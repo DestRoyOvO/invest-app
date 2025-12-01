@@ -110,16 +110,15 @@ investseek-ai/
 │   ├── api/
 │   │   ├── analyze/       # AI Analysis & Web Scraper logic
 │   │   ├── chat/          # Chatbot context injection
-│   │   └── market/        # Yahoo Finance data fetching (Dual-Track Search)
+│   │   └── market/        # Yahoo Finance data fetching
 │   ├── globals.css        # Global Tailwind styles
 │   ├── layout.tsx         # Root layout
-│   └── page.tsx           # Main Dashboard UI (SPA architecture)
+│   └── page.tsx           # Main Dashboard UI
 ├── public/                # Static assets & images
-├── .env.local             # Environment variables (not committed)
-├── next.config.mjs        # Next.js configuration
-├── package.json           # Dependencies and scripts
-├── tailwind.config.ts     # Tailwind configuration
-└── tsconfig.json          # TypeScript configuration
+├── .env.local             # Environment variables
+├── next.config.mjs        # Next.js config
+├── package.json           # Dependencies
+└── tsconfig.json          # TypeScript config
 
 
 🛡️ Disclaimer
