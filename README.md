@@ -105,6 +105,7 @@ Open http://localhost:3000 in your browser.
 
 📂 Project Structure
 
+investseek-ai/
 ├── app/
 │   ├── api/
 │   │   ├── analyze/       # AI Analysis & Web Scraper logic
@@ -114,7 +115,11 @@ Open http://localhost:3000 in your browser.
 │   ├── layout.tsx         # Root layout
 │   └── page.tsx           # Main Dashboard UI (SPA architecture)
 ├── public/                # Static assets & images
-└── ...config files
+├── .env.local             # Environment variables (not committed)
+├── next.config.mjs        # Next.js configuration
+├── package.json           # Dependencies and scripts
+├── tailwind.config.ts     # Tailwind configuration
+└── tsconfig.json          # TypeScript configuration
 
 
 🛡️ Disclaimer
