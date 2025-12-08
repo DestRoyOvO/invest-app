@@ -103,23 +103,23 @@ npm run dev
 Launch
 Open http://localhost:3000 in your browser.
 
-📂 Project Structure
+📁 Project Structure
 
-investseek-ai/
-├── app/
-│   ├── api/
-│   │   ├── analyze/       # AI Analysis & Web Scraper logic
-│   │   ├── chat/          # Chatbot context injection
-│   │   └── market/        # Yahoo Finance data fetching
-│   ├── globals.css        # Global Tailwind styles
-│   ├── layout.tsx         # Root layout
-│   └── page.tsx           # Main Dashboard UI
-├── public/                # Static assets & images
-├── .env.local             # Environment variables
-├── next.config.mjs        # Next.js config
-├── package.json           # Dependencies
-└── tsconfig.json          # TypeScript config
 
+| Path | Description |
+|------|-------------|
+| `app/api/` | Backend API endpoints |
+| `app/analyze/` | AI Analysis & Web Scraper logic |
+| `app/chat/` | Chatbot context injection |
+| `app/market/` | Yahoo Finance data fetching |
+| `globals.css` | Global Tailwind styles |
+| `layout.tsx` | Root layout |
+| `page.tsx` | Main Dashboard UI |
+| `public/` | Static assets & images |
+| `.env.local` | Environment variables |
+| `next.config.mjs` | Next.js configuration |
+| `package.json` | Project dependencies |
+| `tsconfig.json` | TypeScript configuration |
 
 🛡️ Disclaimer
 
