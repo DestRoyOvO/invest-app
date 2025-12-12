@@ -44,7 +44,7 @@ Bilingual Core: Native support for both English and Chinese (Simplified).
 
 📸 Screenshots
 
-(Place your screenshots in the public/images folder to see them here)
+
 
 1. Market Overview & Heatmap
 
