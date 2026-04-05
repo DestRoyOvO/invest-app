@@ -2,43 +2,133 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-// --- 1. 宏观/板块搜索词生成 (保持原样) ---
-function getMacroSearchTerm(sector: string | undefined): string {
-    if (!sector) return "Stock Market News";
-    
+// --- 1. Short search terms (Yahoo returns 0 news for 4+ word queries) ---
+// Each function returns an array of 2-3 word terms for parallel searching.
+function getMacroSearchTerms(sector: string | undefined): string[] {
+    if (!sector) return ["stock market"];
     switch (sector) {
-        case 'Energy': return "Energy Sector Oil Gas News";
-        case 'Technology': return "Technology Sector AI Chips";
-        case 'Financial Services': return "Financial Sector Banks Fed";
-        case 'Basic Materials': return "Mining Commodities Sector News";
-        case 'Consumer Cyclical': return "Retail Consumer Spending News";
-        case 'Consumer Defensive': return "Consumer Staples Inflation News";
-        case 'Healthcare': return "Healthcare Sector Biotech News";
-        case 'Real Estate': return "Real Estate Housing Market";
-        case 'Industrials': return "Industrial Sector Manufacturing";
-        case 'Utilities': return "Utilities Sector Energy Grid";
-        case 'Communication Services': return "Communication Services Telecom";
-        default: return `${sector} Sector Market News`;
+        case 'Energy':                return ["oil prices", "OPEC"];
+        case 'Technology':            return ["semiconductor AI", "tech earnings"];
+        case 'Financial Services':    return ["Federal Reserve", "bank earnings"];
+        case 'Basic Materials':       return ["gold prices", "commodity prices"];
+        case 'Consumer Cyclical':     return ["consumer spending", "retail sales"];
+        case 'Consumer Defensive':    return ["inflation", "consumer staples"];
+        case 'Healthcare':            return ["FDA", "biotech"];
+        case 'Real Estate':           return ["housing market", "mortgage rates"];
+        case 'Industrials':           return ["manufacturing", "supply chain"];
+        case 'Utilities':             return ["renewable energy", "energy grid"];
+        case 'Communication Services':return ["streaming", "social media"];
+        default:                      return ["stock market"];
     }
 }
 
-// --- 2. 简单的关键词相关性检查 (保持原样) ---
-function isRelevantNews(newsItem: any, sector: string | undefined): boolean {
-    if (!sector) return true;
-    const title = (newsItem.title || "").toLowerCase();
-    const sectorLower = sector.toLowerCase();
-    
-    const keywords: Record<string, string[]> = {
-        'Energy': ['oil', 'gas', 'energy', 'crude', 'petroleum', 'drill', 'opec', 'pipeline', 'merger', 'acquisition'],
-        'Technology': ['tech', 'chip', 'ai', 'software', 'data', 'cyber', 'semiconductor'],
-        'Healthcare': ['health', 'drug', 'fda', 'med', 'bio', 'pharma', 'cancer', 'vaccine'],
-        'Financial Services': ['bank', 'fed', 'rate', 'loan', 'credit', 'finance', 'invest'],
+function getIndustrySearchTerms(industry: string | undefined): string[] {
+    if (!industry) return [];
+    const lower = industry.toLowerCase();
+
+    const industryMap: Record<string, string[]> = {
+        'oil & gas e&p':             ['crude oil', 'Iran oil'],
+        'oil & gas integrated':      ['crude oil', 'oil supply'],
+        'oil & gas midstream':       ['natural gas', 'pipeline'],
+        'oil & gas refining':        ['oil refinery', 'gasoline prices'],
+        'oil & gas equipment':       ['oil drilling', 'offshore rig'],
+        'semiconductors':            ['chip shortage', 'nvidia'],
+        'software - infrastructure': ['cloud computing', 'SaaS'],
+        'software - application':    ['enterprise software', 'AI software'],
+        'consumer electronics':      ['consumer electronics', 'Apple'],
+        'internet content':          ['online advertising', 'social media'],
+        'banks - diversified':       ['bank earnings', 'interest rate'],
+        'banks - regional':          ['regional bank', 'deposits'],
+        'insurance':                 ['insurance', 'catastrophe'],
+        'capital markets':           ['Wall Street', 'IPO'],
+        'asset management':          ['ETF flows', 'asset management'],
+        'drug manufacturers':        ['pharma', 'FDA approval'],
+        'biotechnology':             ['biotech', 'clinical trials'],
+        'medical devices':           ['medical devices', 'surgery'],
+        'health care plans':         ['health insurance', 'Medicare'],
+        'aerospace & defense':       ['defense', 'military'],
+        'auto manufacturers':        ['electric vehicle', 'auto tariff'],
+        'residential construction':  ['homebuilder', 'housing starts'],
+        'reit - residential':        ['apartment rent', 'housing'],
+        'reit - retail':             ['retail REIT', 'shopping mall'],
+        'utilities - regulated':     ['utility', 'energy regulation'],
+        'solar':                     ['solar energy', 'renewable'],
+        'gold':                      ['gold prices', 'safe haven'],
+        'copper':                    ['copper prices', 'mining'],
+        'steel':                     ['steel tariff', 'steel demand'],
     };
 
-    const targetKeywords = keywords[sector];
-    if (!targetKeywords) return true;
+    for (const [key, terms] of Object.entries(industryMap)) {
+        if (lower.includes(key)) return terms;
+    }
+    // Fallback: split industry name into a short 2-word query
+    const words = industry.split(/[\s&,/-]+/).filter(w => w.length > 2);
+    return words.length >= 2 ? [words.slice(0, 2).join(' ')] : [industry];
+}
 
-    return targetKeywords.some(k => title.includes(k)) || title.includes(sectorLower);
+// --- 2. Scored news relevance (replaces boolean isRelevantNews) ---
+const SECTOR_KEYWORDS: Record<string, string[]> = {
+    'Energy': ['oil', 'gas', 'energy', 'crude', 'petroleum', 'opec', 'pipeline', 'refinery', 'drill', 'lng', 'sanctions', 'iran', 'russia', 'saudi', 'barrel', 'brent', 'wti', 'geopolitical', 'supply cut', 'tariff'],
+    'Technology': ['tech', 'chip', 'ai', 'software', 'data', 'cyber', 'semiconductor', 'cloud', 'saas', 'nvidia', 'datacenter', 'gpu', 'regulation', 'antitrust'],
+    'Healthcare': ['health', 'drug', 'fda', 'med', 'bio', 'pharma', 'cancer', 'vaccine', 'clinical', 'trial', 'approval', 'medicare', 'hospital'],
+    'Financial Services': ['bank', 'fed', 'rate', 'loan', 'credit', 'finance', 'invest', 'interest', 'yield', 'treasury', 'deposit', 'mortgage', 'default'],
+    'Basic Materials': ['mining', 'gold', 'copper', 'steel', 'lithium', 'commodity', 'metal', 'ore', 'chemical', 'tariff'],
+    'Consumer Cyclical': ['retail', 'consumer', 'spending', 'amazon', 'luxury', 'auto', 'ev', 'housing', 'e-commerce', 'tariff'],
+    'Consumer Defensive': ['grocery', 'staple', 'inflation', 'food', 'beverage', 'tobacco', 'walmart', 'costco', 'consumer'],
+    'Industrials': ['manufacturing', 'industrial', 'supply chain', 'defense', 'aerospace', 'infrastructure', 'transport', 'trade', 'tariff'],
+    'Real Estate': ['real estate', 'housing', 'mortgage', 'rent', 'reit', 'construction', 'property', 'commercial'],
+    'Utilities': ['utility', 'grid', 'renewable', 'solar', 'wind', 'nuclear', 'electric', 'power', 'regulation'],
+    'Communication Services': ['streaming', 'social media', 'telecom', 'advertising', 'content', 'media', '5g', 'broadband'],
+};
+
+const SPAM_PATTERNS = [
+    'top 10', 'top 5', 'best stocks to buy', 'motley fool', 'picks for',
+    'could soar', 'must-buy', 'can\'t miss', 'no-brainer', 'millionaire',
+    'wall street loves', 'retire rich', 'hidden gem', 'next big thing',
+    'buy before', 'skyrocket', 'massive upside', 'get rich',
+];
+
+function scoreNewsRelevance(
+    newsItem: any,
+    ticker: string,
+    companyName: string,
+    sector: string | undefined,
+    industry: string | undefined,
+): number {
+    const title = (newsItem.title || "").toLowerCase();
+    if (!title || title.length < 15) return -10;
+
+    let score = 0;
+
+    // Direct company/ticker mention is highest value
+    if (title.includes(ticker.toLowerCase()) || title.includes(companyName.toLowerCase())) {
+        score += 35;
+    }
+
+    // Industry-specific keyword matches
+    if (industry) {
+        const industryWords = industry.toLowerCase().split(/[\s&,/-]+/).filter(w => w.length > 2);
+        const industryHits = industryWords.filter(w => title.includes(w)).length;
+        score += Math.min(industryHits * 10, 25);
+    }
+
+    // Sector keyword matches
+    if (sector && SECTOR_KEYWORDS[sector]) {
+        const hits = SECTOR_KEYWORDS[sector].filter(k => title.includes(k)).length;
+        score += Math.min(hits * 8, 20);
+    }
+
+    // General finance/market relevance
+    const financeTerms = ['market', 'stock', 'earnings', 'revenue', 'profit', 'analyst', 'forecast', 'gdp', 'inflation', 'trade', 'tariff', 'geopolitical', 'war', 'sanction'];
+    const financeHits = financeTerms.filter(k => title.includes(k)).length;
+    score += Math.min(financeHits * 5, 15);
+
+    // Spam/clickbait penalty
+    if (SPAM_PATTERNS.some(p => title.includes(p))) {
+        score -= 30;
+    }
+
+    return score;
 }
 
 // --- 3. 智能财报日期处理 (保持原样) ---
@@ -83,12 +173,12 @@ export async function GET(request: Request) {
         return date; 
     };
 
-    // --- 1. 板块/新闻查询 (保持原样) ---
+    // --- 1. 板块/新闻查询 ---
     if (newsQuery) {
       try {
-        const q = newsQuery.includes("news") ? newsQuery : `${newsQuery} finance news`;
-        const result = await yf.search(q, { newsCount: 6 });
-        const news = result.news.map((item: any, index: number) => ({
+        const q = newsQuery.includes("news") ? newsQuery : `${newsQuery} news`;
+        const result = await yf.search(q, { newsCount: 6, quotesCount: 0 });
+        const news = (result.news || []).map((item: any, index: number) => ({
           id: index,
           title: item.title,
           link: item.link,
@@ -114,13 +204,23 @@ export async function GET(request: Request) {
         }, { validateResult: false }).catch(() => ({}));
 
         const sector = summary?.summaryProfile?.sector;
-        const macroQuery = getMacroSearchTerm(sector);
+        const industry = summary?.summaryProfile?.industry;
+        const macroTerms = getMacroSearchTerms(sector);
+        const industryTerms = getIndustrySearchTerms(industry);
 
-        const [newsResult, macroNewsResult, chartResult] = await Promise.all([
-          yf.search(newsSearchTerm, { newsCount: 5, quotesCount: 0 }).catch(() => ({ news: [] })), 
-          yf.search(macroQuery, { newsCount: 5, quotesCount: 0 }).catch(() => ({ news: [] })), 
-          yf.chart(ticker, { period1: getDateAgo(90), interval: '1d' }, { validateResult: false }).catch((e: any) => null)
+        const safeSearch = (q: string) =>
+            yf.search(q, { newsCount: 5, quotesCount: 0 }).catch(() => ({ news: [] }));
+
+        const [companyNews, chartResult, ...extraResults] = await Promise.all([
+          safeSearch(newsSearchTerm),
+          yf.chart(ticker, { period1: getDateAgo(90), interval: '1d' }, { validateResult: false }).catch(() => null),
+          ...macroTerms.map(q => safeSearch(q)),
+          ...industryTerms.map(q => safeSearch(q)),
         ]);
+
+        // Tag results by provenance: macro terms come first, then industry terms
+        const macroResults = extraResults.slice(0, macroTerms.length);
+        const industryResults = extraResults.slice(macroTerms.length);
         
         const getMetric = (path: string[]) => {
           let current: any = summary;
@@ -154,23 +254,55 @@ export async function GET(request: Request) {
           chartHistory 
         };
 
-        const companyNewsItems = (newsResult.news || []).map((item: any, index: number) => ({
-          id: `co-${index}`, title: item.title, link: item.link,
-          source: item.providerPublishTime ? new Date(item.providerPublishTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "Yahoo",
-          time: "Live", tag: ticker
-        }));
-
-        const macroNewsItems = (macroNewsResult.news || [])
-            .filter((item: any) => isRelevantNews(item, sector)) 
-            .slice(0, 3) 
-            .map((item: any, index: number) => ({
-                id: `macro-${index}`, title: item.title, link: item.link,
-                source: item.providerPublishTime ? new Date(item.providerPublishTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "Industry",
-                time: "Live", tag: sector || "Macro"
+        // Score, tag, and categorize all news from parallel search tracks
+        type Provenance = 'company' | 'industry' | 'macro';
+        const tagAndScore = (items: any[], defaultSource: string, tag: string, provenance: Provenance) =>
+            (items || []).map((item: any) => ({
+                title: item.title,
+                link: item.link,
+                snippet: item.snippet || item.description || '',
+                source: item.providerPublishTime
+                    ? new Date(item.providerPublishTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : defaultSource,
+                time: "Live",
+                tag,
+                provenance,
+                _score: scoreNewsRelevance(item, ticker, companyName, sector, industry),
             }));
 
-        const allNews = [...companyNewsItems, ...macroNewsItems];
-        const uniqueNews = Array.from(new Map(allNews.map(item => [item.title, item])).values());
+        const allRawNews = [
+            ...tagAndScore(companyNews.news, "Yahoo", ticker, 'company'),
+            ...macroResults.flatMap(r => tagAndScore(r.news, "Macro", sector || "Macro", 'macro')),
+            ...industryResults.flatMap(r => tagAndScore(r.news, "Industry", industry || sector || "Industry", 'industry')),
+        ];
+        // Yahoo already matched macro/industry items to our targeted short queries,
+        // so give them a baseline relevance boost to avoid filtering out geopolitical headlines
+        // that lack explicit sector keywords (e.g., "Trump to escort tankers" for oil stocks).
+        for (const item of allRawNews) {
+            if (item.provenance !== 'company' && item._score < 10) {
+                item._score = Math.max(item._score, 8);
+            }
+        }
+
+        // Deduplicate by title, keep highest-scored version
+        const titleMap = new Map<string, any>();
+        for (const item of allRawNews) {
+            const existing = titleMap.get(item.title);
+            if (!existing || item._score > existing._score) {
+                titleMap.set(item.title, item);
+            }
+        }
+
+        // Filter by minimum relevance, sort by score descending
+        const uniqueNews = Array.from(titleMap.values())
+            .filter(item => item._score >= 5)
+            .sort((a, b) => b._score - a._score)
+            .slice(0, 10)
+            .map((item, index) => ({
+                id: `news-${index}`, title: item.title, link: item.link,
+                snippet: item.snippet, source: item.source, time: item.time,
+                tag: item.tag, provenance: item.provenance,
+            }));
 
         return NextResponse.json({ detail: detailData, news: uniqueNews });
       } catch (e) {
@@ -228,8 +360,7 @@ export async function GET(request: Request) {
       yf.quote(allStockSymbols), 
       fetchCharts(allStockSymbols), 
       yf.quote(symbols.etfs),
-      // [FIX]: 将搜索词简化为 'Stock Market' 并增加数量，确保有结果返回
-      yf.search('Stock Market', { newsCount: 10 }).catch(() => ({ news: [] }))
+      yf.search('Stock Market', { newsCount: 10, quotesCount: 0 }).catch(() => ({ news: [] }))
     ]);
 
     const chartMap = new Map(chartResults.map((c: any) => [c.symbol, c.trend]));
@@ -279,10 +410,9 @@ export async function GET(request: Request) {
       isUp: (item.regularMarketChangePercent || 0) >= 0
     }));
 
-    // [FIX]: 安全地处理新闻结果，使用可选链
     const newsRaw = (newsResult && newsResult.news) ? newsResult.news : [];
     const news = newsRaw
-      .filter((item: any) => !item.title.includes("Stock Market News for"))
+      .filter((item: any) => item.title && !item.title.includes("Stock Market News for"))
       .map((item: any, index: number) => ({
         id: index, title: item.title, link: item.link,
         source: item.providerPublishTime ? new Date(item.providerPublishTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "Yahoo",

@@ -4,7 +4,8 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { 
   Search, TrendingUp, TrendingDown, Zap, Activity, Brain, ArrowRight, BarChart3, 
   ArrowLeft, LayoutGrid, Newspaper, ChevronRight, Layers, PieChart, Loader2,
-  MessageSquare, X, Send, Minus, RefreshCw, History, Star, Plus, Check, List, Globe
+  MessageSquare, X, Send, Minus, RefreshCw, History, Star, Plus, Check, List, Globe,
+  Target, ShieldCheck, AlertTriangle
 } from 'lucide-react';
 
 // --- 1. 语言包定义 ---
@@ -16,6 +17,7 @@ const TRANSLATIONS: any = {
     watchlist: { title: "My Watchlist", tickers: "Tickers", colCompany: "Company", colPrice: "Last Price", colChange: "Change", colTrend: "Trend (14D)", colMktCap: "Mkt Cap", loading: "Fetching Portfolio...", empty: "Your watchlist is empty. Search for a stock to add it here.", riskAnalysis: "Portfolio Risk Analysis", relatedNews: "Related News" },
     sector: { title: "Sector", aiScan: "AI Scan", relatedEtfs: "Related ETFs", loading: "Fetching Data...", colCompany: "Company", colPrice: "Last Price", colChange: "Change", colTrend: "Trend (14D)", colMktCap: "Mkt Cap" },
     detail: { historical: "Historical View", live: "Live Market", liveData: "Live Market Data", mktCap: "Market Cap", pe: "P/E (TTM)", eps: "EPS", roe: "ROE", margin: "Gross Margin", earnings: "Earnings", nextEarnings: "Next Earnings", analysis: "DeepSeek Analysis" },
+    signal: { title: "Model Signal", score: "Score", confidence: "Confidence", momentum: "Momentum", trend: "Trend", rsi: "RSI", volume: "Volume", value: "Value", quality: "Quality", volatility: "Vol Risk", backtest: "Backtest", winRate: "Win Rate", avgReturn: "Avg Ret", sharpe: "Sharpe", maxDD: "Max DD", trades: "Trades", noData: "Insufficient data", disclaimer: "Model output for research only. Not investment advice.", loading: "Computing signal...", technical: "Technical", fundamental: "Fundamental", highConf: "High", medConf: "Medium", lowConf: "Low" },
     news: { readOriginal: "Read Original Story on Yahoo Finance", aiInsight: "AI Strategic Insight" },
     chat: { title: "DeepSeek Assistant", placeholder: "Ask anything...", welcome: "Hello! I am InvestSeek AI. Ask me about markets, stocks, or your watchlist." },
     sectors: { "Technology": "Technology", "Communication": "Communication", "Consumer Disc.": "Consumer Disc.", "Financials": "Financials", "Healthcare": "Healthcare" }
@@ -27,6 +29,7 @@ const TRANSLATIONS: any = {
     watchlist: { title: "我的自选", tickers: "只股票", colCompany: "公司", colPrice: "最新价", colChange: "涨跌幅", colTrend: "趋势 (14日)", colMktCap: "市值", loading: "正在获取持仓...", empty: "自选股为空。请搜索股票代码添加。", riskAnalysis: "持仓风险分析", relatedNews: "相关新闻" },
     sector: { title: "板块", aiScan: "AI 扫描", relatedEtfs: "相关 ETF", loading: "正在获取数据...", colCompany: "公司", colPrice: "最新价", colChange: "涨跌幅", colTrend: "趋势 (14日)", colMktCap: "市值" },
     detail: { historical: "历史回溯", live: "实时行情", liveData: "实时市场数据", mktCap: "市值", pe: "市盈率 (TTM)", eps: "每股收益", roe: "净资产收益率", margin: "毛利率", earnings: "财报", nextEarnings: "下次财报", analysis: "DeepSeek 深度分析" },
+    signal: { title: "量化信号", score: "评分", confidence: "置信度", momentum: "动量", trend: "趋势", rsi: "RSI", volume: "成交量", value: "价值", quality: "质量", volatility: "波动风险", backtest: "回测", winRate: "胜率", avgReturn: "均收益", sharpe: "夏普", maxDD: "最大回撤", trades: "交易数", noData: "数据不足", disclaimer: "模型输出仅供研究参考，不构成投资建议。", loading: "正在计算信号...", technical: "技术面", fundamental: "基本面", highConf: "高", medConf: "中", lowConf: "低" },
     news: { readOriginal: "在 Yahoo Finance 阅读原文", aiInsight: "AI 战略洞察" },
     chat: { title: "DeepSeek 助手", placeholder: "随便问问...", welcome: "您好！我是 InvestSeek AI。您可以问我关于市场、个股或您持仓的问题。" },
     sectors: { "Technology": "科技", "Communication": "通信服务", "Consumer Disc.": "非必需消费", "Financials": "金融", "Healthcare": "医疗健康" }
@@ -122,6 +125,8 @@ interface NewsItem {
   source: string;
   time: string;
   tag?: string;
+  snippet?: string;
+  provenance?: 'company' | 'industry' | 'macro';
 }
 
 interface MacroIndex {
@@ -409,7 +414,13 @@ export default function DeepSeekInvestDashboard() {
   const { data: detailData, isLoading: isDetailLoading, mutate: mutateDetail } = useSWR(
     selectedTicker ? `/api/market?ticker=${selectedTicker}` : null, 
     fetcher,
-    { revalidateOnFocus: false, refreshInterval: 5000 } // 5秒自动刷新个股数据
+    { revalidateOnFocus: false, refreshInterval: 5000 }
+  );
+
+  const { data: signalData, isLoading: isSignalLoading } = useSWR(
+    selectedTicker ? `/api/signal?ticker=${selectedTicker}` : null,
+    fetcher,
+    { revalidateOnFocus: false }
   );
 
   const { data: sectorNewsData } = useSWR(
@@ -526,24 +537,25 @@ export default function DeepSeekInvestDashboard() {
          sector: sectorName, 
          stocks: (stocks[sectorName] || []).map((s: StockData) => ({ symbol: s.symbol, change: s.change, price: s.price })),
          recentNews: currentNewsList.slice(0, 3),
-         indicesContext: indices.map(i => `${i.name}: ${i.change}`)
+         indicesContext: indices.map((i: MacroIndex) => `${i.name}: ${i.change}`)
        };
     } else if (currentView === 'watchlist') {
        contextDesc += "User Watchlist Portfolio Analysis";
        dataToSend = {
            stocks: watchlistStocks.map((s: StockData) => ({ symbol: s.symbol, change: s.change, price: s.price, isUp: s.isUp })),
-           marketContext: indices.map(i => `${i.name}: ${i.change}`)
+           marketContext: indices.map((i: MacroIndex) => `${i.name}: ${i.change}`)
        };
     } else {
        if (!detailData?.detail) return;
        contextDesc += `${detailData.detail.symbol} Stock Deep Dive`;
        dataToSend = { 
            ...detailData.detail, 
-           relatedNews: currentNewsList.slice(0, 3),
+           relatedNews: currentNewsList.slice(0, 8),
            marketContext: {
-               indices: indices.slice(0, 3).map(i => ({ name: i.name, change: i.change, isUp: i.isUp })),
+               indices: indices.slice(0, 3).map((i: MacroIndex) => ({ name: i.name, change: i.change, isUp: i.isUp })),
                topHeadlines: generalNews.slice(0, 2).map((n: NewsItem) => n.title)
-           }
+           },
+           ...(signalData && !signalData.error ? { modelSignal: { signal: signalData.signal, score: signalData.score, confidence: signalData.confidence, components: signalData.components, backtests: signalData.backtests, metadata: signalData.metadata } } : {}),
        };
     }
     
@@ -646,7 +658,8 @@ export default function DeepSeekInvestDashboard() {
               isLoading={isDetailLoading} aiContent={aiContent} isAnalyzing={isAnalyzing}
               onNewsClick={goToNews}
               watchlist={watchlist}
-              onToggleWatchlist={toggleWatchlist} t={t} 
+              onToggleWatchlist={toggleWatchlist} t={t}
+              signalData={signalData} isSignalLoading={isSignalLoading}
             />
           )}
           {currentView === 'news' && (
@@ -865,7 +878,7 @@ function SectorView({ sectorName, stocksData, news, etfMap, isLoading, aiContent
     );
 }
 
-function DetailView({ detail, news, isLoading, aiContent, isAnalyzing, onNewsClick, watchlist, onToggleWatchlist, t }: any) {
+function DetailView({ detail, news, isLoading, aiContent, isAnalyzing, onNewsClick, watchlist, onToggleWatchlist, t, signalData, isSignalLoading }: any) {
     const [hoverData, setHoverData] = useState<HoverData | null>(null);
     const handleChartLeave = useCallback(() => setHoverData(null), []);
 
@@ -923,6 +936,8 @@ function DetailView({ detail, news, isLoading, aiContent, isAnalyzing, onNewsCli
                     </div>
                 </div>
 
+                <SignalCard signalData={signalData} isLoading={isSignalLoading} t={t} />
+
                 <div className="bg-[#161b22] border border-slate-800 rounded-xl p-4 h-[450px] relative overflow-hidden group">
                     <ChartComponent history={detail.chartHistory} currentMarketCap={parseMarketCap(detail.metrics.marketCap)} currentPrice={parseFloat(detail.price)} currentPe={parseFloat(detail.metrics.pe)} onHover={setHoverData} onLeave={handleChartLeave} />
                 </div>
@@ -951,6 +966,165 @@ function NewsView({ newsItem, aiContent, isAnalyzing, t }: any) {
 
 function NavItem({ icon, label, active, onClick }: any) {
     return <button onClick={onClick} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 border border-transparent ${active ? 'bg-indigo-600/10 text-indigo-400 border-indigo-500/20 shadow-sm' : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'}`}>{React.cloneElement(icon, { size: 18 })}<span className={active ? "font-bold" : ""}>{label}</span></button>;
+}
+
+function SignalCard({ signalData, isLoading, t }: any) {
+    const ts = t.signal;
+    const [activePeriod, setActivePeriod] = React.useState('5d');
+
+    if (isLoading) return (
+        <div className="bg-[#161b22] border border-slate-800 rounded-xl p-5 animate-pulse">
+            <div className="flex items-center gap-2 mb-4"><Target className="w-5 h-5 text-slate-600" /><div className="h-4 w-32 bg-slate-700 rounded"></div></div>
+            <div className="h-24 bg-slate-800/50 rounded-lg"></div>
+        </div>
+    );
+    if (!signalData || signalData.error) return null;
+
+    const { signal, score, confidence, components, backtests } = signalData;
+    const signalColors: Record<string, { bg: string; text: string; border: string; glow: string }> = {
+        'Strong Buy':  { bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/30', glow: 'shadow-lg shadow-emerald-500/10' },
+        'Buy':         { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20', glow: '' },
+        'Hold':        { bg: 'bg-amber-500/10', text: 'text-amber-400', border: 'border-amber-500/20', glow: '' },
+        'Sell':        { bg: 'bg-rose-500/10', text: 'text-rose-400', border: 'border-rose-500/20', glow: '' },
+        'Strong Sell': { bg: 'bg-rose-500/15', text: 'text-rose-400', border: 'border-rose-500/30', glow: 'shadow-lg shadow-rose-500/10' },
+    };
+    const sc = signalColors[signal] || signalColors['Hold'];
+    const confColor = confidence >= 70 ? 'text-emerald-400' : confidence >= 45 ? 'text-amber-400' : 'text-rose-400';
+    const confBg = confidence >= 70 ? 'bg-emerald-500/10' : confidence >= 45 ? 'bg-amber-500/10' : 'bg-rose-500/10';
+    const confLabel = confidence >= 70 ? ts.highConf : confidence >= 45 ? ts.medConf : ts.lowConf;
+
+    const factorColor = (val: number) => val >= 58 ? 'text-emerald-400' : val >= 42 ? 'text-amber-400' : 'text-rose-400';
+    const factorBg = (val: number) => val >= 58 ? 'bg-emerald-500/15' : val >= 42 ? 'bg-amber-500/15' : 'bg-rose-500/15';
+
+    const FactorPill = ({ label, value: val }: { label: string; value: number }) => (
+        <div className={`flex items-center justify-between px-2.5 py-1.5 rounded-md ${factorBg(val)} border border-slate-800/50`}>
+            <span className="text-[10px] text-slate-400 font-medium">{label}</span>
+            <span className={`text-xs font-bold font-mono ${factorColor(val)}`}>{val}</span>
+        </div>
+    );
+
+    const btKeys = backtests ? Object.keys(backtests).filter(k => backtests[k]?.sampleSize > 0) : [];
+    const bt = backtests?.[activePeriod] || (btKeys.length > 0 ? backtests[btKeys[0]] : null);
+
+    const StatCell = ({ label, value, color }: { label: string; value: string; color: string }) => (
+        <div className="text-center">
+            <div className="text-[9px] text-slate-500 font-medium uppercase tracking-wider">{label}</div>
+            <div className={`text-sm font-bold font-mono ${color}`}>{value}</div>
+        </div>
+    );
+
+    return (
+        <div className={`bg-[#161b22] border ${sc.border} rounded-xl p-5 ${sc.glow} relative overflow-hidden`}>
+            <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-cyan-500 via-indigo-500 to-purple-500"></div>
+
+            {/* Header: signal badge + score + confidence */}
+            <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2.5">
+                    <div className="bg-indigo-500/10 p-1.5 rounded-lg"><Target className="w-4 h-4 text-indigo-400" /></div>
+                    <h2 className="text-sm font-bold text-white tracking-tight">{ts.title}</h2>
+                </div>
+                <div className="flex items-center gap-3">
+                    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md ${confBg}`}>
+                        <span className="text-[9px] text-slate-500 font-bold uppercase">{ts.confidence}</span>
+                        <span className={`text-xs font-bold font-mono ${confColor}`}>{confidence}%</span>
+                        <span className={`text-[9px] font-bold ${confColor}`}>{confLabel}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 bg-slate-800/50 px-2 py-1 rounded-md">
+                        <span className="text-[9px] text-slate-500 font-bold uppercase">{ts.score}</span>
+                        <span className={`text-lg font-bold font-mono leading-none ${sc.text}`}>{score}</span>
+                    </div>
+                    <span className={`px-2.5 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider border ${sc.bg} ${sc.text} ${sc.border}`}>
+                        {signal}
+                    </span>
+                </div>
+            </div>
+
+            {/* Factors: two groups side-by-side */}
+            <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="bg-slate-950/30 rounded-lg p-3 border border-slate-800/50">
+                    <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-2">{ts.technical}</div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                        <FactorPill label={ts.momentum} value={components.momentum} />
+                        <FactorPill label={ts.trend} value={components.trend} />
+                        <FactorPill label={ts.rsi} value={components.rsi} />
+                        <FactorPill label={ts.volume} value={components.volume} />
+                    </div>
+                </div>
+                <div className="bg-slate-950/30 rounded-lg p-3 border border-slate-800/50">
+                    <div className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-2">{ts.fundamental}</div>
+                    <div className="grid grid-cols-2 gap-1.5">
+                        <FactorPill label={ts.value} value={components.value} />
+                        <FactorPill label={ts.quality} value={components.quality} />
+                        <div className="col-span-2">
+                            <FactorPill label={ts.volatility} value={components.volatility} />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Backtest: tabs for hold period */}
+            {btKeys.length > 0 && bt ? (
+                <div className="bg-slate-950/40 rounded-lg p-3 border border-slate-800/50">
+                    <div className="flex items-center justify-between mb-2.5">
+                        <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <ShieldCheck className="w-3 h-3" /> {ts.backtest}
+                        </h3>
+                        <div className="flex gap-1">
+                            {btKeys.map(key => (
+                                <button
+                                    key={key}
+                                    onClick={() => setActivePeriod(key)}
+                                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-colors ${
+                                        activePeriod === key || (activePeriod === '5d' && !btKeys.includes('5d') && key === btKeys[0])
+                                            ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30'
+                                            : 'bg-slate-800/50 text-slate-500 border border-slate-700/50 hover:text-slate-400'
+                                    }`}
+                                >
+                                    {key}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-5 gap-2">
+                        <StatCell
+                            label={ts.winRate}
+                            value={`${(bt.winRate * 100).toFixed(1)}%`}
+                            color={bt.winRate >= 0.5 ? 'text-emerald-400' : 'text-rose-400'}
+                        />
+                        <StatCell
+                            label={ts.avgReturn}
+                            value={`${bt.avgReturn >= 0 ? '+' : ''}${(bt.avgReturn * 100).toFixed(2)}%`}
+                            color={bt.avgReturn >= 0 ? 'text-emerald-400' : 'text-rose-400'}
+                        />
+                        <StatCell
+                            label={ts.sharpe}
+                            value={bt.sharpe?.toFixed(2) ?? '-'}
+                            color={bt.sharpe >= 0.5 ? 'text-emerald-400' : bt.sharpe >= 0 ? 'text-amber-400' : 'text-rose-400'}
+                        />
+                        <StatCell
+                            label={ts.maxDD}
+                            value={`${((bt.maxDrawdown || 0) * 100).toFixed(1)}%`}
+                            color={bt.maxDrawdown > -0.05 ? 'text-amber-400' : 'text-rose-400'}
+                        />
+                        <StatCell
+                            label={ts.trades}
+                            value={`${bt.sampleSize}`}
+                            color="text-slate-300"
+                        />
+                    </div>
+                </div>
+            ) : (
+                <div className="bg-slate-950/40 rounded-lg p-3 border border-slate-800/50 flex items-center justify-center">
+                    <span className="text-[10px] text-slate-500">{ts.noData}</span>
+                </div>
+            )}
+
+            <div className="mt-3 flex items-center gap-1.5 text-[9px] text-slate-600">
+                <AlertTriangle className="w-2.5 h-2.5" />
+                <span>{ts.disclaimer}</span>
+            </div>
+        </div>
+    );
 }
 
 function MetricCard({ label, value, highlight, dimmed }: any) {

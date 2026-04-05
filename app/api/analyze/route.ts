@@ -9,47 +9,104 @@ const client = new OpenAI({
   apiKey: process.env.DEEPSEEK_API_KEY,
 });
 
-// --- 反爬虫逻辑 (保持不变) ---
-async function fetchNewsContent(url: string): Promise<string> {
-  if (!url) return "";
+// --- Single-article content fetching (only for "News Insight" view) ---
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(url, {
-      headers: { 
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchNewsContent(url: string, timeoutMs: number = 8000): Promise<string> {
+  if (!url) return "";
+
+  // Jina Reader (primary — handles JS rendering, consent walls, read-more)
+  try {
+    const jinaUrl = `https://r.jina.ai/${url}`;
+    const res = await fetchWithTimeout(jinaUrl, {
+      headers: { 'Accept': 'text/plain', 'X-Return-Format': 'markdown' },
+    }, timeoutMs);
+    if (res.ok) {
+      const text = await res.text();
+      if (text.length > 200) return text.slice(0, 6000);
+    }
+  } catch (e) {}
+
+  // Direct scrape fallback
+  try {
+    const res = await fetchWithTimeout(url, {
+      headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
         'Referer': 'https://www.google.com/',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       },
-      next: { revalidate: 3600 } 
-    });
+    }, timeoutMs);
 
     if (res.ok) {
-        const html = await res.text();
-        if (html.includes("consent.yahoo.com") || html.includes("guce.yahoo.com")) throw new Error("Consent Wall");
-        const $ = cheerio.load(html);
-        $('script, style, nav, footer, iframe, .advertisement, .caas-iframe, .bypass-block, button').remove();
-        let content = "";
-        const selectors = ['.caas-body', 'article', '.article-body', 'main', 'body'];
-        for (const selector of selectors) {
-            if ($(selector).length) {
-                $(selector).find('p').each((_, el) => {
-                    const text = $(el).text().trim();
-                    if (text.length > 50) content += text + "\n\n";
-                });
-                break;
-            }
+      const html = await res.text();
+      if (html.includes("consent.yahoo.com") || html.includes("guce.yahoo.com")) return "";
+      const $ = cheerio.load(html);
+      $('script, style, nav, footer, iframe, .advertisement, .caas-iframe, .bypass-block, button').remove();
+      let content = "";
+      const selectors = ['.caas-body', 'article', '.article-body', 'main', 'body'];
+      for (const selector of selectors) {
+        if ($(selector).length) {
+          $(selector).find('p').each((_, el) => {
+            const text = $(el).text().trim();
+            if (text.length > 40) content += text + "\n\n";
+          });
+          break;
         }
-        if (content.length > 200) return content.slice(0, 8000); 
+      }
+      if (content.length > 150) return content.slice(0, 6000);
     }
-  } catch (e) { console.log("Scrape failed"); }
-  
-  // Fallback to Jina
-  try {
-     const targetUrl = `https://r.jina.ai/${url}`;
-     const res = await fetch(targetUrl, { headers: { 'Accept': 'text/plain', 'X-Return-Format': 'markdown' }, next: { revalidate: 3600 } });
-     const text = await res.text();
-     if (text.length > 200 && !text.includes("Yahoo")) return text.slice(0, 6000);
   } catch (e) {}
   return "";
+}
+
+// --- Headline intelligence: categorize news by provenance for AI context ---
+function buildNewsIntelligence(newsItems: any[]): string {
+  if (!newsItems || newsItems.length === 0) return '';
+
+  const byCategory: Record<string, { title: string; snippet?: string }[]> = {
+    company: [],
+    industry: [],
+    macro: [],
+  };
+
+  for (const item of newsItems) {
+    const cat = item.provenance || 'macro';
+    const bucket = byCategory[cat] || byCategory.macro;
+    bucket.push({ title: item.title, snippet: item.snippet || '' });
+  }
+
+  let block = '';
+
+  if (byCategory.company.length > 0) {
+    block += `\n**[COMPANY-SPECIFIC NEWS]** (directly mentions the company):\n`;
+    for (const n of byCategory.company) {
+      block += `- "${n.title}"${n.snippet ? ` — ${n.snippet}` : ''}\n`;
+    }
+  }
+
+  if (byCategory.industry.length > 0) {
+    block += `\n**[INDUSTRY CONTEXT]** (affects the company's industry/supply chain):\n`;
+    for (const n of byCategory.industry) {
+      block += `- "${n.title}"${n.snippet ? ` — ${n.snippet}` : ''}\n`;
+    }
+  }
+
+  if (byCategory.macro.length > 0) {
+    block += `\n**[MACRO/SECTOR BACKDROP]** (broader market & geopolitical context):\n`;
+    for (const n of byCategory.macro) {
+      block += `- "${n.title}"${n.snippet ? ` — ${n.snippet}` : ''}\n`;
+    }
+  }
+
+  return block;
 }
 
 export async function POST(request: Request) {
@@ -63,7 +120,7 @@ export async function POST(request: Request) {
     let extraContext = "";
     let debugMsg = "";
 
-    // 1. 新闻抓取逻辑 (仅针对特定新闻页面)
+    // 1a. Single article fetch (News Insight view)
     if (data.link && (context.includes("Insight") || context.includes("News"))) {
         const articleBody = await fetchNewsContent(data.link);
         if (articleBody && articleBody.length > 200) {
@@ -71,6 +128,14 @@ export async function POST(request: Request) {
             debugMsg = `> 🟢 **[System Log]**: Successfully retrieved full article content (${articleBody.length} chars). Analyzing...\n\n`;
         } else {
              debugMsg = `> ⚠️ **[System Log]**: Direct content access restricted. Analyzing based on headline and summary data.\n\n`;
+        }
+    }
+
+    // 1b. For stock analysis: build categorized headline intelligence (no scraping needed)
+    if (data.relatedNews && Array.isArray(data.relatedNews) && data.relatedNews.length > 0 && !extraContext) {
+        const newsIntel = buildNewsIntelligence(data.relatedNews);
+        if (newsIntel) {
+            extraContext = newsIntel;
         }
     }
 
@@ -109,12 +174,51 @@ export async function POST(request: Request) {
         - **Goal**: A high-level executive summary of the market day.`;
 
     } else {
-        // 默认为个股详情 (Stock Detail)
         specificInstructions = `
         - **Focus**: Fundamental & Technical Synthesis for the specific stock.
         - **Assess**: Valuation (P/E vs Growth), Technical Trend (SMA), and Earnings quality.
-        - **Synthesize**: How do recent news/headlines impact the thesis?
-        - **Goal**: A Buy/Hold/Sell/Watch framework based on data.`;
+        - **News Intelligence**: The news headlines below are categorized by relevance:
+          - COMPANY-SPECIFIC: directly about this company — highest signal weight.
+          - INDUSTRY CONTEXT: affects the company's supply chain, competitors, or pricing — connect cause to effect.
+          - MACRO/SECTOR BACKDROP: broad forces (geopolitics, interest rates, regulation) — assess second-order impact.
+          Treat each headline as an intelligence signal. Infer likely content from the headline and your knowledge, then explain how it impacts this stock's thesis. Do NOT just list headlines — analyze them.
+        - **Goal**: A Buy/Hold/Sell/Watch framework grounded in data and news intelligence.`;
+    }
+
+    // Inject quantitative model signal as a supporting reference (not the central focus)
+    let modelSignalBlock = "";
+    if (data.modelSignal) {
+        const ms = data.modelSignal;
+        const c = ms.components || {};
+        const confLabel = ms.confidence >= 70 ? 'HIGH' : ms.confidence >= 45 ? 'MEDIUM' : 'LOW';
+
+        // Identify standout factors (top/bottom)
+        const entries = Object.entries(c) as [string, number][];
+        const sorted = [...entries].sort((a, b) => b[1] - a[1]);
+        const highlights = sorted.filter(([, v]) => v >= 70 || v <= 30);
+        const highlightStr = highlights.length > 0
+            ? highlights.map(([k, v]) => `${k}=${v}`).join(', ')
+            : 'no extreme factors';
+
+        let btSummary = '';
+        const bts = ms.backtests || {};
+        const btEntries = Object.entries(bts).filter(([_, bt]: [string, any]) => bt && bt.sampleSize > 0);
+        if (btEntries.length > 0) {
+            const parts = btEntries.map(([period, bt]: [string, any]) =>
+                `${period}: ${(bt.winRate * 100).toFixed(0)}% win, ${bt.avgReturn >= 0 ? '+' : ''}${(bt.avgReturn * 100).toFixed(1)}% avg`
+            );
+            btSummary = ` | Backtest: ${parts.join('; ')}`;
+        }
+
+        modelSignalBlock = `
+
+**[Quant Model Reference]**
+Our systematic 7-factor model rates this: **${ms.signal}** (score ${ms.score}/100, confidence ${ms.confidence}% ${confLabel}). Notable: ${highlightStr}.${btSummary}
+
+Treat this as one analyst's view — a data point on your desk, not the thesis itself.
+Lead your memo with your own fundamental/technical/news-driven narrative.
+You may reference the model signal once (e.g., in Bottom Line or Strategic Implication) where it naturally supports or contrasts your view.
+Do NOT structure the memo around explaining each factor score. Do NOT invent different model numbers.`;
     }
 
     const systemPrompt = `You are "InvestSeek AI", a Senior Institutional Portfolio Manager. 
@@ -132,12 +236,13 @@ Your task is to generate a **professional, high-value investment memo** based on
 
 **Context Specifics:**
 ${specificInstructions}
+${modelSignalBlock}
 
 **Tone**: Institutional, Objective, Concise (under 350 words).`;
 
     const userContent = `**Analysis Context**: ${context}
 **Market/Stock Data**: ${JSON.stringify(data)}
-${extraContext ? `\n**Full News Source**: \n${extraContext}` : ''}`;
+${extraContext ? `\n**News Intelligence**:\n${extraContext}` : ''}`;
 
     const response = await client.chat.completions.create({
       model: "deepseek-chat",
