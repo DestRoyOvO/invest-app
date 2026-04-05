@@ -5,7 +5,7 @@ import {
   Search, TrendingUp, TrendingDown, Zap, Activity, Brain, ArrowRight, BarChart3, 
   ArrowLeft, LayoutGrid, Newspaper, ChevronRight, Layers, PieChart, Loader2,
   MessageSquare, X, Send, Minus, RefreshCw, History, Star, Plus, Check, List, Globe,
-  Target, ShieldCheck, AlertTriangle
+  Target, ShieldCheck
 } from 'lucide-react';
 
 // --- 1. 语言包定义 ---
@@ -16,8 +16,8 @@ const TRANSLATIONS: any = {
     overview: { heatMap: "Market Heatmap", volatility: "Size based on volatility", aiInsight: "AI Market Insight", topStories: "Top Stories", majorEtfs: "Major ETFs", loadingEtfs: "Loading ETFs..." },
     watchlist: { title: "My Watchlist", tickers: "Tickers", colCompany: "Company", colPrice: "Last Price", colChange: "Change", colTrend: "Trend (14D)", colMktCap: "Mkt Cap", loading: "Fetching Portfolio...", empty: "Your watchlist is empty. Search for a stock to add it here.", riskAnalysis: "Portfolio Risk Analysis", relatedNews: "Related News" },
     sector: { title: "Sector", aiScan: "AI Scan", relatedEtfs: "Related ETFs", loading: "Fetching Data...", colCompany: "Company", colPrice: "Last Price", colChange: "Change", colTrend: "Trend (14D)", colMktCap: "Mkt Cap" },
-    detail: { historical: "Historical View", live: "Live Market", liveData: "Live Market Data", mktCap: "Market Cap", pe: "P/E (TTM)", eps: "EPS", roe: "ROE", margin: "Gross Margin", earnings: "Earnings", nextEarnings: "Next Earnings", analysis: "DeepSeek Analysis" },
-    signal: { title: "Model Signal", score: "Score", confidence: "Confidence", momentum: "Momentum", trend: "Trend", rsi: "RSI", volume: "Volume", value: "Value", quality: "Quality", volatility: "Vol Risk", backtest: "Backtest", winRate: "Win Rate", avgReturn: "Avg Ret", sharpe: "Sharpe", maxDD: "Max DD", trades: "Trades", noData: "Insufficient data", disclaimer: "Model output for research only. Not investment advice.", loading: "Computing signal...", technical: "Technical", fundamental: "Fundamental", highConf: "High", medConf: "Medium", lowConf: "Low" },
+    detail: { historical: "Historical View", live: "Live Market", liveData: "Live Market Data", mktCap: "Market Cap", pe: "P/E (TTM)", eps: "EPS", roe: "ROE", margin: "Profit margin (TTM)", earnings: "Earnings", nextEarnings: "Next Earnings", analysis: "DeepSeek Analysis" },
+    signal: { title: "Model Signal", score: "Score", confidence: "Reliability", agreement: "Factor fit", dataCoverage: "Data", momentum: "Momentum", trend: "Trend", rsi: "RSI", volume: "Volume", value: "Value", quality: "Quality", volatility: "Vol Risk", backtest: "Backtest", winRate: "Win Rate", avgReturn: "Avg Ret", sharpe: "Sharpe", maxDD: "Max DD", trades: "Trades", noData: "Insufficient data", loading: "Computing signal...", technical: "Technical", fundamental: "Fundamental", highConf: "High", medConf: "Medium", lowConf: "Low" },
     news: { readOriginal: "Read Original Story on Yahoo Finance", aiInsight: "AI Strategic Insight" },
     chat: { title: "DeepSeek Assistant", placeholder: "Ask anything...", welcome: "Hello! I am InvestSeek AI. Ask me about markets, stocks, or your watchlist." },
     sectors: { "Technology": "Technology", "Communication": "Communication", "Consumer Disc.": "Consumer Disc.", "Financials": "Financials", "Healthcare": "Healthcare" }
@@ -28,8 +28,8 @@ const TRANSLATIONS: any = {
     overview: { heatMap: "市场热力图", volatility: "大小基于波动率", aiInsight: "AI 市场洞察", topStories: "头条新闻", majorEtfs: "主要 ETF", loadingEtfs: "加载 ETF 中..." },
     watchlist: { title: "我的自选", tickers: "只股票", colCompany: "公司", colPrice: "最新价", colChange: "涨跌幅", colTrend: "趋势 (14日)", colMktCap: "市值", loading: "正在获取持仓...", empty: "自选股为空。请搜索股票代码添加。", riskAnalysis: "持仓风险分析", relatedNews: "相关新闻" },
     sector: { title: "板块", aiScan: "AI 扫描", relatedEtfs: "相关 ETF", loading: "正在获取数据...", colCompany: "公司", colPrice: "最新价", colChange: "涨跌幅", colTrend: "趋势 (14日)", colMktCap: "市值" },
-    detail: { historical: "历史回溯", live: "实时行情", liveData: "实时市场数据", mktCap: "市值", pe: "市盈率 (TTM)", eps: "每股收益", roe: "净资产收益率", margin: "毛利率", earnings: "财报", nextEarnings: "下次财报", analysis: "DeepSeek 深度分析" },
-    signal: { title: "量化信号", score: "评分", confidence: "置信度", momentum: "动量", trend: "趋势", rsi: "RSI", volume: "成交量", value: "价值", quality: "质量", volatility: "波动风险", backtest: "回测", winRate: "胜率", avgReturn: "均收益", sharpe: "夏普", maxDD: "最大回撤", trades: "交易数", noData: "数据不足", disclaimer: "模型输出仅供研究参考，不构成投资建议。", loading: "正在计算信号...", technical: "技术面", fundamental: "基本面", highConf: "高", medConf: "中", lowConf: "低" },
+    detail: { historical: "历史回溯", live: "实时行情", liveData: "实时市场数据", mktCap: "市值", pe: "市盈率 (TTM)", eps: "每股收益", roe: "净资产收益率", margin: "净利率 (TTM)", earnings: "财报", nextEarnings: "下次财报", analysis: "DeepSeek 深度分析" },
+    signal: { title: "量化信号", score: "评分", confidence: "综合可信度", agreement: "因子一致性", dataCoverage: "数据覆盖", momentum: "动量", trend: "趋势", rsi: "RSI", volume: "成交量", value: "价值", quality: "质量", volatility: "波动风险", backtest: "回测", winRate: "胜率", avgReturn: "均收益", sharpe: "夏普", maxDD: "最大回撤", trades: "交易数", noData: "数据不足", loading: "正在计算信号...", technical: "技术面", fundamental: "基本面", highConf: "高", medConf: "中", lowConf: "低" },
     news: { readOriginal: "在 Yahoo Finance 阅读原文", aiInsight: "AI 战略洞察" },
     chat: { title: "DeepSeek 助手", placeholder: "随便问问...", welcome: "您好！我是 InvestSeek AI。您可以问我关于市场、个股或您持仓的问题。" },
     sectors: { "Technology": "科技", "Communication": "通信服务", "Consumer Disc.": "非必需消费", "Financials": "金融", "Healthcare": "医疗健康" }
@@ -555,7 +555,7 @@ export default function DeepSeekInvestDashboard() {
                indices: indices.slice(0, 3).map((i: MacroIndex) => ({ name: i.name, change: i.change, isUp: i.isUp })),
                topHeadlines: generalNews.slice(0, 2).map((n: NewsItem) => n.title)
            },
-           ...(signalData && !signalData.error ? { modelSignal: { signal: signalData.signal, score: signalData.score, confidence: signalData.confidence, components: signalData.components, backtests: signalData.backtests, metadata: signalData.metadata } } : {}),
+           ...(signalData && !signalData.error ? { modelSignal: { signal: signalData.signal, score: signalData.score, confidence: signalData.confidence, factorAgreement: signalData.factorAgreement, dataCompleteness: signalData.dataCompleteness, components: signalData.components, backtests: signalData.backtests, metadata: signalData.metadata } } : {}),
        };
     }
     
@@ -980,7 +980,9 @@ function SignalCard({ signalData, isLoading, t }: any) {
     );
     if (!signalData || signalData.error) return null;
 
-    const { signal, score, confidence, components, backtests } = signalData;
+    const { signal, score, confidence, factorAgreement, dataCompleteness, components, backtests } = signalData;
+    const fit = typeof factorAgreement === 'number' ? factorAgreement : confidence;
+    const cover = typeof dataCompleteness === 'number' ? dataCompleteness : null;
     const signalColors: Record<string, { bg: string; text: string; border: string; glow: string }> = {
         'Strong Buy':  { bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/30', glow: 'shadow-lg shadow-emerald-500/10' },
         'Buy':         { bg: 'bg-emerald-500/10', text: 'text-emerald-400', border: 'border-emerald-500/20', glow: '' },
@@ -1024,10 +1026,18 @@ function SignalCard({ signalData, isLoading, t }: any) {
                     <h2 className="text-sm font-bold text-white tracking-tight">{ts.title}</h2>
                 </div>
                 <div className="flex items-center gap-3">
-                    <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md ${confBg}`}>
-                        <span className="text-[9px] text-slate-500 font-bold uppercase">{ts.confidence}</span>
-                        <span className={`text-xs font-bold font-mono ${confColor}`}>{confidence}%</span>
-                        <span className={`text-[9px] font-bold ${confColor}`}>{confLabel}</span>
+                    <div className={`flex flex-col items-end gap-0.5 px-2 py-1 rounded-md ${confBg}`}>
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-[9px] text-slate-500 font-bold uppercase">{ts.confidence}</span>
+                            <span className={`text-xs font-bold font-mono ${confColor}`}>{confidence}%</span>
+                            <span className={`text-[9px] font-bold ${confColor}`}>{confLabel}</span>
+                        </div>
+                        <div className="text-[9px] text-slate-500 font-mono tabular-nums">
+                            <span className="text-slate-500">{ts.agreement}</span> {fit}%
+                            {cover !== null ? (
+                                <><span className="mx-1 text-slate-600">·</span><span className="text-slate-500">{ts.dataCoverage}</span> {cover}%</>
+                            ) : null}
+                        </div>
                     </div>
                     <div className="flex items-center gap-1.5 bg-slate-800/50 px-2 py-1 rounded-md">
                         <span className="text-[9px] text-slate-500 font-bold uppercase">{ts.score}</span>
@@ -1119,10 +1129,6 @@ function SignalCard({ signalData, isLoading, t }: any) {
                 </div>
             )}
 
-            <div className="mt-3 flex items-center gap-1.5 text-[9px] text-slate-600">
-                <AlertTriangle className="w-2.5 h-2.5" />
-                <span>{ts.disclaimer}</span>
-            </div>
         </div>
     );
 }

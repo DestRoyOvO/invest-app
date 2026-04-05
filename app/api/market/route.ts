@@ -222,7 +222,7 @@ export async function GET(request: Request) {
         const macroResults = extraResults.slice(0, macroTerms.length);
         const industryResults = extraResults.slice(macroTerms.length);
         
-        const getMetric = (path: string[]) => {
+        const getMetric = (path: (string | number)[]) => {
           let current: any = summary;
           for (const key of path) { if (!current) return undefined; current = current[key]; }
           return current;

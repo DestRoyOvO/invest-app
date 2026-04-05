@@ -191,6 +191,9 @@ export async function POST(request: Request) {
         const ms = data.modelSignal;
         const c = ms.components || {};
         const confLabel = ms.confidence >= 70 ? 'HIGH' : ms.confidence >= 45 ? 'MEDIUM' : 'LOW';
+        const fit = typeof ms.factorAgreement === 'number' ? ms.factorAgreement : ms.confidence;
+        const cov = typeof ms.dataCompleteness === 'number' ? ms.dataCompleteness : null;
+        const dataBit = cov !== null ? `, data coverage ${cov}%` : '';
 
         // Identify standout factors (top/bottom)
         const entries = Object.entries(c) as [string, number][];
@@ -213,7 +216,7 @@ export async function POST(request: Request) {
         modelSignalBlock = `
 
 **[Quant Model Reference]**
-Our systematic 7-factor model rates this: **${ms.signal}** (score ${ms.score}/100, confidence ${ms.confidence}% ${confLabel}). Notable: ${highlightStr}.${btSummary}
+Our systematic 7-factor model rates this: **${ms.signal}** (score ${ms.score}/100, headline reliability ${ms.confidence}% ${confLabel} — factor directional fit ${fit}%${dataBit}). Notable: ${highlightStr}.${btSummary}
 
 Treat this as one analyst's view — a data point on your desk, not the thesis itself.
 Lead your memo with your own fundamental/technical/news-driven narrative.

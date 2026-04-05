@@ -115,8 +115,8 @@ Composite of three fundamental metrics (averaged equally):
 
 | Metric | Good Range | Formula |
 |---|---|---|
-| ROE | 0%–35% | `normalize(ROE, 0, 0.35)` |
-| Profit Margin | -5%–30% | `normalize(margin, -0.05, 0.30)` |
+| ROE | 0%–100% (linear) | `normalize(ROE, 0, 1.0)` — Yahoo decimals (e.g. 0.25 = 25%) |
+| Profit Margin | -5%–50% | `normalize(margin, -0.05, 0.50)` — Yahoo `profitMargins` (typically net margin) |
 | Debt/Equity | 0–3.0 | `inverseNormalize(D/E, 0, 3.0)` |
 
 If data is unavailable for a metric, it defaults to 50 (neutral).
@@ -156,16 +156,18 @@ composite = momentum * 0.20 + trend * 0.15 + rsi * 0.10 + volume * 0.10
 | 28–41 | Sell |
 | 0–27 | Strong Sell |
 
-### Confidence Score
+### Reliability (headline score in API/UI)
 
-Measures factor agreement: what percentage of the 7 factors agree with the overall
-direction (bullish if score >= 50, bearish if < 50).
+- **Factor agreement** (“Factor fit”): weighted fraction of factors whose directional
+  score aligns with the composite (bullish if composite ≥ 50), 0–100%.
+- **Data completeness**: average per-factor data availability, 0–100%.
+- **Reliability**: `round(sqrt(factorAgreement * dataCompleteness))`.
 
-| Confidence | Meaning |
+| Reliability | Meaning (UI bands) |
 |---|---|
-| >= 70% | HIGH — Most factors align. Signal is reliable. |
-| 45–69% | MEDIUM — Mixed signals. Proceed with caution. |
-| < 45% | LOW — Factors disagree. High uncertainty. |
+| >= 70% | HIGH |
+| 45–69% | MEDIUM |
+| < 45% | LOW |
 
 ---
 

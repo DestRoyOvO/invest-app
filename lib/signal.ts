@@ -37,7 +37,9 @@ export type SignalLabel = 'Strong Buy' | 'Buy' | 'Hold' | 'Sell' | 'Strong Sell'
 export interface SignalResult {
   signal: SignalLabel;
   score: number;
-  confidence: number;     // 0–100, how many factors agree
+  confidence: number;
+  factorAgreement: number;
+  dataCompleteness: number;
   components: FactorScores;
   metadata: {
     ticker: string;
@@ -90,6 +92,29 @@ function inverseNormalize(value: number, min: number, max: number): number {
   return Math.round(((max - clamped) / (max - min)) * 100);
 }
 
+function median(nums: number[]): number {
+  if (nums.length === 0) return 0;
+  const s = [...nums].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+/** 20-day stdev of simple daily returns (most recent window). */
+function dailyReturnStd(bars: DailyBar[], window: number): number | undefined {
+  if (bars.length < window + 1) return undefined;
+  const rets: number[] = [];
+  const start = bars.length - window;
+  for (let i = start; i < bars.length; i++) {
+    const a = bars[i - 1].close;
+    const b = bars[i].close;
+    if (a > 0) rets.push((b - a) / a);
+  }
+  if (rets.length < 5) return undefined;
+  const mean = rets.reduce((s, v) => s + v, 0) / rets.length;
+  const v = rets.reduce((s, x) => s + (x - mean) ** 2, 0) / Math.max(rets.length - 1, 1);
+  return Math.sqrt(v);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // FACTOR 1: Multi-Timeframe Momentum (weight: 20%)
 // Combines 5d, 20d, 60d returns. Short-term weighted more for responsiveness,
@@ -109,17 +134,26 @@ export function computeMomentum(bars: DailyBar[]): number {
 
   if (r5 === undefined && r20 === undefined) return 50;
 
-  // Normalize each timeframe: [-20%, +20%] → [0, 100]
-  const s5 = r5 !== undefined ? normalize(r5, -0.15, 0.15) : 50;
-  const s20 = r20 !== undefined ? normalize(r20, -0.20, 0.20) : 50;
-  const s60 = r60 !== undefined ? normalize(r60, -0.30, 0.30) : 50;
+  // Vol-adjust: scale returns so high-vol names need larger moves to score extremes
+  const dstd = dailyReturnStd(bars, 20);
+  const ref = 0.012;
+  const scale = ref / Math.max(dstd ?? ref, 0.006);
+  const adj = (r: number | undefined) => (r === undefined ? undefined : r * scale);
+
+  const ar5 = adj(r5);
+  const ar20 = adj(r20);
+  const ar60 = adj(r60);
+
+  const s5 = ar5 !== undefined ? normalize(ar5, -0.15, 0.15) : 50;
+  const s20 = ar20 !== undefined ? normalize(ar20, -0.20, 0.20) : 50;
+  const s60 = ar60 !== undefined ? normalize(ar60, -0.30, 0.30) : 50;
 
   // Weighted: recent matters more but requires long-term confirmation
   // Mean-reversion penalty: if 5d is extremely positive but 60d is negative, dampen
   let score = s5 * 0.35 + s20 * 0.40 + s60 * 0.25;
 
   // Divergence penalty: only when short-term and long-term disagree in direction
-  if (r5 !== undefined && r60 !== undefined) {
+  if (ar5 !== undefined && ar60 !== undefined) {
     const shortBullish = s5 >= 50;
     const longBullish = s60 >= 50;
     if (shortBullish !== longBullish) {
@@ -173,7 +207,23 @@ export function computeTrend(bars: DailyBar[]): number {
   }
 
   if (maxPoints === 0) return 50;
-  return Math.round((points / maxPoints) * 100);
+  let score = (points / maxPoints) * 100;
+
+  // MA20 slope (5 sessions): rewards persistent trend, penalizes rolling-over structure
+  if (ma20 !== undefined && ma20 > 0 && bars.length >= 25) {
+    const lagBars = bars.slice(0, bars.length - 5);
+    const ma20Lag = sma(lagBars, 20);
+    if (ma20Lag !== undefined && ma20Lag > 0) {
+      const slope = (ma20 - ma20Lag) / ma20Lag;
+      if (score >= 54 && slope > 0.001) {
+        score = Math.min(100, score + Math.min(10, slope * 350));
+      } else if (score <= 46 && slope < -0.001) {
+        score = Math.max(0, score + Math.max(-10, slope * 350));
+      }
+    }
+  }
+
+  return Math.round(score);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -181,21 +231,28 @@ export function computeTrend(bars: DailyBar[]): number {
 // 14-day RSI. Score is INVERTED: RSI 30 (oversold) = high score (buying opportunity),
 // RSI 70 (overbought) = low score (risk of pullback).
 // ═══════════════════════════════════════════════════════════════════════════════
+/** Wilder smoothing RSI(14) over full history (industry-standard). */
 function computeRSI14(bars: DailyBar[]): number | undefined {
   if (bars.length < 15) return undefined;
-  const recent = bars.slice(-15);
-  let gains = 0, losses = 0;
-  for (let i = 1; i < recent.length; i++) {
-    const change = recent[i].close - recent[i - 1].close;
-    if (change > 0) gains += change;
-    else losses -= change;
+  let avgGain = 0;
+  let avgLoss = 0;
+  for (let i = 1; i <= 14; i++) {
+    const ch = bars[i].close - bars[i - 1].close;
+    if (ch >= 0) avgGain += ch;
+    else avgLoss -= ch;
   }
-  if (gains + losses === 0) return 50;
-  const avgGain = gains / 14;
-  const avgLoss = losses / 14;
+  avgGain /= 14;
+  avgLoss /= 14;
+  for (let i = 15; i < bars.length; i++) {
+    const ch = bars[i].close - bars[i - 1].close;
+    const g = ch > 0 ? ch : 0;
+    const l = ch < 0 ? -ch : 0;
+    avgGain = (avgGain * 13 + g) / 14;
+    avgLoss = (avgLoss * 13 + l) / 14;
+  }
   if (avgLoss === 0) return 100;
   const rs = avgGain / avgLoss;
-  return 100 - (100 / (1 + rs));
+  return 100 - 100 / (1 + rs);
 }
 
 export function computeRSI(bars: DailyBar[]): number {
@@ -232,7 +289,9 @@ export function computeVolume(bars: DailyBar[]): number {
   const baselineAvgVol = baseline.reduce((s, b) => s + (b.volume || 0), 0) / baseline.length;
 
   if (baselineAvgVol === 0) return 50;
-  const volumeRatio = recentAvgVol / baselineAvgVol;
+  const recentMed = median(recent.map((b) => b.volume || 0));
+  const baselineMed = median(baseline.map((b) => b.volume || 0));
+  const volumeRatio = baselineMed > 0 ? recentMed / baselineMed : recentAvgVol / baselineAvgVol;
 
   // Price direction over same period
   const priceChange = (recent[recent.length - 1].close - recent[0].close) / recent[0].close;
@@ -241,19 +300,19 @@ export function computeVolume(bars: DailyBar[]): number {
 
   if (priceChange > 0.01) {
     // Price rising
-    if (volumeRatio > 1.3) score = 85;       // strong volume confirmation
-    else if (volumeRatio > 1.0) score = 70;  // moderate confirmation
-    else if (volumeRatio > 0.7) score = 55;  // weak rally (volume declining)
+    if (volumeRatio > 1.35) score = 85;       // strong volume confirmation
+    else if (volumeRatio > 1.05) score = 70;  // moderate confirmation
+    else if (volumeRatio > 0.75) score = 55;  // weak rally (volume declining)
     else score = 40;                          // very weak - distribution likely
   } else if (priceChange < -0.01) {
     // Price falling
-    if (volumeRatio > 1.3) score = 20;       // heavy selling - capitulation
-    else if (volumeRatio > 1.0) score = 35;  // confirmed downtrend
-    else if (volumeRatio > 0.7) score = 50;  // gentle fade, may reverse
+    if (volumeRatio > 1.35) score = 20;       // heavy selling - capitulation
+    else if (volumeRatio > 1.05) score = 35;  // confirmed downtrend
+    else if (volumeRatio > 0.75) score = 50;  // gentle fade, may reverse
     else score = 60;                          // declining on low volume - could be drying up
   } else {
     // Flat price
-    if (volumeRatio > 1.2) score = 45;       // accumulation or distribution
+    if (volumeRatio > 1.25) score = 45;       // accumulation or distribution
     else score = 50;                          // quiet/neutral
   }
 
@@ -276,13 +335,21 @@ export function computeValue(fundamentals: Fundamentals): number {
   if (pe === 0) return 50;
 
   // Growth-adjusted P/E thresholds
+  let score: number;
   if (revenueGrowth !== undefined && revenueGrowth !== null && revenueGrowth > 0.15) {
-    return inverseNormalize(pe, 10, 80);
+    score = inverseNormalize(pe, 10, 80);
   } else if (revenueGrowth !== undefined && revenueGrowth !== null && revenueGrowth > 0.05) {
-    return inverseNormalize(pe, 8, 50);
+    score = inverseNormalize(pe, 8, 50);
   } else {
-    return inverseNormalize(pe, 5, 35);
+    score = inverseNormalize(pe, 5, 35);
   }
+
+  // Value trap: ultra-low P/E with no/negative growth — cap optimism
+  if (pe > 0 && pe < 7 && (revenueGrowth === undefined || revenueGrowth === null || revenueGrowth < 0)) {
+    score = Math.min(score, 60);
+  }
+
+  return score;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -299,11 +366,11 @@ export function computeQuality(fundamentals: Fundamentals): number {
   let debtScore = 50;
 
   if (roe !== undefined && roe !== null) {
-    roeScore = normalize(roe, 0, 0.35);
+    roeScore = normalize(roe, 0, 1.0);
   }
 
   if (profitMargin !== undefined && profitMargin !== null) {
-    marginScore = normalize(profitMargin, -0.05, 0.30);
+    marginScore = normalize(profitMargin, -0.05, 0.5);
   }
 
   if (debtToEquity !== undefined && debtToEquity !== null) {
@@ -311,6 +378,17 @@ export function computeQuality(fundamentals: Fundamentals): number {
   }
 
   if (roe == null && profitMargin == null && debtToEquity == null) return 50;
+
+  const allPresent =
+    roe !== undefined && roe !== null &&
+    profitMargin !== undefined && profitMargin !== null &&
+    debtToEquity !== undefined && debtToEquity !== null;
+
+  if (allPresent) {
+    const avg = (roeScore + marginScore + debtScore) / 3;
+    const weakest = Math.min(roeScore, marginScore, debtScore);
+    return Math.round(weakest * 0.24 + avg * 0.76);
+  }
 
   return Math.round((roeScore + marginScore + debtScore) / 3);
 }
@@ -365,6 +443,32 @@ export function rawVolatility(bars: DailyBar[]): number | undefined {
   return Math.sqrt(variance) * Math.sqrt(252);
 }
 
+/** Strong trend + momentum: ease mean-reversion RSI so it does not dominate a healthy advance/decline. */
+function applyRsiRegimeBlend(factors: FactorScores): FactorScores {
+  const { trend, momentum, rsi } = factors;
+  if (trend >= 72 && momentum >= 55) {
+    return { ...factors, rsi: Math.round(rsi * 0.67 + 50 * 0.33) };
+  }
+  if (trend <= 28 && momentum <= 45) {
+    return { ...factors, rsi: Math.round(rsi * 0.67 + 50 * 0.33) };
+  }
+  return factors;
+}
+
+/** Full factor pipeline (matches live signal and backtest per-bar evaluation). */
+export function computeFactorScores(bars: DailyBar[], fundamentals: Fundamentals): FactorScores {
+  const base: FactorScores = {
+    momentum: computeMomentum(bars),
+    trend: computeTrend(bars),
+    rsi: computeRSI(bars),
+    volume: computeVolume(bars),
+    value: computeValue(fundamentals),
+    quality: computeQuality(fundamentals),
+    volatility: computeVolatility(bars),
+  };
+  return applyRsiRegimeBlend(base);
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPOSITE SCORE, SIGNAL LABEL, CONFIDENCE
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -388,13 +492,85 @@ export function scoreToSignal(score: number): SignalLabel {
   return 'Strong Sell';
 }
 
-// Confidence: how many of the 7 factors agree with the overall direction
-export function computeConfidence(factors: FactorScores, overallScore: number): number {
+/** Weighted directional agreement: factors aligned with composite direction, weighted by model importance. */
+export function computeFactorAgreement(factors: FactorScores, overallScore: number): number {
   const isBullish = overallScore >= 50;
-  const factorValues = Object.values(factors);
-  const agreeing = factorValues.filter(v => isBullish ? v >= 50 : v < 50).length;
-  // Scale: all 7 agree = 100, 4/7 = ~57, etc.
-  return Math.round((agreeing / factorValues.length) * 100);
+  const keys = Object.keys(WEIGHTS) as (keyof FactorScores)[];
+  let agreeWeight = 0;
+  for (const k of keys) {
+    const v = factors[k];
+    if (isBullish ? v >= 50 : v < 50) agreeWeight += WEIGHTS[k];
+  }
+  return Math.round(agreeWeight * 100);
+}
+
+/** Per-factor data presence (0–1); penalizes neutral imputation from missing Yahoo fields or short history. */
+export function computeDataCompleteness(bars: DailyBar[], fundamentals: Fundamentals): number {
+  const r5 = periodReturn(bars, 5);
+  const r20 = periodReturn(bars, 20);
+  const r60 = periodReturn(bars, 60);
+  const retSlots = [r5, r20, r60].filter((x) => x !== undefined).length;
+  const momentumFrac = retSlots / 3;
+
+  let trendFrac = 0;
+  if (bars.length >= 100) trendFrac = 1;
+  else if (bars.length >= 50) trendFrac = 0.75;
+  else if (bars.length >= 20) trendFrac = 0.5;
+  else if (bars.length >= 1) trendFrac = 0.25;
+
+  const rsiFrac = bars.length >= 15 ? 1 : 0;
+
+  let volFrac = 0;
+  if (bars.length >= 25) {
+    const recent = bars.slice(-5);
+    const baseline = bars.slice(-25, -5);
+    const hasVolume =
+      recent.every((b) => b.volume !== undefined && b.volume > 0) &&
+      baseline.some((b) => b.volume !== undefined && b.volume > 0);
+    volFrac = hasVolume ? 1 : 0;
+  }
+
+  const { pe, roe, profitMargin, debtToEquity } = fundamentals;
+  const valueFrac = pe !== undefined && pe !== null ? 1 : 0;
+
+  let qualCount = 0;
+  if (roe !== undefined && roe !== null) qualCount++;
+  if (profitMargin !== undefined && profitMargin !== null) qualCount++;
+  if (debtToEquity !== undefined && debtToEquity !== null) qualCount++;
+  const qualityFrac = qualCount / 3;
+
+  let volRiskFrac = 0;
+  if (bars.length >= 21) {
+    const recent = bars.slice(-21);
+    let n = 0;
+    for (let i = 1; i < recent.length; i++) {
+      if (recent[i - 1].close > 0 && recent[i].close > 0) n++;
+    }
+    volRiskFrac = n >= 10 ? 1 : 0;
+  }
+
+  const sum =
+    momentumFrac +
+    trendFrac +
+    rsiFrac +
+    volFrac +
+    valueFrac +
+    qualityFrac +
+    volRiskFrac;
+  return Math.round((sum / 7) * 100);
+}
+
+/** Combine agreement and data coverage (both must be high for a strong headline confidence). */
+export function computeReliability(factorAgreement: number, dataCompleteness: number): number {
+  const a = Math.max(0, Math.min(100, factorAgreement));
+  const d = Math.max(0, Math.min(100, dataCompleteness));
+  // Geometric mean on 0–100 scale: √(a·d). (Using √(a·d/100) was a bug — e.g. 80 & 100 became ~9%.)
+  return Math.round(Math.sqrt(a * d));
+}
+
+/** @deprecated Use computeFactorAgreement + computeReliability for clarity */
+export function computeConfidence(factors: FactorScores, overallScore: number): number {
+  return computeFactorAgreement(factors, overallScore);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -405,18 +581,12 @@ export function computeSignal(
   bars: DailyBar[],
   fundamentals: Fundamentals,
 ): SignalResult {
-  const factors: FactorScores = {
-    momentum: computeMomentum(bars),
-    trend: computeTrend(bars),
-    rsi: computeRSI(bars),
-    volume: computeVolume(bars),
-    value: computeValue(fundamentals),
-    quality: computeQuality(fundamentals),
-    volatility: computeVolatility(bars),
-  };
+  const factors = computeFactorScores(bars, fundamentals);
 
   const score = compositeScore(factors);
-  const confidence = computeConfidence(factors, score);
+  const factorAgreement = computeFactorAgreement(factors, score);
+  const dataCompleteness = computeDataCompleteness(bars, fundamentals);
+  const confidence = computeReliability(factorAgreement, dataCompleteness);
 
   const recentVols = bars.slice(-5);
   const baselineVols = bars.slice(-25, -5);
@@ -427,6 +597,8 @@ export function computeSignal(
     signal: scoreToSignal(score),
     score,
     confidence,
+    factorAgreement,
+    dataCompleteness,
     components: factors,
     metadata: {
       ticker,
@@ -451,15 +623,7 @@ export function computeSignalAtIndex(
   fundamentals: Fundamentals,
 ): { score: number; signal: SignalLabel } {
   const windowBars = bars.slice(0, endIndex + 1);
-  const factors: FactorScores = {
-    momentum: computeMomentum(windowBars),
-    trend: computeTrend(windowBars),
-    rsi: computeRSI(windowBars),
-    volume: computeVolume(windowBars),
-    value: computeValue(fundamentals),
-    quality: computeQuality(fundamentals),
-    volatility: computeVolatility(windowBars),
-  };
+  const factors = computeFactorScores(windowBars, fundamentals);
   const score = compositeScore(factors);
   return { score, signal: scoreToSignal(score) };
 }

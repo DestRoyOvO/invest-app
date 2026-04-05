@@ -62,9 +62,14 @@ export async function GET(request: Request) {
         ?? undefined,
       revenueGrowth: getMetric(['financialData', 'revenueGrowth'])
         ?? undefined,
-      debtToEquity: getMetric(['financialData', 'debtToEquity'])
-        ? (getMetric(['financialData', 'debtToEquity']) / 100) // Yahoo reports as percentage
-        : undefined,
+      debtToEquity: (() => {
+        const raw =
+          getMetric(['financialData', 'debtToEquity']) ??
+          getMetric(['defaultKeyStatistics', 'debtToEquity']);
+        if (raw === undefined || raw === null) return undefined;
+        // Yahoo quoteSummary typically uses whole-number percent (e.g. 7.255 → 7.255%)
+        return raw / 100;
+      })(),
     };
 
     const signal = computeSignal(ticker.toUpperCase(), bars, fundamentals);
