@@ -23,7 +23,7 @@
     "react-dom": "^19.3.1",
     "server-only": "^0.0.1",
     "swr": "^2.5.1",
-    "yahoo-finance2": "~3.14.3",
+    "yahoo-finance2": "~4.0.5",
     "zod": "^4.6.7"
   },
   "devDependencies": {
