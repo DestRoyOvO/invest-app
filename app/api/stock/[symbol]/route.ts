@@ -1,5 +1,6 @@
+import { extraUnits, uncachedStockDetailCalls } from "@/lib/server/charging";
 import { jsonError, jsonOk, upstreamError } from "@/lib/server/http";
-import { limitPublicRequest } from "@/lib/server/request-guard";
+import { chargePublicRequest, limitPublicRequest } from "@/lib/server/request-guard";
 import { getStockDetail } from "@/lib/server/market";
 import { isSessionActive } from "@/lib/server/yahoo";
 import { normalizeSymbol } from "@/lib/symbols";
@@ -18,6 +19,10 @@ export async function GET(request: Request, ctx: { params: Promise<{ symbol: str
 
   const symbol = normalizeSymbol(decodeParam((await ctx.params).symbol));
   if (!symbol) return jsonError(400, "bad_request", "Invalid symbol.");
+
+  // An uncached page can take up to 7 Yahoo calls (quote, summary, news searches): each one beyond the first costs a unit.
+  const charged = chargePublicRequest(request, extraUnits(uncachedStockDetailCalls(symbol)));
+  if (charged) return charged;
 
   try {
     const detail = await getStockDetail(symbol);

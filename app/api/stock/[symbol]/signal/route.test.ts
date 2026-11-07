@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { uncachedSignalCalls } from "@/lib/server/charging";
+import { jsonError } from "@/lib/server/http";
+import { chargePublicRequest } from "@/lib/server/request-guard";
 import { getSignalReport, SignalNotFoundError } from "@/lib/server/signal-service";
 import type { SignalReport } from "@/types/api";
 
@@ -10,6 +13,14 @@ vi.mock("@/lib/server/signal-service", () => {
   class SignalNotFoundError extends Error {}
   return { getSignalReport: vi.fn(), SignalNotFoundError };
 });
+vi.mock("@/lib/server/charging", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/server/charging")>()),
+  uncachedSignalCalls: vi.fn(() => 0),
+}));
+vi.mock("@/lib/server/request-guard", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/server/request-guard")>()),
+  chargePublicRequest: vi.fn(() => null),
+}));
 
 const REPORT: SignalReport = {
   symbol: "^GSPC",
@@ -34,6 +45,8 @@ function call(symbol: string) {
 describe("GET /api/stock/[symbol]/signal", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    vi.mocked(uncachedSignalCalls).mockReturnValue(0);
+    vi.mocked(chargePublicRequest).mockReturnValue(null);
   });
 
   it("rejects invalid symbols with 400", async () => {
@@ -52,6 +65,22 @@ describe("GET /api/stock/[symbol]/signal", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toContain("s-maxage=300");
     expect(await response.json()).toEqual(REPORT);
+  });
+
+  it("charges one unit per Yahoo call an uncached report makes, beyond the request's own unit", async () => {
+    vi.mocked(getSignalReport).mockResolvedValue(REPORT);
+    vi.mocked(uncachedSignalCalls).mockReturnValue(3);
+    await call("AAPL");
+    expect(uncachedSignalCalls).toHaveBeenCalledWith("AAPL");
+    expect(vi.mocked(chargePublicRequest).mock.calls[0]?.[1]).toBe(2);
+  });
+
+  it("stops before loading when the extra units exceed the client's budget", async () => {
+    vi.mocked(uncachedSignalCalls).mockReturnValue(3);
+    vi.mocked(chargePublicRequest).mockReturnValue(jsonError(429, "rate_limited", "Too many requests."));
+    const response = await call("AAPL");
+    expect(response.status).toBe(429);
+    expect(getSignalReport).not.toHaveBeenCalled();
   });
 
   it("maps an unknown symbol to 404", async () => {

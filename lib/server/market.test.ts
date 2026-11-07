@@ -39,6 +39,13 @@ vi.mock("./yahoo", () => ({
   CHART_RANGES: ["1mo", "3mo", "6mo", "1y", "2y", "5y"] satisfies ChartRange[],
   isSessionActive: (state: MarketState | null) => state === "REGULAR" || state === "PRE" || state === "POST",
   hasCachedSparkline: () => false,
+  // Cache probes used by lib/server/charging.ts: nothing is cached, so the stock route charges its full fan-out.
+  hasFreshQuote: () => false,
+  hasCachedSummary: () => false,
+  hasCachedNewsSearch: () => false,
+  hasCachedDailyBars: () => false,
+  peekQuote: () => undefined,
+  peekSummary: () => undefined,
 }));
 vi.mock("./news", () => news);
 
