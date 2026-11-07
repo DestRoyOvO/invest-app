@@ -51,7 +51,8 @@ What `docker-compose.yml` sets up:
 - Settings come from `.env.local`, the same file `npm run dev` uses. No setting is baked into the image: `.dockerignore`
   keeps every `.env*` file out of the build.
 - The port is published on `127.0.0.1` only. To reach the app from other devices, use the [Caddy profile](#https-with-caddy)
-  or change the mapping in `docker-compose.yml` (and then set `TRUST_PROXY=0`, see below).
+  or change the mapping in `docker-compose.yml`, and then set `TRUST_PROXY=0` in the shell or in a `.env` file next to
+  `docker-compose.yml`. Compose sets `TRUST_PROXY` itself, so a value in `.env.local` has no effect there (see below).
 - The image has a `HEALTHCHECK` that calls `/api/health` with Node every 30 seconds. It checks liveness only, so a Yahoo
   outage never marks the container unhealthy or gets it restarted.
 - `restart: unless-stopped` brings the app back after a crash or a reboot.
@@ -145,7 +146,8 @@ without them. In private mode:
   for. An API request gets `401` with `{"error":{"code":"unauthorized",...}}`.
 - These stay open: `/api/health` (for monitors and the Docker health check), `/api/auth/*` (sign-in), `/unlock`, the
   framework's static assets, icons and the web manifest.
-- Every response carries `X-Robots-Tag: noindex, nofollow`.
+- Every page and API response carries `X-Robots-Tag: noindex, nofollow`. Build assets and root-level static files
+  (icons, the manifest) skip `proxy.ts` and are served without it.
 - Successful API responses use `Cache-Control: private, max-age=0` instead of the shared CDN cache, so no shared cache
   can hand your data to an anonymous visitor.
 - A session lasts 30 days. Changing `ACCESS_PASSWORD` or `SESSION_SECRET` signs every browser out.
@@ -178,7 +180,7 @@ default". An invalid value falls back to the default and is reported at startup 
 | `ACCESS_PASSWORD` | none | Unlocks the AI features, and the whole site in private mode. Without it AI is open in development (on localhost only) and disabled in production. Use 12 to 256 characters. |
 | `SESSION_SECRET` | none | Signs the session cookie. Required with `ACCESS_PASSWORD`; 32 or more random characters, e.g. `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. |
 | `SITE_ACCESS` | `public` | `public` or `private`, see [Private site mode](#private-site-mode). An unreadable value counts as `private`. |
-| `TRUST_PROXY` | off | `1` behind a reverse proxy you control that appends the client address to `X-Forwarded-For` (nginx, Caddy). Rate limits then use the right-most address. Leave it off otherwise: forwarded headers are ignored and all clients share one rate-limit bucket. Not needed on Vercel. Accepts 1/0, true/false, yes/no, on/off. |
+| `TRUST_PROXY` | off | `1` behind a reverse proxy you control that appends the client address to `X-Forwarded-For` (nginx, Caddy). Rate limits then use the right-most address. Leave it off otherwise: forwarded headers are ignored and all clients share one rate-limit bucket. Not needed on Vercel. Accepts 1/0, true/false, yes/no, on/off. Docker Compose sets `1` and reads this one from the shell or a `.env` file, not from `.env.local`. |
 | `SITE_URL` | none | Public address of the deployment, e.g. `https://invest.example.com`. Only the origin is kept. |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` or `silent`. |
 | `MARKET_DATA_SOURCE` | `yahoo` | Where market data comes from. `fixtures` and `record` are reserved for the replay mode of the end-to-end tests and are not available yet; the server reports them at startup and uses Yahoo. |
