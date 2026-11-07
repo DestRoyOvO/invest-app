@@ -33,6 +33,8 @@ export const BENCHMARK = "SPY";
 /** Pairs whose daily returns correlate at least this much are flagged as moving together. */
 export const HIGH_CORRELATION = 0.8;
 export const VAR_CONFIDENCE = 0.95;
+/** The risk statistics cover the last year of sessions (252 daily returns), the same window as the 1Y chart. */
+export const RISK_SESSIONS = 252;
 
 type Series = ReadonlyArray<number | null>;
 
@@ -85,6 +87,15 @@ export function onBenchmarkSessions(history: AlignedCloses, benchmark: string): 
     closes[symbol] = out;
   }
   return { dates: history.dates.filter((_, i) => keep.has(i)), closes };
+}
+
+/** The last `count` sessions of an aligned history. */
+export function lastSessions(history: AlignedCloses, count: number): AlignedCloses {
+  const start = Math.max(0, history.dates.length - count);
+  if (start === 0) return history;
+  const closes: Record<string, Array<number | null>> = {};
+  for (const [symbol, series] of Object.entries(history.closes)) closes[symbol] = series.slice(start);
+  return { dates: history.dates.slice(start), closes };
 }
 
 /** A series on other dates looked up by date onto `dates` (null where it has no close that day). */
@@ -196,7 +207,7 @@ export function analyzeRisk(analyzed: readonly ValuedPosition[], history: Aligne
   const raw = history ?? { dates: [], closes: {} };
   const withHistory = analyzed.filter((p) => (raw.closes[p.symbol] ?? []).some(isPrice));
   const missingHistory = analyzed.filter((p) => !withHistory.includes(p)).map((p) => p.symbol);
-  const aligned = onBenchmarkSessions(raw, benchmark);
+  const aligned = lastSessions(onBenchmarkSessions(raw, benchmark), RISK_SESSIONS + 1);
   const dates = [...aligned.dates];
   const shares = Object.fromEntries(withHistory.map((p) => [p.symbol, p.shares]));
   const values = withHistory.length > 0 ? holdingsValueSeries(aligned, shares) : dates.map(() => null);

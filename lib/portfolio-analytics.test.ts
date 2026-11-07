@@ -14,9 +14,11 @@ import {
   HIGH_CORRELATION,
   historySymbols,
   largestRiskGap,
+  lastSessions,
   onBenchmarkSessions,
   performanceWindow,
   projectedDividends,
+  RISK_SESSIONS,
   sectorExposure,
   selectAnalyzed,
   type PositionRisk,
@@ -147,6 +149,17 @@ describe("analyzeRisk", () => {
     expect(report.since).toBe(dates[40]);
     expect(report.sessions).toBe(n - 41);
     expect(report.values.slice(0, 40).every((v) => v === null)).toBe(true);
+  });
+
+  it("covers the last 252 daily returns, the 1Y chart window", () => {
+    const long = 400;
+    const longMarket = noise(11, long - 1);
+    const longDates = Array.from({ length: long }, (_, i) => i * DAY);
+    const report = analyzeRisk([pos("SPY", 1, 500)], { dates: longDates, closes: { SPY: closesFrom(400, longMarket) } });
+    expect(report.dates).toHaveLength(RISK_SESSIONS + 1);
+    expect(report.dates[0]).toBe(longDates[long - RISK_SESSIONS - 1]);
+    expect(report.sessions).toBe(RISK_SESSIONS);
+    expect(lastSessions({ dates: [1, 2, 3], closes: { A: [1, 2, 3] } }, 2)).toEqual({ dates: [2, 3], closes: { A: [2, 3] } });
   });
 
   it("returns empty statistics without history or benchmark", () => {

@@ -155,6 +155,7 @@ function EditorDrawer({ initial, onClose }: { initial: string; onClose: () => vo
               onPick={choose}
               placeholder={t.portfolio.symbolPlaceholder}
               inputClassName="max-sm:h-10"
+              inline
             />
           </Field>
         ) : null}

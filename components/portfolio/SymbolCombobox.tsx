@@ -22,6 +22,8 @@ interface SymbolComboboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>
   /** Classes for the wrapper (width); the input fills it. */
   className?: string;
   inputClassName?: string;
+  /** Render the suggestions in the flow below the input (inside drawers and sheets) instead of floating over the page. */
+  inline?: boolean;
 }
 
 /**
@@ -30,7 +32,7 @@ interface SymbolComboboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>
  * surrounding form submits the typed text), Escape closes the list. Inside a Field it is labelled automatically.
  */
 export const SymbolCombobox = forwardRef<HTMLInputElement, SymbolComboboxProps>(function SymbolCombobox(
-  { value, onValueChange, onPick, className, inputClassName, onKeyDown, onFocus, onBlur, ...props },
+  { value, onValueChange, onPick, className, inputClassName, inline = false, onKeyDown, onFocus, onBlur, ...props },
   ref,
 ) {
   const listId = useId();
@@ -106,7 +108,11 @@ export const SymbolCombobox = forwardRef<HTMLInputElement, SymbolComboboxProps>(
         className={cn("mono uppercase placeholder:font-sans placeholder:normal-case", inputClassName)}
       />
       {open ? (
-        <ul id={listId} role="listbox" className="absolute top-full right-0 left-0 z-30 mt-1 rounded-xs border border-line-2 bg-panel py-1 shadow-xl">
+        <ul
+          id={listId}
+          role="listbox"
+          className={cn("mt-1 rounded-xs border border-line-2 bg-panel py-1", inline ? "relative" : "absolute top-full right-0 left-0 z-30 shadow-xl")}
+        >
           {suggestions.map((s, i) => (
             <li
               key={s.symbol}
