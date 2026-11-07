@@ -210,9 +210,10 @@ function QuoteList({ data, screen, error, onRetry, keys, caption, cap, onCapChan
   );
 }
 
-function ListMeta({ data }: { data: DiscoverResponse | undefined }) {
+/** "50 shown · 250 of 371 scanned · Updated 16:10 ET" for the list on screen, once it matches the tab and floor. */
+function ListMeta({ data, screen, cap }: { data: DiscoverResponse | undefined; screen: DiscoverScreen; cap: DiscoverCap }) {
   const { t, lang } = usePrefs();
-  if (!data) return null;
+  if (!data || data.screen !== screen || data.minMarketCap !== cap) return null;
   const counts =
     data.total !== null
       ? tpl(t.discover.shown, { n: data.quotes.length, scanned: data.scanned, total: data.total })
@@ -235,7 +236,7 @@ function MoversPanel({ cap, onCapChange }: { cap: DiscoverCap; onCapChange: (cap
           <Tabs label={t.discover.moverTabs.label} value={screen} onChange={setScreen} options={MOVER_SCREENS.map((s) => ({ value: s, label: t.discover.moverTabs[s] }))} />
         </div>
         <div className="min-w-0 pr-3 pb-2.5">
-          <ListMeta data={data && data.screen === screen ? data : undefined} />
+          <ListMeta data={data} screen={screen} cap={cap} />
         </div>
       </div>
       <QuoteList
@@ -263,7 +264,7 @@ function IdeasPanel({ cap, onCapChange }: { cap: DiscoverCap; onCapChange: (cap:
           <Tabs label={t.discover.ideaTabs.label} value={screen} onChange={setScreen} options={IDEA_SCREENS.map((s) => ({ value: s, label: t.discover.ideaTabs[s] }))} />
         </div>
         <div className="min-w-0 pr-3 pb-2.5">
-          <ListMeta data={data && data.screen === screen ? data : undefined} />
+          <ListMeta data={data} screen={screen} cap={cap} />
         </div>
       </div>
       <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 border-b border-line px-3 py-2 text-xs text-fg-2">
@@ -293,7 +294,7 @@ function TrendingPanel({ cap, onCapChange }: { cap: DiscoverCap; onCapChange: (c
         <p className="text-xs text-fg-2">{t.discover.trendingHint}</p>
       </div>
       <div className="border-b border-line px-3 py-1.5">
-        <ListMeta data={data && data.screen === "trending" ? data : undefined} />
+        <ListMeta data={data} screen="trending" cap={cap} />
       </div>
       <QuoteList
         data={data}

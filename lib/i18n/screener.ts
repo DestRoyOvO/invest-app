@@ -182,7 +182,7 @@ export const screenerMessages = defineMessages(
       add: "Add selected to watchlist",
       clear: "Clear selection",
       added: "Added {n} to the watchlist",
-      addedSkipped: "Added {n} to the watchlist. {skipped} were already there.",
+      addedSkipped: "Added {n} to the watchlist. Already there: {skipped}.",
       allThere: "All selected symbols are already in the watchlist.",
       full: "The watchlist holds up to {max} symbols: added {n} of {total}.",
     },

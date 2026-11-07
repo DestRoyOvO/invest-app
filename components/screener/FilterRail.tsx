@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronRight } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Checkbox } from "@/components/ui/Checkbox";
@@ -42,6 +42,42 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
       <h3 className="col-head">{title}</h3>
       {children}
     </section>
+  );
+}
+
+interface RangeGroupProps {
+  title: string;
+  metrics: readonly MetricKey[];
+  filters: ScreenFilters;
+  onFiltersChange: (filters: ScreenFilters) => void;
+}
+
+/**
+ * A collapsible group of min/max fields. It opens when one of its ranges gets a value (a preset, a link) and otherwise
+ * keeps the state the person chose, so clearing the last field never folds the group away under the cursor.
+ */
+function RangeGroup({ title, metrics, filters, onFiltersChange }: RangeGroupProps) {
+  const { t } = usePrefs();
+  const set = metrics.filter((key) => filters.ranges[key]).length;
+  const [open, setOpen] = useState(set > 0);
+  const [seen, setSeen] = useState(set);
+  if (set !== seen) {
+    setSeen(set);
+    if (set > seen) setOpen(true);
+  }
+  return (
+    <details open={open} onToggle={(event) => setOpen(event.currentTarget.open)} className="group/range">
+      <summary className="flex h-10 cursor-pointer list-none items-center gap-2 px-3 transition-colors select-none hover:bg-hover [&::-webkit-details-marker]:hidden">
+        <ChevronRight aria-hidden className="size-3.5 shrink-0 text-fg-3 transition-transform group-open/range:rotate-90" strokeWidth={2} />
+        <span className="col-head flex-1">{title}</span>
+        {set > 0 ? <span className="num text-micro text-fg-2">{tpl(t.screener.filters.groupCount, { n: set })}</span> : null}
+      </summary>
+      <div className="space-y-3 px-3 pt-1 pb-3">
+        {metrics.map((key) => (
+          <RangeField key={key} metric={key} range={filters.ranges[key]} onChange={(range) => onFiltersChange(setRange(filters, key, range))} />
+        ))}
+      </div>
+    </details>
   );
 }
 
@@ -150,20 +186,14 @@ export function FilterRail({ screen, onFiltersChange, sectorCounts }: FilterRail
       {RANGE_GROUPS.map((group) => {
         const metrics = group.metrics.filter((key) => RANGE_KEYS.includes(key) && appliesTo(key, universe));
         if (metrics.length === 0) return null;
-        const set = metrics.filter((key) => filters.ranges[key]).length;
         return (
-          <details key={`${universe}-${group.key}`} open={set > 0} className="group/range">
-            <summary className="flex h-10 cursor-pointer list-none items-center gap-2 px-3 transition-colors select-none hover:bg-hover [&::-webkit-details-marker]:hidden">
-              <ChevronRight aria-hidden className="size-3.5 shrink-0 text-fg-3 transition-transform group-open/range:rotate-90" strokeWidth={2} />
-              <span className="col-head flex-1">{t.screener.filters.groups[group.key]}</span>
-              {set > 0 ? <span className="num text-micro text-fg-2">{tpl(t.screener.filters.groupCount, { n: set })}</span> : null}
-            </summary>
-            <div className="space-y-3 px-3 pt-1 pb-3">
-              {metrics.map((key) => (
-                <RangeField key={key} metric={key} range={filters.ranges[key]} onChange={(range) => onFiltersChange(setRange(filters, key, range))} />
-              ))}
-            </div>
-          </details>
+          <RangeGroup
+            key={`${universe}-${group.key}`}
+            title={t.screener.filters.groups[group.key]}
+            metrics={metrics}
+            filters={filters}
+            onFiltersChange={onFiltersChange}
+          />
         );
       })}
     </div>
