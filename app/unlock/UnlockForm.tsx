@@ -1,19 +1,22 @@
 "use client";
 
 import { Lock } from "lucide-react";
-import { useId, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 
 import { useT } from "@/components/providers/PrefsProvider";
 import { Button } from "@/components/ui/Button";
 import { ApiError, postJson } from "@/lib/api-client";
 import { tpl } from "@/lib/format";
 
+import { retryWait } from "./wait";
+
 /**
  * Password form of the private-site unlock page. It signs in through the same endpoint as the AI unlock form and, on
- * success, loads the page the visitor asked for.
+ * success, loads the page the visitor asked for. `maxLength` is the longest password the server accepts.
  */
-export function UnlockForm({ next }: { next: string }) {
+export function UnlockForm({ next, maxLength }: { next: string; maxLength: number }) {
   const t = useT();
+  const inputRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
   const messageId = useId();
   const [password, setPassword] = useState("");
@@ -32,11 +35,18 @@ export function UnlockForm({ next }: { next: string }) {
       // A full page load, so the server renders the shell with the new session cookie from the start.
       window.location.replace(next);
     } catch (error) {
-      if (error instanceof ApiError && error.status === 429) setMessage(tpl(t.access.rateLimited, { s: error.retryAfter ?? 60 }));
-      else if (error instanceof ApiError && error.status === 401) setMessage(t.access.wrongPassword);
-      else if (error instanceof ApiError && (error.status === 400 || error.status === 503)) setMessage(t.access.unavailable);
+      const apiError = error instanceof ApiError ? error : null;
+      if (apiError?.status === 429) {
+        const wait = retryWait(apiError.retryAfter);
+        setMessage(wait.unit === "min" ? tpl(t.access.rateLimitedMinutes, { m: wait.value }) : tpl(t.access.rateLimited, { s: wait.value }));
+      } else if (apiError?.status === 401) setMessage(t.access.wrongPassword);
+      else if (apiError?.status === 400 || apiError?.status === 503) setMessage(t.access.unavailable);
       else setMessage(t.access.failed);
       setBusy(false);
+      // Submitting disabled the button, which drops its focus to the page: return focus to the field, with a wrong
+      // password selected so that typing replaces it.
+      inputRef.current?.focus();
+      if (apiError?.status === 401) inputRef.current?.select();
     }
   };
 
@@ -48,8 +58,10 @@ export function UnlockForm({ next }: { next: string }) {
       </label>
       <div className="flex gap-2">
         <input
+          ref={inputRef}
           id={inputId}
           type="password"
+          maxLength={maxLength}
           autoComplete="current-password"
           autoFocus
           required
