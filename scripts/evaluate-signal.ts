@@ -268,7 +268,7 @@ export function renderEvaluationReport(
       ? `At no horizon does the Newey-West t reach |t| = 2: over this decade the technical score has **not predicted** which of these stocks did better. It describes short-term relative strength.`
       : `The Newey-West t reaches |t| = 2 at ${reliable.map((h) => `${h.days} sessions`).join(", ")}. Read it together with the holdout and the hindsight gap below before treating it as an edge.`,
     "",
-    `Holdout ${holdout.from} to ${holdout.to} (the model was never designed on these years): the composite's ${holdout.horizon}-session rank IC is ${num(holdout.composite.mean)} ` +
+    `Holdout ${holdout.from} to ${holdout.to} (the model's weights were never fitted to these years): the composite's ${holdout.horizon}-session rank IC is ${num(holdout.composite.mean)} ` +
       `(Newey-West t ${num(holdout.composite.t, 2)}, 95% CI ${holdout.composite.ci ? `${num(holdout.composite.ci[0])} to ${num(holdout.composite.ci[1])}` : "n/a"}), ` +
       `${holdout.composite.pass ? "which passes" : "which does not pass"} the one-sided 5% test; ` +
       `${holdout.factors.filter((f) => f.pass).length === 0 ? "none of the five technical factors passes" : `${holdout.factors.filter((f) => f.pass).map((f) => f.key).join(", ")} pass`} the Holm-adjusted test.`,
@@ -366,6 +366,8 @@ export function renderEvaluationReport(
       "(Bartlett kernel, lag h, because h-session returns overlap). Every h-th date gives a non-overlapping grid, one per starting phase; the range of their classical t " +
       "shows how much a single grid could mislead, and the verdict is flagged fragile when the grids disagree.",
     "- A relationship counts as reliable when |t| >= 2. The label table overlaps heavily, so read it through its intervals, dates and episodes.",
+    "- Selection, timing and the shares average over observations, so every stock-session counts once and days with many readings weigh more; " +
+      "an average of per-date means would weigh every date equally instead. The bootstrap resamples whole dates either way.",
     "- The per-stock backtest on each quote page adds a circular-shift permutation p-value per hold period (lib/signal.ts), because across 78 stocks some edges look large by chance.",
     "",
     "## Caveats",

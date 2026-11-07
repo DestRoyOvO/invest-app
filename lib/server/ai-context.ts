@@ -532,7 +532,7 @@ export function evaluationLine(evaluation = SIGNAL_EVALUATION): string | null {
     `rank IC with ${days}-day forward returns ${fmtNumber(horizon.ic.mean, 3)} (Newey-West t ${fmtNumber(horizon.ic.t, 2)}), so ${EVALUATION_VERDICT_TEXT[evaluationVerdict(horizon)]}; ` +
     `average ${days}-day return against the same-day universe after very strong readings ${after(findLabel(horizon, "strong_bullish"))}, ` +
     `after very weak readings ${after(findLabel(horizon, "strong_bearish"))}; ` +
-    `holdout ${holdout.from} to ${holdout.to} (not used to build the model): rank IC ${fmtNumber(holdout.composite.mean, 3)} (95% CI ${holdoutCi}), ` +
+    `holdout ${holdout.from} to ${holdout.to} (the weights were never fitted to it): rank IC ${fmtNumber(holdout.composite.mean, 3)} (95% CI ${holdoutCi}), ` +
     (passed.length === 0 ? "and no technical factor passed its pre-set test" : `pre-set test passed by: ${passed.join(", ")}`)
   );
 }
