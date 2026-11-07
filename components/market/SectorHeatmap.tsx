@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
-import { deltaTint } from "@/components/ui/Delta";
+import { heatStep, heatStyle, withTrueMinus } from "@/components/ui/Delta";
 import { stockPath } from "@/lib/api-client";
 import { formatCompact, formatPercent, formatPrice } from "@/lib/format";
 import { squarify, type TreemapNode } from "@/lib/treemap";
@@ -27,8 +27,7 @@ function median(values: number[]): number {
 
 /** Market-cap treemap of the sector universe, colored by today's change. */
 export function SectorHeatmap({ sectors, className }: { sectors: SectorSnapshot[]; className?: string }) {
-  const { lang, theme } = usePrefs();
-  const maxMix = theme === "light" ? 80 : 50;
+  const { lang } = usePrefs();
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
 
@@ -76,7 +75,7 @@ export function SectorHeatmap({ sectors, className }: { sectors: SectorSnapshot[
                 style={{ left: node.x, top: node.y, width: Math.max(node.w - 1, 0), height: header - 1 }}
               >
                 <span className="truncate font-medium">{def?.short[lang] ?? node.item.key}</span>
-                <span className="num shrink-0">{formatPercent(node.item.changePercent)}</span>
+                <span className="num shrink-0">{withTrueMinus(formatPercent(node.item.changePercent))}</span>
               </Link>
             ) : null}
             {stocks.map((tile) => {
@@ -86,18 +85,19 @@ export function SectorHeatmap({ sectors, className }: { sectors: SectorSnapshot[
               const showSymbol = w > 34 && h > 18;
               const showChange = w > 44 && h > 34;
               const large = w > 110 && h > 70;
-              const label = `${q.symbol} ${q.name} ${formatPrice(q.price, lang)} ${formatPercent(q.changePercent)} · ${formatCompact(q.marketCap, lang)}`;
+              const change = withTrueMinus(formatPercent(q.changePercent));
+              const label = `${q.symbol} ${q.name} ${formatPrice(q.price, lang)} ${change} · ${formatCompact(q.marketCap, lang)}`;
               return (
                 <Link
                   key={q.symbol}
                   href={stockPath(q.symbol)}
                   aria-label={label}
                   title={label}
-                  className="absolute flex flex-col items-center justify-center overflow-hidden text-center leading-tight text-fg outline-offset-[-2px] transition-[filter] hover:brightness-125"
-                  style={{ left: tile.x, top: tile.y, width: Math.max(w, 0), height: Math.max(h, 0), background: deltaTint(q.changePercent, 3, maxMix) }}
+                  className="absolute flex flex-col items-center justify-center overflow-hidden text-center leading-tight outline-offset-[-2px] transition-[filter] hover:brightness-125"
+                  style={{ left: tile.x, top: tile.y, width: Math.max(w, 0), height: Math.max(h, 0), ...heatStyle(heatStep(q.changePercent)) }}
                 >
-                  {showSymbol ? <span className={`num font-medium ${large ? "text-base" : "text-xs"}`}>{q.symbol}</span> : null}
-                  {showChange ? <span className={`num ${large ? "text-sm" : "text-xs"} opacity-90`}>{formatPercent(q.changePercent)}</span> : null}
+                  {showSymbol ? <span className={`mono font-medium ${large ? "text-base" : "text-xs"}`}>{q.symbol}</span> : null}
+                  {showChange ? <span className={`num ${large ? "text-sm" : "text-xs"}`}>{change}</span> : null}
                 </Link>
               );
             })}
