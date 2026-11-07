@@ -1,0 +1,69 @@
+"use client";
+
+import { ArrowUpRight } from "lucide-react";
+import { useState } from "react";
+
+import { usePrefs } from "@/components/providers/PrefsProvider";
+import { Button } from "@/components/ui/Button";
+import { Panel } from "@/components/ui/Panel";
+import { formatInteger } from "@/lib/format";
+import type { StockProfile } from "@/types/api";
+
+function safeWebsite(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+export function ProfilePanel({ profile, className }: { profile: StockProfile; className?: string }) {
+  const { t, lang } = usePrefs();
+  const [expanded, setExpanded] = useState(false);
+  const website = safeWebsite(profile.website);
+  const s = t.stock.stats;
+
+  return (
+    <Panel title={t.stock.profile} className={className}>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 border-b border-line px-3 py-3 text-xs">
+        <div>
+          <dt className="text-fg-3">{s.sector}</dt>
+          <dd className="text-fg">{profile.sector ?? "—"}</dd>
+        </div>
+        <div>
+          <dt className="text-fg-3">{s.industry}</dt>
+          <dd className="text-fg">{profile.industry ?? "—"}</dd>
+        </div>
+        <div>
+          <dt className="text-fg-3">{s.employees}</dt>
+          <dd className="num text-fg">{formatInteger(profile.employees, lang)}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="text-fg-3">{s.website}</dt>
+          <dd className="truncate">
+            {website ? (
+              <a href={website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-info hover:underline">
+                {new URL(website).hostname.replace(/^www\./, "")}
+                <ArrowUpRight aria-hidden className="size-3" strokeWidth={1.75} />
+              </a>
+            ) : (
+              "—"
+            )}
+          </dd>
+        </div>
+      </dl>
+      {profile.summary ? (
+        <div className="px-3 py-3">
+          <p lang="en" className={expanded ? "text-sm leading-relaxed text-fg-2" : "line-clamp-5 text-sm leading-relaxed text-fg-2"}>
+            {profile.summary}
+          </p>
+          <Button size="sm" variant="ghost" className="mt-1 -ml-2" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
+            {expanded ? t.common.less : t.common.more}
+          </Button>
+        </div>
+      ) : null}
+    </Panel>
+  );
+}

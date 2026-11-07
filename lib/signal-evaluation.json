@@ -1,0 +1,237 @@
+{
+  "generated": "2026-11-07",
+  "from": "2024-04-30",
+  "to": "2026-11-06",
+  "universe": 78,
+  "observations": 49452,
+  "model": {
+    "version": 3,
+    "thresholds": {
+      "strongBullish": 72,
+      "bullish": 58,
+      "bearish": 42,
+      "strongBearish": 28
+    },
+    "weights": {
+      "momentum": 0.2,
+      "trend": 0.15,
+      "rsi": 0.1,
+      "volume": 0.1,
+      "value": 0.18,
+      "quality": 0.12,
+      "volatility": 0.15
+    }
+  },
+  "horizons": [
+    {
+      "days": 5,
+      "base": {
+        "n": 49062,
+        "mean": 0.00306,
+        "hitRate": 0.53708
+      },
+      "ic": {
+        "mean": -0.02528,
+        "t": -1.44246,
+        "dates": 126
+      },
+      "labels": [
+        {
+          "code": "strong_bullish",
+          "n": 1546,
+          "mean": 0.00146,
+          "hitRate": 0.52781,
+          "hitCI": [
+            0.50289,
+            0.5526
+          ],
+          "excess": -0.0016
+        },
+        {
+          "code": "bullish",
+          "n": 10865,
+          "mean": 0.00228,
+          "hitRate": 0.52738,
+          "hitCI": [
+            0.51799,
+            0.53676
+          ],
+          "excess": -0.00078
+        },
+        {
+          "code": "neutral",
+          "n": 24245,
+          "mean": 0.00185,
+          "hitRate": 0.52337,
+          "hitCI": [
+            0.51708,
+            0.52965
+          ],
+          "excess": -0.00121
+        },
+        {
+          "code": "bearish",
+          "n": 11764,
+          "mean": 0.00563,
+          "hitRate": 0.56656,
+          "hitCI": [
+            0.55758,
+            0.57549
+          ],
+          "excess": 0.00257
+        },
+        {
+          "code": "strong_bearish",
+          "n": 642,
+          "mean": 0.01855,
+          "hitRate": 0.70093,
+          "hitCI": [
+            0.66441,
+            0.73507
+          ],
+          "excess": 0.0155
+        }
+      ]
+    },
+    {
+      "days": 10,
+      "base": {
+        "n": 48672,
+        "mean": 0.00648,
+        "hitRate": 0.54341
+      },
+      "ic": {
+        "mean": -0.04385,
+        "t": -1.68848,
+        "dates": 63
+      },
+      "labels": [
+        {
+          "code": "strong_bullish",
+          "n": 1528,
+          "mean": 0.00481,
+          "hitRate": 0.54319,
+          "hitCI": [
+            0.51814,
+            0.56803
+          ],
+          "excess": -0.00167
+        },
+        {
+          "code": "bullish",
+          "n": 10723,
+          "mean": 0.005,
+          "hitRate": 0.53688,
+          "hitCI": [
+            0.52743,
+            0.54631
+          ],
+          "excess": -0.00147
+        },
+        {
+          "code": "neutral",
+          "n": 24078,
+          "mean": 0.00448,
+          "hitRate": 0.5267,
+          "hitCI": [
+            0.52039,
+            0.53301
+          ],
+          "excess": -0.002
+        },
+        {
+          "code": "bearish",
+          "n": 11708,
+          "mean": 0.01098,
+          "hitRate": 0.57474,
+          "hitCI": [
+            0.56576,
+            0.58366
+          ],
+          "excess": 0.0045
+        },
+        {
+          "code": "strong_bearish",
+          "n": 635,
+          "mean": 0.02822,
+          "hitRate": 0.71024,
+          "hitCI": [
+            0.67377,
+            0.74417
+          ],
+          "excess": 0.02174
+        }
+      ]
+    },
+    {
+      "days": 20,
+      "base": {
+        "n": 47892,
+        "mean": 0.01314,
+        "hitRate": 0.55333
+      },
+      "ic": {
+        "mean": -0.02634,
+        "t": -0.80938,
+        "dates": 31
+      },
+      "labels": [
+        {
+          "code": "strong_bullish",
+          "n": 1485,
+          "mean": 0.00289,
+          "hitRate": 0.51178,
+          "hitCI": [
+            0.48636,
+            0.53715
+          ],
+          "excess": -0.01024
+        },
+        {
+          "code": "bullish",
+          "n": 10437,
+          "mean": 0.00877,
+          "hitRate": 0.53866,
+          "hitCI": [
+            0.52908,
+            0.54821
+          ],
+          "excess": -0.00436
+        },
+        {
+          "code": "neutral",
+          "n": 23754,
+          "mean": 0.01196,
+          "hitRate": 0.54534,
+          "hitCI": [
+            0.539,
+            0.55166
+          ],
+          "excess": -0.00118
+        },
+        {
+          "code": "bearish",
+          "n": 11587,
+          "mean": 0.01967,
+          "hitRate": 0.58255,
+          "hitCI": [
+            0.57354,
+            0.5915
+          ],
+          "excess": 0.00653
+        },
+        {
+          "code": "strong_bearish",
+          "n": 629,
+          "mean": 0.03383,
+          "hitRate": 0.65819,
+          "hitCI": [
+            0.62026,
+            0.6942
+          ],
+          "excess": 0.02069
+        }
+      ]
+    }
+  ]
+}

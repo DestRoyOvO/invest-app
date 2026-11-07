@@ -1,9 +1,194 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-/* 防止闪烁，强制深色背景 */
-body {
-  background-color: #0a0c10;
-  color: #fff;
+/*
+  InvestSeek design tokens.
+  Colors are CSS variables so the theme (dark/light) and the up/down color convention
+  (international green-up, or Chinese red-up) can switch at runtime via data attributes on <html>.
+*/
+
+@theme inline {
+  --font-sans: var(--font-plex-sans), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SFMono-Regular", Menlo, Consolas, "PingFang SC", "Microsoft YaHei", monospace;
+
+  --color-canvas: var(--canvas);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-hover: var(--hover);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-up: var(--up);
+  --color-down: var(--down);
+  --color-info: var(--info);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+
+  --text-data: 0.8125rem;
+  --text-data--line-height: 1.25rem;
+
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    --canvas: #06080b;
+    --panel: #0c0f13;
+    --panel-2: #11151a;
+    --hover: #161b21;
+    --line: #1d232b;
+    --line-2: #2a313b;
+    --fg: #e6e9ed;
+    --fg-2: #a9b2be;
+    --fg-3: #7d8897;
+    --accent: #f2a33a;
+    --accent-fg: #140d02;
+    --accent-soft: rgb(242 163 58 / 0.13);
+    --green: #2fbf71;
+    --red: #f0525a;
+    --info: #5aa9f0;
+    --warn: #e3b341;
+    --heat-neutral: #1b2027;
+    --up: var(--green);
+    --down: var(--red);
+    /* Errors stay red in both price conventions; --up and --down swap in red-up mode. */
+    --danger: var(--red);
+  }
+
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --canvas: #e4e8ed;
+    --panel: #ffffff;
+    --panel-2: #f5f7f9;
+    --hover: #eef1f4;
+    --line: #dde2e8;
+    --line-2: #c6cdd5;
+    --fg: #0e1318;
+    --fg-2: #47515e;
+    --fg-3: #5c6672;
+    --accent: #a35f00;
+    --accent-fg: #ffffff;
+    --accent-soft: rgb(163 95 0 / 0.1);
+    --green: #0b7d43;
+    --red: #c4252f;
+    --info: #1f6fc4;
+    --warn: #8a5f00;
+    --heat-neutral: #eceff2;
+  }
+
+  /* Chinese convention: red means up, green means down. */
+  :root[data-updown="cn"] {
+    --up: var(--red);
+    --down: var(--green);
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    background: var(--canvas);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: 0.875rem;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--accent) 35%, transparent);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-2) transparent;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer components {
+  /* Numbers: monospaced tabular figures so columns line up. */
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* Small uppercase panel and table labels. */
+  .label {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+  }
+
+  /* Brief background flash when a price ticks. */
+  .flash-up {
+    animation: flash-up 900ms ease-out;
+  }
+
+  .flash-down {
+    animation: flash-down 900ms ease-out;
+  }
+
+  /* Hide scrollbars on horizontally scrolling strips while keeping them scrollable. */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@keyframes flash-up {
+  from {
+    background-color: color-mix(in oklab, var(--up) 30%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+@keyframes flash-down {
+  from {
+    background-color: color-mix(in oklab, var(--down) 30%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
 }
