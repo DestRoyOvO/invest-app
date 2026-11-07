@@ -1,4 +1,73 @@
 import { defineMessages } from "./define";
 
 // Market-wide screens (movers, idea lists, trending). zh is typed against en; add keys to both.
-export const discoverMessages = defineMessages({}, {});
+export const discoverMessages = defineMessages(
+  {
+    title: "Discover",
+    movers: "Market movers",
+    moverTabs: { label: "Mover lists", day_gainers: "Gainers", day_losers: "Losers", most_actives: "Most active" },
+    ideas: "Idea lists",
+    ideaTabs: {
+      label: "Idea lists",
+      undervalued_large_caps: "Undervalued large caps",
+      growth_technology_stocks: "Growth technology",
+      most_shorted_stocks: "Most shorted",
+    },
+    yahooDefinition: "Yahoo's definition",
+    definitions: {
+      undervalued_large_caps: "Large caps that Yahoo's screen marks as potentially undervalued on P/E and PEG, ordered by volume.",
+      growth_technology_stocks: "Technology stocks with revenue and earnings growth above 25%, ordered by volume.",
+      most_shorted_stocks: "Stocks with the highest short interest as a share of shares outstanding, from exchange reports published every two weeks.",
+    },
+    trending: "Trending",
+    trendingHint: "Symbols most looked up on Yahoo Finance in the US right now. Funds and crypto are left out.",
+    minCap: "Min market cap",
+    columns: { relVol: "Rel vol", earnings: "Earnings", rating: "Rating" },
+    relVolHint: "Today's volume over the 3-month daily average. It reads low early in the session.",
+    earningsHint: "Days to the next report. ~ marks a date the company has not confirmed.",
+    shown: "{n} shown · {scanned} of {total} scanned",
+    shownNoTotal: "{n} shown · {scanned} scanned",
+    empty: "No stocks in this list clear the {cap} floor right now.",
+    lowerCap: "Lower the floor to {cap}",
+    caption: "{list}: {n} stocks",
+    source: "About these lists",
+    sourceNote:
+      "Lists come from Yahoo Finance predefined screens and Yahoo's trending symbols, so the definitions are Yahoo's, not ours. Shown: US-listed stocks priced at $2 or more with a market cap of at least {cap}. Quotes are delayed and the lists refresh about every 2 minutes.",
+    notAdvice: "A starting point for research, not a recommendation.",
+    updated: "Updated {time} ET",
+  },
+  {
+    title: "全市场",
+    movers: "市场异动",
+    moverTabs: { label: "异动榜单", day_gainers: "涨幅榜", day_losers: "跌幅榜", most_actives: "成交活跃" },
+    ideas: "创意清单",
+    ideaTabs: {
+      label: "创意清单",
+      undervalued_large_caps: "低估大盘股",
+      growth_technology_stocks: "成长科技股",
+      most_shorted_stocks: "做空最多",
+    },
+    yahooDefinition: "雅虎的定义",
+    definitions: {
+      undervalued_large_caps: "雅虎按市盈率和 PEG 标为可能低估的大盘股，按成交量排序。",
+      growth_technology_stocks: "营收和盈利增长都超过 25% 的科技股，按成交量排序。",
+      most_shorted_stocks: "空头持仓占流通股比例最高的股票，数据来自交易所每两周发布的报告。",
+    },
+    trending: "热门",
+    trendingHint: "此刻美国用户在雅虎财经上查询最多的代码，已去掉基金和加密货币。",
+    minCap: "最低市值",
+    columns: { relVol: "相对量", earnings: "财报", rating: "评级" },
+    relVolHint: "今日成交量与 3 个月日均成交量之比，开盘不久时读数偏低。",
+    earningsHint: "距下次财报的天数，~ 表示公司尚未确认的日期。",
+    shown: "显示 {n} 个 · 已扫描 {total} 个中的 {scanned} 个",
+    shownNoTotal: "显示 {n} 个 · 已扫描 {scanned} 个",
+    empty: "此清单中目前没有市值达到 {cap} 的股票。",
+    lowerCap: "把最低市值降到 {cap}",
+    caption: "{list}：{n} 只股票",
+    source: "关于这些清单",
+    sourceNote:
+      "清单来自雅虎财经的预设筛选和雅虎热门代码，定义是雅虎的，不是我们的。只显示在美国上市、股价不低于 2 美元且市值不低于 {cap} 的股票。报价有延迟，清单大约每 2 分钟刷新一次。",
+    notAdvice: "仅作研究起点，不构成推荐。",
+    updated: "更新于 {time}（纽约时间）",
+  },
+);
