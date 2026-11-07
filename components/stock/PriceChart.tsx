@@ -160,7 +160,7 @@ export function PriceChart({ symbol, className }: { symbol: string; className?: 
       actions={<Tabs label={t.stock.chart} value={range} onChange={setRange} options={RANGES.map((r) => ({ value: r, label: t.stock.ranges[r] }))} />}
       className={className}
     >
-      <div className="num flex min-h-8 flex-wrap items-center gap-x-4 gap-y-0.5 border-b border-line px-3 py-1 text-xs text-fg-3">
+      <div className="mono flex min-h-8 flex-wrap items-center gap-x-4 gap-y-0.5 border-b border-line px-3 py-1 text-xs text-fg-3">
         {shown ? (
           <>
             <span className="text-fg-2">{formatDate(shown.t, lang, "UTC")}</span>
@@ -176,7 +176,7 @@ export function PriceChart({ symbol, className }: { symbol: string; className?: 
             <span>
               C <span className="text-fg-2">{formatPrice(shown.c, lang)}</span>
             </span>
-            <Delta value={shownChange} />
+            <Delta value={shownChange} className="mono" />
             <span className="hidden sm:inline">
               V <span className="text-fg-2">{formatCompact(shown.v, lang)}</span>
             </span>

@@ -38,7 +38,7 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist }: QuoteHea
       <div className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-end md:justify-between">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
-            <h1 className="num text-xl font-semibold tracking-tight text-fg">{quote.symbol}</h1>
+            <h1 className="mono text-xl font-semibold tracking-tight text-fg">{quote.symbol}</h1>
             <span className="min-w-0 truncate text-sm text-fg-2">{profile.longName ?? quote.name}</span>
             {quote.exchange ? <Badge>{quote.exchange}</Badge> : null}
             {quote.currency && quote.currency !== "USD" ? <Badge tone="info">{quote.currency}</Badge> : null}

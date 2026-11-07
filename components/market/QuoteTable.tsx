@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
-import { Delta } from "@/components/ui/Delta";
+import { Delta, directionOf } from "@/components/ui/Delta";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { stockPath } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
@@ -64,7 +64,7 @@ export function QuoteTable({ quotes, columns, sparklines, rowAction, caption, de
       case "pe":
         return <span className="num text-fg-2">{q.trailingPE !== null ? q.trailingPE.toFixed(1) : "—"}</span>;
       case "trend":
-        return <Sparkline data={sparklines?.[q.symbol] ?? []} width={72} height={20} />;
+        return <Sparkline data={sparklines?.[q.symbol] ?? []} width={72} height={20} tone={directionOf(q.changePercent)} />;
     }
   };
 
@@ -73,19 +73,19 @@ export function QuoteTable({ quotes, columns, sparklines, rowAction, caption, de
       {caption ? <caption className="sr-only">{caption}</caption> : null}
       <thead>
         <tr className="border-b border-line">
-          <th scope="col" className="label h-8 w-[5.5rem] px-3 text-left font-normal">
+          <th scope="col" className="col-head h-8 w-[5.5rem] px-3 text-left">
             {t.columns.symbol}
           </th>
           {columns.map((col) => (
             <th
               key={col}
               scope="col"
-              className={cn("label h-8 px-3 font-normal", RIGHT.has(col) ? "text-right" : "text-left", col === "trend" && "w-[6.5rem]", hideOnNarrow(col))}
+              className={cn("col-head h-8 px-3", RIGHT.has(col) ? "text-right" : "text-left", col === "trend" && "w-[6.5rem]", hideOnNarrow(col))}
             >
               {headers[col]}
             </th>
           ))}
-          {rowAction ? <th scope="col" className="w-[4.5rem]" /> : null}
+          {rowAction ? <th scope="col" className="w-[4.5rem] max-sm:w-[5.5rem]" /> : null}
         </tr>
       </thead>
       <tbody>
@@ -98,8 +98,8 @@ export function QuoteTable({ quotes, columns, sparklines, rowAction, caption, de
             }}
             className="cursor-pointer border-b border-line/70 transition-colors last:border-b-0 hover:bg-hover"
           >
-            <td className={cn("px-3", dense ? "h-8" : "h-10")}>
-              <Link href={stockPath(q.symbol)} className="num font-medium text-fg hover:text-accent">
+            <td className={cn("px-3", dense ? "h-row" : "h-10")}>
+              <Link href={stockPath(q.symbol)} className="mono font-medium text-fg hover:text-accent">
                 {q.symbol}
               </Link>
             </td>

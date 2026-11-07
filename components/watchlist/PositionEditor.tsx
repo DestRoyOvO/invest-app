@@ -38,7 +38,7 @@ function Form({ symbol, current, onSave, onClear, onClose }: PositionEditorProps
     onClose();
   };
 
-  const field = "num h-9 w-full rounded-xs border border-line-2 bg-canvas px-2.5 text-sm text-fg focus:border-accent focus:outline-none";
+  const field = "num h-9 w-full rounded-xs border border-input-border bg-input-bg px-2.5 text-sm text-fg focus:border-accent focus:outline-none";
   return (
     <form onSubmit={onSubmit} className="space-y-4 p-4">
       <div className="space-y-1.5">

@@ -1,9 +1,10 @@
 "use client";
 
-import { Lock, Sparkles } from "lucide-react";
+import { Lock } from "lucide-react";
 
 import { useT } from "@/components/providers/PrefsProvider";
 import { useUi } from "@/components/providers/UiProvider";
+import { AiChip } from "@/components/ui/Badge";
 import { useAuthStatus } from "@/hooks/useApi";
 import { cn } from "@/lib/cn";
 import type { AuthStatus } from "@/types/api";
@@ -38,7 +39,7 @@ export function AiStatusButton({ className }: { className?: string }) {
         className,
       )}
     >
-      {state === "locked" ? <Lock aria-hidden className="size-3.5 text-warn" strokeWidth={1.75} /> : <Sparkles aria-hidden className={cn("size-3.5", state === "available" ? "text-accent" : "")} strokeWidth={1.75} />}
+      {state === "locked" ? <Lock aria-hidden className="size-3.5 text-warn" strokeWidth={1.75} /> : <AiChip tone={state === "available" ? "accent" : "muted"} />}
       <span className="hidden sm:inline">{label}</span>
     </button>
   );

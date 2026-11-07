@@ -79,7 +79,7 @@ export function AddSymbolForm({ onAdd }: { onAdd: (symbol: string) => AddResult 
           aria-expanded={suggestions.length > 0}
           aria-controls={listId}
           aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}
-          className="num h-8 w-full rounded-xs border border-line-2 bg-canvas px-2.5 text-sm text-fg uppercase placeholder:normal-case placeholder:text-fg-3 focus:border-accent focus:outline-none"
+          className="mono h-8 w-full rounded-xs border border-input-border bg-input-bg px-2.5 text-sm text-fg uppercase placeholder:normal-case placeholder:text-fg-3 focus:border-accent focus:outline-none"
         />
         {suggestions.length > 0 ? (
           <ul id={listId} role="listbox" className="absolute top-full right-0 left-0 z-20 mt-1 rounded-xs border border-line-2 bg-panel py-1 shadow-xl">
@@ -95,9 +95,9 @@ export function AddSymbolForm({ onAdd }: { onAdd: (symbol: string) => AddResult 
                 }}
                 className={cn("flex cursor-pointer items-center gap-3 px-2.5 py-1.5 text-sm", i === active ? "bg-hover text-fg" : "text-fg-2")}
               >
-                <span className="num w-20 shrink-0 font-medium text-fg">{s.symbol}</span>
+                <span className="mono w-20 shrink-0 font-medium text-fg">{s.symbol}</span>
                 <span className="min-w-0 flex-1 truncate">{s.name}</span>
-                <span className="num shrink-0 text-xs text-fg-3">{s.exchange}</span>
+                <span className="mono shrink-0 text-xs text-fg-3">{s.exchange}</span>
               </li>
             ))}
           </ul>

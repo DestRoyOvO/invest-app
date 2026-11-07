@@ -1,10 +1,11 @@
 "use client";
 
-import { RefreshCw, Sparkles, Square } from "lucide-react";
+import { RefreshCw, Square } from "lucide-react";
 import { useEffect } from "react";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { aiStateOf } from "@/components/shell/AiStatus";
+import { AiChip } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Panel, PanelMeta } from "@/components/ui/Panel";
 import { useAuthStatus } from "@/hooks/useApi";
@@ -69,7 +70,7 @@ export function ResearchNoteBody({ request, ready = true, className }: ResearchN
           </Button>
         ) : (
           <Button size="sm" variant={text ? "secondary" : "primary"} onClick={start} disabled={!request || !ready}>
-            {text ? <RefreshCw aria-hidden className="size-3.5" strokeWidth={1.75} /> : <Sparkles aria-hidden className="size-3.5" strokeWidth={1.75} />}
+            {text ? <RefreshCw aria-hidden className="size-3.5" strokeWidth={1.75} /> : <AiChip tone="current" />}
             {text ? t.ai.regenerate : t.ai.generate}
           </Button>
         )}

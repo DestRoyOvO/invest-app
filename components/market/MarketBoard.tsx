@@ -3,7 +3,7 @@
 import Link from "next/link";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
-import { Delta } from "@/components/ui/Delta";
+import { Delta, directionOf } from "@/components/ui/Delta";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { Skeleton } from "@/components/ui/States";
 import { stockPath } from "@/lib/api-client";
@@ -37,7 +37,10 @@ export function MarketBoard({ board }: { board: BoardItem[] | undefined }) {
                     <Delta value={quote.change} kind="change" lang={lang} />
                     <Delta value={quote.changePercent} />
                   </span>
-                  <Sparkline data={item?.spark ?? []} width={64} height={18} />
+                  <span className="flex items-center gap-1.5">
+                    <Sparkline data={item?.spark ?? []} width={64} height={18} tone={directionOf(quote.changePercent)} />
+                    <span className="hidden text-micro text-fg-3 sm:inline">{t.columns.trend}</span>
+                  </span>
                 </div>
               </>
             ) : board ? (

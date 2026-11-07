@@ -18,6 +18,9 @@ interface CommandItem {
   id: string;
   section: "commands" | "symbols" | "sectors";
   label: string;
+  /** Search results show the ticker in mono and the company name in sans. */
+  symbol?: string;
+  name?: string;
   hint?: string;
   icon: ReactNode;
   run: () => void;
@@ -119,6 +122,8 @@ export function CommandPalette() {
         id: `sym:${result.symbol}`,
         section: "symbols",
         label: `${result.symbol}  ${result.name}`,
+        symbol: result.symbol,
+        name: result.name,
         hint: [result.exchange, result.type].filter(Boolean).join(" · "),
         icon: <TrendingUp aria-hidden className={iconClass} strokeWidth={1.75} />,
         run: () => go(stockPath(result.symbol)),
@@ -223,7 +228,7 @@ export function CommandPalette() {
       <div aria-hidden className="absolute inset-0 bg-black/55" onClick={close} />
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={t.command.title} className="relative w-full max-w-xl overflow-hidden rounded-xs border border-line-2 bg-panel shadow-2xl">
         <div className="flex h-12 items-center gap-2 border-b border-line px-3">
-          <span aria-hidden className="num text-accent">
+          <span aria-hidden className="mono text-accent">
             &gt;
           </span>
           <input
@@ -242,7 +247,7 @@ export function CommandPalette() {
             aria-autocomplete="list"
             autoComplete="off"
             spellCheck={false}
-            className="num h-full min-w-0 flex-1 bg-transparent text-sm text-fg placeholder:text-fg-3 focus:outline-none"
+            className="mono h-full min-w-0 flex-1 bg-transparent text-sm text-fg placeholder:text-fg-3 focus:outline-none"
           />
           {isLoading && searchTerm ? <span className="text-xs text-fg-3">{t.command.searching}</span> : null}
         </div>
@@ -263,15 +268,22 @@ export function CommandPalette() {
                   className={cn("flex h-9 cursor-pointer items-center gap-3 px-3 text-sm", selected ? "bg-hover text-fg" : "text-fg-2")}
                 >
                   {item.icon}
-                  <span className="num min-w-0 flex-1 truncate">{item.label}</span>
-                  {item.hint ? <span className="num hidden shrink-0 text-xs text-fg-3 sm:inline">{item.hint}</span> : null}
+                  {item.symbol ? (
+                    <span className="flex min-w-0 flex-1 items-baseline gap-2.5">
+                      <span className="mono shrink-0 font-medium text-fg">{item.symbol}</span>
+                      <span className="truncate text-fg-2">{item.name}</span>
+                    </span>
+                  ) : (
+                    <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  )}
+                  {item.hint ? <span className="mono hidden shrink-0 text-xs text-fg-3 sm:inline">{item.hint}</span> : null}
                   {selected ? <CornerDownLeft aria-hidden className="size-3.5 shrink-0 text-fg-3" strokeWidth={1.75} /> : null}
                 </div>
               </li>
             );
           })}
         </ul>
-        <div className="num border-t border-line px-3 py-1.5 text-xs text-fg-3">{t.command.hint}</div>
+        <div className="mono border-t border-line px-3 py-1.5 text-xs text-fg-3">{t.command.hint}</div>
       </div>
     </div>
   );

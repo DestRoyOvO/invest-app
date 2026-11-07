@@ -158,7 +158,7 @@ export function WatchlistView() {
           <div role="status" className="flex flex-wrap items-center gap-2 border-y border-line bg-panel-2 px-3 py-1.5 text-xs text-warn">
             {tpl(t.watchlist.missing, { symbols: "" })}
             {missing.map((s) => (
-              <span key={s} className="num inline-flex items-center gap-1 rounded-xs border border-line-2 pl-1.5 text-fg-2">
+              <span key={s} className="mono inline-flex items-center gap-1 rounded-xs border border-line-2 pl-1.5 text-fg-2">
                 {s}
                 <IconButton size="sm" label={tpl(t.watchlist.remove, { symbol: s })} icon={<X className="size-3" strokeWidth={2} />} onClick={() => remove(s)} className="size-5" />
               </span>

@@ -18,7 +18,7 @@ function Money({ value, lang, signed = false }: { value: number | null; lang: La
   const sign = signOf(value);
   const text = formatNumber(Math.abs(value), 2, lang);
   if (!signed) return <span className="num text-fg">{text}</span>;
-  return <span className={`num ${sign > 0 ? "text-up" : sign < 0 ? "text-down" : "text-fg-3"}`}>{`${sign > 0 ? "+" : sign < 0 ? "-" : ""}${text}`}</span>;
+  return <span className={`num ${sign > 0 ? "text-up" : sign < 0 ? "text-down" : "text-fg-3"}`}>{`${sign > 0 ? "+" : sign < 0 ? "−" : ""}${text}`}</span>;
 }
 
 interface PositionsPanelProps {
@@ -32,17 +32,17 @@ interface PositionsPanelProps {
 export function PositionsPanel({ portfolio, loading, onEdit, className }: PositionsPanelProps) {
   const { t, lang } = usePrefs();
   const p = t.portfolio;
-  const th = "label h-8 px-3 text-right font-normal";
+  const th = "col-head h-8 px-3 text-right whitespace-nowrap";
   const { rows, foreign, unpriced, totals, baseCurrency } = portfolio;
   const count = rows.length + foreign.length + unpriced.length;
 
   const shares = (value: number) => formatNumber(value, value % 1 === 0 ? 0 : 4, lang);
   const symbolCell = (symbol: string, currency?: string) => (
-    <td className="h-8 px-3 whitespace-nowrap">
-      <Link href={stockPath(symbol)} className="num font-medium text-fg hover:text-accent">
+    <td className="h-row px-3 whitespace-nowrap">
+      <Link href={stockPath(symbol)} className="mono font-medium text-fg hover:text-accent">
         {symbol}
       </Link>
-      {currency ? <span className="num ml-1.5 text-xs text-fg-3">{currency}</span> : null}
+      {currency ? <span className="mono ml-1.5 text-xs text-fg-3">{currency}</span> : null}
     </td>
   );
   const editCell = (symbol: string) => (
@@ -95,7 +95,7 @@ export function PositionsPanel({ portfolio, loading, onEdit, className }: Positi
             <table className="w-full min-w-[640px] border-collapse text-data">
               <thead>
                 <tr className="border-b border-line">
-                  <th scope="col" className="label h-8 px-3 text-left font-normal">
+                  <th scope="col" className="col-head h-8 px-3 text-left">
                     {t.columns.symbol}
                   </th>
                   <th scope="col" className={th}>{p.shares}</th>
@@ -116,7 +116,7 @@ export function PositionsPanel({ portfolio, loading, onEdit, className }: Positi
               {rows.length > 0 ? (
                 <tfoot>
                   <tr className="bg-panel-2">
-                    <th scope="row" className="label h-9 px-3 text-left font-normal whitespace-nowrap">
+                    <th scope="row" className="col-head h-9 px-3 text-left whitespace-nowrap">
                       {p.total} · {baseCurrency}
                     </th>
                     <td colSpan={3} />

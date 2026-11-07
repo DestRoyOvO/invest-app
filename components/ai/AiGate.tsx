@@ -59,7 +59,7 @@ export function AiGate({ compact = false }: { compact?: boolean }) {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           placeholder={t.ai.password}
-          className="h-8 min-w-0 flex-1 rounded-xs border border-line-2 bg-canvas px-2.5 text-sm text-fg placeholder:text-fg-3 focus:border-accent focus:outline-none"
+          className="h-8 min-w-0 flex-1 rounded-xs border border-input-border bg-input-bg px-2.5 text-sm text-fg placeholder:text-fg-3 focus:border-accent focus:outline-none"
         />
         <Button type="submit" variant="primary" disabled={!password || busy}>
           {busy ? t.ai.unlocking : t.ai.unlock}

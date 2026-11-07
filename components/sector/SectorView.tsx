@@ -61,7 +61,7 @@ export function SectorView({ sector }: { sector: SectorDef }) {
           </div>
           {snapshot?.etf ? (
             <Link href={stockPath(snapshot.etf.symbol)} className="flex items-baseline gap-2 text-sm hover:text-accent">
-              <span className="num font-medium text-fg">{snapshot.etf.symbol}</span>
+              <span className="mono font-medium text-fg">{snapshot.etf.symbol}</span>
               <span className="num text-fg-2">{formatPrice(snapshot.etf.price, lang)}</span>
               <Delta value={snapshot.etf.changePercent} />
             </Link>
