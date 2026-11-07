@@ -81,9 +81,12 @@ The light `--fg-3` is `#646d7b` rather than the audit's `#687180`: the latter me
 
 ### Accent and status
 
+`--fg-3` is for text on panels. It is only 4.25:1 on the light `--canvas`, so text placed straight on the canvas (the
+404 page, anything outside a panel) uses `--fg-2` (8.3:1) or `--fg`.
+
 | Token | Dark | Light | Role |
 | --- | --- | --- | --- |
-| `--accent` | `#f2a33a` | `#a35f00` | Focus ring, the current marker, function codes, primary buttons, selected tab underline |
+| `--accent` | `#f2a33a` | `#965800` | Focus ring, the current marker, function codes, primary buttons, selected tab underline |
 | `--accent-fg` | `#140d02` | `#ffffff` | Text on an accent fill |
 | `--accent-soft` | 13% accent | 7% accent | Active icon buttons, accent badges |
 | `--info` | `#5aa9f0` | `#1f6fc4` | Links, info badges, chart series 1 |
@@ -91,6 +94,9 @@ The light `--fg-3` is `#646d7b` rather than the audit's `#687180`: the latter me
 | `--danger` | red | red | Errors. Stays red in every price convention |
 
 ### Price direction
+
+The light accent is dark enough for accent text on every surface it meets: 5.0:1 on a hovered row (ticker links turn
+accent there), 4.8:1 for an accent badge in a panel header and 4.6:1 for one on a hovered row.
 
 | Token | intl | cn | cb dark / light |
 | --- | --- | --- | --- |
@@ -438,14 +444,16 @@ Focus moves in, Tab is trapped, Escape closes and focus returns. Mark the first 
 ## Accessibility
 
 - **Contrast**: text 4.5:1, large text and non-text marks (input borders, focus rings, chart lines, meter fills) 3:1.
-  All 45 promised pairs pass in both themes and all three conventions (`scripts/check-contrast.ts`, 270 checks).
+  All 49 promised pairs pass in both themes and all three conventions (`scripts/check-contrast.ts`, 294 checks),
+  hover states included. A pair a component starts to use goes into `CONTRAST_PAIRS` in `lib/design-tokens.ts`.
   Selected results:
 
   | Pair | Dark | Light |
   | --- | --- | --- |
   | `--fg-3` on panel / panel-2 / hover | 5.34 / 5.10 / 4.82 | 5.23 / 4.87 / 4.61 |
   | `--up` on hover (intl / cn / cb) | 7.27 / 5.00 / 6.49 | 4.60 / 5.07 / 5.36 |
-  | `--accent` on panel-2 (code chips) | 8.79 | 4.66 |
+  | `--accent` on panel-2 / hover (code chips, hovered links) | 8.79 / 8.31 | 5.30 / 5.02 |
+  | `--accent` on accent-soft over panel-2 / hover (badges) | 7.03 / 6.56 | 4.82 / 4.57 |
   | Heatmap text, weakest step | 4.88 | 6.23 |
   | `--input-border` on panel / panel-2 | 3.50 / 3.34 | 3.66 / 3.41 |
 
@@ -460,6 +468,7 @@ Focus moves in, Tab is trapped, Escape closes and focus returns. Mark the first 
 
 ## Brand
 
+  | `--fg-2` on the bare canvas | 9.36 | 8.28 |
 - The mark ("prompt-candle") is a command-line chevron followed by a candlestick, defined once in
   `components/ui/brand.ts`. `app/icon.svg` is generated from it (a test fails if they drift): regenerate with
   `markSvg({ size: 32, background: BRAND_COLORS.background, radius: 6, padding: 3 })`.

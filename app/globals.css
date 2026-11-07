@@ -157,11 +157,11 @@
 
       --fg: #0e1318;
       --fg-2: #39424d;
-      --fg-3: #646d7b; /* 4.6:1 even on the hover row */
+      --fg-3: #646d7b; /* 4.6:1 even on the hover row; on the bare canvas use --fg-2 */
 
-      --accent: #a35f00;
+      --accent: #965800; /* 5:1 on the hover row, so links turning accent on a hovered row stay readable */
       --accent-fg: #ffffff;
-      --accent-soft: rgb(163 95 0 / 0.07);
+      --accent-soft: rgb(150 88 0 / 0.07);
 
       --info: #1f6fc4;
       --warn: #8a5f00;
