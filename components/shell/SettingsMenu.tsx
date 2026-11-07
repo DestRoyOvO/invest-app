@@ -6,14 +6,16 @@ import { useEffect, useId, useRef, useState } from "react";
 import { DataMenuSection } from "@/components/data/DataMenuSection";
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { IconButton } from "@/components/ui/Button";
+import { Delta } from "@/components/ui/Delta";
 import { Segmented } from "@/components/ui/Segmented";
 
-/** Language, theme and up/down color convention. */
+/** Language, theme, price colors and density, plus the data section (backup and import). */
 export function SettingsMenu() {
-  const { t, lang, theme, updown, setLang, setTheme, setUpdown } = usePrefs();
+  const { t, lang, theme, updown, density, setLang, setTheme, setUpdown, setDensity } = usePrefs();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
+  const s = t.settings;
 
   useEffect(() => {
     if (!open) return;
@@ -45,12 +47,12 @@ export function SettingsMenu() {
         <div
           id={panelId}
           role="dialog"
-          aria-label={t.settings.title}
-          className="absolute top-full right-0 z-50 mt-2 w-64 space-y-3 rounded-xs border border-line-2 bg-panel p-3 shadow-2xl"
+          aria-label={s.title}
+          className="absolute top-full right-0 z-50 mt-2 max-h-[calc(100dvh-4rem)] w-72 space-y-3 overflow-y-auto rounded-xs border border-line-2 bg-panel p-3 shadow-2xl"
         >
           <Segmented
             size="sm"
-            label={t.settings.language}
+            label={s.language}
             value={lang}
             onChange={setLang}
             options={[
@@ -60,22 +62,41 @@ export function SettingsMenu() {
           />
           <Segmented
             size="sm"
-            label={t.settings.theme}
+            label={s.theme}
             value={theme}
             onChange={setTheme}
             options={[
-              { value: "dark", label: t.settings.dark },
-              { value: "light", label: t.settings.light },
+              { value: "dark", label: s.dark },
+              { value: "light", label: s.light },
+              { value: "system", label: s.system },
             ]}
           />
+          <div className="space-y-1.5">
+            <Segmented
+              size="sm"
+              label={s.colors}
+              value={updown}
+              onChange={setUpdown}
+              options={[
+                { value: "intl", label: s.greenUp },
+                { value: "cn", label: s.redUp },
+                { value: "cb", label: s.colorBlind },
+              ]}
+            />
+            <div className="flex items-center gap-2 text-xs text-fg-3">
+              <span>{updown === "cb" ? s.colorBlindHint : s.preview}</span>
+              <Delta value={1.24} className="ml-auto" />
+              <Delta value={-0.86} />
+            </div>
+          </div>
           <Segmented
             size="sm"
-            label={t.settings.colors}
-            value={updown}
-            onChange={setUpdown}
+            label={s.density}
+            value={density}
+            onChange={setDensity}
             options={[
-              { value: "intl", label: t.settings.greenUp },
-              { value: "cn", label: t.settings.redUp },
+              { value: "comfortable", label: s.comfortable },
+              { value: "compact", label: s.compact },
             ]}
           />
           <DataMenuSection onNavigate={() => setOpen(false)} />

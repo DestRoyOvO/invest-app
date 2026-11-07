@@ -16,7 +16,16 @@ export interface ChatSeed {
 interface UiContextValue {
   commandOpen: boolean;
   openCommand: () => void;
+  /** Opens the command bar with text already typed (the 404 page passes what the reader starts typing). */
+  openCommandWith: (query: string) => void;
+  /** Text the command bar starts with; empty unless opened with openCommandWith. */
+  commandQuery: string;
   closeCommand: () => void;
+
+  /** The keyboard shortcuts sheet ("?"). */
+  shortcutsOpen: boolean;
+  openShortcuts: () => void;
+  closeShortcuts: () => void;
 
   chatOpen: boolean;
   /** A question to send when the chat opens (the command bar's "?" prefix, "Why is it moving?" buttons). */
@@ -43,7 +52,8 @@ interface UiContextValue {
 const UiContext = createContext<UiContextValue | null>(null);
 
 export function UiProvider({ children }: { children: ReactNode }) {
-  const [commandOpen, setCommandOpen] = useState(false);
+  const [command, setCommand] = useState<{ open: boolean; query: string }>({ open: false, query: "" });
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatSeed, setChatSeed] = useState<ChatSeed | null>(null);
   const [newsItem, setNewsItem] = useState<NewsItem | null>(null);
@@ -57,9 +67,14 @@ export function UiProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<UiContextValue>(
     () => ({
-      commandOpen,
-      openCommand: () => setCommandOpen(true),
-      closeCommand: () => setCommandOpen(false),
+      commandOpen: command.open,
+      commandQuery: command.query,
+      openCommand: () => setCommand({ open: true, query: "" }),
+      openCommandWith: (query) => setCommand({ open: true, query }),
+      closeCommand: () => setCommand({ open: false, query: "" }),
+      shortcutsOpen,
+      openShortcuts: () => setShortcutsOpen(true),
+      closeShortcuts: () => setShortcutsOpen(false),
       chatOpen,
       chatSeed,
       openChat,
@@ -75,7 +90,7 @@ export function UiProvider({ children }: { children: ReactNode }) {
       openAlertEditor: (symbol) => setAlertEditor(symbol ?? ""),
       closeAlertEditor: () => setAlertEditor(null),
     }),
-    [commandOpen, chatOpen, chatSeed, openChat, newsItem, positionEditor, alertEditor],
+    [command, shortcutsOpen, chatOpen, chatSeed, openChat, newsItem, positionEditor, alertEditor],
   );
 
   return <UiContext value={value}>{children}</UiContext>;
