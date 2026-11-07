@@ -83,14 +83,14 @@ function BacktestTable({ results, t }: { results: BacktestResult[]; t: Messages 
     <table className="w-full border-collapse text-data">
       <thead>
         <tr className="border-b border-line">
-          <th scope="col" className="label h-7 px-3 text-left font-normal" />
-          <th scope="col" className="label h-7 px-2 text-right font-normal">{c.trades}</th>
-          <th scope="col" className="label h-7 px-2 text-right font-normal">{c.winRate}</th>
-          <th scope="col" className="label h-7 px-2 text-right font-normal">{c.avgReturn}</th>
-          <th scope="col" className="label hidden h-7 px-2 text-right font-normal sm:table-cell">{c.baseline}</th>
-          <th scope="col" className="label h-7 px-2 text-right font-normal">{c.edge}</th>
-          <th scope="col" className="label hidden h-7 px-2 text-right font-normal md:table-cell">{c.sharpe}</th>
-          <th scope="col" className="label hidden h-7 px-3 text-right font-normal md:table-cell">{c.maxDD}</th>
+          <th scope="col" className="col-head h-7 px-3 text-left" />
+          <th scope="col" className="col-head h-7 px-2 text-right">{c.trades}</th>
+          <th scope="col" className="col-head h-7 px-2 text-right">{c.winRate}</th>
+          <th scope="col" className="col-head h-7 px-2 text-right">{c.avgReturn}</th>
+          <th scope="col" className="col-head hidden h-7 px-2 text-right sm:table-cell">{c.baseline}</th>
+          <th scope="col" className="col-head h-7 px-2 text-right">{c.edge}</th>
+          <th scope="col" className="col-head hidden h-7 px-2 text-right md:table-cell">{c.sharpe}</th>
+          <th scope="col" className="col-head hidden h-7 px-3 text-right md:table-cell">{c.maxDD}</th>
         </tr>
       </thead>
       <tbody>
@@ -138,10 +138,10 @@ function TrackRecord({ technicalScore, t, lang }: { technicalScore: number | nul
       <table className="w-full border-collapse text-data">
         <thead>
           <tr className="border-b border-line">
-            <th scope="col" className="label h-7 px-3 text-left font-normal">{tr.reading}</th>
-            <th scope="col" className="label h-7 px-2 text-right font-normal">{tr.sessions}</th>
-            <th scope="col" className="label h-7 px-2 text-right font-normal">{tr.excess}</th>
-            <th scope="col" className="label h-7 px-3 text-right font-normal">{tr.upRate}</th>
+            <th scope="col" className="col-head h-7 px-3 text-left">{tr.reading}</th>
+            <th scope="col" className="col-head h-7 px-2 text-right">{tr.sessions}</th>
+            <th scope="col" className="col-head h-7 px-2 text-right">{tr.excess}</th>
+            <th scope="col" className="col-head h-7 px-3 text-right">{tr.upRate}</th>
           </tr>
         </thead>
         <tbody>

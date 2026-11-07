@@ -1,10 +1,35 @@
 @import "tailwindcss";
 
 /*
-  InvestSeek design tokens.
-  Colors are CSS variables so the theme (dark/light) and the up/down color convention
-  (international green-up, or Chinese red-up) can switch at runtime via data attributes on <html>.
+  InvestSeek design tokens. docs/design-system.md describes every role and rule.
+
+  All color and density decisions are CSS variables on <html>, switched at runtime by three attributes:
+  - data-theme:   dark (default) | light | system (follows prefers-color-scheme)
+  - data-updown:  intl (green up, default) | cn (red up) | cb (blue up, orange down; safe for red-green color blindness)
+  - data-density: comfortable (default) | compact
+  Components use the semantic tokens (--up, --heat-up-2, --series-1 ...), never the raw hues (--green, --blue ...),
+  so a new theme or convention only touches this file.
 */
+
+/* Light values are written once and apply to data-theme="light" and to data-theme="system" on a light OS. */
+@custom-variant theme-light {
+  &[data-theme="light"] {
+    @slot;
+  }
+  @media (prefers-color-scheme: light) {
+    &[data-theme="system"] {
+      @slot;
+    }
+  }
+}
+
+/* Row height for data tables; the compact density lowers --row-h. */
+@utility h-row {
+  height: var(--row-h);
+}
+
+/* Styles for the compact density only, e.g. `sm:compact:size-6` on the icon buttons inside table rows. */
+@custom-variant compact (&:where([data-density="compact"] *));
 
 @theme inline {
   --font-sans: var(--font-plex-sans), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
@@ -16,6 +41,8 @@
   --color-hover: var(--hover);
   --color-line: var(--line);
   --color-line-2: var(--line-2);
+  --color-input-bg: var(--input-bg);
+  --color-input-border: var(--input-border);
   --color-fg: var(--fg);
   --color-fg-2: var(--fg-2);
   --color-fg-3: var(--fg-3);
@@ -27,65 +54,202 @@
   --color-info: var(--info);
   --color-warn: var(--warn);
   --color-danger: var(--danger);
-
-  --text-data: 0.8125rem;
-  --text-data--line-height: 1.25rem;
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-4: var(--series-4);
+  --color-series-5: var(--series-5);
+  --color-series-6: var(--series-6);
 
   --radius-xs: 2px;
   --radius-sm: 3px;
 }
 
+/*
+  Type scale. Not inline, so the utilities read the variables and the compact density can shrink data text in one place.
+  micro 11/16: column heads, meta · data 13/20: tables and numbers · body 14/22: prose · figure 20/24: board values and
+  KPI tiles · display 30/36: the quote price.
+*/
+@theme static {
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1rem;
+  --text-data: 0.8125rem;
+  --text-data--line-height: 1.25rem;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.375rem;
+  --text-figure: 1.25rem;
+  --text-figure--line-height: 1.5rem;
+  --text-display: 1.875rem;
+  --text-display--line-height: 2.25rem;
+}
+
 @layer base {
   :root {
     color-scheme: dark;
+
+    /* Surfaces, back to front. Panels sit on the canvas with 1px --line gaps between them. */
     --canvas: #06080b;
     --panel: #0c0f13;
-    --panel-2: #11151a;
+    --panel-2: #11151a; /* panel headers, table footers, the current row */
     --hover: #161b21;
-    --line: #1d232b;
-    --line-2: #2a313b;
+    --line: #1d232b; /* hairlines and skeletons */
+    --line-2: #2a313b; /* stronger rules and tracks */
+    --input-bg: var(--canvas); /* fields are recessed in the dark theme */
+    --input-border: #5f6a7a; /* inputs and the command button: at least 3:1 against the panel */
+
+    /* Text: --fg for values and titles, --fg-2 for secondary text, --fg-3 for labels and meta. */
     --fg: #e6e9ed;
     --fg-2: #a9b2be;
     --fg-3: #7d8897;
+
+    /* Accent: focus, the current marker, function codes and primary actions. Never a direction or a verdict. */
     --accent: #f2a33a;
     --accent-fg: #140d02;
     --accent-soft: rgb(242 163 58 / 0.13);
-    --green: #2fbf71;
-    --red: #f0525a;
+
     --info: #5aa9f0;
     --warn: #e3b341;
-    --heat-neutral: #1b2027;
-    --up: var(--green);
-    --down: var(--red);
-    /* Errors stay red in both price conventions; --up and --down swap in red-up mode. */
-    --danger: var(--red);
+
+    /* Raw hues behind the price conventions. Components never use these directly. */
+    --green: #2fbf71;
+    --red: #f0525a;
+    --blue: #4ea1ff;
+    --orange: #ff9f43;
+
+    /* Heatmap ramps: steps 1-3 per hue (step 4 is the full hue), the flat tile and the text on top of them. */
+    --heat-flat: #262c33;
+    --heat-green-1: #18492e;
+    --heat-green-2: #1b603a;
+    --heat-green-3: #1b7243;
+    --heat-red-1: #5b2328;
+    --heat-red-2: #7c2b31;
+    --heat-red-3: #a3343c;
+    --heat-blue-1: #294260;
+    --heat-blue-2: #2d5685;
+    --heat-blue-3: #2a64a5;
+    --heat-orange-1: #4e3014;
+    --heat-orange-2: #6d3d09;
+    --heat-orange-3: #8e4e01;
+    --heat-fg: var(--fg); /* on the flat tile and steps 1-3 */
+    --heat-fg-strong: var(--canvas); /* on step 4 */
+
+    /* Sparkline stroke: neutral, so only the end dot carries the direction of the day. */
+    --spark: var(--fg-3);
+
+    /* Chart series (moving averages, comparison overlays) in assignment order. Identity only, never direction. */
+    --series-1: var(--info);
+    --series-2: #c792ea;
+    --series-3: #2ec4b6;
+    --series-4: #e8dca8;
+    --series-5: #f075b5;
+    --series-6: #b9c2cc;
+
+    --row-h: 2rem;
+
+    @variant theme-light {
+      color-scheme: light;
+
+      --canvas: #e4e8ed;
+      --panel: #ffffff;
+      --panel-2: #f5f7f9;
+      --hover: #eef1f4;
+      --line: #dde2e8;
+      --line-2: #c6cdd5;
+      --input-bg: var(--panel);
+      --input-border: #7b8794;
+
+      --fg: #0e1318;
+      --fg-2: #39424d;
+      --fg-3: #646d7b; /* 4.6:1 even on the hover row; on the bare canvas use --fg-2 */
+
+      --accent: #965800; /* 5:1 on the hover row, so links turning accent on a hovered row stay readable */
+      --accent-fg: #ffffff;
+      --accent-soft: rgb(150 88 0 / 0.07);
+
+      --info: #1f6fc4;
+      --warn: #8a5f00;
+
+      --green: #0b7d43;
+      --red: #c4252f;
+      --blue: #1a63b0;
+      --orange: #a65400;
+
+      --heat-flat: #eceff2;
+      --heat-green-1: #cbe7d5;
+      --heat-green-2: #94cfaa;
+      --heat-green-3: #5fb582;
+      --heat-red-1: #f7cfcc;
+      --heat-red-2: #f0a19d;
+      --heat-red-3: #e5736f;
+      --heat-blue-1: #c9e1ff;
+      --heat-blue-2: #9bc2f2;
+      --heat-blue-3: #6ea3e3;
+      --heat-orange-1: #f5d2bb;
+      --heat-orange-2: #e4ab85;
+      --heat-orange-3: #d3854d;
+      --heat-fg: var(--fg);
+      --heat-fg-strong: #ffffff;
+
+      --spark: var(--fg-2);
+
+      --series-2: #7b4bb7;
+      --series-3: #008b80;
+      --series-4: #94821e;
+      --series-5: #b8327a;
+      --series-6: #3f4853;
+    }
   }
 
-  :root[data-theme="light"] {
-    color-scheme: light;
-    --canvas: #e4e8ed;
-    --panel: #ffffff;
-    --panel-2: #f5f7f9;
-    --hover: #eef1f4;
-    --line: #dde2e8;
-    --line-2: #c6cdd5;
-    --fg: #0e1318;
-    --fg-2: #47515e;
-    --fg-3: #5c6672;
-    --accent: #a35f00;
-    --accent-fg: #ffffff;
-    --accent-soft: rgb(163 95 0 / 0.1);
-    --green: #0b7d43;
-    --red: #c4252f;
-    --info: #1f6fc4;
-    --warn: #8a5f00;
-    --heat-neutral: #eceff2;
+  /* Price direction: --up and --down for numbers and marks, --heat-up-N and --heat-down-N for heatmap fills. */
+  :root {
+    --up: var(--green);
+    --down: var(--red);
+    --heat-up-1: var(--heat-green-1);
+    --heat-up-2: var(--heat-green-2);
+    --heat-up-3: var(--heat-green-3);
+    --heat-up-4: var(--green);
+    --heat-down-1: var(--heat-red-1);
+    --heat-down-2: var(--heat-red-2);
+    --heat-down-3: var(--heat-red-3);
+    --heat-down-4: var(--red);
+    /* Errors stay red in every convention. */
+    --danger: var(--red);
   }
 
   /* Chinese convention: red means up, green means down. */
   :root[data-updown="cn"] {
     --up: var(--red);
     --down: var(--green);
+    --heat-up-1: var(--heat-red-1);
+    --heat-up-2: var(--heat-red-2);
+    --heat-up-3: var(--heat-red-3);
+    --heat-up-4: var(--red);
+    --heat-down-1: var(--heat-green-1);
+    --heat-down-2: var(--heat-green-2);
+    --heat-down-3: var(--heat-green-3);
+    --heat-down-4: var(--green);
+  }
+
+  /* Color-blind safe: blue up, orange down. Series 1 turns neutral so a moving average never reads as an up move. */
+  :root[data-updown="cb"] {
+    --up: var(--blue);
+    --down: var(--orange);
+    --heat-up-1: var(--heat-blue-1);
+    --heat-up-2: var(--heat-blue-2);
+    --heat-up-3: var(--heat-blue-3);
+    --heat-up-4: var(--blue);
+    --heat-down-1: var(--heat-orange-1);
+    --heat-down-2: var(--heat-orange-2);
+    --heat-down-3: var(--heat-orange-3);
+    --heat-down-4: var(--orange);
+    --series-1: var(--fg);
+  }
+
+  /* Compact density: 24px rows and 12px data text. */
+  :root[data-density="compact"] {
+    --row-h: 1.5rem;
+    --text-data: 0.75rem;
+    --text-data--line-height: 1rem;
   }
 
   html,
@@ -139,14 +303,47 @@
 }
 
 @layer components {
-  /* Numbers: monospaced tabular figures so columns line up. */
+  /* Numbers: Plex Sans figures are fixed width and 11-14% narrower than Plex Mono, so columns still line up. */
   .num {
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-    letter-spacing: -0.01em;
+    font-family: var(--font-sans);
+    font-variant-numeric: tabular-nums lining-nums;
   }
 
-  /* Small uppercase panel and table labels. */
+  /* Tickers, function codes, the command line and the OHLC legend: the anchors of a terminal. */
+  .mono {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Panel and drawer titles: the strongest label in a panel. */
+  .panel-title {
+    font-family: var(--font-sans);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--fg);
+  }
+
+  /* Table column heads and stat labels. */
+  .col-head {
+    font-family: var(--font-sans);
+    font-size: var(--text-micro);
+    line-height: var(--text-micro--line-height);
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+  }
+
+  /* Chinese has no letter case and 11px CJK glyphs are hard to read, so column heads go to 12px without tracking. */
+  :lang(zh) .col-head {
+    font-size: 0.75rem;
+    letter-spacing: 0;
+  }
+
+  /* Keyboard hints and codes only (G W, SPX). Titles use .panel-title and table heads .col-head. */
   .label {
     font-family: var(--font-mono);
     font-size: 0.75rem;
@@ -156,13 +353,13 @@
     color: var(--fg-3);
   }
 
-  /* Brief background flash when a price ticks. */
+  /* Brief background flash on the one value that just ticked (hooks/useTickFlash.ts). */
   .flash-up {
-    animation: flash-up 900ms ease-out;
+    animation: flash-up 600ms ease-out;
   }
 
   .flash-down {
-    animation: flash-down 900ms ease-out;
+    animation: flash-down 600ms ease-out;
   }
 
   /* Hide scrollbars on horizontally scrolling strips while keeping them scrollable. */

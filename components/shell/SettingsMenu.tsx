@@ -6,46 +6,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { DataMenuSection } from "@/components/data/DataMenuSection";
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { IconButton } from "@/components/ui/Button";
-import { cn } from "@/lib/cn";
-
-function Segmented<T extends string>({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: Array<{ value: T; label: string }>;
-  onChange: (value: T) => void;
-}) {
-  const id = useId();
-  return (
-    <div className="space-y-1.5">
-      <div id={id} className="label">
-        {label}
-      </div>
-      <div role="radiogroup" aria-labelledby={id} className="grid grid-cols-2 gap-px rounded-xs bg-line p-px">
-        {options.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            role="radio"
-            aria-checked={value === option.value}
-            onClick={() => onChange(option.value)}
-            className={cn(
-              "h-7 text-xs transition-colors",
-              // Opaque background: a translucent accent over the hairline color fails contrast in the light theme.
-              value === option.value ? "bg-panel-2 font-medium text-accent shadow-[inset_0_-2px_0_var(--accent)]" : "bg-panel text-fg-2 hover:bg-hover",
-            )}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
+import { Segmented } from "@/components/ui/Segmented";
 
 /** Language, theme and up/down color convention. */
 export function SettingsMenu() {
@@ -88,6 +49,7 @@ export function SettingsMenu() {
           className="absolute top-full right-0 z-50 mt-2 w-64 space-y-3 rounded-xs border border-line-2 bg-panel p-3 shadow-2xl"
         >
           <Segmented
+            size="sm"
             label={t.settings.language}
             value={lang}
             onChange={setLang}
@@ -97,6 +59,7 @@ export function SettingsMenu() {
             ]}
           />
           <Segmented
+            size="sm"
             label={t.settings.theme}
             value={theme}
             onChange={setTheme}
@@ -106,6 +69,7 @@ export function SettingsMenu() {
             ]}
           />
           <Segmented
+            size="sm"
             label={t.settings.colors}
             value={updown}
             onChange={setUpdown}

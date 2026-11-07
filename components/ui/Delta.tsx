@@ -2,6 +2,10 @@ import { cn } from "@/lib/cn";
 import { formatChange, formatPercent, formatRatio, signOf } from "@/lib/format";
 import type { Lang } from "@/types/api";
 
+import { withTrueMinus } from "./delta-utils";
+
+export { directionOf, heatStep, heatStyle, HEAT_EDGES, HEAT_STEPS, withTrueMinus, type Direction, type HeatStep } from "./delta-utils";
+
 interface DeltaProps {
   value: number | null | undefined;
   /** percent: value in percent units; ratio: decimal; change: absolute price change. */
@@ -12,7 +16,10 @@ interface DeltaProps {
   className?: string;
 }
 
-/** A signed number colored by direction (up/down colors follow the user's color convention). */
+/**
+ * A signed price, return or P&L colored by direction (up/down follow the user's color convention), with a true minus
+ * sign. Only for prices, returns and P&L: model readings, percentiles and risk use neutral text.
+ */
 export function Delta({ value, kind = "percent", digits, arrow = false, lang = "en", className }: DeltaProps) {
   const sign = signOf(value);
   const color = sign > 0 ? "text-up" : sign < 0 ? "text-down" : "text-fg-3";
@@ -29,19 +36,7 @@ export function Delta({ value, kind = "percent", digits, arrow = false, lang = "
           {sign > 0 ? "▲" : "▼"}
         </span>
       ) : null}
-      {text}
+      {withTrueMinus(text)}
     </span>
   );
-}
-
-/**
- * Background tint for a change value, used by heatmaps and badges. `maxMix` caps how far the tint moves toward the
- * up/down color: the dark theme keeps it near 50% so light tile text stays above 4.5:1 contrast.
- */
-export function deltaTint(value: number | null | undefined, maxAbs = 3, maxMix = 80): string {
-  if (typeof value !== "number" || !Number.isFinite(value) || value === 0) return "var(--heat-neutral)";
-  const strength = Math.min(Math.abs(value) / maxAbs, 1);
-  const pct = Math.round(18 + strength * (maxMix - 18));
-  const color = value > 0 ? "var(--up)" : "var(--down)";
-  return `color-mix(in oklab, ${color} ${pct}%, var(--heat-neutral))`;
 }

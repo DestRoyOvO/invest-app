@@ -179,7 +179,7 @@ export function ChatDrawer() {
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={onKeyDown}
                 placeholder={t.ai.chat.placeholder}
-                className="min-h-[2.75rem] flex-1 resize-none rounded-xs border border-line-2 bg-canvas px-2.5 py-2 text-sm text-fg placeholder:text-fg-3 focus:border-accent focus:outline-none"
+                className="min-h-[2.75rem] flex-1 resize-none rounded-xs border border-input-border bg-input-bg px-2.5 py-2 text-sm text-fg placeholder:text-fg-3 focus:border-accent focus:outline-none"
               />
               {busy ? (
                 <IconButton label={t.ai.stop} icon={<Square className="size-3.5" strokeWidth={2} />} onClick={stop} />

@@ -69,6 +69,8 @@ export const en = {
       locked: "AI locked",
       disabled: "AI off",
       notConfigured: "AI not configured",
+      // The same states without the word AI, shown after the AI chip.
+      status: { available: "ready", disabled: "off", notConfigured: "not configured" },
     },
   },
   command: {
@@ -421,6 +423,7 @@ export const zh: Messages = {
       locked: "AI 未解锁",
       disabled: "AI 已关闭",
       notConfigured: "AI 未配置",
+      status: { available: "可用", disabled: "已关闭", notConfigured: "未配置" },
     },
   },
   command: {

@@ -53,7 +53,7 @@ export function NewsDrawer() {
                 <div className="flex flex-wrap items-center gap-1.5 text-xs">
                   <span className="text-fg-3">{t.news.related}</span>
                   {newsItem.relatedTickers.slice(0, 8).map((symbol) => (
-                    <Link key={symbol} href={stockPath(symbol)} onClick={closeNews} className="num rounded-xs border border-line-2 px-1.5 py-0.5 text-fg-2 hover:bg-hover hover:text-fg">
+                    <Link key={symbol} href={stockPath(symbol)} onClick={closeNews} className="mono rounded-xs border border-line-2 px-1.5 py-0.5 text-fg-2 hover:bg-hover hover:text-fg">
                       {symbol}
                     </Link>
                   ))}
