@@ -321,7 +321,7 @@ same-day equal-weight universe), with 95% moving-block bootstrap intervals over 
 | Horizon | Rank IC (NW t) | t over grid phases | Very strong: vs universe [95% CI] | Very weak: vs universe [95% CI] |
 |---|---|---|---|---|
 | 5 sessions | -0.005 (-0.64) | -1.04 to -0.11 | +0.02% [-0.19%, +0.22%] | +0.35% [-0.49%, +1.09%] |
-| 10 sessions | -0.010 (-1.06) | -1.92 to -0.03 | +0.18% [-0.23%, +0.57%] | +0.10% [-0.94%, +0.96%] |
+| 10 sessions | -0.010 (-1.06) | -1.92 to -0.03 | +0.18% [-0.22%, +0.57%] | +0.10% [-0.94%, +0.96%] |
 | 20 sessions | -0.017 (-1.43) | -1.69 to -0.11 | +0.42% [-0.27%, +1.10%] | +0.78% [-0.88%, +2.63%] |
 
 - The technical score has **not predicted** forward returns: no horizon reaches |t| = 2, no subperiod either, and the

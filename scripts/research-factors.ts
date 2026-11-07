@@ -61,8 +61,14 @@ function signText(signs: ReadonlyArray<1 | -1 | 0>): string {
   return signs.map((s) => (s > 0 ? "+" : s < 0 ? "-" : "0")).join(" ");
 }
 
-/** docs/factor-research.md, from the two result objects only. */
-export function renderResearchReport(research: FactorResearch, risk: RiskCalibration): string {
+/** Typical monthly rank IC of published large-cap factors after publication decay, the yardstick for power. */
+const TYPICAL_FACTOR_IC = 0.03;
+
+/**
+ * docs/factor-research.md from the two result objects (as written to the JSON files, so the numbers match what the
+ * app reads) and the study settings. Every conclusion in the text is checked against the results it describes.
+ */
+export function renderResearchReport(research: FactorResearch, risk: RiskCalibration, settings: { minStocksPerDate: number }): string {
   const lines: string[] = [];
   const push = (...rows: string[]) => lines.push(...rows);
   const periods = research.subperiods.map((p) => `${p.from.slice(0, 4)}-${p.to.slice(0, 4)}`);
@@ -72,6 +78,27 @@ export function renderResearchReport(research: FactorResearch, risk: RiskCalibra
   const [main, ...gaps] = research.bias.universeVsBenchmarks;
   const { market, equalWeight } = research.bias.benchmarks;
   const q = risk.quintiles.overall;
+
+  // Low volatility and low beta: against their literature direction on raw returns, for it once beta is netted out?
+  const lowRisk = research.factors.filter((f) => f.key === "volatility" || f.key === "beta");
+  const lowRiskRaw = lowRisk.flatMap((f) => f.results.map((r) => r.ic));
+  const lowRiskAdjusted = lowRisk.flatMap((f) => f.results.map((r) => r.betaAdjustedIc));
+  const lowRiskIsBeta =
+    lowRiskRaw.every((ic) => ic !== null && ic < 0) && lowRiskAdjusted.every((ic) => ic !== null && ic > 0 && ic < TYPICAL_FACTOR_IC * 2);
+  const icsByFactor = (pick: (r: FactorResearch["factors"][number]["results"][number]) => number | null) =>
+    lowRisk.map((f) => `${SHORT_LABEL[f.key].toLowerCase()} ${f.results.map((r) => num(pick(r))).join(" / ")}`).join(", ");
+  // Power: can the design see a typical factor IC at all?
+  const smallestDetectable = Math.min(...research.power.map((p) => p.minimumDetectableIc ?? Infinity));
+  const underpowered = smallestDetectable > TYPICAL_FACTOR_IC;
+  // Sampling noise of a per-date rank IC over n stocks is about 1 / sqrt(n - 1); above sqrt(2) times that, time variation dominates.
+  const sdIcs = research.power.map((p) => p.sdIc).filter((sd): sd is number => sd !== null);
+  const timeDominates = sdIcs.length > 0 && sdIcs.every((sd) => sd > Math.SQRT2 / Math.sqrt(research.universe - 1));
+  // Hindsight: does the universe's lead shrink in every later subperiod, against both benchmarks?
+  const lead = (g: (typeof gaps)[number], key: "equalWeight" | "market") => (g.universe !== null && g[key] !== null ? g.universe - (g[key] as number) : null);
+  const shrinks = (key: "equalWeight" | "market") =>
+    gaps.length > 1 && gaps.every((g, i) => lead(g, key) !== null && (i === 0 || (lead(g, key) as number) < (lead(gaps[i - 1], key) as number)));
+  const riskPersists = (risk.persistence.volatility.mean ?? 0) >= 0.5 && (risk.persistence.volatility.min ?? 0) > 0;
+  const monthCorrelation = research.bias.technicalVsMonthReturn;
 
   push(
     "# Factor research",
@@ -85,16 +112,21 @@ export function renderResearchReport(research: FactorResearch, risk: RiskCalibra
       ? `- **No factor passes the adoption rule.** Across ${all.length} pre-registered tests (${research.factors.length} factors x ${research.horizons.length} horizons, signals ${research.from} to ${research.to}, ${research.universe} large US stocks) ` +
           `the smallest p-value is ${num(best?.p ?? null, 3, false)} (${SHORT_LABEL[best.key]}, ${best.days} sessions, IC ${num(best.ic)}), and its Holm-adjusted p is ${num(best?.holmP ?? null, 2, false)}.`
       : `- Predictive under the rule: ${predictive.map((r) => `${SHORT_LABEL[r.key]} at ${r.days} sessions (IC ${num(r.ic)}, Holm p ${num(r.holmP, 3, false)})`).join("; ")}.`,
-    `- Low volatility and low beta run against their literature direction on raw returns, but net of beta times ${market}'s return their ICs turn small and positive: ` +
-      `the raw pattern is market exposure in a decade when ${market} returned ${pct(main.market)} a year, not stock selection.`,
+    lowRiskIsBeta
+      ? `- Low volatility and low beta run against their literature direction on raw returns, but net of beta times ${market}'s return their ICs turn small and positive: ` +
+          `the raw pattern is market exposure in a decade when ${market} returned ${pct(main.market)} a year, not stock selection.`
+      : `- Low volatility and low beta, ICs at ${research.horizons.join(" / ")} sessions: ${icsByFactor((r) => r.ic)} on raw returns; net of beta times ${market}'s return ${icsByFactor((r) => r.betaAdjustedIc)}.`,
     `- The universe is today's leaders picked with hindsight: equal-weighted it returned ${pct(main.universe)} a year against ${pct(main.equalWeight)} for ${equalWeight} and ${pct(main.market)} for ${market}.`,
-    `- With about ${research.universe} names the smallest IC this design can detect with 80% power is ${research.power.map((p) => `${num(p.minimumDetectableIc, 3, false)} at ${p.days}`).join(", ")} sessions, above typical large-cap factor ICs: the universe cannot validate a factor either way.`,
-    `- Risk, unlike return, is forecastable: trailing 63-session volatility ranks next quarter's volatility with a mean rank correlation of ${num(risk.persistence.volatility.mean, 2, false)} (never below ${num(risk.persistence.volatility.min, 2, false)}), ` +
+    `- With about ${research.universe} names the smallest IC this design can detect with 80% power is ${research.power.map((p) => `${num(p.minimumDetectableIc, 3, false)} at ${p.days}`).join(", ")} sessions` +
+      (underpowered
+        ? `, above typical large-cap factor ICs (about 0.01 to ${TYPICAL_FACTOR_IC}): the universe cannot validate a factor either way.`
+        : `; typical large-cap factor ICs are about 0.01 to ${TYPICAL_FACTOR_IC}.`),
+    `- ${riskPersists ? (predictive.length === 0 ? "Risk, unlike return, is forecastable" : "Risk is forecastable") : "Risk"}: trailing 63-session volatility ranks next quarter's volatility with a mean rank correlation of ${num(risk.persistence.volatility.mean, 2, false)} (never below ${num(risk.persistence.volatility.min, 2, false)}), ` +
       `trailing beta ranks next quarter's beta at ${num(risk.persistence.beta.mean, 2, false)}, and the volatility forecast's 10-session bands held ${pct(risk.bands.overall.within1)} and ${pct(risk.bands.overall.within2)} of moves (68.3% and 95.4% for normal returns).`,
     "",
     "## Design (fixed before the results)",
     "",
-    `- Universe: the ${research.universe} stocks of lib/universe.ts with history; calendar: ${market}'s sessions. Signals every session from ${research.from}; a date counts with at least 20 stocks.`,
+    `- Universe: the ${research.universe} stocks of lib/universe.ts with history; calendar: ${market}'s sessions. Signals every session from ${research.from}; a date counts with at least ${settings.minStocksPerDate} stocks.`,
     "- Factors at the close of session k, from data up to k only (lib/factors.ts), signed so that higher values are expected to do better:",
     ...research.factors.map((f) => `  - ${f.label}`),
     "- Forward return over h sessions: adjusted open of k + 1 to adjusted close of k + h, minus the same-day equal-weight mean of all stocks (excess).",
@@ -118,7 +150,8 @@ export function renderResearchReport(research: FactorResearch, risk: RiskCalibra
     "",
     "### Quintile spreads, turnover and robustness",
     "",
-    "Spread: highest minus lowest quintile of same-day excess returns per holding period (quintiles of 15 to 16 stocks). Robustness ICs use the same dates: ranks demeaned within " +
+    `Spread: highest minus lowest quintile of same-day excess returns per holding period (quintiles of ${Math.floor(research.universe / 5)} to ${Math.ceil(research.universe / 5)} stocks when all ${research.universe} have data). ` +
+      "Robustness ICs use the same dates: ranks demeaned within " +
       `sectors; forward returns net of trailing beta times ${market}'s return; and the universe without the ${research.bias.exWinners.length} biggest ex-post winners ` +
       `(${research.bias.exWinners.map((w) => `${w.symbol} ${pct(w.annualReturn, 0)}`).join(", ")} a year).`,
     "",
@@ -132,7 +165,8 @@ export function renderResearchReport(research: FactorResearch, risk: RiskCalibra
   }
   push(
     "",
-    `The technical score is mostly last month's relative move: its mean cross-sectional rank correlation with the trailing 21-session return is ${num(research.bias.technicalVsMonthReturn, 2)}.`,
+    `The technical score ${monthCorrelation !== null && monthCorrelation >= 0.5 ? "is mostly last month's relative move" : "follows last month's relative move only in part"}: ` +
+      `its mean cross-sectional rank correlation with the trailing 21-session return is ${num(monthCorrelation, 2)}.`,
     "",
     "## Power",
     "",
@@ -142,8 +176,10 @@ export function renderResearchReport(research: FactorResearch, risk: RiskCalibra
     "|---:|---:|---:|---:|",
     ...research.power.map((p) => `| ${p.days} | ${p.dates} | ${num(p.sdIc, 3, false)} | ${num(p.minimumDetectableIc, 3, false)} |`),
     "",
-    "Published large-cap factor ICs are about 0.01 to 0.03 per month, so a null here means \"cannot tell\", not \"disproven\". " +
-      "The per-date IC varies mostly with time rather than with sampling noise, so more years help more than more names.",
+    `Published large-cap factor ICs are about 0.01 to ${TYPICAL_FACTOR_IC} per month, so a null here means "cannot tell", not "disproven".` +
+      (timeDominates
+        ? ` The per-date IC varies mostly with time rather than with sampling noise (about ${num(1 / Math.sqrt(research.universe - 1), 2, false)} for ${research.universe} names), so more years help more than more names.`
+        : ""),
     "",
     "## Hindsight in the universe",
     "",
@@ -157,7 +193,7 @@ export function renderResearchReport(research: FactorResearch, risk: RiskCalibra
       return `| ${g.from} to ${g.to} | ${pct(g.universe)} | ${pct(g.equalWeight)} | ${pct(g.market)} | ${pct(vsEw, 1, true)} | ${pct(vsMarket, 1, true)} |`;
     }),
     "",
-    "The gap shrinks toward the date the list was chosen. Hindsight works against momentum too: the losers still in today's list are the ones that recovered.",
+    `${shrinks("equalWeight") && shrinks("market") ? "The gap shrinks toward the date the list was chosen. " : ""}Hindsight works against momentum too: the losers still in today's list are the ones that recovered.`,
     "",
     "## Risk: what the data does forecast",
     "",
@@ -189,13 +225,16 @@ export function renderResearchReport(research: FactorResearch, risk: RiskCalibra
     "",
     "## Limitations",
     "",
-    "- Hindsight universe: 78 of today's largest stocks, chosen in 2026. Delisted and shrunken companies are missing, which flatters returns and favours stocks that fell and recovered. " +
+    `- Hindsight universe: ${research.universe} of today's largest stocks, chosen in 2026. Delisted and shrunken companies are missing, which flatters returns and favours stocks that fell and recovered. ` +
       "A point-in-time universe (historical index membership) is the fix and is not available from Yahoo.",
-    "- Power: with this few names and years, realistic factor ICs are below what the tests can detect. A null result here does not refute the published evidence.",
+    underpowered
+      ? "- Power: with this few names and years, realistic factor ICs are below what the tests can detect. A null result here does not refute the published evidence."
+      : "- Power: see the table above; a factor near the detection limit can still be missed.",
     "- Regime: one decade, mostly a strong US bull market. Low-risk and reversal effects are known to depend on the market's volatility.",
     "- Data: Yahoo daily charts, dividend and split adjusted; returns before costs; no fundamentals (they have no point-in-time history here). " +
       "Yahoo recomputes adjusted closes in single precision on every request, so a fresh download can move the last digits; the cached bars reproduce every number exactly.",
-    "- What the app does with this: it shows these factors as descriptive percentiles with their measured IC, never as a buy or sell signal, and puts the risk numbers first.",
+    "- Intended use: lib/factor-research.json backs descriptive factor percentiles shown with their measured IC, never a buy or sell signal; " +
+      "lib/risk-calibration.json backs the risk ranges with their measured coverage.",
     "",
   );
   return lines.join("\n");
@@ -220,14 +259,17 @@ async function main() {
   const bars = await loadBars({ symbols: [...UNIVERSE_STOCKS, market, equalWeight], from: config.data.from, cacheDir, offline });
 
   const sectors = new Map(SECTORS.flatMap((sector) => sector.stocks.map((symbol) => [symbol, sector.key] as const)));
-  const { research, risk } = runResearch({ bars, symbols: UNIVERSE_STOCKS, sectors, benchmarks: { market, equalWeight }, factors: config.factors, risk: config.risk });
+  const results = runResearch({ bars, symbols: UNIVERSE_STOCKS, sectors, benchmarks: { market, equalWeight }, factors: config.factors, risk: config.risk });
+  // The report is rendered from the rounded results, the numbers the app reads, so both round the same way.
+  const research = JSON.parse(JSON.stringify(results.research, roundReplacer)) as FactorResearch;
+  const risk = JSON.parse(JSON.stringify(results.risk, roundReplacer)) as RiskCalibration;
 
   const outPath = arg("out", "docs/factor-research.md");
   const factorsPath = arg("factors", "lib/factor-research.json");
   const riskPath = arg("risk", "lib/risk-calibration.json");
-  writeFileSync(outPath, renderResearchReport(research, risk));
-  writeFileSync(factorsPath, `${JSON.stringify(research, roundReplacer, 2)}\n`);
-  writeFileSync(riskPath, `${JSON.stringify(risk, roundReplacer, 2)}\n`);
+  writeFileSync(outPath, renderResearchReport(research, risk, config.factors));
+  writeFileSync(factorsPath, `${JSON.stringify(research, null, 2)}\n`);
+  writeFileSync(riskPath, `${JSON.stringify(risk, null, 2)}\n`);
   console.log(`Wrote ${outPath}, ${factorsPath} and ${riskPath} (${research.universe} stocks, signals ${research.from} to ${research.to}).`);
 }
 

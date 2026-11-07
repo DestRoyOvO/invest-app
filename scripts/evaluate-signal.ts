@@ -387,7 +387,7 @@ export function renderEvaluationReport(
     "- A relationship counts as reliable when |t| >= 2. The label table overlaps heavily, so read it through its intervals, dates and episodes.",
     "- Selection, timing and the shares average over observations, so every stock-session counts once and days with many readings weigh more; " +
       "an average of per-date means would weigh every date equally instead. The bootstrap resamples whole dates either way.",
-    "- The per-stock backtest on each quote page adds a circular-shift permutation p-value per hold period (lib/signal.ts), because across 78 stocks some edges look large by chance.",
+    `- The per-stock backtest behind each quote page reports a circular-shift permutation p-value per hold period (lib/signal.ts), because across ${evaluation.universe} stocks some edges look large by chance.`,
     "",
     "## Caveats",
     "",
@@ -446,8 +446,10 @@ async function main() {
     throw new Error("The evaluation does not describe the current model.");
   }
 
-  writeFileSync(outPath, renderEvaluationReport(evaluation, config.signal, benchmarks));
-  writeFileSync(jsonPath, `${JSON.stringify(evaluation, roundReplacer, 2)}\n`);
+  // The report is rendered from the rounded evaluation, the numbers the app reads, so both round the same way.
+  const rounded = JSON.parse(JSON.stringify(evaluation, roundReplacer)) as SignalEvaluation;
+  writeFileSync(outPath, renderEvaluationReport(rounded, config.signal, benchmarks));
+  writeFileSync(jsonPath, `${JSON.stringify(rounded, null, 2)}\n`);
   console.log(`Wrote ${outPath} and ${jsonPath} (${evaluation.observations} observations, ${evaluation.universe} stocks).`);
 }
 

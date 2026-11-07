@@ -34,22 +34,22 @@ All observations: mean +0.33%, up 55%, n = 210753.
 | Reading | Obs | Dates | Episodes (largest) | Selection [95% CI] | Timing | Raw excess [95% CI] | Up [95% CI] | Beat median |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | Very strong | 3002 | 1253 | 41 (13%) | +0.02% [-0.19% to +0.22%] | -0.11% | -0.09% [-0.36% to +0.15%] | 53% [49% to 56%] | 51% |
-| Strong | 53887 | 2665 | 2 (57%) | +0.00% [-0.06% to +0.07%] | -0.11% | -0.11% [-0.23% to +0.01%] | 54% [53% to 56%] | 50% |
+| Strong | 53887 | 2665 | 2 (57%) | +0.00% [-0.06% to +0.07%] | -0.11% | -0.10% [-0.23% to +0.01%] | 54% [53% to 56%] | 50% |
 | Neutral | 128759 | 2723 | 1 (100%) | -0.02% [-0.05% to +0.00%] | +0.02% | -0.00% [-0.05% to +0.04%] | 55% [53% to 57%] | 49% |
 | Weak | 24419 | 2514 | 4 (38%) | +0.11% [+0.01% to +0.22%] | +0.14% | +0.25% [+0.00% to +0.53%] | 56% [54% to 59%] | 51% |
 | Very weak | 686 | 411 | 66 (10%) | +0.35% [-0.49% to +1.09%] | +0.25% | +0.60% [-1.04% to +1.92%] | 60% [53% to 69%] | 51% |
 
 ### 10 sessions
 
-All observations: mean +0.71%, up 57%, n = 210363.
+All observations: mean +0.70%, up 57%, n = 210363.
 
 | Reading | Obs | Dates | Episodes (largest) | Selection [95% CI] | Timing | Raw excess [95% CI] | Up [95% CI] | Beat median |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Very strong | 3001 | 1252 | 41 (13%) | +0.18% [-0.23% to +0.57%] | -0.35% | -0.17% [-0.75% to +0.36%] | 54% [49% to 57%] | 50% |
+| Very strong | 3001 | 1252 | 41 (13%) | +0.18% [-0.22% to +0.57%] | -0.35% | -0.17% [-0.75% to +0.36%] | 54% [49% to 57%] | 50% |
 | Strong | 53770 | 2660 | 2 (57%) | -0.01% [-0.12% to +0.10%] | -0.17% | -0.18% [-0.40% to +0.02%] | 56% [54% to 58%] | 50% |
-| Neutral | 128534 | 2718 | 1 (100%) | -0.03% [-0.07% to +0.02%] | +0.04% | +0.01% [-0.07% to +0.09%] | 56% [54% to 59%] | 49% |
-| Weak | 24373 | 2509 | 4 (38%) | +0.14% [-0.02% to +0.32%] | +0.21% | +0.35% [-0.13% to +0.80%] | 58% [55% to 62%] | 51% |
-| Very weak | 685 | 410 | 66 (11%) | +0.10% [-0.94% to +0.96%] | +0.44% | +0.55% [-1.42% to +2.08%] | 61% [54% to 69%] | 52% |
+| Neutral | 128534 | 2718 | 1 (100%) | -0.03% [-0.07% to +0.01%] | +0.04% | +0.01% [-0.07% to +0.09%] | 56% [54% to 59%] | 49% |
+| Weak | 24373 | 2509 | 4 (38%) | +0.14% [-0.01% to +0.32%] | +0.21% | +0.35% [-0.13% to +0.80%] | 58% [55% to 62%] | 51% |
+| Very weak | 685 | 410 | 66 (11%) | +0.10% [-0.94% to +0.96%] | +0.45% | +0.55% [-1.42% to +2.08%] | 61% [54% to 69%] | 52% |
 
 ### 20 sessions
 
@@ -57,11 +57,11 @@ All observations: mean +1.48%, up 58%, n = 209583.
 
 | Reading | Obs | Dates | Episodes (largest) | Selection [95% CI] | Timing | Raw excess [95% CI] | Up [95% CI] | Beat median |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| Very strong | 2999 | 1250 | 41 (13%) | +0.42% [-0.27% to +1.10%] | -0.71% | -0.30% [-1.23% to +0.59%] | 58% [53% to 63%] | 51% |
+| Very strong | 2999 | 1250 | 41 (13%) | +0.42% [-0.27% to +1.10%] | -0.71% | -0.30% [-1.23% to +0.60%] | 58% [53% to 63%] | 51% |
 | Strong | 53537 | 2650 | 2 (57%) | -0.04% [-0.24% to +0.16%] | -0.40% | -0.44% [-0.81% to -0.11%] | 57% [54% to 60%] | 50% |
 | Neutral | 128080 | 2708 | 1 (100%) | -0.06% [-0.14% to +0.01%] | +0.06% | -0.00% [-0.12% to +0.11%] | 58% [55% to 61%] | 49% |
 | Weak | 24286 | 2499 | 4 (38%) | +0.34% [+0.07% to +0.63%] | +0.61% | +0.95% [+0.34% to +1.63%] | 61% [57% to 65%] | 51% |
-| Very weak | 681 | 407 | 66 (11%) | +0.78% [-0.88% to +2.63%] | +1.43% | +2.21% [-0.04% to +4.78%] | 63% [55% to 73%] | 54% |
+| Very weak | 681 | 407 | 66 (11%) | +0.78% [-0.88% to +2.63%] | +1.44% | +2.21% [-0.04% to +4.78%] | 63% [55% to 73%] | 54% |
 
 ## Holdout decade
 
@@ -104,7 +104,7 @@ Annualized returns on SPY's sessions: the universe equal-weighted and rebalanced
 - Rank IC: on each date, the Spearman correlation between the score and the forward return across stocks; the mean over all dates is tested with a Newey-West t (Bartlett kernel, lag h, because h-session returns overlap). Every h-th date gives a non-overlapping grid, one per starting phase; the range of their classical t shows how much a single grid could mislead, and the verdict is flagged fragile when the grids disagree.
 - A relationship counts as reliable when |t| >= 2. The label table overlaps heavily, so read it through its intervals, dates and episodes.
 - Selection, timing and the shares average over observations, so every stock-session counts once and days with many readings weigh more; an average of per-date means would weigh every date equally instead. The bootstrap resamples whole dates either way.
-- The per-stock backtest on each quote page adds a circular-shift permutation p-value per hold period (lib/signal.ts), because across 78 stocks some edges look large by chance.
+- The per-stock backtest behind each quote page reports a circular-shift permutation p-value per hold period (lib/signal.ts), because across 78 stocks some edges look large by chance.
 
 ## Caveats
 
