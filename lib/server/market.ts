@@ -15,6 +15,7 @@ import type {
 import { MARKET_BOARD, MARKET_STATE_SYMBOL, SECTORS, UNIVERSE_STOCKS } from "@/lib/universe";
 
 import { cached } from "./cache";
+import { log } from "./log";
 import { getCompanyNews, getMarketNews } from "./news";
 import { getChart, getQuote, getQuotes, getSparkline, getSummary } from "./yahoo";
 
@@ -229,7 +230,7 @@ async function buildOverview(): Promise<MarketOverview> {
     news = newsResult.value;
   } else {
     warnings.push("news");
-    console.warn("[market/overview] news unavailable", newsResult.reason);
+    log("warn", "market.news_unavailable", { error: newsResult.reason });
   }
 
   return {
@@ -261,7 +262,7 @@ export async function getStockDetail(symbol: string): Promise<StockDetail | null
 
   const warnings: string[] = [];
   if (quote.stale) warnings.push("quotes_stale");
-  if (summaryResult.status === "rejected") console.warn(`[stock] summary unavailable for ${symbol}`, summaryResult.reason);
+  if (summaryResult.status === "rejected") log("warn", "stock.summary_unavailable", { symbol, error: summaryResult.reason });
   const summary = summaryResult.status === "fulfilled" ? summaryResult.value : null;
   if (!summary) warnings.push("summary");
   const { profile, stats } = summary
@@ -273,7 +274,7 @@ export async function getStockDetail(symbol: string): Promise<StockDetail | null
     news = await getCompanyNews(symbol, quote.name || profile.name, summary?.profile ?? null);
   } catch (error) {
     warnings.push("news");
-    console.warn(`[stock] news unavailable for ${symbol}`, error);
+    log("warn", "stock.news_unavailable", { symbol, error });
   }
 
   return { asOf: new Date().toISOString(), quote, profile, stats, news, warnings };

@@ -5,6 +5,7 @@ import { normalizeSymbol } from "@/lib/symbols";
 import { getSector } from "@/lib/universe";
 
 import { HOUR, peek, put } from "./cache";
+import { log } from "./log";
 import { searchNews, type RawNewsItem } from "./yahoo";
 
 // Headlines for the overview, sector and stock pages, built from short Yahoo news searches.
@@ -705,7 +706,7 @@ async function runQueries<T extends NewsProvenance>(queries: readonly NewsQuery<
     else errors.push(outcome.reason);
   });
   if (errors.length > 0 && results.length === 0) throw new Error("All news searches failed", { cause: errors[0] });
-  if (errors.length > 0) console.warn(`[news] ${errors.length} of ${queries.length} searches failed`, errors[0]);
+  if (errors.length > 0) log("warn", "news.searches_failed", { failed: errors.length, total: queries.length, error: errors[0] });
   return results;
 }
 

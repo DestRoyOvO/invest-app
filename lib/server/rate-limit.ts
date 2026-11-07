@@ -3,6 +3,7 @@ import "server-only";
 import { isIPv4, isIPv6 } from "node:net";
 
 import { MINUTE } from "./cache";
+import { readEnv, type RawEnv } from "./env";
 
 // In-memory sliding-window rate limits plus a process-wide daily AI budget.
 // State lives on globalThis (so dev-mode module reloads keep it) and is bounded. With several server instances
@@ -70,7 +71,7 @@ export function clientKey(address: string): string {
 
 export type RateLimitResult = { ok: true; remaining: number } | { ok: false; retryAfterSeconds: number };
 
-export const DEFAULT_AI_DAILY_LIMIT = 200;
+export { DEFAULT_AI_DAILY_LIMIT } from "./env";
 const MAX_TRACKED_KEYS = 10_000;
 
 interface Bucket {
@@ -120,12 +121,9 @@ export function consumeRateLimit(rule: RateLimitRule, key: string, now: number =
   return { ok: true, remaining: rule.limit - hits.length };
 }
 
-/** AI_DAILY_LIMIT as a positive integer; anything else falls back to the default of 200. */
-export function readDailyLimit(env: Readonly<Record<string, string | undefined>> = process.env): number {
-  const raw = env.AI_DAILY_LIMIT?.trim() ?? "";
-  if (!/^\d{1,7}$/.test(raw)) return DEFAULT_AI_DAILY_LIMIT;
-  const value = Number(raw);
-  return value > 0 ? value : DEFAULT_AI_DAILY_LIMIT;
+/** AI_DAILY_LIMIT as a positive integer; anything else falls back to the default of 200 (validated in env.ts). */
+export function readDailyLimit(source?: RawEnv): number {
+  return readEnv(source).aiDailyLimit;
 }
 
 function utcDay(now: number): string {

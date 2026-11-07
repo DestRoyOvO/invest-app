@@ -10,6 +10,8 @@ import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 
 import { load, type CheerioAPI } from "cheerio/slim";
 
+import { log } from "./log";
+
 // SSRF-safe article reader for news analysis.
 //
 // Controls, in order of importance:
@@ -517,7 +519,7 @@ export async function fetchArticleText(input: string, options: FetchArticleOptio
     }
     return null;
   } catch (error) {
-    console.warn("[article] fetch failed", { host: url.hostname, reason: describeFailure(error) });
+    log("warn", "article.fetch_failed", { host: url.hostname, reason: describeFailure(error) });
     return null;
   }
 }
