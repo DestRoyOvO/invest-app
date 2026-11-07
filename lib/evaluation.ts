@@ -210,8 +210,6 @@ export interface FactorResearch {
   factors: Array<{ key: ResearchFactor; label: string; direction: 1 | -1; results: FactorHorizonResult[] }>;
   /** The smallest mean IC the design detects with 80% power at the 5% level. */
   power: Array<{ days: number; dates: number; sdIc: number | null; minimumDetectableIc: number | null }>;
-  /** dataHash of the bars up to the window end; it equals SignalEvaluation.data.hash when both ran on the same download and window end. */
-  dataHash: string;
   bias: {
     benchmarks: { market: string; equalWeight: string };
     /** The universe against its benchmarks over the window and each subperiod (selection bias gauge). */
@@ -221,6 +219,8 @@ export interface FactorResearch {
     /** Mean cross-sectional rank correlation of the technical score with the trailing 21-session return. */
     technicalVsMonthReturn: number | null;
   };
+  /** dataHash of the bars up to the window end; it equals SignalEvaluation.data.hash when both ran on the same download and window end. */
+  dataHash: string;
 }
 
 export interface BandCoverage {

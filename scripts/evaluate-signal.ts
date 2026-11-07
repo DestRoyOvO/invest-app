@@ -314,7 +314,7 @@ export function renderEvaluationReport(
     `Holdout ${holdout.from} to ${holdout.to} (${holdoutUse}): the composite's ${holdout.horizon}-session rank IC is ${num(holdout.composite.mean)} ` +
       `(Newey-West t ${num(holdout.composite.t, 2)}, 95% CI ${holdout.composite.ci ? `${num(holdout.composite.ci[0])} to ${num(holdout.composite.ci[1])}` : "n/a"}), ` +
       `${holdout.composite.pass ? "which passes" : "which does not pass"} the one-sided 5% test; ` +
-      `${holdout.factors.filter((f) => f.pass).length === 0 ? "none of the five technical factors passes" : `${holdout.factors.filter((f) => f.pass).map((f) => f.key).join(", ")} pass`} the Holm-adjusted test.`,
+      `${passed.length === 0 ? "none of the five technical factors passes" : `${list(passed)} ${passed.length > 1 ? "pass" : "passes"}`} the Holm-adjusted test.`,
     "",
     `Hindsight gap: the universe, equal-weighted, returned ${pct(hindsight.main.universe, 1, false)} a year over the window against ${pct(hindsight.main.equalWeight, 1, false)} for ${symbols.equalWeight} and ${pct(hindsight.main.market, 1, false)} for ${symbols.market}. ` +
       `The ${evaluation.universe} names are today's leaders, picked with hindsight, so every absolute return below is flattered.`,
