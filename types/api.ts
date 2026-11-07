@@ -570,7 +570,10 @@ export interface SignalReport {
 // AI
 // ---------------------------------------------------------------------------
 
-/** A position the investor entered (stored only in their browser), sent with the watchlist analysis. */
+/**
+ * A position the investor entered (stored only in their browser). AI requests carry positions only while the
+ * investor's "Include my positions" setting is on (it is by default), and the chat footer says they go to DeepSeek.
+ */
 export interface PositionInput {
   symbol: string;
   shares: number;
@@ -578,14 +581,39 @@ export interface PositionInput {
   cost: number;
 }
 
+/** Fields every analyze request shares. */
+export interface AnalyzeOptions {
+  lang: Lang;
+  /** Regenerate: skip the server's 15-minute note cache and write a new note. */
+  force?: boolean;
+}
+
 export type AnalyzeRequest =
-  | { kind: "market"; lang: Lang }
-  | { kind: "stock"; symbol: string; lang: Lang }
-  | { kind: "sector"; sector: SectorKey; lang: Lang }
+  | ({ kind: "market" } & AnalyzeOptions)
+  /** Equities, funds, crypto, futures, currencies and indices; the note's sections follow the quote type. */
+  | ({ kind: "stock"; symbol: string } & AnalyzeOptions)
+  | ({ kind: "sector"; sector: SectorKey } & AnalyzeOptions)
   /** Optional positions (max 50) let the analysis weigh concentration and risk by position value. */
-  | { kind: "watchlist"; symbols: string[]; lang: Lang; positions?: PositionInput[] }
+  | ({ kind: "watchlist"; symbols: string[]; positions?: PositionInput[] } & AnalyzeOptions)
   /** `link` and `title` are only used if the server no longer has the news item cached; the link is checked against an allowlist. */
-  | { kind: "news"; newsId: string; lang: Lang; link?: string; title?: string };
+  | ({ kind: "news"; newsId: string; link?: string; title?: string } & AnalyzeOptions)
+  /** Why a symbol moved: the market, sector and peer baseline, how unusual the move is and recent company headlines. */
+  | ({ kind: "move"; symbol: string } & AnalyzeOptions);
+
+export type AnalyzeKind = AnalyzeRequest["kind"];
+
+/** At most this many symbols in a compare intent. */
+export const MAX_COMPARE_SYMBOLS = 4;
+
+/**
+ * What a seeded chat question is about, so the server loads the matching data instead of the open page's
+ * (UiProvider's ChatSeed carries it, e.g. the "Why is it moving?" button sends { kind: "move", symbol }).
+ */
+export type ChatIntentInput =
+  | { kind: "move"; symbol: string }
+  | { kind: "earnings"; symbol: string }
+  /** 2 to MAX_COMPARE_SYMBOLS symbols. */
+  | { kind: "compare"; symbols: string[] };
 
 export interface ChatMessage {
   role: "user" | "assistant";
@@ -602,14 +630,39 @@ export interface ChatRequest {
     sector?: SectorKey;
     /** The user's watchlist (it lives in the browser), sent when view is "watchlist"; max 50 symbols. */
     symbols?: string[];
+    /**
+     * The investor's positions while "Include my positions" is on (max 50): all of them on the watchlist, market and
+     * sector views (a portfolio summary on the last two), the symbol's own position on the stock view.
+     */
+    positions?: PositionInput[];
+    /** The subject of a seeded question; it takes precedence over the view. */
+    intent?: ChatIntentInput;
   };
 }
+
+/** Response headers of POST /api/ai/analyze (the body is the note itself). */
+export const AI_HEADERS = {
+  /** ISO time of the newest regular-session trade behind the note's market data, when known. */
+  dataAsOf: "x-ai-data-as-of",
+  /** Market state of that data (REGULAR, CLOSED, ...), when known. */
+  marketState: "x-ai-market-state",
+  /** "hit" when the note came from the server's 15-minute note cache (same data, no new model call), else "miss". */
+  noteCache: "x-ai-note-cache",
+  /** ISO time the note was written (earlier than the response on a cache hit). */
+  generatedAt: "x-ai-generated-at",
+} as const;
 
 /**
  * If an AI stream fails after it has started, the server appends this marker followed by an error code
  * (e.g. "[[AI_STREAM_ERROR]]upstream_error") and closes the stream. The client strips it and shows an error.
  */
 export const AI_STREAM_ERROR = "[[AI_STREAM_ERROR]]";
+
+/**
+ * Codes that follow AI_STREAM_ERROR: an ApiErrorCode, or "model_limit" when the model spent its whole token budget
+ * before writing an answer (a reasoning model configured as DEEPSEEK_MODEL can do this).
+ */
+export type AiStreamErrorCode = ApiErrorCode | "model_limit";
 
 /**
  * Appended as the very last chunk when the model stopped at the token limit, so the client can say that the answer

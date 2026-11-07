@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { normalizeSymbol } from "@/lib/symbols";
 import { MAX_WATCHLIST, SECTOR_KEYS } from "@/lib/universe";
-import type { AnalyzeRequest, ChatMessage, ChatRequest } from "@/types/api";
+import { MAX_COMPARE_SYMBOLS, type AnalyzeRequest, type ChatMessage, type ChatRequest, type PositionInput } from "@/types/api";
 
 // Request validation for the AI and auth routes. Client-written text only ever reaches the model as chat
 // messages; everything else is an identifier that the server resolves to its own data.
@@ -60,15 +60,28 @@ const positionSchema = z.object({
   cost: z.number().finite().positive().max(1e7),
 });
 
+/** At most MAX_WATCHLIST positions; a symbol listed twice keeps its first entry. */
+const positionListSchema = z
+  .array(positionSchema)
+  .max(MAX_WATCHLIST)
+  .transform((positions): PositionInput[] => {
+    const seen = new Set<string>();
+    return positions.filter((position) => !seen.has(position.symbol) && seen.add(position.symbol));
+  });
+
+/** Regenerate: skip the server's note cache. */
+const forceSchema = z.boolean().optional();
+
 export const analyzeRequestSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("market"), lang: langSchema }),
-  z.object({ kind: z.literal("stock"), symbol: symbolSchema, lang: langSchema }),
-  z.object({ kind: z.literal("sector"), sector: sectorSchema, lang: langSchema }),
+  z.object({ kind: z.literal("market"), lang: langSchema, force: forceSchema }),
+  z.object({ kind: z.literal("stock"), symbol: symbolSchema, lang: langSchema, force: forceSchema }),
+  z.object({ kind: z.literal("sector"), sector: sectorSchema, lang: langSchema, force: forceSchema }),
   z.object({
     kind: z.literal("watchlist"),
     symbols: symbolListSchema.pipe(z.array(z.string()).min(1)),
     lang: langSchema,
-    positions: z.array(positionSchema).max(MAX_WATCHLIST).optional(),
+    positions: positionListSchema.optional(),
+    force: forceSchema,
   }),
   z.object({
     kind: z.literal("news"),
@@ -76,7 +89,9 @@ export const analyzeRequestSchema = z.discriminatedUnion("kind", [
     lang: langSchema,
     link: z.string().trim().max(2_048).optional(),
     title: titleSchema.optional(),
+    force: forceSchema,
   }),
+  z.object({ kind: z.literal("move"), symbol: symbolSchema, lang: langSchema, force: forceSchema }),
 ]);
 
 export type NormalizeChatResult = { ok: true; messages: ChatMessage[] } | { ok: false; message: string };
@@ -137,12 +152,27 @@ const chatMessageSchema = z.object({
   content: z.string().max(CHAT_LIMITS.maxIncomingMessageChars),
 });
 
+const intentSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("move"), symbol: symbolSchema }),
+  z.object({ kind: z.literal("earnings"), symbol: symbolSchema }),
+  z.object({
+    kind: z.literal("compare"),
+    symbols: z
+      .array(symbolSchema)
+      .max(MAX_COMPARE_SYMBOLS)
+      .transform((symbols) => [...new Set(symbols)])
+      .pipe(z.array(z.string()).min(2, "Compare needs at least two different symbols.")),
+  }),
+]);
+
 const chatContextSchema = z
   .object({
     view: z.enum(["market", "stock", "sector", "watchlist"]),
     symbol: symbolSchema.optional(),
     sector: sectorSchema.optional(),
     symbols: symbolListSchema.optional(),
+    positions: positionListSchema.optional(),
+    intent: intentSchema.optional(),
   })
   .superRefine((context, ctx) => {
     if (context.view === "stock" && !context.symbol) {

@@ -67,6 +67,26 @@ describe("parseAnalyzeRequest", () => {
     expect(parseAnalyzeRequest({ kind: "watchlist", symbols: [...fifty, "S50"], lang: "en" }).ok).toBe(false);
   });
 
+  it("accepts the move kind and the regenerate flag", () => {
+    expect(parseAnalyzeRequest({ kind: "move", symbol: "nvda", lang: "en" })).toEqual({ ok: true, data: { kind: "move", symbol: "NVDA", lang: "en" } });
+    expect(parseAnalyzeRequest({ kind: "stock", symbol: "NVDA", lang: "en", force: true })).toEqual({ ok: true, data: { kind: "stock", symbol: "NVDA", lang: "en", force: true } });
+    expect(parseAnalyzeRequest({ kind: "market", lang: "en", force: "yes" }).ok).toBe(false);
+    expect(parseAnalyzeRequest({ kind: "move", lang: "en" }).ok).toBe(false);
+  });
+
+  it("keeps the first entry when a position symbol repeats", () => {
+    const result = parseAnalyzeRequest({
+      kind: "watchlist",
+      symbols: ["AAPL"],
+      lang: "en",
+      positions: [
+        { symbol: "aapl", shares: 1, cost: 100 },
+        { symbol: "AAPL", shares: 2, cost: 200 },
+      ],
+    });
+    expect(result.ok && result.data.kind === "watchlist" && result.data.positions).toEqual([{ symbol: "AAPL", shares: 1, cost: 100 }]);
+  });
+
   it("validates news ids and cleans the fallback title", () => {
     expect(parseAnalyzeRequest({ kind: "news", newsId: "../../etc/passwd", lang: "en" }).ok).toBe(false);
     expect(parseAnalyzeRequest({ kind: "news", newsId: "", lang: "en" }).ok).toBe(false);
@@ -191,6 +211,42 @@ describe("parseChatRequest", () => {
     expect(stock.ok && stock.data.context).toEqual({ view: "stock", symbol: "MSFT" });
     const watchlist = parseChatRequest({ lang: "en", context: { view: "watchlist", symbols: ["aapl", "nvda"] }, messages: [user("q")] });
     expect(watchlist.ok && watchlist.data.context.symbols).toEqual(["AAPL", "NVDA"]);
+  });
+});
+
+describe("parseChatRequest: positions and intents", () => {
+  const messages = [user("How did my portfolio do today?")];
+
+  it("accepts positions on every view, capped at the watchlist limit", () => {
+    const result = parseChatRequest({ lang: "en", context: { view: "market", positions: [{ symbol: "msft", shares: 5, cost: 300 }] }, messages });
+    expect(result.ok && result.data.context).toEqual({ view: "market", positions: [{ symbol: "MSFT", shares: 5, cost: 300 }] });
+    const fifty = Array.from({ length: 50 }, (_, i) => ({ symbol: `S${i}`, shares: 1, cost: 1 }));
+    expect(parseChatRequest({ lang: "en", context: { view: "watchlist", positions: fifty }, messages }).ok).toBe(true);
+    expect(parseChatRequest({ lang: "en", context: { view: "watchlist", positions: [...fifty, { symbol: "S50", shares: 1, cost: 1 }] }, messages }).ok).toBe(false);
+    for (const bad of [{ symbol: "MSFT", shares: 0, cost: 1 }, { symbol: "MSFT", shares: 1, cost: Number.NaN }, { symbol: "<x>", shares: 1, cost: 1 }]) {
+      expect(parseChatRequest({ lang: "en", context: { view: "stock", symbol: "MSFT", positions: [bad] }, messages }).ok).toBe(false);
+    }
+  });
+
+  it("accepts move, earnings and compare intents", () => {
+    const move = parseChatRequest({ lang: "en", context: { view: "watchlist", symbols: ["nvda"], intent: { kind: "move", symbol: "nvda" } }, messages });
+    expect(move.ok && move.data.context.intent).toEqual({ kind: "move", symbol: "NVDA" });
+    const earnings = parseChatRequest({ lang: "zh", context: { view: "market", intent: { kind: "earnings", symbol: "aapl" } }, messages });
+    expect(earnings.ok && earnings.data.context.intent).toEqual({ kind: "earnings", symbol: "AAPL" });
+    const compare = parseChatRequest({ lang: "en", context: { view: "stock", symbol: "NVDA", intent: { kind: "compare", symbols: ["nvda", "AMD", "amd"] } }, messages });
+    expect(compare.ok && compare.data.context.intent).toEqual({ kind: "compare", symbols: ["NVDA", "AMD"] });
+  });
+
+  it("rejects malformed intents", () => {
+    const bad = [
+      { kind: "move" },
+      { kind: "move", symbol: "BAD SYMBOL" },
+      { kind: "compare", symbols: ["NVDA"] },
+      { kind: "compare", symbols: ["NVDA", "nvda"] },
+      { kind: "compare", symbols: ["A", "B", "C", "D", "E"] },
+      { kind: "portfolio" },
+    ];
+    for (const intent of bad) expect(parseChatRequest({ lang: "en", context: { view: "market", intent }, messages }).ok).toBe(false);
   });
 });
 

@@ -1,45 +1,92 @@
 import "server-only";
 
-import { evaluationVerdict, findHorizon, findLabel } from "@/lib/evaluation";
-import { EVALUATION_DAYS, SIGNAL_EVALUATION } from "@/lib/evaluation-data";
+import { analystBlock, actionText, earningsBlock, recentActions } from "@/lib/ai-earnings";
+import {
+  cleanInline,
+  clip,
+  daysUntil,
+  fmtChangePercent,
+  fmtCompact,
+  fmtDate,
+  fmtDaysUntil,
+  fmtMultiple,
+  fmtNumber,
+  fmtPrice,
+  fmtRatio,
+  fmtShare,
+  fmtSigned,
+  fmtTime,
+  isFiniteNumber,
+  NA,
+  pairs,
+  untrusted,
+} from "@/lib/ai-format";
+import { fundBlock, mapFundData, type FundData } from "@/lib/ai-fund";
+import { dailyVolatility, moveBlock, moveHeader, nearestPeers, newYorkDate, trailingBeta, type MoveInput } from "@/lib/ai-move";
+import { assetClassOf, type AssetClass } from "@/lib/ai-notes";
+import { dayPnlLine, eventsLine, groupSplitLine, largestGroupSplit, largestMovers, portfolioRisk, portfolioSummary, ranksLine, riskBlock } from "@/lib/ai-portfolio";
+import { quantBlock } from "@/lib/ai-quant";
 import { valuePortfolio, type ValuedPosition } from "@/lib/portfolio";
-import { labelForScore, SIGNAL_THRESHOLDS } from "@/lib/signal";
-import { normalizeSymbol } from "@/lib/symbols";
-import { getSector, MARKET_BOARD, MARKET_STATE_SYMBOL, SECTORS, sectorOfSymbol, UNIVERSE_STOCKS, type BoardSymbol } from "@/lib/universe";
+import { annualizedVolatility, correlation, dailyReturns, maxDrawdown } from "@/lib/risk";
 import { yahooSectorKey } from "@/lib/sectors";
+import { normalizeSymbol } from "@/lib/symbols";
+import { getSector, MARKET_BOARD, MARKET_STATE_SYMBOL, SECTORS, sectorOfSymbol, UNIVERSE_STOCKS, type BoardSymbol, type SectorDef } from "@/lib/universe";
 import type {
   AnalyzeRequest,
   ApiErrorCode,
   ChatRequest,
+  FactorProfile,
   KeyStats,
   Lang,
+  MarketState,
   NewsItem,
+  PositionInput,
   Quote,
   SectorKey,
   SignalReport,
   StockProfile,
 } from "@/types/api";
+import type { AnalystActivity, EarningsDetail } from "@/types/earnings";
 
 import { fetchArticleText, parseArticleUrl } from "./article";
-import { HOUR, peek, put } from "./cache";
-import { findNewsById, getCompanyNews, getMarketNews, getSectorNews } from "./news";
-import { UNTRUSTED_CLOSE, UNTRUSTED_OPEN } from "./prompts";
+import { cached, HOUR, peek, put } from "./cache";
+import { getAnalystActivity, getEarningsDetail } from "./earnings";
+import { alignCloses } from "./history";
+import { findNewsById, getCompanyNews, getMarketNews, getSectorNews, isSpam } from "./news";
+import { getFactorProfile } from "./screener";
 import { getSignalReport } from "./signal-service";
-import { getDailyBars, getQuote, getQuotes, getSummary, type DailyBar } from "./yahoo";
+import { callOptions, getDailyBars, getQuote, getQuotes, getSummary, searchNews, upstream, yf, type DailyBar, type RawNewsItem } from "./yahoo";
 
 // Builds the live context for the AI from server-side data only. Each block is compact and whitelisted (no raw
 // JSON), third-party text is wrapped in <untrusted_data> delimiters, and every source is loaded with a time budget
-// so that a slow or failing source degrades to "not available" instead of failing the whole request.
+// so that a slow or failing source degrades to "not available" instead of failing the whole request. Relations the
+// model tends to get wrong (ranks, contributions, which positions rose or fell, how much of a move the market
+// explains) are precomputed by the lib/ai-*.ts modules and written out.
+
+export { cleanInline, fmtChangePercent, fmtCompact, fmtMultiple, fmtNumber, fmtPrice, fmtRatio, untrusted } from "@/lib/ai-format";
+export { evaluationLine } from "@/lib/ai-quant";
+
+export interface ContextMeta {
+  /** Asset class of a single-symbol context; the stock note picks its sections from it. */
+  asset?: AssetClass;
+  /** ISO time of the newest regular-session trade behind the data, when known. */
+  dataAsOf?: string | null;
+  marketState?: MarketState | null;
+}
 
 export type ContextResult =
-  | { ok: true; text: string; subject: Record<Lang, string> }
+  | ({ ok: true; text: string; subject: Record<Lang, string> } & ContextMeta)
   | { ok: false; status: 404 | 502; code: ApiErrorCode; message: string };
 
 export type ChatContextInput = ChatRequest["context"];
 
-const MAX_CONTEXT_CHARS = 8_000;
+const MAX_CONTEXT_CHARS = 10_000;
 /** Time budget for the parallel data loads of one context; slower sources are reported as not available. */
 const LOAD_BUDGET_MS = 9_000;
+/** The factor profile may have to build the universe snapshot; it never holds up a context for longer than this. */
+const FACTOR_BUDGET_MS = 3_000;
+/** Article text for the move explainer is fetched within this sub-budget. */
+const ARTICLE_BUDGET_MS = 4_000;
 const MAX_HEADLINES = 8;
 const MAX_WATCHLIST_ROWS = 30;
 /** Non-universe watchlist equities whose sector is looked up via the Yahoo profile. */
@@ -48,97 +95,19 @@ const MAX_SUMMARY_CHARS = 500;
 const MAX_RELATED_TICKERS = 5;
 /** Same window as the signal engine (lib/server/signal-service.ts), so both share one cached chart request. */
 const BARS_LOOKBACK_DAYS = 540;
-const TRADING_DAYS = { month1: 21, month3: 63, month6: 126 } as const;
-
-// ---------------------------------------------------------------------------
-// Formatting (English, compact; the model translates when writing in Chinese)
-// ---------------------------------------------------------------------------
-
-function isFiniteNumber(value: number | null | undefined): value is number {
-  return typeof value === "number" && Number.isFinite(value);
-}
-
-const NA = "n/a";
-
-export function fmtNumber(value: number | null | undefined, digits = 2): string {
-  if (!isFiniteNumber(value)) return NA;
-  return value.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
-}
-
-export function fmtPrice(value: number | null | undefined): string {
-  if (!isFiniteNumber(value)) return NA;
-  return fmtNumber(value, Math.abs(value) >= 1 ? 2 : 4);
-}
-
-/** Percent units: 1.234 -> "+1.23%". */
-export function fmtChangePercent(value: number | null | undefined): string {
-  if (!isFiniteNumber(value)) return NA;
-  return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
-}
-
-/** Decimal ratio: 0.2534 -> "25.3%" (or "+25.3%" when signed). */
-export function fmtRatio(value: number | null | undefined, digits = 1, signed = false): string {
-  if (!isFiniteNumber(value)) return NA;
-  return `${signed && value > 0 ? "+" : ""}${(value * 100).toFixed(digits)}%`;
-}
-
-export function fmtMultiple(value: number | null | undefined): string {
-  return isFiniteNumber(value) ? `${value.toFixed(1)}x` : NA;
-}
-
-/** 4.61e12 -> "4.61T"; with USD -> "$4.61T"; other currencies are suffixed. */
-export function fmtCompact(value: number | null | undefined, currency?: string | null): string {
-  if (!isFiniteNumber(value)) return NA;
-  const abs = Math.abs(value);
-  const [divisor, unit] = abs >= 1e12 ? [1e12, "T"] : abs >= 1e9 ? [1e9, "B"] : abs >= 1e6 ? [1e6, "M"] : abs >= 1e3 ? [1e3, "K"] : [1, ""];
-  const amount = `${(value / divisor).toFixed(divisor === 1 ? 0 : 2)}${unit}`;
-  if (!currency) return amount;
-  return currency === "USD" ? `${value < 0 ? "-" : ""}$${amount.replace("-", "")}` : `${amount} ${currency}`;
-}
-
-/** ISO timestamp to minute precision, e.g. "2026-11-07T14:05Z". */
-function fmtTime(iso: string | null | undefined): string {
-  return iso && iso.length >= 16 ? `${iso.slice(0, 16)}Z` : NA;
-}
-
-function fmtDate(iso: string | null | undefined): string {
-  return iso && iso.length >= 10 ? iso.slice(0, 10) : NA;
-}
-
-/** "label value" pairs joined by commas, skipping missing values. */
-function pairs(entries: ReadonlyArray<readonly [string, string]>): string {
-  return entries
-    .filter(([, value]) => value !== NA)
-    .map(([label, value]) => `${label} ${value}`)
-    .join(", ");
-}
-
-/** Third-party strings shown inline (names, reasons): no control or format characters, angle brackets or line breaks. */
-export function cleanInline(value: string | null | undefined, maxChars = 80): string {
-  if (!value) return "";
-  const text = value
-    .replace(/[\p{Cc}\p{Cf}]/gu, " ")
-    .replace(/[<>\uFF1C\uFF1E\uFE64\uFE65]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  return text.length > maxChars ? `${text.slice(0, maxChars - 1)}…` : text;
-}
-
-/**
- * Wraps third-party text in the delimiters the system prompt tells the model to treat as data.
- * Angle brackets (and their full-width and small look-alikes) are replaced so the text can neither close the block
- * nor open a fake one.
- */
-export function untrusted(text: string): string {
-  const safe = text
-    .replace(/[\p{Cc}\p{Cf}]/gu, (char) => (char === "\n" ? "\n" : " "))
-    .replace(/[<\uFF1C\uFE64]/g, "‹")
-    .replace(/[>\uFF1E\uFE65]/g, "›")
-    .replace(/[ \t]+/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-  return `${UNTRUSTED_OPEN}\n${safe}\n${UNTRUSTED_CLOSE}`;
-}
+const TRADING_DAYS = { month1: 21, month3: 63, month6: 126, year: 252 } as const;
+/** The portfolio risk block covers the largest positions by value. */
+const MAX_RISK_POSITIONS = 25;
+const RISK_BENCHMARK = "SPY";
+const RISK_WINDOW_DAYS = 366;
+/** Company headlines count as news about the move within this window. */
+const MOVE_NEWS_HOURS = 48;
+const MAX_MOVE_HEADLINES = 8;
+const MOVE_ARTICLES = 2;
+const MAX_ARTICLE_CHARS = 1_200;
+const MOVER_NEWS_COUNT = 8;
+const FUND_TTL_MS = 24 * HOUR;
+const DAY_MS = 86_400_000;
 
 // ---------------------------------------------------------------------------
 // Pure computations
@@ -239,7 +208,7 @@ export function computeConcentration(rows: ReadonlyArray<{ group: string; market
 
 interface Section {
   name: string;
-  text: string;
+  text: string | null;
 }
 
 /** Joins sections in priority order, skipping whole sections that would exceed the budget (never cutting one). */
@@ -248,7 +217,7 @@ export function joinSections(sections: readonly Section[], maxChars: number = MA
   const omitted: string[] = [];
   let length = 0;
   for (const section of sections) {
-    const text = section.text.trim();
+    const text = section.text?.trim();
     if (!text) continue;
     const added = text.length + (kept.length > 0 ? 2 : 0);
     if (length + added > maxChars) {
@@ -260,6 +229,20 @@ export function joinSections(sections: readonly Section[], maxChars: number = MA
   }
   if (omitted.length > 0) kept.push(`(Omitted for length: ${omitted.join(", ")}.)`);
   return kept.join("\n\n");
+}
+
+function unique<T>(values: readonly T[]): T[] {
+  return [...new Set(values)];
+}
+
+/** The newest regular-session trade time among quotes (ISO), and the market state of that quote. */
+export function newestTrade(quotes: Iterable<Quote | undefined>): { dataAsOf: string | null; marketState: MarketState | null } {
+  let best: Quote | undefined;
+  for (const quote of quotes) {
+    if (!quote?.regularMarketTime) continue;
+    if (!best?.regularMarketTime || quote.regularMarketTime > best.regularMarketTime) best = quote;
+  }
+  return { dataAsOf: best?.regularMarketTime ?? null, marketState: best?.marketState ?? null };
 }
 
 // ---------------------------------------------------------------------------
@@ -294,14 +277,23 @@ function settle<T>(promise: Promise<T>, budget: Budget): Promise<Settled<T>> {
 /** Starts a load immediately; synchronous throws become rejections. */
 function attempt<T>(load: () => Promise<T>): Promise<T> {
   try {
-    return load();
+    return Promise.resolve(load());
   } catch (error) {
     return Promise.reject(error);
   }
 }
 
+/** Resolves with the load's value, or null once `ms` pass (the load itself keeps running and fills its cache). */
+function within<T>(load: Promise<T>, ms: number): Promise<T | null> {
+  const budget = startBudget(ms);
+  return settle(load, budget).then((settled) => {
+    budget.clear();
+    return settled.ok ? settled.value : null;
+  });
+}
+
 function valueOf<T>(settled: Settled<T>): T | null {
-  return settled.ok ? settled.value : null;
+  return settled.ok ? (settled.value ?? null) : null;
 }
 
 const UPSTREAM_FAILURE: ContextResult = {
@@ -346,6 +338,20 @@ function boardLine(item: BoardSymbol, quote: Quote | undefined): string {
   return `- ${label}: ${fmtPrice(quote.price)} (${fmtChangePercent(quote.changePercent)})`;
 }
 
+function shareCount(value: number): string {
+  return fmtNumber(value, Number.isInteger(value) ? 0 : 4);
+}
+
+/** The investor's position in the symbol on the stock page, valued at the latest price (lib/portfolio.ts). */
+export function positionLine(position: PositionInput, quote: Quote | null): string {
+  const base = `Your position (entered by the investor): ${shareCount(position.shares)} sh at ${fmtPrice(position.cost)} average cost`;
+  const { rows, foreign } = valuePortfolio([position], () => quote ?? undefined);
+  const row: ValuedPosition | undefined = rows[0] ?? foreign[0];
+  if (!row) return `${base}; no current price, so it is not valued.`;
+  const day = row.dayPnl !== null ? `, today ${fmtSigned(row.dayPnl)}` : "";
+  return `${base}; value ${fmtNumber(row.value)} ${row.currency}, unrealized ${fmtSigned(row.pnl)} (${fmtRatio(row.pnlPct, 1, true)})${day}.`;
+}
+
 // ---------------------------------------------------------------------------
 // Stock
 // ---------------------------------------------------------------------------
@@ -353,6 +359,7 @@ function boardLine(item: BoardSymbol, quote: Quote | undefined): string {
 function stockHeader(symbol: string, quote: Quote | null, profile: StockProfile | null): string {
   const name = cleanInline(profile?.longName ?? profile?.name ?? quote?.name ?? symbol);
   const details = pairs([
+    ["type", cleanInline(quote?.quoteType) || NA],
     ["sector", cleanInline(profile?.sector) || NA],
     ["industry", cleanInline(profile?.industry) || NA],
     ["exchange", cleanInline(quote?.exchange ?? profile?.exchange) || NA],
@@ -365,8 +372,9 @@ function stockHeader(symbol: string, quote: Quote | null, profile: StockProfile 
 
 function quoteBlock(quote: Quote | null, stats: KeyStats | null): string {
   if (!quote) return "Quote: not available.";
+  const stale = quote.stale ? `; this quote is older data from ${fmtTime(quote.fetchedAt)} because the latest refresh failed` : "";
   const lines = [
-    `Quote (market state ${quote.marketState ?? NA}, last regular-session trade ${fmtTime(quote.regularMarketTime)}):`,
+    `Quote (market state ${quote.marketState ?? NA}, last regular-session trade ${fmtTime(quote.regularMarketTime)}${stale}):`,
     `- ${pairs([
       ["price", fmtPrice(quote.price)],
       ["change", isFiniteNumber(quote.change) ? `${quote.change > 0 ? "+" : ""}${fmtPrice(quote.change)} (${fmtChangePercent(quote.changePercent)})` : NA],
@@ -405,7 +413,14 @@ function earningsLine(nextEarningsDate: string | null, now: Date): string | null
   return `- Next earnings date: ${fmtDate(nextEarningsDate)} (${upcoming ? "upcoming" : "most recent report; no future date announced"})`;
 }
 
-function statsBlock(stats: KeyStats | null, price: number | null, currency: string | null, now: Date): string {
+interface StatsOptions {
+  /** The Analyst activity block is present, so the analyst line is left out here. */
+  skipAnalysts?: boolean;
+  /** The Earnings block is present, so the earnings date is left out here. */
+  skipEarnings?: boolean;
+}
+
+function statsBlock(stats: KeyStats | null, price: number | null, currency: string | null, now: Date, options: StatsOptions = {}): string {
   if (!stats) return "Key statistics: not available.";
   const lines: string[] = [];
   const add = (label: string, body: string) => {
@@ -421,7 +436,7 @@ function statsBlock(stats: KeyStats | null, price: number | null, currency: stri
       ["EPS (ttm)", fmtNumber(stats.eps)],
       ["forward EPS", fmtNumber(stats.forwardEps)],
       ["dividend yield", fmtRatio(stats.dividendYield, 2)],
-      ["beta", fmtNumber(stats.beta)],
+      ["beta (Yahoo)", fmtNumber(stats.beta)],
     ]),
   );
   add(
@@ -450,7 +465,7 @@ function statsBlock(stats: KeyStats | null, price: number | null, currency: stri
       ["revenue (ttm)", fmtCompact(stats.totalRevenue, currency)],
     ]),
   );
-  if (isFiniteNumber(stats.targetMeanPrice)) {
+  if (isFiniteNumber(stats.targetMeanPrice) && !options.skipAnalysts) {
     const implied = isFiniteNumber(price) && price > 0 ? ` (${fmtRatio(stats.targetMeanPrice / price - 1, 1, true)} vs the price)` : "";
     const range =
       isFiniteNumber(stats.targetLowPrice) && isFiniteNumber(stats.targetHighPrice)
@@ -459,9 +474,11 @@ function statsBlock(stats: KeyStats | null, price: number | null, currency: stri
     const consensus = stats.recommendationKey ? `, consensus ${cleanInline(stats.recommendationKey, 20).replace(/_/g, " ")}` : "";
     const mean = isFiniteNumber(stats.recommendationMean) ? ` (mean rating ${stats.recommendationMean.toFixed(1)} on 1 = strong buy ... 5 = sell)` : "";
     const analysts = isFiniteNumber(stats.numberOfAnalysts) ? `, ${stats.numberOfAnalysts} analysts` : "";
-    lines.push(`- Analysts: mean target ${fmtPrice(stats.targetMeanPrice)}${implied}${range}${consensus}${mean}${analysts}`);
+    lines.push(`- Analysts (opinions): mean target ${fmtPrice(stats.targetMeanPrice)}${implied}${range}${consensus}${mean}${analysts}`);
+  } else if (isFiniteNumber(stats.targetMeanPrice) && isFiniteNumber(price) && price > 0) {
+    lines.push(`- Mean analyst target ${fmtPrice(stats.targetMeanPrice)} is ${fmtRatio(stats.targetMeanPrice / price - 1, 1, true)} from the price (an opinion)`);
   }
-  const earnings = earningsLine(stats.nextEarningsDate, now);
+  const earnings = options.skipEarnings ? null : earningsLine(stats.nextEarningsDate, now);
   if (earnings) lines.push(earnings);
   if (stats.exDividendDate) lines.push(`- Ex-dividend date: ${fmtDate(stats.exDividendDate)}`);
   return lines.length > 0 ? `Key statistics:\n${lines.join("\n")}` : "Key statistics: not available.";
@@ -488,113 +505,6 @@ function technicalsBlock(bars: readonly DailyBar[] | null): string {
   return lines.join("\n");
 }
 
-function factorValue(raw: number | null, unit: SignalReport["factors"][number]["rawUnit"]): string {
-  if (!isFiniteNumber(raw)) return "";
-  if (unit === "percent") return ` (${fmtRatio(raw)})`;
-  if (unit === "multiple") return ` (${fmtMultiple(raw)})`;
-  return ` (${fmtNumber(raw, 1)})`;
-}
-
-/** Plain-language names of the signal codes: the score describes the current setup, it is not a forecast. */
-const READING: Record<NonNullable<SignalReport["code"]>, string> = {
-  strong_bullish: "very strong",
-  bullish: "strong",
-  neutral: "neutral",
-  bearish: "weak",
-  strong_bearish: "very weak",
-};
-
-const EVALUATION_VERDICT_TEXT = {
-  predictive: "higher scores were followed by higher returns",
-  inverse: "higher scores were followed by lower returns",
-  none: "the score has not been a reliable forecast",
-} as const;
-
-/**
- * One line from the offline universe evaluation (lib/signal-evaluation.json): the rank IC with its Newey-West t, the
- * extreme readings' return against the same-day universe (market moves removed) with their bootstrap intervals and
- * episode counts, and the holdout decade.
- */
-export function evaluationLine(evaluation = SIGNAL_EVALUATION): string | null {
-  const horizon = findHorizon(evaluation, EVALUATION_DAYS);
-  if (!horizon) return null;
-  const days = horizon.days;
-  const after = (label: ReturnType<typeof findLabel>) => {
-    if (!label) return NA;
-    const ci = label.ci.selection;
-    return `${fmtRatio(label.selection, 2, true)} (95% CI ${ci ? `${fmtRatio(ci[0], 2, true)} to ${fmtRatio(ci[1], 2, true)}` : NA}, ${label.episodes} episodes)`;
-  };
-  const { holdout } = evaluation;
-  const passed = holdout.factors.filter((factor) => factor.pass).map((factor) => factor.key);
-  const holdoutCi = holdout.composite.ci ? `${fmtNumber(holdout.composite.ci[0], 3)} to ${fmtNumber(holdout.composite.ci[1], 3)}` : NA;
-  // No weight was fitted to the holdout, but a factor dropped after seeing it makes it a weaker test of the current model.
-  const weights = evaluation.model.weights;
-  const names: Record<keyof typeof weights, string> = {
-    momentum: "momentum",
-    trend: "trend",
-    rsi: "RSI",
-    volume: "volume",
-    value: "valuation",
-    quality: "quality",
-    volatility: "volatility regime",
-  };
-  const dropped = (Object.keys(names) as Array<keyof typeof weights>).filter((key) => weights[key] === 0).map((key) => names[key]);
-  const holdoutUse =
-    dropped.length === 0
-      ? "the weights were never fitted to it"
-      : `the weights were never fitted to it, but model v${evaluation.model.version} dropped the ${dropped.join(" and ")} after seeing it`;
-  return (
-    `- universe evaluation (${evaluation.universe} large US stocks, technical score, signals ${evaluation.from} to ${evaluation.to}): ` +
-    `rank IC with ${days}-day forward returns ${fmtNumber(horizon.ic.mean, 3)} (Newey-West t ${fmtNumber(horizon.ic.t, 2)}), so ${EVALUATION_VERDICT_TEXT[evaluationVerdict(horizon)]}; ` +
-    `average ${days}-day return against the same-day universe after very strong readings ${after(findLabel(horizon, "strong_bullish"))}, ` +
-    `after very weak readings ${after(findLabel(horizon, "strong_bearish"))}; ` +
-    `holdout ${holdout.from} to ${holdout.to} (${holdoutUse}): rank IC ${fmtNumber(holdout.composite.mean, 3)} (95% CI ${holdoutCi}), ` +
-    (passed.length === 0 ? "and no technical factor passed its pre-set test" : `pre-set test passed by: ${passed.join(", ")}`)
-  );
-}
-
-function signalBlock(report: SignalReport | null): string {
-  if (!report) return "InvestSeek model signal: not available.";
-  if (report.status !== "ok" || report.code === null) {
-    const reason = cleanInline(report.reason, 120);
-    return `InvestSeek model signal: insufficient data${reason ? ` (${reason})` : ""}.`;
-  }
-  const round = (value: number | null) => (isFiniteNumber(value) ? String(Math.round(value)) : NA);
-  const lines = [
-    "InvestSeek model signal:",
-    `- reading: ${READING[report.code]}, score ${round(report.score)}/100, factor agreement ${round(report.consensus)}/100, data coverage ${round(report.coverage)}/100, clarity ${report.confidence ?? NA} (agreement and coverage, not forecast confidence)`,
-  ];
-  if (isFiniteNumber(report.technicalScore)) {
-    lines.push(`- technical-only score (what the backtest and the universe evaluation measure): ${report.technicalScore.toFixed(1)}, reading ${READING[labelForScore(report.technicalScore)]}`);
-  }
-  const informative = [...report.factors.filter((factor) => !factor.imputed)].sort((a, b) => b.score - a.score);
-  const describe = (factor: SignalReport["factors"][number]) => `${factor.key} ${Math.round(factor.score)}${factorValue(factor.raw, factor.rawUnit)}`;
-  if (informative.length >= 4) {
-    lines.push(`- strongest factors: ${informative.slice(0, 2).map(describe).join(", ")}; weakest: ${informative.slice(-2).reverse().map(describe).join(", ")}`);
-  } else if (informative.length > 0) {
-    lines.push(`- factors (0-100, higher reads stronger): ${informative.map(describe).join(", ")}`);
-  }
-  const backtest = report.backtest;
-  const fiveDay = backtest?.results.find((result) => result.holdDays === 5);
-  if (backtest && fiveDay) {
-    const ci = fiveDay.winRateCI ? ` (95% CI ${fmtRatio(fiveDay.winRateCI[0])}-${fmtRatio(fiveDay.winRateCI[1])})` : "";
-    lines.push(
-      `- backtest of strong readings (score >= ${SIGNAL_THRESHOLDS.bullish}), technical factors only, 5-day hold over ${fiveDay.windowDays} sessions, ${backtest.costBps} bps round-trip cost: ` +
-        `${fiveDay.trades} trades, win rate ${fmtRatio(fiveDay.winRate)}${ci} vs baseline ${fmtRatio(fiveDay.baselineWinRate)}, ` +
-        `average return ${fmtRatio(fiveDay.avgReturn, 2, true)} vs baseline ${fmtRatio(fiveDay.baselineAvgReturn, 2, true)} (edge ${fmtRatio(fiveDay.edge, 2, true)})` +
-        (fiveDay.lowSample ? "; fewer than 20 trades, so these statistics are not meaningful" : ""),
-    );
-  } else {
-    lines.push("- backtest: not available");
-  }
-  const evaluation = evaluationLine();
-  if (evaluation) lines.push(evaluation);
-  lines.push(
-    "- limits: the live score mixes technical and fundamental factors, but the backtest can only test the technical factors because historical fundamentals are not available; past results do not predict future returns",
-  );
-  return lines.join("\n");
-}
-
 function profileBlock(profile: StockProfile | null): string {
   const summary = profile?.summary?.trim();
   if (!summary) return "";
@@ -602,7 +512,25 @@ function profileBlock(profile: StockProfile | null): string {
   return `Business description (third-party text):\n${untrusted(clipped)}`;
 }
 
-async function stockContext(symbol: string, now: Date): Promise<ContextResult> {
+/** Fund holdings and profile from one quoteSummary call (cached 24 hours). Null for symbols without fund data. */
+export async function getFundData(symbol: string): Promise<FundData | null> {
+  return cached(`ai-fund:${symbol}`, { ttlMs: FUND_TTL_MS, staleMs: 2 * FUND_TTL_MS }, async () => {
+    try {
+      const raw = await upstream(() => yf.quoteSummary(symbol, { modules: ["topHoldings", "fundProfile"] }, callOptions()));
+      return mapFundData(raw as unknown as Record<string, unknown>);
+    } catch (error) {
+      if (/not found|No fundamentals|Not Found|404/i.test(String(error))) return null;
+      throw error;
+    }
+  });
+}
+
+interface StockOptions {
+  /** The investor's position in this symbol (chat on the stock page). */
+  position?: PositionInput;
+}
+
+async function stockContext(symbol: string, now: Date, options: StockOptions = {}): Promise<ContextResult> {
   const budget = startBudget(LOAD_BUDGET_MS);
   try {
     const quotePromise = attempt(() => getQuote(symbol));
@@ -613,12 +541,22 @@ async function stockContext(symbol: string, now: Date): Promise<ContextResult> {
       const quoteName = quote.status === "fulfilled" ? quote.value?.name : undefined;
       return getCompanyNews(symbol, profile?.longName ?? profile?.name ?? quoteName ?? symbol, profile);
     });
-    const [quoteR, summaryR, barsR, signalR, newsR] = await Promise.all([
+    // Earnings, analysts and style factors are for companies, the holdings block for funds: the quote type decides.
+    const assetPromise = quotePromise.then(
+      (quote) => assetClassOf(quote?.quoteType),
+      (): AssetClass => "equity",
+    );
+    const forAsset = <T,>(asset: AssetClass, load: () => Promise<T>) => assetPromise.then((current) => (current === asset ? load() : null));
+    const [quoteR, summaryR, barsR, signalR, newsR, earningsR, analystsR, factorsR, fundR] = await Promise.all([
       settle(quotePromise, budget),
       settle(summaryPromise, budget),
       settle(attempt(() => getDailyBars(symbol, BARS_LOOKBACK_DAYS)), budget),
       settle(attempt(() => getSignalReport(symbol)), budget),
       settle(newsPromise, budget),
+      settle<EarningsDetail | null>(forAsset("equity", () => getEarningsDetail(symbol)), budget),
+      settle<AnalystActivity | null>(forAsset("equity", () => getAnalystActivity(symbol)), budget),
+      settle<FactorProfile | null>(forAsset("equity", () => within(attempt(() => getFactorProfile(symbol)), FACTOR_BUDGET_MS)), budget),
+      settle<FundData | null>(forAsset("fund", () => getFundData(symbol)), budget),
     ]);
 
     const quote = valueOf(quoteR);
@@ -632,17 +570,297 @@ async function stockContext(symbol: string, now: Date): Promise<ContextResult> {
     const stats = summary?.stats ?? null;
     const name = cleanInline(profile?.longName ?? profile?.name ?? quote?.name ?? symbol);
     const currency = quote?.currency ?? profile?.currency ?? null;
+    const asset = assetClassOf(quote?.quoteType);
+    const bars = valueOf(barsR);
+    const earnings = asset === "equity" ? earningsBlock({ detail: valueOf(earningsR), bars, currency, quoteNextDate: quote?.nextEarningsDate, quoteDateEstimated: quote?.earningsDateEstimated, now }) : null;
+    const analysts = asset === "equity" ? analystBlock(valueOf(analystsR), now) : null;
 
     const text = joinSections([
       { name: "header", text: stockHeader(symbol, quote, profile) },
       { name: "quote", text: quoteBlock(quote, stats) },
-      { name: "key statistics", text: statsBlock(stats, quote?.price ?? null, currency, now) },
-      { name: "technicals", text: technicalsBlock(valueOf(barsR)) },
-      { name: "model signal", text: signalBlock(valueOf(signalR)) },
+      { name: "position", text: options.position ? positionLine(options.position, quote) : null },
+      { name: "earnings", text: earnings },
+      { name: "analyst activity", text: analysts },
+      { name: "key statistics", text: statsBlock(stats, quote?.price ?? null, currency, now, { skipAnalysts: analysts !== null, skipEarnings: earnings !== null }) },
+      { name: "fund profile", text: asset === "fund" ? fundBlock(valueOf(fundR), quote) : null },
+      { name: "technicals", text: technicalsBlock(bars) },
+      { name: "quant facts", text: quantBlock({ report: valueOf(signalR), profile: valueOf(factorsR) }) },
       { name: "headlines", text: headlineBlock(valueOf(newsR)) },
       { name: "business description", text: profileBlock(profile) },
     ]);
-    return { ok: true, text, subject: { en: `${symbol} (${name})`, zh: `${symbol}（${name}）` } };
+    return {
+      ok: true,
+      text,
+      subject: { en: `${symbol} (${name})`, zh: `${symbol}（${name}）` },
+      asset,
+      dataAsOf: quote?.regularMarketTime ?? null,
+      marketState: quote?.marketState ?? null,
+    };
+  } finally {
+    budget.clear();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Move explainer
+// ---------------------------------------------------------------------------
+
+/** The universe sector of a symbol, or the one its Yahoo sector maps onto. */
+function sectorFor(symbol: string, yahooSector: string | null): SectorDef | undefined {
+  const universe = sectorOfSymbol(symbol);
+  if (universe) return universe;
+  const key = yahooSectorKey(yahooSector);
+  return key ? getSector(key) : undefined;
+}
+
+/** Company headlines published within the last `hours` hours, newest first. */
+export function recentCompanyNews(items: readonly NewsItem[] | null, now: Date, hours = MOVE_NEWS_HOURS): NewsItem[] {
+  if (!items) return [];
+  const since = now.getTime() - hours * 3_600_000;
+  return items
+    .filter((item) => item.provenance === "company")
+    .filter((item) => {
+      const t = item.publishedAt ? Date.parse(item.publishedAt) : Number.NaN;
+      return Number.isFinite(t) && t >= since && t <= now.getTime() + 3_600_000;
+    })
+    .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))
+    .slice(0, MAX_MOVE_HEADLINES);
+}
+
+function numberedHeadlines(items: readonly NewsItem[]): string {
+  if (items.length === 0) return `Company headlines from the last ${MOVE_NEWS_HOURS} hours: none found.`;
+  const lines = items.map((item, i) => {
+    const publisher = cleanInline(item.publisher, 40) || "unknown publisher";
+    return `[${i + 1}] ${fmtTime(item.publishedAt)} | ${publisher}: ${cleanInline(item.title, 200)}`;
+  });
+  return `Company headlines from the last ${MOVE_NEWS_HOURS} hours (third-party text, newest first; cite them as [n]):\n${untrusted(lines.join("\n"))}`;
+}
+
+/**
+ * Article text, cached for an hour so that re-analyzing a headline does not fetch the page again. Failures are not
+ * cached: a timeout or an unreadable page is retried on the next request.
+ */
+async function loadArticle(link: string, signal?: AbortSignal): Promise<string | null> {
+  const key = `article:${link}`;
+  const hit = peek<string>(key);
+  if (hit !== undefined) return hit;
+  const text = await (signal ? fetchArticleText(link, { signal }) : fetchArticleText(link));
+  if (text !== null) put(key, text, { ttlMs: HOUR });
+  return text;
+}
+
+/** Text of the first `count` headlines, each clipped, fetched together within the article sub-budget. */
+async function loadMoveArticles(items: readonly NewsItem[]): Promise<Array<string | null>> {
+  const picked = items.slice(0, MOVE_ARTICLES);
+  if (picked.length === 0) return [];
+  const controller = new AbortController();
+  const budget = startBudget(ARTICLE_BUDGET_MS);
+  try {
+    const settled = await Promise.all(picked.map((item) => settle(attempt(() => loadArticle(item.link, controller.signal)), budget)));
+    return settled.map((result) => {
+      const text = valueOf(result);
+      return text ? clip(text, MAX_ARTICLE_CHARS) : null;
+    });
+  } finally {
+    budget.clear();
+    controller.abort();
+  }
+}
+
+function eventsForMove(quote: Quote, analysts: AnalystActivity | null, now: Date): string {
+  const parts: string[] = [];
+  if (quote.lastEarningsDate) {
+    const days = daysUntil(quote.lastEarningsDate, now);
+    if (days !== null && days <= 0 && days >= -4) parts.push(`last earnings report ${quote.lastEarningsDate.slice(0, 10)} (${fmtDaysUntil(days)})`);
+  }
+  if (quote.nextEarningsDate) {
+    const days = daysUntil(quote.nextEarningsDate, now);
+    if (days !== null && days >= 0) parts.push(`next earnings report ${quote.nextEarningsDate.slice(0, 10)} (${quote.earningsDateEstimated ? "estimated" : "confirmed"}, ${fmtDaysUntil(days)})`);
+  }
+  if (quote.exDividendDate) {
+    const days = daysUntil(quote.exDividendDate, now);
+    if (days !== null && days >= -2 && days <= 2) parts.push(`ex-dividend ${quote.exDividendDate.slice(0, 10)}`);
+  }
+  const actions = recentActions(analysts, now, 5);
+  parts.push(actions.length > 0 ? `analyst actions in the last 5 days: ${actions.slice(0, 4).map(actionText).join("; ")}` : "no analyst rating or target actions in the last 5 days");
+  return `Scheduled events and analyst actions around the move: ${parts.join("; ")}.`;
+}
+
+async function moveContext(symbol: string, now: Date, options: StockOptions = {}): Promise<ContextResult> {
+  const budget = startBudget(LOAD_BUDGET_MS);
+  try {
+    const quotePromise = attempt(() => getQuote(symbol));
+    const summaryPromise = attempt(() => getSummary(symbol));
+    const profileOf = (summary: PromiseSettledResult<Awaited<ReturnType<typeof getSummary>>>) => (summary.status === "fulfilled" ? (summary.value?.profile ?? null) : null);
+    const sectorPromise = Promise.allSettled([summaryPromise]).then(([summary]) => sectorFor(symbol, profileOf(summary)?.sector ?? null));
+    const peersPromise = sectorPromise.then((sector) =>
+      getQuotes(unique([MARKET_STATE_SYMBOL, ...(sector ? [sector.etf, ...sector.relatedEtfs, ...sector.stocks] : [])]).filter((s) => s !== symbol)),
+    );
+    const newsPromise = Promise.allSettled([quotePromise, summaryPromise]).then(([quote, summary]) => {
+      const profile = profileOf(summary);
+      const quoteName = quote.status === "fulfilled" ? quote.value?.name : undefined;
+      return getCompanyNews(symbol, profile?.longName ?? profile?.name ?? quoteName ?? symbol, profile);
+    });
+    const articlesPromise = newsPromise.then((news) => loadMoveArticles(recentCompanyNews(news, now)));
+    const analystsPromise = quotePromise.then((quote) => (assetClassOf(quote?.quoteType) === "equity" ? getAnalystActivity(symbol) : null));
+
+    const [quoteR, summaryR, barsR, benchmarkR, signalR, peersR, newsR, articlesR, analystsR, sectorR] = await Promise.all([
+      settle(quotePromise, budget),
+      settle(summaryPromise, budget),
+      settle(attempt(() => getDailyBars(symbol, BARS_LOOKBACK_DAYS)), budget),
+      settle(attempt(() => getDailyBars(RISK_BENCHMARK, BARS_LOOKBACK_DAYS)), budget),
+      settle(attempt(() => getSignalReport(symbol)), budget),
+      settle(peersPromise, budget),
+      settle(newsPromise, budget),
+      settle(articlesPromise, budget),
+      settle(analystsPromise, budget),
+      settle(sectorPromise, budget),
+    ]);
+
+    const quote = valueOf(quoteR);
+    if (!quote) {
+      // Yahoo answered without a quote: an unknown symbol. A failed request is an outage.
+      if (quoteR.ok) return { ok: false, status: 404, code: "not_found", message: `No market data found for ${symbol}.` };
+      return UPSTREAM_FAILURE;
+    }
+    const profile = valueOf(summaryR)?.profile ?? null;
+    const name = cleanInline(profile?.longName ?? profile?.name ?? quote.name ?? symbol);
+    const sector = valueOf(sectorR) ?? undefined;
+    const quotes = valueOf(peersR) ?? new Map<string, Quote>();
+    const bars = valueOf(barsR);
+    const report: SignalReport | null = valueOf(signalR);
+    const reportBeta = report?.risk?.beta;
+    const benchmarkBars = valueOf(benchmarkR);
+    let beta: MoveInput["beta"] = null;
+    if (isFiniteNumber(reportBeta)) beta = { value: reportBeta, source: "risk report" };
+    else if (Array.isArray(bars) && Array.isArray(benchmarkBars)) {
+      const fallback = trailingBeta(bars, benchmarkBars);
+      if (fallback !== null) beta = { value: fallback, source: "daily bars" };
+    }
+    const sectorStocks = sector ? sector.stocks.map((s) => quotes.get(s)).filter((q): q is Quote => q !== undefined) : [];
+    const input: MoveInput = {
+      quote,
+      market: quotes.get(MARKET_STATE_SYMBOL),
+      sectorLabel: sector?.label.en ?? null,
+      sectorEtf: sector ? quotes.get(sector.etf) : undefined,
+      relatedEtfs: sector ? sector.relatedEtfs.filter((etf) => etf !== sector.etf).map((etf) => quotes.get(etf)).filter((q): q is Quote => q !== undefined) : [],
+      peers: nearestPeers(symbol, quote.marketCap, sectorStocks),
+      beta,
+      dailyVolatility: Array.isArray(bars) ? dailyVolatility(bars, newYorkDate(quote.regularMarketTime)) : null,
+      session: sessionLabel(quote),
+    };
+
+    const headlines = recentCompanyNews(valueOf(newsR), now);
+    const articles = valueOf(articlesR) ?? [];
+    const articleSections: Section[] = articles.flatMap((text, i) =>
+      text ? [{ name: `article ${i + 1}`, text: `Article text for [${i + 1}] (third-party, clipped):\n${untrusted(text)}` }] : [],
+    );
+
+    const text = joinSections([
+      { name: "header", text: moveHeader(symbol, name, profile?.industry ?? null) },
+      { name: "position", text: options.position ? positionLine(options.position, quote) : null },
+      { name: "move", text: moveBlock(input) },
+      { name: "headlines", text: newsR.ok ? numberedHeadlines(headlines) : "Company headlines: not available." },
+      ...articleSections,
+      { name: "events", text: eventsForMove(quote, valueOf(analystsR), now) },
+    ]);
+    return {
+      ok: true,
+      text,
+      subject: { en: `the latest move in ${symbol} (${name})`, zh: `${symbol}（${name}）的最新涨跌` },
+      asset: assetClassOf(quote.quoteType),
+      dataAsOf: quote.regularMarketTime,
+      marketState: quote.marketState,
+    };
+  } finally {
+    budget.clear();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Compare
+// ---------------------------------------------------------------------------
+
+/** Last-year return, volatility, beta and drawdown of one symbol from its daily bars. */
+function yearStats(bars: readonly DailyBar[] | null, benchmark: readonly DailyBar[] | null) {
+  if (!bars || bars.length < TRADING_DAYS.month1 + 1) return null;
+  const closes = bars.map((bar) => bar.adjClose).filter((close) => Number.isFinite(close) && close > 0);
+  const year = closes.slice(-(TRADING_DAYS.year + 1));
+  return {
+    technicals: computeTechnicals(bars),
+    return1y: closes.length > TRADING_DAYS.year ? closes[closes.length - 1] / closes[closes.length - 1 - TRADING_DAYS.year] - 1 : null,
+    volatility: annualizedVolatility(dailyReturns(year)),
+    beta: benchmark ? trailingBeta(bars, benchmark) : null,
+    drawdown: maxDrawdown(year)?.depth ?? null,
+  };
+}
+
+async function compareContext(symbols: readonly string[], now: Date): Promise<ContextResult> {
+  const budget = startBudget(LOAD_BUDGET_MS);
+  try {
+    const [quotesR, benchmarkR, ...barsR] = await Promise.all([
+      settle(attempt(() => getQuotes([...symbols])), budget),
+      settle(attempt(() => getDailyBars(RISK_BENCHMARK, BARS_LOOKBACK_DAYS)), budget),
+      ...symbols.map((symbol) => settle(attempt(() => getDailyBars(symbol, BARS_LOOKBACK_DAYS)), budget)),
+    ]);
+    if (!quotesR.ok) return UPSTREAM_FAILURE;
+    const quotes = quotesR.value;
+    const known = symbols.filter((symbol) => quotes.has(symbol));
+    if (known.length === 0) return { ok: false, status: 404, code: "not_found", message: "None of the symbols to compare were found." };
+    const benchmark = valueOf(benchmarkR);
+    const barsBySymbol = new Map<string, DailyBar[]>();
+    symbols.forEach((symbol, i) => {
+      const bars = valueOf(barsR[i]);
+      if (Array.isArray(bars)) barsBySymbol.set(symbol, bars);
+    });
+
+    const lines = known.map((symbol) => {
+      const quote = quotes.get(symbol) as Quote;
+      const stats = yearStats(barsBySymbol.get(symbol) ?? null, Array.isArray(benchmark) ? benchmark : null);
+      const valuation = pairs([
+        ["cap", fmtCompact(quote.marketCap, quote.currency)],
+        ["P/E", fmtMultiple(quote.trailingPE)],
+        ["fwd P/E", fmtMultiple(quote.forwardPE)],
+        ["P/B", fmtMultiple(quote.priceToBook)],
+        ["dividend yield", fmtRatio(quote.dividendYield, 2)],
+      ]);
+      const returns = stats
+        ? pairs([
+            ["1M", fmtRatio(stats.technicals.return1m, 1, true)],
+            ["3M", fmtRatio(stats.technicals.return3m, 1, true)],
+            ["6M", fmtRatio(stats.technicals.return6m, 1, true)],
+            ["1Y", fmtRatio(stats.return1y, 1, true)],
+          ])
+        : "";
+      const risk = stats
+        ? pairs([
+            ["1-year volatility", fmtRatio(stats.volatility)],
+            ["beta to SPY", fmtNumber(stats.beta)],
+            ["1-year max drawdown", fmtRatio(stats.drawdown, 1, true)],
+          ])
+        : "";
+      return `- ${symbol} ${cleanInline(quote.name, 40)} (${cleanInline(quote.quoteType) || "type n/a"}): ${fmtPrice(quote.price)} (${fmtChangePercent(quote.changePercent)})${valuation ? `; ${valuation}` : ""}${returns ? `; returns ${returns}` : ""}${risk ? `; ${risk}` : ""}`;
+    });
+
+    const aligned = alignCloses(known, barsBySymbol, now.getTime() - RISK_WINDOW_DAYS * DAY_MS);
+    const correlations: string[] = [];
+    for (let i = 0; i < known.length; i++) {
+      for (let j = i + 1; j < known.length; j++) {
+        const a = aligned.closes[known[i]];
+        const b = aligned.closes[known[j]];
+        const r = a && b ? correlation(dailyReturns(a), dailyReturns(b)) : null;
+        if (r !== null) correlations.push(`${known[i]}/${known[j]} ${fmtNumber(r)}`);
+      }
+    }
+    const missing = symbols.filter((symbol) => !quotes.has(symbol));
+    const text = joinSections([
+      {
+        name: "comparison",
+        text: `Comparison (${known.length} symbols; dividend-adjusted closes; risk figures describe the past year):\n${lines.join("\n")}${missing.length > 0 ? `\nNo data for: ${missing.join(", ")}.` : ""}`,
+      },
+      { name: "correlation", text: correlations.length > 0 ? `Correlation of daily returns over the past year: ${correlations.join(", ")}.` : null },
+    ]);
+    return { ok: true, text, subject: { en: `a comparison of ${known.join(", ")}`, zh: `${known.join("、")} 的比较` }, ...newestTrade(known.map((s) => quotes.get(s))) };
   } finally {
     budget.clear();
   }
@@ -679,8 +897,17 @@ function moverLine(quote: Quote): string {
   return `${quote.symbol} ${fmtChangePercent(quote.changePercent)}`;
 }
 
-async function marketContext(): Promise<ContextResult> {
-  const symbols = [...new Set([...MARKET_BOARD.map((item) => item.symbol), ...SECTORS.map((sector) => sector.etf), ...UNIVERSE_STOCKS])];
+/** The two-line portfolio summary for the market and sector chats (null without positions). */
+function summaryOfPositions(positions: readonly PositionInput[], quotes: ReadonlyMap<string, Quote>): string | null {
+  if (positions.length === 0) return null;
+  return portfolioSummary(
+    valuePortfolio(positions, (symbol) => quotes.get(symbol)),
+    positions.length,
+  );
+}
+
+async function marketContext(positions: readonly PositionInput[] = []): Promise<ContextResult> {
+  const symbols = unique([...MARKET_BOARD.map((item) => item.symbol), ...SECTORS.map((sector) => sector.etf), ...UNIVERSE_STOCKS, ...positions.map((p) => p.symbol)]);
   const budget = startBudget(LOAD_BUDGET_MS);
   try {
     const [quotesR, newsR] = await Promise.all([settle(attempt(() => getQuotes(symbols)), budget), settle(attempt(() => getMarketNews()), budget)]);
@@ -692,14 +919,16 @@ async function marketContext(): Promise<ContextResult> {
       (quote): quote is Quote => quote !== undefined && isFiniteNumber(quote.changePercent),
     );
     const byChange = [...universe].sort((a, b) => (b.changePercent ?? 0) - (a.changePercent ?? 0));
-    const session = sessionLabel(quotes.get(MARKET_STATE_SYMBOL));
+    const reference = quotes.get(MARKET_STATE_SYMBOL);
+    const session = sessionLabel(reference);
     const advancers = universe.filter((quote) => (quote.changePercent ?? 0) > 0).length;
 
     const sections: Section[] = [
       {
         name: "header",
-        text: `US market snapshot. Cash-session state: ${quotes.get(MARKET_STATE_SYMBOL)?.marketState ?? NA} (from ${MARKET_STATE_SYMBOL}).`,
+        text: `US market snapshot. Cash-session state: ${reference?.marketState ?? NA} (from ${MARKET_STATE_SYMBOL}).`,
       },
+      { name: "positions", text: summaryOfPositions(positions, quotes) },
       { name: "board", text: quotes.size > 0 ? `Board:\n${MARKET_BOARD.map((item) => boardLine(item, quotes.get(item.symbol))).join("\n")}` : "Board: not available." },
     ];
     if (universe.length > 0) {
@@ -721,6 +950,8 @@ async function marketContext(): Promise<ContextResult> {
       ok: true,
       text: joinSections(sections),
       subject: live ? { en: "the US market today", zh: "今日美股市场" } : { en: "the US market in its latest session", zh: "美股最近一个交易日" },
+      dataAsOf: reference?.regularMarketTime ?? null,
+      marketState: reference?.marketState ?? null,
     };
   } finally {
     budget.clear();
@@ -731,10 +962,10 @@ async function marketContext(): Promise<ContextResult> {
 // Sector
 // ---------------------------------------------------------------------------
 
-async function sectorContext(key: SectorKey): Promise<ContextResult> {
+async function sectorContext(key: SectorKey, positions: readonly PositionInput[] = []): Promise<ContextResult> {
   const sector = getSector(key);
   if (!sector) return { ok: false, status: 404, code: "not_found", message: "Unknown sector." };
-  const symbols = [...new Set([sector.etf, ...sector.relatedEtfs, ...sector.stocks, MARKET_STATE_SYMBOL])];
+  const symbols = unique([sector.etf, ...sector.relatedEtfs, ...sector.stocks, MARKET_STATE_SYMBOL, ...positions.map((p) => p.symbol)]);
   const budget = startBudget(LOAD_BUDGET_MS);
   try {
     const [quotesR, newsR] = await Promise.all([settle(attempt(() => getQuotes(symbols)), budget), settle(attempt(() => getSectorNews(key)), budget)]);
@@ -754,9 +985,14 @@ async function sectorContext(key: SectorKey): Promise<ContextResult> {
       .map((symbol) => quotes.get(symbol))
       .filter((quote): quote is Quote => quote !== undefined)
       .map((quote) => `${quote.symbol} ${fmtPrice(quote.price)} (${fmtChangePercent(quote.changePercent)})`);
+    const held = positions.filter((position) => sector.stocks.includes(position.symbol)).map((position) => position.symbol);
 
     const sections: Section[] = [
       { name: "header", text: `Sector: ${sector.label.en}. SPDR sector ETF: ${sector.etf}. Constituents tracked: ${sector.stocks.join(", ")}.` },
+      {
+        name: "positions",
+        text: positions.length > 0 ? `${summaryOfPositions(positions, quotes) ?? ""}${held.length > 0 ? `\nHeld in this sector: ${held.join(", ")}.` : "\nNo position in this sector's tracked stocks."}` : null,
+      },
       {
         name: "performance",
         text: [
@@ -770,10 +1006,13 @@ async function sectorContext(key: SectorKey): Promise<ContextResult> {
       },
       { name: "headlines", text: headlineBlock(news, "Sector headlines") },
     ];
+    const reference = quotes.get(MARKET_STATE_SYMBOL) ?? quotes.get(sector.etf);
     return {
       ok: true,
       text: joinSections(sections),
       subject: { en: `the ${sector.label.en} sector`, zh: `${sector.label.zh}板块` },
+      dataAsOf: reference?.regularMarketTime ?? null,
+      marketState: reference?.marketState ?? null,
     };
   } finally {
     budget.clear();
@@ -781,7 +1020,7 @@ async function sectorContext(key: SectorKey): Promise<ContextResult> {
 }
 
 // ---------------------------------------------------------------------------
-// Watchlist
+// Watchlist and portfolio
 // ---------------------------------------------------------------------------
 
 const QUOTE_TYPE_GROUPS: Readonly<Record<string, string>> = {
@@ -803,24 +1042,20 @@ export function sectorGroup(symbol: string, quoteType: string | null, yahooSecto
   return yahooSector ? cleanInline(yahooSector, 40) : "Unclassified";
 }
 
-function pct(share: number): string {
-  return `${Math.round(share * 100)}%`;
-}
-
 function concentrationBlock(concentration: Concentration): string {
   const lines = [
-    `Concentration (${concentration.holdings} holdings, equal count; market-cap weights cover ${concentration.withCap} of ${concentration.holdings}):`,
+    `Concentration of the watchlist rows (${concentration.holdings} symbols, equal count; market-cap weights cover ${concentration.withCap} of ${concentration.holdings}):`,
   ];
   if (concentration.largestByCount) {
     const top = concentration.largestByCount;
-    lines.push(`- largest group by count: ${top.group} ${top.count}/${concentration.holdings} (${pct(top.countShare)})`);
+    lines.push(`- largest group by count: ${top.group} ${top.count}/${concentration.holdings} (${fmtShare(top.countShare)})`);
   }
   const topByCap = concentration.largestByCap;
   if (topByCap && topByCap.capShare !== null) {
-    lines.push(`- largest group by market cap: ${topByCap.group} ${pct(topByCap.capShare)}`);
+    lines.push(`- largest group by market cap: ${topByCap.group} ${fmtShare(topByCap.capShare)}`);
   }
   const all = concentration.groups.map(
-    (group) => `${group.group} ${group.count} (${pct(group.countShare)}${group.capShare !== null ? `, cap ${pct(group.capShare)}` : ""})`,
+    (group) => `${group.group} ${group.count} (${fmtShare(group.countShare)}${group.capShare !== null ? `, cap ${fmtShare(group.capShare)}` : ""})`,
   );
   lines.push(`- all groups: ${all.join("; ")}`);
   return lines.join("\n");
@@ -847,20 +1082,18 @@ export function positionsBlock(
   const unpricedLine = unpriced.length > 0 ? `No price for: ${unpriced.map((position) => position.symbol).join(", ")} (left out of the totals).` : null;
   if (rows.length === 0 && foreign.length === 0) return `Positions entered by the investor: ${unpricedLine ?? "none could be valued."}`;
 
-  const signed = (value: number) => `${value >= 0 ? "+" : "-"}${fmtNumber(Math.abs(value))}`;
-  const shares = (value: number) => fmtNumber(value, Number.isInteger(value) ? 0 : 4);
-  const pnlText = (row: ValuedPosition) => `unrealized ${signed(row.pnl)} (${fmtRatio(row.pnlPct, 1, true)})${row.dayPnl !== null ? `, day ${signed(row.dayPnl)}` : ""}`;
+  const pnlText = (row: ValuedPosition) => `unrealized ${fmtSigned(row.pnl)} (${fmtRatio(row.pnlPct, 1, true)})${row.dayPnl !== null ? `, day ${fmtSigned(row.dayPnl)}` : ""}`;
 
   const counts = [`${rows.length} in ${baseCurrency}`];
   if (foreign.length > 0) counts.push(`${foreign.length} in other currencies, not converted`);
   if (unpriced.length > 0) counts.push(`${unpriced.length} without a price`);
   const lines = [`Positions entered by the investor (${counts.join("; ")}):`];
   for (const row of rows) {
-    lines.push(`- ${row.symbol}: ${shares(row.shares)} sh @ ${fmtPrice(row.cost)} -> value ${fmtNumber(row.value)} (${pct(row.weight ?? 0)} of positions), ${pnlText(row)}; ${groupOf(row.symbol)}`);
+    lines.push(`- ${row.symbol}: ${shareCount(row.shares)} sh @ ${fmtPrice(row.cost)} -> value ${fmtNumber(row.value)} (${fmtShare(row.weight ?? 0)} of positions), ${pnlText(row)}; ${groupOf(row.symbol)}`);
   }
   for (const row of foreign) {
     lines.push(
-      `- ${row.symbol}: ${shares(row.shares)} sh @ ${fmtPrice(row.cost)} ${row.currency} -> value ${fmtNumber(row.value)} ${row.currency}, ${pnlText(row)}; ${groupOf(row.symbol)}; not in the ${baseCurrency} totals`,
+      `- ${row.symbol}: ${shareCount(row.shares)} sh @ ${fmtPrice(row.cost)} ${row.currency} -> value ${fmtNumber(row.value)} ${row.currency}, ${pnlText(row)}; ${groupOf(row.symbol)}; not in the ${baseCurrency} totals`,
     );
   }
   if (unpricedLine) lines.push(unpricedLine);
@@ -868,23 +1101,50 @@ export function positionsBlock(
   if (rows.length > 0) {
     const byGroup = new Map<string, number>();
     for (const row of rows) byGroup.set(groupOf(row.symbol), (byGroup.get(groupOf(row.symbol)) ?? 0) + row.value);
-    const groups = [...byGroup.entries()].sort((a, b) => b[1] - a[1]).map(([group, value]) => `${group} ${pct(value / totals.value)}`);
+    const groups = [...byGroup.entries()].sort((a, b) => b[1] - a[1]).map(([group, value]) => `${group} ${fmtShare(value / totals.value)}`);
     const topThree = rows.slice(0, 3).reduce((sum, row) => sum + row.value, 0) / totals.value;
     lines.push(
-      `Totals (${baseCurrency}): value ${fmtNumber(totals.value)}, cost ${fmtNumber(totals.costBasis)}, unrealized ${signed(totals.pnl)} (${fmtRatio(totals.pnlPct, 1, true)}), day ${signed(totals.dayPnl)}.`,
-      `Largest position ${rows[0].symbol} ${pct(rows[0].weight ?? 0)}; top 3 ${pct(topThree)}. Weights by group (by value): ${groups.join("; ")}.`,
+      `Totals (${baseCurrency}): value ${fmtNumber(totals.value)}, cost ${fmtNumber(totals.costBasis)}, unrealized ${fmtSigned(totals.pnl)} (${fmtRatio(totals.pnlPct, 1, true)}), day ${fmtSigned(totals.dayPnl)}.`,
+      `Largest position ${rows[0].symbol} ${fmtShare(rows[0].weight ?? 0)}; top 3 ${fmtShare(topThree)}. Weights by group (by value): ${groups.join("; ")}.`,
     );
   }
   return lines.join("\n");
 }
 
-async function watchlistContext(requestedSymbols: readonly string[], positions: readonly PositionRowInput[] = []): Promise<ContextResult> {
+/** The newest recent headline that is about `symbol` (tagged or naming the ticker), excluding clickbait. */
+export function moverHeadline(symbol: string, items: readonly RawNewsItem[] | null, now: Date): RawNewsItem | null {
+  if (!items) return null;
+  const since = now.getTime() - MOVE_NEWS_HOURS * 3_600_000;
+  const ticker = new RegExp(`(^|[^A-Za-z0-9])${symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^A-Za-z0-9]|$)`);
+  return (
+    items
+      .filter((item) => !isSpam(item.title))
+      .filter((item) => item.relatedTickers.some((t) => normalizeSymbol(t) === symbol) || ticker.test(item.title))
+      .filter((item) => {
+        const t = item.publishedAt ? Date.parse(item.publishedAt) : Number.NaN;
+        return Number.isFinite(t) && t >= since;
+      })
+      .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))[0] ?? null
+  );
+}
+
+function moverHeadlinesBlock(movers: readonly ValuedPosition[], news: ReadonlyArray<readonly RawNewsItem[] | null>, now: Date): string | null {
+  if (movers.length === 0) return null;
+  const lines = movers.map((row, i) => {
+    const item = moverHeadline(row.symbol, news[i] ?? null, now);
+    const head = `- ${row.symbol} (day ${fmtSigned(row.dayPnl)})`;
+    return item ? `${head}: ${fmtTime(item.publishedAt)} | ${cleanInline(item.publisher, 40) || "unknown publisher"}: ${cleanInline(item.title, 200)}` : `${head}: no headline in the last ${MOVE_NEWS_HOURS} hours`;
+  });
+  return `Latest headline for the two largest P&L movers (third-party text; it may not explain the move):\n${untrusted(lines.join("\n"))}`;
+}
+
+async function watchlistContext(requestedSymbols: readonly string[], positions: readonly PositionInput[] = [], now: Date = new Date()): Promise<ContextResult> {
   // Positions come first, so a long watchlist never crowds them out of the rows, and every position is quoted even
   // beyond the row limit (the schema caps positions at MAX_WATCHLIST).
-  const positionSymbols = [...new Set(positions.map((position) => position.symbol))];
-  const requested = [...new Set([...positionSymbols, ...requestedSymbols])];
+  const positionSymbols = unique(positions.map((position) => position.symbol));
+  const requested = unique([...positionSymbols, ...requestedSymbols]);
   const symbols = requested.slice(0, MAX_WATCHLIST_ROWS);
-  const quoteSymbols = [...new Set([...symbols, ...positionSymbols])];
+  const quoteSymbols = unique([...symbols, ...positionSymbols]);
   const budget = startBudget(LOAD_BUDGET_MS);
   try {
     const quotesR = await settle(attempt(() => getQuotes(quoteSymbols)), budget);
@@ -893,19 +1153,29 @@ async function watchlistContext(requestedSymbols: readonly string[], positions: 
     if (quotes.size === 0) return { ok: false, status: 404, code: "not_found", message: "None of the watchlist symbols were found." };
 
     // Sector names for equities outside the static universe come from the Yahoo profile (cached for hours).
-    const lookups = symbols
+    const lookups = unique([...symbols, ...positionSymbols])
       .filter((symbol) => {
         const quote = quotes.get(symbol);
         return quote !== undefined && !sectorOfSymbol(symbol) && (quote.quoteType === null || quote.quoteType === "EQUITY");
       })
       .slice(0, MAX_PROFILE_LOOKUPS);
-    const profiles = await Promise.all(lookups.map((symbol) => settle(attempt(() => getSummary(symbol)), budget)));
+    const portfolio = positions.length > 0 ? valuePortfolio(positions, (symbol) => quotes.get(symbol)) : null;
+    const riskSymbols = portfolio ? portfolio.rows.slice(0, MAX_RISK_POSITIONS).map((row) => row.symbol) : [];
+    const movers = portfolio ? largestMovers(portfolio) : [];
+    const barsSymbols = riskSymbols.length > 0 ? unique([...riskSymbols, RISK_BENCHMARK]) : [];
+
+    const [profiles, barsSettled, moverNews] = await Promise.all([
+      Promise.all(lookups.map((symbol) => settle(attempt(() => getSummary(symbol)), budget))),
+      Promise.all(barsSymbols.map((symbol) => settle(attempt(() => getDailyBars(symbol, BARS_LOOKBACK_DAYS)), budget))),
+      Promise.all(movers.map((row) => settle(attempt(() => searchNews(row.symbol, MOVER_NEWS_COUNT)), budget))),
+    ]);
     const yahooSectors = new Map(lookups.map((symbol, index) => [symbol, valueOf(profiles[index])?.profile.sector ?? null]));
+    const groupOfSymbol = (symbol: string) => sectorGroup(symbol, quotes.get(symbol)?.quoteType ?? null, yahooSectors.get(symbol) ?? null);
 
     const missing = symbols.filter((symbol) => !quotes.has(symbol));
     const rows = symbols.flatMap((symbol) => {
       const quote = quotes.get(symbol);
-      return quote ? [{ quote, group: sectorGroup(symbol, quote.quoteType, yahooSectors.get(symbol) ?? null) }] : [];
+      return quote ? [{ quote, group: groupOfSymbol(symbol) }] : [];
     });
 
     const withChange = rows.filter((row) => isFiniteNumber(row.quote.changePercent));
@@ -923,21 +1193,37 @@ async function watchlistContext(requestedSymbols: readonly string[], positions: 
             ? `${capitalize(session)}: equal-weighted average ${fmtChangePercent(average)}; best ${moverLine(byChange[0].quote)}; worst ${moverLine(byChange[byChange.length - 1].quote)}.`
             : `${capitalize(session)}: changes not available.`,
       },
-      { name: "concentration", text: concentrationBlock(computeConcentration(rows.map((row) => ({ group: row.group, marketCap: row.quote.marketCap })))) },
     ];
-    const groupBySymbol = new Map(rows.map((row) => [row.quote.symbol, row.group]));
-    const positionsText = positions.length > 0 ? positionsBlock(positions, quotes, (symbol) => groupBySymbol.get(symbol) ?? "Unclassified") : null;
-    if (positionsText) sections.push({ name: "positions", text: positionsText });
-    sections.push({
-      name: "holdings",
-      text: `Holdings (symbol name: price (change), valuation; group):\n${rows.map((row) => `${compactQuoteLine(row.quote)}; ${row.group}`).join("\n")}`,
-    });
+    if (portfolio) {
+      const barsBySymbol = new Map<string, DailyBar[]>();
+      barsSymbols.forEach((symbol, i) => {
+        const bars = valueOf(barsSettled[i]);
+        if (Array.isArray(bars)) barsBySymbol.set(symbol, bars);
+      });
+      const aligned = alignCloses(barsSymbols, barsBySymbol, now.getTime() - RISK_WINDOW_DAYS * DAY_MS);
+      sections.push(
+        { name: "positions", text: positionsBlock(positions, quotes, groupOfSymbol) },
+        { name: "day P&L", text: dayPnlLine(portfolio) },
+        { name: "ranks", text: [ranksLine(portfolio), groupSplitLine(largestGroupSplit(portfolio, groupOfSymbol))].filter(Boolean).join("\n") },
+        { name: "risk", text: riskBlock(portfolioRisk(aligned, portfolio, RISK_BENCHMARK), portfolio, RISK_BENCHMARK) },
+        { name: "events", text: eventsLine(positionSymbols, quotes, now) },
+        { name: "mover headlines", text: moverHeadlinesBlock(movers, moverNews.map((settled) => valueOf(settled)), now) },
+      );
+    }
+    sections.push(
+      { name: "concentration", text: concentrationBlock(computeConcentration(rows.map((row) => ({ group: row.group, marketCap: row.quote.marketCap })))) },
+      {
+        name: "holdings",
+        text: `Watchlist rows (symbol name: price (change), valuation; group):\n${rows.map((row) => `${compactQuoteLine(row.quote)}; ${row.group}`).join("\n")}`,
+      },
+    );
     return {
       ok: true,
       text: joinSections(sections),
-      subject: positionsText
+      subject: portfolio
         ? { en: `the investor's portfolio and watchlist (${rows.length} symbols)`, zh: `投资者的持仓与自选（${rows.length} 只）` }
         : { en: `the investor's watchlist (${rows.length} symbols)`, zh: `投资者的自选股（${rows.length} 只）` },
+      ...newestTrade(quotes.values()),
     };
   } finally {
     budget.clear();
@@ -978,28 +1264,12 @@ export function resolveNewsTarget(request: { newsId: string; link?: string; titl
   return { title, publisher: null, link: link.href, publishedAt: null, relatedTickers: [], provenance: null };
 }
 
-/**
- * Article text, cached for an hour so that re-analyzing a headline does not fetch the page again. Failures are not
- * cached: a timeout or an unreadable page is retried on the next request.
- */
-async function loadArticle(link: string): Promise<string | null> {
-  const key = `article:${link}`;
-  const hit = peek<string>(key);
-  if (hit !== undefined) return hit;
-  const text = await fetchArticleText(link);
-  if (text !== null) put(key, text, { ttlMs: HOUR });
-  return text;
-}
-
 async function newsContext(request: { newsId: string; link?: string; title?: string }): Promise<ContextResult> {
   const target = resolveNewsTarget(request);
   if (!target) {
     return { ok: false, status: 404, code: "not_found", message: "This news item is no longer available. Refresh the news list and try again." };
   }
-  const tickers = [...new Set(target.relatedTickers.map(normalizeSymbol).filter((symbol): symbol is string => symbol !== null))].slice(
-    0,
-    MAX_RELATED_TICKERS,
-  );
+  const tickers = unique(target.relatedTickers.map(normalizeSymbol).filter((symbol): symbol is string => symbol !== null)).slice(0, MAX_RELATED_TICKERS);
   const budget = startBudget(LOAD_BUDGET_MS);
   try {
     const [quotesR, articleR] = await Promise.all([
@@ -1035,7 +1305,7 @@ async function newsContext(request: { newsId: string; link?: string; title?: str
       { name: "related tickers", text: related },
       { name: "article", text: articleText },
     ]);
-    return { ok: true, text, subject: { en: "the news item in the data", zh: "数据中的这条新闻" } };
+    return { ok: true, text, subject: { en: "the news item in the data", zh: "数据中的这条新闻" }, dataAsOf: null, marketState: null };
   } finally {
     budget.clear();
   }
@@ -1049,12 +1319,14 @@ export async function buildAnalyzeContext(request: AnalyzeRequest, now: Date = n
   switch (request.kind) {
     case "stock":
       return stockContext(request.symbol, now);
+    case "move":
+      return moveContext(request.symbol, now);
     case "market":
       return marketContext();
     case "sector":
       return sectorContext(request.sector);
     case "watchlist":
-      return watchlistContext(request.symbols, request.positions ?? []);
+      return watchlistContext(request.symbols, request.positions ?? [], now);
     case "news":
       return newsContext(request);
   }
@@ -1071,14 +1343,30 @@ function withNote(result: ContextResult, note: string): ContextResult {
   return result.ok ? { ...result, text: `${note}\n\n${result.text}` } : result;
 }
 
-/** Context for the chat, based on the view the investor has open. */
+/**
+ * Context for the chat: the subject of a seeded question when there is one (a move, a report, a comparison), else the
+ * view the investor has open. Positions arrive only while the investor allows it.
+ */
 export async function buildChatContext(input: ChatContextInput, now: Date = new Date()): Promise<ContextResult> {
   const note = VIEW_NOTES[input.view];
-  if (input.view === "stock" && input.symbol) return withNote(await stockContext(input.symbol, now), note);
-  if (input.view === "sector" && input.sector) return withNote(await sectorContext(input.sector), note);
-  if (input.view === "watchlist") {
-    if (input.symbols && input.symbols.length > 0) return withNote(await watchlistContext(input.symbols), note);
-    return withNote(await marketContext(), `${note} The watchlist is empty or was not sent, so the market overview is shown instead.`);
+  const positions = input.positions ?? [];
+  const positionOf = (symbol: string) => positions.find((position) => position.symbol === symbol);
+  const intent = input.intent;
+  if (intent?.kind === "move") {
+    return withNote(await moveContext(intent.symbol, now, { position: positionOf(intent.symbol) }), `${note} They asked why ${intent.symbol} is moving; the move breakdown below is the basis for the answer.`);
   }
-  return withNote(await marketContext(), note);
+  if (intent?.kind === "earnings") {
+    return withNote(await stockContext(intent.symbol, now, { position: positionOf(intent.symbol) }), `${note} They asked about ${intent.symbol}'s earnings; use the Earnings and Analyst activity blocks.`);
+  }
+  if (intent?.kind === "compare") {
+    return withNote(await compareContext(intent.symbols, now), `${note} They asked to compare ${intent.symbols.join(", ")}.`);
+  }
+  if (input.view === "stock" && input.symbol) return withNote(await stockContext(input.symbol, now, { position: positionOf(input.symbol) }), note);
+  if (input.view === "sector" && input.sector) return withNote(await sectorContext(input.sector, positions), note);
+  if (input.view === "watchlist") {
+    const symbols = input.symbols ?? [];
+    if (symbols.length > 0 || positions.length > 0) return withNote(await watchlistContext(symbols, positions, now), note);
+    return withNote(await marketContext(positions), `${note} The watchlist is empty or was not sent, so the market overview is shown instead.`);
+  }
+  return withNote(await marketContext(positions), note);
 }
