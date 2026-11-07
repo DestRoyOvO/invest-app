@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { PHASE_PRODUCTION_BUILD } from "next/constants";
 
 // Build-time configuration. It runs outside the app bundle, so it reads NODE_ENV directly instead of going through
 // lib/server/env.ts (which is for runtime settings).
@@ -19,9 +20,6 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // A self-contained server in .next/standalone for the Docker image (see Dockerfile). Vercel ignores it. `npm start`
-  // still serves the regular build, but Next prints a warning that it does not use this output.
-  output: "standalone",
   poweredByHeader: false,
   reactStrictMode: true,
   // `npm run dev` binds to 127.0.0.1 only; allow both loopback host names for dev assets and HMR.
@@ -39,4 +37,11 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+/**
+ * The configuration for one Next.js phase. `next build` also writes a self-contained server to .next/standalone, which
+ * the Docker image runs (see Dockerfile) and Vercel ignores. Other phases leave that setting out: `next start` serves
+ * the regular build from .next, and with the setting present it would warn that it "does not work" with it.
+ */
+export default function configFor(phase: string): NextConfig {
+  return phase === PHASE_PRODUCTION_BUILD ? { ...nextConfig, output: "standalone" } : nextConfig;
+}

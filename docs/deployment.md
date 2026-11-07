@@ -75,9 +75,8 @@ docker run -d --name investseek --restart unless-stopped --env-file .env.local -
 ### Without Docker
 
 `npm ci && npm run build && npm start` runs the same server on port 3000; put it behind a TLS reverse proxy and set
-`TRUST_PROXY=1`. Because the build also writes the standalone server for the image, `next start` prints a warning that
-it does not use that output; the warning is harmless. To run the standalone server directly, copy `public/` to
-`.next/standalone/public` and `.next/static` to `.next/standalone/.next/static`, then run
+`TRUST_PROXY=1`. The build also writes the standalone server that the image uses. To run that one directly, copy
+`public/` to `.next/standalone/public` and `.next/static` to `.next/standalone/.next/static`, then run
 `node .next/standalone/server.js` with `PORT` and `HOSTNAME` set.
 
 ### Plain HTTP on a local network
