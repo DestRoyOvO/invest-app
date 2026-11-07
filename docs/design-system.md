@@ -391,8 +391,11 @@ toast.show({ message: tpl(t.watchlist.removed, { symbol }), action: { label: t.c
 ```
 
 `ToastProvider` is mounted in `components/providers/Providers.tsx`. Toasts sit above the phone tab bar or the status
-bar, in a polite live region, at most three at a time; they close after 5s (8s with an action) and pause while hovered
-or focused.
+bar, in a polite live region, at most three at a time; they close after 5s (8s with an action). The countdowns pause
+while the pointer is over the toasts or keyboard focus is inside them, and resume with the time that was left (at
+least 1.5s). When a toast closes under keyboard focus (Undo, Close), focus moves to the toast that took its place, or
+back to where it was before the toasts. The list and countdowns live in `createToastStore` (`toast-queue.ts`, unit
+tested).
 
 ### Drawer
 

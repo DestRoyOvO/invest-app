@@ -1,12 +1,12 @@
 "use client";
 
 import { X } from "lucide-react";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FocusEvent, type PointerEvent, type ReactNode } from "react";
 
 import { useT } from "@/components/providers/PrefsProvider";
 
 import { IconButton } from "./Button";
-import { pushToast, remainingTime, removeToast } from "./toast-queue";
+import { createToastStore } from "./toast-queue";
 
 export interface ToastOptions {
   message: ReactNode;
@@ -35,73 +35,85 @@ const ToastContext = createContext<ToastApi | null>(null);
 
 /**
  * Hosts the toasts (bottom center on phones above the tab bar, bottom right on wider screens) in a polite live region.
+ * Countdowns pause while the pointer is over the toasts or keyboard focus is inside them. When a toast that has
+ * keyboard focus closes, focus moves to the toast that took its place, or back to where it was before the toasts.
  * Mounted once in components/providers/Providers.tsx.
  */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const t = useT();
   const [toasts, setToasts] = useState<ToastEntry[]>([]);
-  const timers = useRef(new Map<string, { handle: number; deadline: number }>());
-  const paused = useRef(false);
+  // The list and its countdowns live in one store that hands each new list to React.
+  const [store] = useState(() => createToastStore<ToastEntry>(setToasts, { max: MAX_TOASTS }));
+  const regionRef = useRef<HTMLDivElement>(null);
+  // Where keyboard focus came from before it entered the toasts, which toast holds it, and whether it got there by
+  // keyboard: enough to put focus somewhere sensible when that toast closes under it.
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const focusedIndex = useRef(-1);
+  const keyboardFocus = useRef(false);
   const counter = useRef(0);
 
-  const dismiss = useCallback((id: string) => {
-    const timer = timers.current.get(id);
-    if (timer) window.clearTimeout(timer.handle);
-    timers.current.delete(id);
-    setToasts((queue) => removeToast(queue, id));
-  }, []);
-
-  const schedule = useCallback(
-    (id: string, ms: number) => {
-      const existing = timers.current.get(id);
-      if (existing) window.clearTimeout(existing.handle);
-      const handle = window.setTimeout(() => dismiss(id), ms);
-      timers.current.set(id, { handle, deadline: Date.now() + ms });
-    },
-    [dismiss],
-  );
+  const dismiss = useCallback((id: string) => store.dismiss(id), [store]);
 
   const show = useCallback(
     (options: ToastOptions) => {
       counter.current += 1;
       const id = options.id ?? `toast-${counter.current}`;
-      const duration = options.duration ?? (options.action ? 8000 : 5000);
-      setToasts((queue) => pushToast(queue, { ...options, id, duration }, MAX_TOASTS));
-      if (!paused.current) schedule(id, duration);
-      else timers.current.set(id, { handle: 0, deadline: Date.now() + duration });
+      store.show({ ...options, id, duration: options.duration ?? (options.action ? 8000 : 5000) });
       return id;
     },
-    [schedule],
+    [store],
   );
 
-  // Toasts pushed out of the queue by newer ones must not keep a timer.
   useEffect(() => {
-    for (const id of [...timers.current.keys()]) {
-      if (!toasts.some((toast) => toast.id === id)) {
-        window.clearTimeout(timers.current.get(id)?.handle);
-        timers.current.delete(id);
+    // The focusout of a toast that closes under keyboard focus fires while React deletes it and never reaches onBlur,
+    // and a pointer can be left over the gap it leaves. So the holds are checked after every change; otherwise the
+    // countdowns would stay paused and later toasts would never close by themselves.
+    const region = regionRef.current;
+    if (!region) return;
+    if (store.isHeld("focus") && !region.contains(document.activeElement)) {
+      store.hold("focus", false);
+      const active = document.activeElement;
+      if (keyboardFocus.current && (!active || active === document.body)) {
+        const items = region.querySelectorAll<HTMLElement>("[data-toast]");
+        const next = items[Math.min(focusedIndex.current, items.length - 1)]?.querySelector<HTMLElement>("button");
+        const back = returnFocus.current?.isConnected ? returnFocus.current : null;
+        (next ?? back)?.focus();
+      }
+      if (!region.contains(document.activeElement)) {
+        returnFocus.current = null;
+        focusedIndex.current = -1;
       }
     }
-  }, [toasts]);
+    if (store.isHeld("hover") && !region.matches(":hover")) store.hold("hover", false);
+  }, [toasts, store]);
 
-  useEffect(() => {
-    const map = timers.current;
-    return () => {
-      for (const timer of map.values()) window.clearTimeout(timer.handle);
-    };
-  }, []);
+  useEffect(() => () => store.clear(), [store]);
 
-  const pause = () => {
-    if (paused.current) return;
-    paused.current = true;
-    for (const timer of timers.current.values()) window.clearTimeout(timer.handle);
+  const onFocus = (event: FocusEvent<HTMLDivElement>) => {
+    const region = event.currentTarget;
+    const from = event.relatedTarget;
+    if (from instanceof HTMLElement && !region.contains(from)) returnFocus.current = from;
+    const target = event.target as HTMLElement;
+    const item = target.closest("[data-toast]");
+    focusedIndex.current = item ? Array.prototype.indexOf.call(region.querySelectorAll("[data-toast]"), item) : -1;
+    keyboardFocus.current = target.matches(":focus-visible");
+    store.hold("focus", true);
   };
-  const resume = () => {
-    if (!paused.current) return;
-    paused.current = false;
-    const now = Date.now();
-    for (const [id, timer] of timers.current) schedule(id, remainingTime(timer.deadline, now));
+
+  const onBlur = (event: FocusEvent<HTMLDivElement>) => {
+    // Moving between the buttons of the toasts keeps them paused.
+    const to = event.relatedTarget;
+    if (to instanceof Node && event.currentTarget.contains(to)) return;
+    returnFocus.current = null;
+    focusedIndex.current = -1;
+    store.hold("focus", false);
   };
+
+  // A touch has no hover, and its emulated mouse events never leave, so only a real pointer pauses the toasts.
+  const onPointerEnter = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "touch") store.hold("hover", true);
+  };
+  const onPointerLeave = () => store.hold("hover", false);
 
   const api = useMemo<ToastApi>(() => ({ show, dismiss }), [show, dismiss]);
 
@@ -109,16 +121,18 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext value={api}>
       {children}
       <div
+        ref={regionRef}
         aria-live="polite"
-        onMouseEnter={pause}
-        onMouseLeave={resume}
-        onFocus={pause}
-        onBlur={resume}
+        onPointerEnter={onPointerEnter}
+        onPointerLeave={onPointerLeave}
+        onFocus={onFocus}
+        onBlur={onBlur}
         className="pointer-events-none fixed inset-x-0 bottom-16 z-[60] flex flex-col items-center gap-2 px-4 md:inset-x-auto md:right-4 md:bottom-10 md:items-end md:px-0"
       >
         {toasts.map((toast) => (
           <div
             key={toast.id}
+            data-toast
             className="pointer-events-auto flex w-full max-w-sm items-center gap-3 rounded-xs border border-line-2 bg-panel-2 py-1.5 pr-1.5 pl-3 text-sm text-fg shadow-xl md:w-auto md:min-w-72"
           >
             <div className="min-w-0 flex-1">{toast.message}</div>
