@@ -180,6 +180,11 @@ describe("toFundamentals", () => {
   });
 });
 
+/** Calls of the mocked getDailyBars for one symbol. */
+function barCalls(symbol: string): number {
+  return vi.mocked(getDailyBars).mock.calls.filter(([requested]) => requested === symbol).length;
+}
+
 describe("getSignalReport", () => {
   beforeEach(() => {
     clearCache();
@@ -197,15 +202,51 @@ describe("getSignalReport", () => {
     expect(Number.isNaN(Date.parse(report.asOf))).toBe(false);
     expect(report.factors.find((f) => f.key === "quality")?.imputed).toBe(false);
     expect(getDailyBars).toHaveBeenCalledWith("TEST", 540);
+    // The benchmark uses the same request as the screener, so both share one cache entry.
+    expect(getDailyBars).toHaveBeenCalledWith("SPY", 540);
 
     await getSignalReport("TEST");
-    expect(getDailyBars).toHaveBeenCalledTimes(1);
+    expect(barCalls("TEST")).toBe(1);
+    expect(barCalls("SPY")).toBe(1);
+  });
+
+  it("attaches the risk forecast, with beta against the benchmark", async () => {
+    const report = await getSignalReport("TEST");
+    const risk = report.risk;
+    if (!risk) throw new Error("risk missing");
+    // The mocked benchmark moves exactly like the stock.
+    expect(risk.beta).toBeCloseTo(1, 10);
+    expect(risk.price).toBeCloseTo(makeBars(300)[299].c, 10);
+    expect(risk.forecastVolatility).toBeGreaterThan(0);
+    expect(risk.range1?.low).toBeLessThan(risk.price ?? 0);
+    expect(risk.range2?.high).toBeGreaterThan(risk.range1?.high ?? Infinity);
+    expect(risk.volatility63).toBeGreaterThan(0);
+    expect(risk.ownPercentile).not.toBeNull();
+  });
+
+  it("still reports risk without the benchmark, leaving beta null", async () => {
+    vi.mocked(getDailyBars).mockImplementation(async (symbol) => {
+      if (symbol === "SPY") throw new Error("benchmark down");
+      return makeBars(300);
+    });
+    const report = await getSignalReport("TEST");
+    expect(report.status).toBe("ok");
+    expect(report.risk?.beta).toBeNull();
+    expect(report.risk?.forecastVolatility).toBeGreaterThan(0);
+  });
+
+  it("measures the benchmark against itself without a second request", async () => {
+    const report = await getSignalReport("SPY");
+    expect(report.risk?.beta).toBeCloseTo(1, 10);
+    expect(barCalls("SPY")).toBe(1);
   });
 
   it("drops today's still-forming bar during the regular session", async () => {
     vi.mocked(getQuote).mockResolvedValue(makeQuote({ marketState: "REGULAR" }));
     const report = await getSignalReport("TEST");
     expect(report.meta).toEqual({ bars: 299, droppedPartialBar: true, lastBarDate: new Date(LAST_SESSION - DAY_MS).toISOString() });
+    expect(report.risk?.price).toBeCloseTo(makeBars(300)[298].c, 10);
+    expect(report.risk?.beta).toBeCloseTo(1, 10);
   });
 
   it("still reports when the quote or the summary is unavailable", async () => {
@@ -220,7 +261,7 @@ describe("getSignalReport", () => {
   it("reports insufficient data for a known symbol without enough history", async () => {
     vi.mocked(getDailyBars).mockResolvedValue([]);
     const report = await getSignalReport("TEST");
-    expect(report).toMatchObject({ status: "insufficient_data", score: null, factors: [], backtest: null });
+    expect(report).toMatchObject({ status: "insufficient_data", score: null, factors: [], backtest: null, risk: null });
   });
 
   it("throws SignalNotFoundError for unknown symbols and caches that answer", async () => {
@@ -229,7 +270,7 @@ describe("getSignalReport", () => {
     vi.mocked(getSummary).mockResolvedValue(null);
     await expect(getSignalReport("NOPE")).rejects.toBeInstanceOf(SignalNotFoundError);
     await expect(getSignalReport("NOPE")).rejects.toBeInstanceOf(SignalNotFoundError);
-    expect(getDailyBars).toHaveBeenCalledTimes(1);
+    expect(barCalls("NOPE")).toBe(1);
   });
 
   it("does not cache a not-found answer when the quote lookup itself failed", async () => {
@@ -237,7 +278,7 @@ describe("getSignalReport", () => {
     vi.mocked(getQuote).mockRejectedValue(new Error("quote down"));
     await expect(getSignalReport("MAYBE")).rejects.toBeInstanceOf(SignalNotFoundError);
     await expect(getSignalReport("MAYBE")).rejects.toBeInstanceOf(SignalNotFoundError);
-    expect(getDailyBars).toHaveBeenCalledTimes(2);
+    expect(barCalls("MAYBE")).toBe(2);
   });
 
   it("serves the previous report for up to an hour when a refresh fails", async () => {
@@ -267,6 +308,6 @@ describe("getSignalReport", () => {
     await expect(getSignalReport("TEST")).rejects.toBe(outage); // a quote alone is not enough for a report
 
     await expect(getSignalReport("TEST")).resolves.toMatchObject({ status: "ok" });
-    expect(getDailyBars).toHaveBeenCalledTimes(3);
+    expect(barCalls("TEST")).toBe(3);
   });
 });
