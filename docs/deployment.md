@@ -145,7 +145,7 @@ without them. In private mode:
   session is redirected to `/unlock`, which asks for the access password and then returns to the page that was asked
   for. An API request gets `401` with `{"error":{"code":"unauthorized",...}}`.
 - These stay open: `/api/health` (for monitors and the Docker health check), `/api/auth/*` (sign-in), `/unlock`, the
-  framework's static assets, icons and the web manifest.
+  framework's static assets, icons (including the generated `/icon` and `/apple-icon`) and the web manifest.
 - Every page and API response carries `X-Robots-Tag: noindex, nofollow`. Build assets and root-level static files
   (icons, the manifest) skip `proxy.ts` and are served without it.
 - Successful API responses use `Cache-Control: private, max-age=0` instead of the shared CDN cache, so no shared cache

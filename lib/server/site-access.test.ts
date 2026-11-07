@@ -25,6 +25,9 @@ describe("isOpenPath", () => {
       "/apple-icon.png",
       "/manifest.webmanifest",
       "/robots.txt",
+      "/icon",
+      "/apple-icon",
+      "/apple-icon1",
     ]) {
       expect(isOpenPath(path), path).toBe(true);
     }
@@ -44,6 +47,9 @@ describe("isOpenPath", () => {
       "/unlocked",
       "/opengraph-image",
       "/api/auth%2F..%2Fquotes",
+      "/icons",
+      "/apple-icon/../watchlist",
+      "/stock/icon",
     ]) {
       expect(isOpenPath(path), path).toBe(false);
     }

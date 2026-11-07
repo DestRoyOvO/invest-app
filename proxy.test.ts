@@ -76,9 +76,9 @@ describe("proxy on a private site", () => {
     expect(await api.json()).toMatchObject({ error: { code: "unauthorized" } });
   });
 
-  it("keeps the health check, sign-in and the unlock page open", () => {
+  it("keeps the health check, sign-in, the unlock page and generated icons open", () => {
     privateSite();
-    for (const path of ["/api/health?ready=1", "/api/auth/status", "/api/auth/login", "/unlock?next=%2F"]) {
+    for (const path of ["/api/health?ready=1", "/api/auth/status", "/api/auth/login", "/unlock?next=%2F", "/apple-icon?3c6e1a2b"]) {
       const response = call(path);
       expect(response.headers.get("x-middleware-next"), path).toBe("1");
       expect(response.headers.get("x-robots-tag"), path).toBe("noindex, nofollow");
