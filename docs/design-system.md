@@ -20,8 +20,12 @@ every token pair; `lib/design-tokens.test.ts` fails when a pair drops below its 
   Switch、Field/Input、Checkbox、Badge/AiChip、Sparkline（中性线条 + 按当日涨跌着色的端点）、Delta 与热力图分档
   （heatStep/heatStyle）、TickNumber（只闪变化的那个数字）、Whisker（置信区间须线）、Meter、StatTile、HoverCard/Tooltip、
   Toast（可撤销）、Drawer（右侧或底部）、EmptyState（左对齐 + 快捷代码按钮）、Wordmark。
-- **无障碍**：文字对比度 ≥ 4.5:1、图形 ≥ 3:1（两套主题、三种配色全部实测通过）；桌面点击区 ≥ 24px、手机 ≥ 40px；
-  可排序表头带 aria-sort；实时更新用礼貌型 live region；尊重"减少动态效果"。
+- **无障碍**：文字对比度 ≥ 4.5:1、图形 ≥ 3:1（两套主题、三种配色全部实测通过，含悬停状态）；`--fg-3` 只用在面板上，
+  直接放在画布上的文字用 `--fg-2`；桌面点击区 ≥ 24px、手机 ≥ 40px（可排序表头整格可点）；紧凑密度下行内小图标按钮为
+  24px，带操作的行也保持约 24px；可排序表头带 aria-sort；Esc 只关闭最内层（先关悬停卡片，再关抽屉）；提示条在悬停或
+  键盘焦点时暂停，键盘关闭后焦点移到下一条或回到原处；实时更新用礼貌型 live region；尊重"减少动态效果"。
+- **非价格的正负读数**（相关系数、z 分数、因子倾向）：只按绝对值深浅着色，用一种中性色阶并标出带符号的数字，不用红绿或
+  热力图分档。
 
 ## Principles
 
@@ -181,6 +185,11 @@ for text you format yourself.
    One accent element per group.
 4. Errors use `--danger` with words and an icon; never a color alone.
 5. Text never takes a series color; a swatch or line key next to the text carries identity.
+6. Signed readings that are not prices (correlations, z-scores, factor tilts) shade by magnitude only, with one
+   neutral ramp, and print the signed number in `--fg`: for example
+   `background: color-mix(in oklab, var(--info) N%, var(--panel))` with N = |r| x 40, which keeps `--fg` above 7:1 in
+   both themes. Never the heat steps: a red/green or blue/orange diverging scale reads as price direction in one of
+   the three conventions.
 
 ## Layout: column flow
 
