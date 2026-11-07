@@ -14,6 +14,7 @@ import {
   type Fundamentals,
   labelForScore,
   MIN_BARS,
+  permutationPValue,
   qualityFactor,
   rsiToScore,
   runBacktest,
@@ -851,6 +852,24 @@ describe("runBacktest", () => {
     const avg = (xs: readonly number[]) => xs.reduce((sum, x) => sum + x, 0) / xs.length;
     const share = (xs: readonly number[], keep: (x: number) => boolean) => xs.filter(keep).length / xs.length;
     const sd = Math.sqrt(returns.reduce((sum, r) => sum + (r - avg(returns)) ** 2, 0) / (returns.length - 1));
+
+    // Permutation test: rotate the window's labels left by every shift of 20 to W - 20 sessions and re-run the rule.
+    const window = labels.slice(first, last + 1);
+    const edgeFor = (shift: number) => {
+      const taken: number[] = [];
+      for (let k = 0; k < window.length; k++) {
+        const flat = taken.length === 0 || k >= taken[taken.length - 1] + hold;
+        if (flat && window[(k + shift) % window.length].endsWith("bullish")) taken.push(k);
+      }
+      return avg(taken.map((k) => forward(first + k))) - avg(baseline);
+    };
+    const observed = Math.abs(edgeFor(0));
+    let extreme = 0;
+    let shifts = 0;
+    for (let shift = 20; shift <= window.length - 20; shift++) {
+      shifts += 1;
+      if (Math.abs(edgeFor(shift)) >= observed - 1e-12) extreme += 1;
+    }
     return {
       windowDays: last - first + 1,
       trades: returns.length,
@@ -863,6 +882,7 @@ describe("runBacktest", () => {
       bearishSignals: bearish.length,
       bearishHitRate: share(bearish, (r) => r < 0),
       bearishAvgForwardReturn: avg(bearish),
+      pValue: (1 + extreme) / (1 + shifts),
     };
   }
 
@@ -892,6 +912,9 @@ describe("runBacktest", () => {
           expectRounded(r.winRate, expected.winRate, 4);
           expectRounded(r.avgReturn, expected.avgReturn, 5);
           expectRounded(r.maxDrawdown, expected.maxDrawdown, 4);
+          expectRounded(r.pValue ?? null, expected.pValue, 4);
+        } else {
+          expect(r.pValue).toBeNull();
         }
         if (expected.trades > 1) expectRounded(r.sharpe, expected.sharpe, 2);
         if (expected.bearishSignals > 0) {
@@ -920,6 +943,8 @@ describe("runBacktest", () => {
       expect(r.avgReturn).toBeCloseTo(expected, 5);
       expect(r.baselineAvgReturn).toBeCloseTo(expected, 5);
       expect(r.edge).toBe(0);
+      // Every rotation of an all-bullish sequence trades the same way, so the edge is as large as any random one.
+      expect(r.pValue).toBe(1);
       expect(r.sharpe).toBeNull(); // identical returns have no dispersion
       expect(r.maxDrawdown).toBe(0);
       expect(r.bearishSignals).toBe(0);
@@ -961,6 +986,44 @@ describe("runBacktest", () => {
       expect(r.bearishSignals).toBe(r.windowDays);
       expect(r.bearishHitRate).toBe(1);
       expect(r.bearishAvgForwardReturn).toBeCloseTo(Math.exp(daily * r.holdDays) - 1 - COST, 5);
+      expect(r.pValue).toBeNull();
     }
+  });
+});
+
+describe("permutationPValue", () => {
+  /** Irregular strong / neutral readings with runs, as the technical score produces. */
+  function readings(n: number, seed: number): Array<"bullish" | "neutral"> {
+    const rand = mulberry32(seed);
+    const out: Array<"bullish" | "neutral"> = [];
+    let state: "bullish" | "neutral" = "neutral";
+    for (let k = 0; k < n; k++) {
+      if (rand() < 0.15) state = state === "bullish" ? "neutral" : "bullish";
+      out.push(state);
+    }
+    return out;
+  }
+
+  it("is small when strong readings line up with the gains and large when they do not", () => {
+    const labels = readings(250, 5);
+    const rand = mulberry32(6);
+    const noise = labels.map(() => 0.01 * gaussian(rand));
+    // Returns that are higher exactly after strong readings: no rotation of the labels times them as well.
+    const timed = noise.map((r, k) => r + (labels[k] === "bullish" ? 0.02 : 0));
+    const p = permutationPValue(timed, labels, 1) ?? 1;
+    expect(p).toBeLessThan(0.01);
+    expect(p).toBeGreaterThanOrEqual(1 / (1 + 211));
+    // Pure noise: the observed edge is typical of random timing.
+    expect(permutationPValue(noise, labels, 5)).toBeGreaterThan(0.05);
+  });
+
+  it("enumerates every rotation of at least 20 sessions and needs one", () => {
+    const labels = readings(60, 7);
+    const forward = labels.map((_, k) => Math.sin(k));
+    const p = permutationPValue(forward, labels, 3) ?? Number.NaN;
+    // 60 sessions allow rotations 20..40, so p is a multiple of 1/22.
+    expect(Math.abs(p * 22 - Math.round(p * 22))).toBeLessThan(1e-9);
+    expect(permutationPValue(forward.slice(0, 39), labels.slice(0, 39), 3)).toBeNull();
+    expect(permutationPValue(forward, labels.map(() => "neutral"), 3)).toBeNull();
   });
 });

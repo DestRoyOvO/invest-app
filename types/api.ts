@@ -483,7 +483,14 @@ export interface BacktestResult {
   baselineAvgReturn: number | null;
   /** avgReturn - baselineAvgReturn */
   edge: number | null;
-  /** Annualized: mean / std * sqrt(252 / holdDays). */
+  /**
+   * Two-sided circular-shift permutation p-value of the edge: the share of rotations of the label sequence (by at
+   * least 20 sessions, same trade rule) whose |edge| is at least as large. Small values mean the timing is hard to get
+   * by chance; the UI treats edges with pValue >= 0.01 as indistinguishable from random timing. Null without trades.
+   * Absent in reports computed before model v4.
+   */
+  pValue?: number | null;
+  /** Annualized by the observed trade frequency: mean / std * sqrt(trades * 252 / windowDays). */
   sharpe: number | null;
   /** Worst peak-to-trough of the daily marked-to-market equity curve (negative decimal). */
   maxDrawdown: number | null;

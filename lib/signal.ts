@@ -15,6 +15,7 @@ import type {
   SignalReport,
 } from "@/types/api";
 
+import { mulberry32 } from "./research-stats";
 import {
   clamp,
   downsideDeviation,
@@ -74,6 +75,11 @@ export const BACKTEST_SETTINGS = {
   costBps: 10,
   /** Fewer trades than this flags a result as lowSample. */
   minTrades: 20,
+  /** The permutation test rotates the label sequence by at least this many sessions in either direction. */
+  permutationMinShift: 20,
+  /** Above this many valid rotations the test draws this many at random (seeded) instead of trying them all. */
+  permutationMaxShifts: 1000,
+  permutationSeed: 20_261_107,
 } as const;
 
 export const RSI_PERIOD = 14;
@@ -787,25 +793,70 @@ function strategyMaxDrawdown(s: PriceSeries, trades: readonly Trade[], hold: num
   return worst;
 }
 
+function isStrongReading(label: SignalCode): boolean {
+  return label === "bullish" || label === "strong_bullish";
+}
+
+/**
+ * Window offsets of the non-overlapping trades opened on strong readings, with the label sequence rotated left by
+ * `shift` sessions (0 = as observed). The position is held through the close of k + hold, so a signal formed at that
+ * close trades the next morning.
+ */
+function tradeOffsets(labels: readonly SignalCode[], hold: number, shift = 0): number[] {
+  const n = labels.length;
+  const out: number[] = [];
+  let next = 0;
+  for (let k = 0; k < n; k++) {
+    if (k >= next && isStrongReading(labels[(k + shift) % n])) {
+      out.push(k);
+      next = k + hold;
+    }
+  }
+  return out;
+}
+
+/** Rotations the permutation test uses: every valid one, or a seeded random sample when there are too many. */
+function permutationShifts(n: number): number[] {
+  const { permutationMinShift: min, permutationMaxShifts: max, permutationSeed } = BACKTEST_SETTINGS;
+  const valid = n - 2 * min + 1;
+  if (valid <= 0) return [];
+  if (valid <= max) return Array.from({ length: valid }, (_, k) => min + k);
+  const random = mulberry32(permutationSeed + n);
+  return Array.from({ length: max }, () => min + Math.floor(random() * valid));
+}
+
+/**
+ * Circular-shift permutation test of the backtest edge (two-sided). `forward[k]` is the net return of a trade
+ * signalled at window offset k and `labels[k]` the reading there. Rotating the label sequence by at least
+ * permutationMinShift sessions keeps how often and in what runs strong readings occur, and keeps the returns, but
+ * breaks their alignment: the rotated edges show what random timing with the same trading pattern produces.
+ * pValue = (1 + rotations with |edge| >= |observed edge|) / (1 + rotations). Null without trades or rotations.
+ */
+export function permutationPValue(forward: readonly number[], labels: readonly SignalCode[], hold: number): number | null {
+  const shifts = permutationShifts(labels.length);
+  const observed = tradeOffsets(labels, hold);
+  const base = mean(forward);
+  if (observed.length === 0 || shifts.length === 0 || base === null) return null;
+  const edgeOf = (offsets: readonly number[]) => (mean(offsets.map((k) => forward[k])) ?? base) - base;
+  const threshold = Math.abs(edgeOf(observed)) - 1e-12;
+  let extreme = 0;
+  for (const shift of shifts) if (Math.abs(edgeOf(tradeOffsets(labels, hold, shift))) >= threshold) extreme += 1;
+  return (1 + extreme) / (1 + shifts.length);
+}
+
 function evaluateHold(s: PriceSeries, first: number, labels: readonly SignalCode[], hold: number): BacktestResult {
   const cost = BACKTEST_SETTINGS.costBps / 10_000;
   const baseline: number[] = [];
   const bearish: number[] = [];
-  const trades: Trade[] = [];
-  let nextSignal = first;
 
   for (let k = 0; k < labels.length; k++) {
     const i = first + k;
     const forward = s.close[i + hold] / s.open[i + 1] - 1 - cost;
     baseline.push(forward);
-    const label = labels[k];
-    if (label === "bearish" || label === "strong_bearish") bearish.push(forward);
-    if ((label === "bullish" || label === "strong_bullish") && i >= nextSignal) {
-      trades.push({ signal: i, ret: forward });
-      // The position is held through the close of i + hold; a signal formed at that close trades the next morning.
-      nextSignal = i + hold;
-    }
+    if (labels[k] === "bearish" || labels[k] === "strong_bearish") bearish.push(forward);
   }
+  const trades: Trade[] = tradeOffsets(labels, hold).map((k) => ({ signal: first + k, ret: baseline[k] }));
+  const pValue = permutationPValue(baseline, labels, hold);
 
   const returns = trades.map((trade) => trade.ret);
   const wins = returns.filter((r) => r > 0).length;
@@ -826,6 +877,7 @@ function evaluateHold(s: PriceSeries, first: number, labels: readonly SignalCode
     baselineWinRate: baseline.length > 0 ? round(baseline.filter((r) => r > 0).length / baseline.length, 4) : null,
     baselineAvgReturn,
     edge: avgReturn !== null && baselineAvgReturn !== null ? round(avgReturn - baselineAvgReturn, 5) : null,
+    pValue: pValue === null ? null : round(pValue, 4),
     // Annualized by the observed trade frequency (trades per year of window), not by 252 / hold: the strategy is flat
     // between trades, and scaling as if it were always invested would overstate the ratio by sqrt(window / (hold x trades)).
     sharpe:
