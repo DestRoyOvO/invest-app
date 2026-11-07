@@ -11,6 +11,8 @@ const fake = vi.hoisted(() => ({
   calls: [] as string[],
   fresh: new Set<string>(),
   quoteKnown: false,
+  /** Symbols Yahoo does not know: getQuote answers null, and the quote probe then sees that stored null. */
+  unknown: new Set<string>(),
   summaryState: "unknown" as "unknown" | "none" | "known",
 }));
 
@@ -35,7 +37,7 @@ const SUMMARY: { profile: StockProfile; stats: KeyStats } = {
 vi.mock("./yahoo", () => ({
   getQuote: async (symbol: string) => {
     fake.calls.push(`quote:${symbol}`);
-    return QUOTE;
+    return fake.unknown.has(symbol) ? null : QUOTE;
   },
   getQuotes: async () => new Map(),
   getSummary: async (symbol: string) => {
@@ -57,7 +59,7 @@ vi.mock("./yahoo", () => ({
   hasCachedSummary: (symbol: string) => fake.fresh.has(`summary:${symbol}`),
   hasCachedDailyBars: (symbol: string, days: number) => fake.fresh.has(`bars:${symbol}:${days}`),
   hasCachedNewsSearch: (term: string, count = 8) => fake.fresh.has(`news:${term}:${count}`),
-  peekQuote: () => (fake.quoteKnown ? QUOTE : undefined),
+  peekQuote: (symbol: string) => (fake.unknown.has(symbol) && fake.calls.includes(`quote:${symbol}`) ? null : fake.quoteKnown ? QUOTE : undefined),
   peekSummary: () => (fake.summaryState === "known" ? SUMMARY : fake.summaryState === "none" ? null : undefined),
 }));
 
@@ -73,6 +75,7 @@ describe("charging for /api/stock/[symbol]", () => {
     fake.calls = [];
     fake.fresh.clear();
     fake.quoteKnown = false;
+    fake.unknown.clear();
     fake.summaryState = "unknown";
     clearCache();
   });
@@ -110,6 +113,27 @@ describe("charging for /api/stock/[symbol]", () => {
     const calls = uncachedStockDetailCalls("NVDA");
     expect(calls).toBeGreaterThan(2);
     expect(calls).toBeLessThan(2 + MAX_COMPANY_NEWS_SEARCHES);
+  });
+
+  it("charges no news searches while Yahoo's answer that it does not know the symbol is cached", async () => {
+    fake.unknown.add("ZZQXJ");
+    // First request: nothing says the symbol is unknown yet, so the largest plan is charged.
+    expect(uncachedStockDetailCalls("ZZQXJ")).toBe(2 + MAX_COMPANY_NEWS_SEARCHES);
+    expect(await getStockDetail("ZZQXJ")).toBeNull();
+    // The loader stops after the quote and the summary: a 404 searches no news.
+    expect([...fake.calls].sort()).toEqual(["quote:ZZQXJ", "summary:ZZQXJ"]);
+
+    // Both answers are cached now (the quote as a fresh null), so the next request makes no Yahoo call and pays none.
+    fake.summaryState = "none";
+    fake.fresh.add("quote:ZZQXJ");
+    fake.fresh.add("summary:ZZQXJ");
+    expect(uncachedStockDetailCalls("ZZQXJ")).toBe(0);
+    fake.fresh.delete("summary:ZZQXJ");
+    expect(uncachedStockDetailCalls("ZZQXJ")).toBe(1);
+
+    // Once the null expires, Yahoo is asked again and might know the symbol by then: the largest plan applies again.
+    fake.fresh.delete("quote:ZZQXJ");
+    expect(uncachedStockDetailCalls("ZZQXJ")).toBe(2 + MAX_COMPANY_NEWS_SEARCHES);
   });
 });
 

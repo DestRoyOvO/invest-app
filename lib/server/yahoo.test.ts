@@ -266,6 +266,14 @@ describe("cache probes for rate-limit charging", () => {
     expect(peekQuote("PROBE1")?.name).toBe("Probe Inc.");
   });
 
+  it("keeps Yahoo's answer that it does not know a symbol as a fresh null", async () => {
+    expect(peekQuote("PROBE3")).toBeUndefined();
+    vi.spyOn(yf, "quote").mockResolvedValueOnce([] as never);
+    expect((await getQuotes(["PROBE3"])).size).toBe(0);
+    expect(hasFreshQuote("PROBE3")).toBe(true);
+    expect(peekQuote("PROBE3")).toBeNull();
+  });
+
   it("probes the summary and news caches under the getters' own keys", async () => {
     vi.spyOn(yf, "quoteSummary").mockResolvedValueOnce({ price: { shortName: "Probe" }, assetProfile: { industry: "Semiconductors" } } as never);
     expect(hasCachedSummary("PROBE2")).toBe(false);

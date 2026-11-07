@@ -19,13 +19,15 @@ function signalReportKey(symbol: string): string {
 }
 
 /**
- * Uncached news searches behind getCompanyNews for the symbol. The plan depends on the profile (industry and sector)
- * and the company name; when those are not cached yet, every search is assumed to run.
+ * Uncached news searches behind getCompanyNews for the symbol. None while Yahoo's "unknown symbol" answer is fresh in
+ * the quote cache, because getStockDetail then answers 404 before it searches. Otherwise the plan depends on the
+ * profile (industry and sector) and the company name; when those are not cached yet, every search is assumed to run.
  */
 function uncachedCompanyNewsSearches(symbol: string): number {
-  const summary = peekSummary(symbol);
   const quote = peekQuote(symbol);
-  if (summary === undefined || (summary === null && quote === undefined)) return MAX_COMPANY_NEWS_SEARCHES;
+  if (quote === null && hasFreshQuote(symbol)) return 0;
+  const summary = peekSummary(symbol);
+  if (summary === undefined || (summary === null && !quote)) return MAX_COMPANY_NEWS_SEARCHES;
   const profile = summary?.profile ?? null;
   const companyName = quote?.name || profile?.name || symbol;
   const matcher = buildCompanyMatcher(symbol, [profile?.longName, companyName, profile?.name]);

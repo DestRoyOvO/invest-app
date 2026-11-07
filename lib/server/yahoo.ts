@@ -452,9 +452,12 @@ export function hasFreshQuote(symbol: string): boolean {
   return slot !== undefined && slot.expiresAt > Date.now();
 }
 
-/** The last quote stored for the symbol, fresh or not, without loading; undefined when none is stored. */
-export function peekQuote(symbol: string): Quote | undefined {
-  return quoteSlots.get(symbol)?.quote ?? undefined;
+/**
+ * The last answer stored for the symbol, fresh or not, without loading: its quote, null when Yahoo did not know the
+ * symbol (the negative cache), undefined when nothing is stored.
+ */
+export function peekQuote(symbol: string): Quote | null | undefined {
+  return quoteSlots.get(symbol)?.quote;
 }
 
 // ---------------------------------------------------------------------------
