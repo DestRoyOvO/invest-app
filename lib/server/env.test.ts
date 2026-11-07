@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+import { parseLoginRequest } from "./ai-schemas";
 import {
   authModeOf,
   DEFAULT_AI_DAILY_LIMIT,
@@ -13,6 +14,7 @@ import {
   ENV_KEYS,
   isAllowedBaseUrl,
   isLoopbackHostname,
+  MAX_ACCESS_PASSWORD_LENGTH,
   parseEnv,
   readEnv,
   startupSummary,
@@ -195,6 +197,15 @@ describe("password, secret and private mode", () => {
     const short = parseEnv({ ACCESS_PASSWORD: PASSWORD, SESSION_SECRET: "too-short" });
     expect(short.sessionSecret).toBeNull();
     expect(short.issues).toEqual([expect.objectContaining({ key: "SESSION_SECRET", level: "error" })]);
+  });
+
+  it("is an error to set a password longer than the sign-in form accepts", () => {
+    const tooLong = "x".repeat(MAX_ACCESS_PASSWORD_LENGTH + 1);
+    expect(issuesFor({ ACCESS_PASSWORD: tooLong, SESSION_SECRET: SECRET })).toEqual([expect.objectContaining({ key: "ACCESS_PASSWORD", level: "error" })]);
+    expect(issuesFor({ ACCESS_PASSWORD: "x".repeat(MAX_ACCESS_PASSWORD_LENGTH), SESSION_SECRET: SECRET })).toEqual([]);
+    // The limit is the login schema's own, so a password that passes startup can always be typed in.
+    expect(parseLoginRequest({ password: "x".repeat(MAX_ACCESS_PASSWORD_LENGTH) }).ok).toBe(true);
+    expect(parseLoginRequest({ password: tooLong }).ok).toBe(false);
   });
 
   it("warns about a weak password and an unused secret", () => {

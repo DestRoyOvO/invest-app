@@ -31,6 +31,8 @@ export const DEFAULT_AI_DAILY_LIMIT = 200;
 export const MIN_SESSION_SECRET_LENGTH = 32;
 /** Shorter access passwords still work, but startup reports them as weak. */
 export const RECOMMENDED_PASSWORD_LENGTH = 12;
+/** The longest password the sign-in form accepts (loginRequestSchema in ai-schemas.ts; env.test.ts keeps them equal). */
+export const MAX_ACCESS_PASSWORD_LENGTH = 256;
 
 const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
 const TRUE_VALUES: ReadonlySet<string> = new Set(["1", "true", "yes", "on"]);
@@ -230,7 +232,13 @@ export function parseEnv(raw: RawEnv): ServerEnv {
         message: `SESSION_SECRET is shorter than ${MIN_SESSION_SECRET_LENGTH} characters, so nobody can sign in. Generate one with: ${SECRET_GENERATOR}`,
       });
     }
-    if (password.length < RECOMMENDED_PASSWORD_LENGTH) {
+    if (password.length > MAX_ACCESS_PASSWORD_LENGTH) {
+      issues.push({
+        key: "ACCESS_PASSWORD",
+        level: "error",
+        message: `ACCESS_PASSWORD is longer than ${MAX_ACCESS_PASSWORD_LENGTH} characters, the most the sign-in form accepts, so nobody can sign in.`,
+      });
+    } else if (password.length < RECOMMENDED_PASSWORD_LENGTH) {
       issues.push({
         key: "ACCESS_PASSWORD",
         level: "warn",

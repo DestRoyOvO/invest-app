@@ -175,7 +175,7 @@ default". An invalid value falls back to the default and is reported at startup 
 | `DEEPSEEK_MODEL` | `deepseek-chat` | Model id. Must look like a model id (letters, digits, `.`, `_`, `:`, `-`). |
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com` | API base URL. Must be https; plain http is accepted only for `localhost`, `127.x.x.x` and `[::1]`, so tests can use a local mock server. No credentials, query or fragment. |
 | `AI_DAILY_LIMIT` | `200` | AI requests per UTC day for one server process. Whole number from 1 to 9999999. |
-| `ACCESS_PASSWORD` | none | Unlocks the AI features, and the whole site in private mode. Without it AI is open in development (on localhost only) and disabled in production. Use 12 or more characters. |
+| `ACCESS_PASSWORD` | none | Unlocks the AI features, and the whole site in private mode. Without it AI is open in development (on localhost only) and disabled in production. Use 12 to 256 characters. |
 | `SESSION_SECRET` | none | Signs the session cookie. Required with `ACCESS_PASSWORD`; 32 or more random characters, e.g. `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`. |
 | `SITE_ACCESS` | `public` | `public` or `private`, see [Private site mode](#private-site-mode). An unreadable value counts as `private`. |
 | `TRUST_PROXY` | off | `1` behind a reverse proxy you control that appends the client address to `X-Forwarded-For` (nginx, Caddy). Rate limits then use the right-most address. Leave it off otherwise: forwarded headers are ignored and all clients share one rate-limit bucket. Not needed on Vercel. Accepts 1/0, true/false, yes/no, on/off. |
@@ -206,7 +206,8 @@ validates the settings and writes one line that describes the configuration with
 Each problem gets its own `config.issue` line. A production server **refuses to start** (it logs why and exits with
 code 1) when:
 
-- `ACCESS_PASSWORD` is set without a `SESSION_SECRET` of 32 or more characters, because nobody could sign in;
+- `ACCESS_PASSWORD` is set without a `SESSION_SECRET` of 32 or more characters, or is longer than the 256 characters
+  the sign-in form accepts, because nobody could sign in;
 - `SITE_ACCESS=private` lacks `ACCESS_PASSWORD` or a valid `SESSION_SECRET`, because nobody could open the site;
 - `SITE_ACCESS` has a value other than `public` or `private`.
 
