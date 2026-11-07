@@ -1,6 +1,7 @@
-import { getEarningsDetail } from "@/lib/server/earnings";
+import { extraUnits } from "@/lib/server/charging";
+import { getEarningsDetail, uncachedEarningsCalls } from "@/lib/server/earnings";
 import { jsonError, jsonOk, upstreamError } from "@/lib/server/http";
-import { limitPublicRequest } from "@/lib/server/request-guard";
+import { chargePublicRequest, limitPublicRequest } from "@/lib/server/request-guard";
 import { normalizeSymbol } from "@/lib/symbols";
 
 const CACHE_SECONDS = 1800;
@@ -21,6 +22,10 @@ export async function GET(request: Request, ctx: { params: Promise<{ symbol: str
   const { symbol: param } = await ctx.params;
   const symbol = normalizeSymbol(decodeParam(param));
   if (!symbol) return jsonError(400, "bad_request", "Invalid symbol.");
+
+  // One quoteSummary call when uncached; each call beyond the first costs a unit of the client's budget.
+  const charged = chargePublicRequest(request, extraUnits(uncachedEarningsCalls(symbol)));
+  if (charged) return charged;
 
   try {
     const data = await getEarningsDetail(symbol);
