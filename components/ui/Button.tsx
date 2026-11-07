@@ -54,7 +54,8 @@ interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
 
 /**
  * Square icon button: 28px (sm) or 32px (md) on desktop, and a 40px touch target below the sm breakpoint so adjacent
- * row actions stay easy to hit on a phone.
+ * row actions stay easy to hit on a phone. In the compact density sm is 24px from sm up, so compact table rows with
+ * actions stay about as tall as the rows without.
  */
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
   { label, icon, size = "md", active = false, className, type = "button", ...props },
@@ -68,7 +69,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       title={label}
       className={cn(
         "inline-flex shrink-0 items-center justify-center rounded-xs border border-transparent transition-colors disabled:text-fg-3",
-        size === "sm" ? "size-7 max-sm:size-10" : "size-8 max-sm:size-10",
+        size === "sm" ? "size-7 max-sm:size-10 sm:compact:size-6" : "size-8 max-sm:size-10",
         active ? "bg-accent-soft text-accent" : "text-fg-2 enabled:hover:bg-hover enabled:hover:text-fg",
         className,
       )}

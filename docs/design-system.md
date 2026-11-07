@@ -41,7 +41,7 @@ Three attributes on `<html>` switch everything at runtime, without a reload:
 | --- | --- | --- |
 | `data-theme` | `dark` (default), `light`, `system` | Surfaces, text, accent and every ramp. `system` follows `prefers-color-scheme` in pure CSS. |
 | `data-updown` | `intl` (green up), `cn` (red up), `cb` (blue up, orange down) | `--up`, `--down`, the heatmap steps, and `--series-1` in `cb`. |
-| `data-density` | comfortable (default, no attribute), `compact` | `--row-h` 32px to 24px and `--text-data` 13px to 12px. |
+| `data-density` | comfortable (default, no attribute), `compact` | `--row-h` 32px to 24px, `--text-data` 13px to 12px, small icon buttons 28px to 24px (from `sm` up). |
 
 `lib/prefs.ts` currently stores `dark | light` and `intl | cn`; the shell work package adds `system`, `cb` and the
 density setting to the settings menu. The tokens already support them.
@@ -160,6 +160,11 @@ uses both, so tables follow the setting with no extra code. Use `h-row` for any 
 | `.mono` | Plex Mono, tabular | Tickers, function codes, the command line, the OHLC legend, currency codes |
 | `.panel-title` | Plex Sans 600, 12px caps, 0.04em, `--fg` | Panel and drawer titles (Panel and Drawer apply it) |
 | `.col-head` | Plex Sans 500, 11px caps, 0.04em, `--fg-3` | Table column heads, stat and KPI labels. 12px without tracking in Chinese |
+Row actions must fit the row too: `IconButton size="sm"` is 28px, and 24px from `sm` up in the compact density, so a
+compact row with actions measures 24.5 to 25px (the button plus half of each collapsed hairline) instead of 29px.
+Keep larger controls out of table rows. For other density-specific styles use the `compact:` variant, for example
+`sm:compact:size-6`; keep phone touch targets at 40px.
+
 | `.label` | Plex Mono 12px caps, `--fg-3` | Keyboard hints and codes only (G W, SPX). Not for titles or headers |
 
 Plex Sans figures are fixed width, so columns still align, and they set 11 to 14% narrower than Plex Mono. Tickers stay
@@ -247,7 +252,8 @@ The header is 36px on `--panel-2` with a hairline under it. `title` may be omitt
 ```
 
 One primary button per view. A disabled primary turns gray (`--fg-3` on `--panel-2`), never half-transparent amber.
-IconButton is 28 or 32px on desktop and 40px below `sm`; `active` marks an open menu or a pressed toggle.
+IconButton is 28 or 32px on desktop and 40px below `sm`; `size="sm"` drops to 24px from `sm` up in the compact
+density. `active` marks an open menu or a pressed toggle.
 
 ### Badge, Kbd, AiChip
 
@@ -368,7 +374,8 @@ const columns: DataTableColumn<Quote>[] = [
 - Sorting: a header click cycles the column's first direction (descending for right-aligned columns), the opposite, then
   the natural order. `aria-sort` marks the sorted header. Missing values sort last both ways; equal values keep their
   `tieBreak` order, then their original order. Pass `sort`/`onSortChange` to control it, for example to keep a
-  watchlist's custom order as the unsorted state.
+  watchlist's custom order as the unsorted state. The sort button fills its whole header cell (32px tall, 40px below
+  `sm`), so even a narrow "P/E" head is an easy target.
 - `rowHref` makes the row clickable (Ctrl or Cmd opens a new tab) and renders the first cell as a real link.
 - `rowActions` are revealed on hover and keyboard focus and always shown on touch screens. The column is
   `actionsWidth` wide (4.5rem) and `actionsTouchWidth` (5.5rem) below `sm`, where icon buttons grow to 40px.
@@ -459,7 +466,8 @@ Focus moves in, Tab is trapped, Escape closes and focus returns. Mark the first 
 
 - **Focus**: every interactive element shows the 2px accent outline (`:focus-visible`), or an accent border and ring on
   fields. Never remove it without a replacement.
-- **Targets**: at least 24px on desktop and 40px below `sm` (IconButton, toast actions, empty-state chips do this).
+- **Targets**: at least 24px on desktop and 40px below `sm` (IconButton, toast actions, empty-state chips and DataTable
+  sort heads do this; compact icon buttons stop at 24px).
 - **Tables**: a caption (visually hidden), `scope="col"` heads, `aria-sort` on the sorted head, one link per row.
 - **Live regions**: toasts and the stale banner are polite; errors use `role="alert"`. Ticking prices are not announced.
 - **Motion**: flashes and pulses are off with `prefers-reduced-motion`.

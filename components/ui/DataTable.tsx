@@ -144,7 +144,7 @@ export function DataTable<Row>({
   };
 
   const columnCount = columns.length + (rowActions ? 1 : 0);
-  const headClass = cn("h-8 px-3 shadow-[inset_0_-1px_0_var(--line)]", stickyHeader && "sticky top-0 z-10 bg-panel");
+  const headClass = cn("h-8 shadow-[inset_0_-1px_0_var(--line)]", stickyHeader && "sticky top-0 z-10 bg-panel");
 
   let body: ReactNode;
   if (loading && rows.length === 0) {
@@ -224,15 +224,23 @@ export function DataTable<Row>({
                   scope="col"
                   aria-sort={direction}
                   title={column.title}
-                  className={cn("col-head whitespace-nowrap", headClass, ALIGN[align], column.hideBelow && HIDE_CELL[column.hideBelow])}
+                  className={cn(
+                    "col-head whitespace-nowrap",
+                    headClass,
+                    // A sort button fills its cell, so the whole head is the target (40px tall on phones).
+                    !column.sortValue && "px-3",
+                    ALIGN[align],
+                    column.hideBelow && HIDE_CELL[column.hideBelow],
+                  )}
                 >
                   {column.sortValue ? (
                     <button
                       type="button"
                       onClick={() => onHeaderClick(column)}
                       className={cn(
-                        "inline-flex max-w-full items-center gap-1 tracking-[inherit] uppercase transition-colors hover:text-fg",
+                        "flex h-8 w-full items-center gap-1 px-3 tracking-[inherit] uppercase transition-colors hover:text-fg focus-visible:outline-offset-[-2px] max-sm:h-10",
                         align === "right" && "flex-row-reverse",
+                        align === "center" && "justify-center",
                         direction ? "text-fg-2" : undefined,
                       )}
                     >
@@ -249,7 +257,7 @@ export function DataTable<Row>({
                 </th>
               );
             })}
-            {rowActions ? <td aria-hidden className={headClass} /> : null}
+            {rowActions ? <td aria-hidden className={cn(headClass, "px-3")} /> : null}
           </tr>
         </thead>
         <tbody>{body}</tbody>

@@ -28,6 +28,9 @@
   height: var(--row-h);
 }
 
+/* Styles for the compact density only, e.g. `sm:compact:size-6` on the icon buttons inside table rows. */
+@custom-variant compact (&:where([data-density="compact"] *));
+
 @theme inline {
   --font-sans: var(--font-plex-sans), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, "SFMono-Regular", Menlo, Consolas, "PingFang SC", "Microsoft YaHei", monospace;
