@@ -19,8 +19,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // A self-contained server in .next/standalone for the Docker image (see Dockerfile). Vercel ignores it, and
-  // `npm start` keeps working.
+  // A self-contained server in .next/standalone for the Docker image (see Dockerfile). Vercel ignores it. `npm start`
+  // still serves the regular build, but Next prints a warning that it does not use this output.
   output: "standalone",
   poweredByHeader: false,
   reactStrictMode: true,

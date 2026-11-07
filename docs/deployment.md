@@ -72,6 +72,14 @@ docker build --build-arg GIT_SHA=$(git rev-parse HEAD) -t investseek .
 docker run -d --name investseek --restart unless-stopped --env-file .env.local -p 127.0.0.1:3000:3000 investseek
 ```
 
+### Without Docker
+
+`npm ci && npm run build && npm start` runs the same server on port 3000; put it behind a TLS reverse proxy and set
+`TRUST_PROXY=1`. Because the build also writes the standalone server for the image, `next start` prints a warning that
+it does not use that output; the warning is harmless. To run the standalone server directly, copy `public/` to
+`.next/standalone/public` and `.next/static` to `.next/standalone/.next/static`, then run
+`node .next/standalone/server.js` with `PORT` and `HOSTNAME` set.
+
 ### Plain HTTP on a local network
 
 In production the session cookie is `Secure` (and named `__Host-is_session`), so browsers only keep it over HTTPS or on
