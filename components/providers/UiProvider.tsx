@@ -4,6 +4,14 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 
 import type { NewsItem } from "@/types/api";
 
+/** What a seeded question is about, so the assistant can load the right data (e.g. a move explainer). */
+export type ChatIntent = { kind: "move"; symbol: string } | { kind: "compare"; symbols: string[] } | { kind: "earnings"; symbol: string };
+
+export interface ChatSeed {
+  text: string;
+  intent?: ChatIntent;
+}
+
 /** Global UI state for overlays that can be opened from anywhere (command bar, chat, news reader). */
 interface UiContextValue {
   commandOpen: boolean;
@@ -11,9 +19,9 @@ interface UiContextValue {
   closeCommand: () => void;
 
   chatOpen: boolean;
-  /** A question to send when the chat opens (from the command bar's "?" prefix). */
-  chatSeed: string | null;
-  openChat: (seed?: string) => void;
+  /** A question to send when the chat opens (the command bar's "?" prefix, "Why is it moving?" buttons). */
+  chatSeed: ChatSeed | null;
+  openChat: (seed?: string | ChatSeed) => void;
   closeChat: () => void;
   clearChatSeed: () => void;
 
@@ -27,11 +35,11 @@ const UiContext = createContext<UiContextValue | null>(null);
 export function UiProvider({ children }: { children: ReactNode }) {
   const [commandOpen, setCommandOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [chatSeed, setChatSeed] = useState<string | null>(null);
+  const [chatSeed, setChatSeed] = useState<ChatSeed | null>(null);
   const [newsItem, setNewsItem] = useState<NewsItem | null>(null);
 
-  const openChat = useCallback((seed?: string) => {
-    if (seed) setChatSeed(seed);
+  const openChat = useCallback((seed?: string | ChatSeed) => {
+    if (seed) setChatSeed(typeof seed === "string" ? { text: seed } : seed);
     setChatOpen(true);
   }, []);
 

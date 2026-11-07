@@ -567,6 +567,13 @@ export function technicalScoreSeries(bars: readonly DailyBar[]): Array<{ t: numb
   return s.t.map((t, i) => ({ t, score: i >= MIN_BARS - 1 ? technicalScoreAt(s, i) : null }));
 }
 
+/** Technical-only composite at the last bar (rounded to 0.1), as in the report; null with fewer than MIN_BARS bars. */
+export function latestTechnicalScore(bars: readonly DailyBar[]): number | null {
+  const s = prepareSeries(bars);
+  const n = s.close.length;
+  return n >= MIN_BARS ? technicalScoreAt(s, n - 1) : null;
+}
+
 // ---------------------------------------------------------------------------
 // Fundamental factors
 // ---------------------------------------------------------------------------

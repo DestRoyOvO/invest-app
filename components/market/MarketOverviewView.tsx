@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { ResearchNote } from "@/components/ai/ResearchNote";
+import { WeekAheadPanel } from "@/components/calendar/WeekAheadPanel";
 import { NewsList } from "@/components/news/NewsList";
+import { MyDayPanel } from "@/components/portfolio/MyDayPanel";
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Panel, PanelMeta } from "@/components/ui/Panel";
 import { EmptyState, ErrorState, Skeleton, SkeletonRows, StaleBanner } from "@/components/ui/States";
@@ -75,6 +77,9 @@ export function MarketOverviewView() {
   return (
     <div className="grid gap-px bg-line p-px lg:grid-cols-6 xl:grid-cols-12">
       <h1 className="sr-only">{t.market.title}</h1>
+
+      <MyDayPanel className="lg:col-span-6 xl:col-span-8" />
+      <WeekAheadPanel className="lg:col-span-6 xl:col-span-4" />
 
       <Panel
         title={t.market.board}

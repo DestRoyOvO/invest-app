@@ -17,10 +17,16 @@ import { ApiError } from "@/lib/api-client";
 import { tpl } from "@/lib/format";
 import type { AnalyzeRequest } from "@/types/api";
 
+import { NotesPanel } from "@/components/notes/NotesPanel";
+
+import { AnalystsPanel } from "./AnalystsPanel";
+import { EarningsPanel } from "./EarningsPanel";
+import { FactorProfilePanel } from "./FactorProfilePanel";
 import { KeyStats } from "./KeyStats";
 import { PriceChart } from "./PriceChart";
 import { ProfilePanel } from "./ProfilePanel";
 import { QuoteHeader } from "./QuoteHeader";
+import { RiskPanel } from "./RiskPanel";
 import { SignalPanel } from "./SignalPanel";
 
 function NotFound({ symbol }: { symbol: string }) {
@@ -90,7 +96,13 @@ export function StockView({ symbol, rawInput }: { symbol: string | null; rawInpu
 
       <SignalPanel report={signal.data} error={signal.error} onRetry={() => signal.mutate()} className="xl:col-span-8" />
 
+      <RiskPanel symbol={symbol} className="xl:col-span-8" />
+      <FactorProfilePanel symbol={symbol} className="xl:col-span-8" />
+      <EarningsPanel symbol={symbol} className="xl:col-span-4" />
+      <AnalystsPanel symbol={symbol} className="xl:col-span-4" />
+
       <ResearchNote title={t.stock.aiNote} request={request} ready={!!data} className="xl:col-span-6" />
+      <NotesPanel symbol={symbol} price={data?.quote.price ?? null} className="xl:col-span-6" />
 
       <Panel title={t.stock.news} className="xl:col-span-6">
         {data ? <NewsList news={data.news} showProvenance unavailable={data.warnings.includes("news")} /> : <SkeletonRows rows={8} />}

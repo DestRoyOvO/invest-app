@@ -14,6 +14,7 @@ import type {
 } from "@/types/api";
 
 import { normalizeBars, type DailyBar, type RawChart } from "@/lib/bars";
+import { hasCjk } from "@/lib/names-zh";
 
 import { cached, HOUR, MINUTE, peek } from "./cache";
 
@@ -63,12 +64,16 @@ export class UpstreamBusyError extends Error {
 /** Queue wait plus run time allowed per call: a job dequeued after this fails at once instead of fetching. */
 const CALL_DEADLINE_MS = 20_000;
 
-/** Module options for every Yahoo call; the signal reaches timeoutFetch through the library's fetchOptions. */
-function callOptions() {
+/**
+ * Module options for every Yahoo call; the signal reaches timeoutFetch through the library's fetchOptions.
+ * Server modules that add new Yahoo calls (earnings, fundamentals, options, screeners) must pass these options and
+ * wrap the call in upstream(), so every request shares the timeout, the deadline and the pending-call cap.
+ */
+export function callOptions() {
   return { validateResult: false as const, fetchOptions: { signal: AbortSignal.timeout(CALL_DEADLINE_MS) } };
 }
 
-async function upstream<T>(call: () => Promise<T>): Promise<T> {
+export async function upstream<T>(call: () => Promise<T>): Promise<T> {
   if (pendingCalls >= MAX_PENDING_CALLS) throw new UpstreamBusyError();
   pendingCalls++;
   try {
@@ -89,7 +94,7 @@ export function num(value: unknown): number | null {
   return null;
 }
 
-function str(value: unknown): string | null {
+export function str(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
@@ -109,7 +114,7 @@ export function toIso(value: unknown): string | null {
 
 const MARKET_STATES = new Set<MarketState>(["PREPRE", "PRE", "REGULAR", "POST", "POSTPOST", "CLOSED"]);
 
-function marketState(value: unknown): MarketState | null {
+export function marketState(value: unknown): MarketState | null {
   return typeof value === "string" && MARKET_STATES.has(value as MarketState) ? (value as MarketState) : null;
 }
 
@@ -159,6 +164,9 @@ export function mapQuote(q: RawQuote): Quote {
     }
   }
 
+  const earnings = earningsDates(q, Date.now());
+  const dividend = announcedDividend(q.corporateActions);
+  const expenseRatioPercent = num(q.netExpenseRatio); // percent units
   const quoteDividendYield = num(q.dividendYield); // percent units in the quote endpoint
   const dividendYield =
     quoteDividendYield !== null ? quoteDividendYield / 100 : num(q.trailingAnnualDividendYield);
@@ -191,6 +199,76 @@ export function mapQuote(q: RawQuote): Quote {
     extendedChangePercent,
     extendedSession,
     regularMarketTime: regularTime,
+    fiftyDayAverage: num(q.fiftyDayAverage),
+    twoHundredDayAverage: num(q.twoHundredDayAverage),
+    fiftyTwoWeekChangePercent: num(q.fiftyTwoWeekChangePercent),
+    priceToBook: num(q.priceToBook),
+    forwardEps: num(q.epsForward),
+    dividendRate: num(q.dividendRate),
+    analystRating: analystRating(q.averageAnalystRating),
+    sharesOutstanding: num(q.sharesOutstanding),
+    nextEarningsDate: earnings.next,
+    earningsDateEstimated: earnings.next === null ? null : q.isEarningsDateEstimate === true,
+    lastEarningsDate: earnings.last,
+    dividendDate: toIso(q.dividendDate),
+    exDividendDate: dividend?.exDate ?? null,
+    dividendAmount: dividend?.amount ?? null,
+    expenseRatio: expenseRatioPercent === null ? null : expenseRatioPercent / 100,
+    netAssets: num(q.netAssets),
+    ytdReturnPercent: num(q.ytdReturn),
+    fetchedAt: null,
+    stale: false,
+  };
+}
+
+/**
+ * The announced cash dividend from the quote's corporate actions, e.g. { header: "Dividend", message: "AAPL announced
+ * a cash dividend of $0.27 with an ex-date of Nov. 12, 2026", meta: { eventType: "DIVIDEND", dateEpochMs, amount:
+ * "0.27" } }. When several are listed, the latest ex-date wins. Yahoo sometimes sends the array as a JSON string.
+ */
+export function announcedDividend(value: unknown): { exDate: string; amount: number | null } | null {
+  let actions: unknown = value;
+  if (typeof actions === "string") {
+    try {
+      actions = JSON.parse(actions);
+    } catch {
+      return null;
+    }
+  }
+  if (!Array.isArray(actions)) return null;
+  let best: { exDate: string; amount: number | null } | null = null;
+  for (const action of actions) {
+    const meta = (action as { meta?: Record<string, unknown> } | null)?.meta;
+    if (!meta || meta.eventType !== "DIVIDEND") continue;
+    const exDate = toIso(meta.dateEpochMs);
+    if (!exDate) continue;
+    const parsed = typeof meta.amount === "string" ? Number.parseFloat(meta.amount) : num(meta.amount);
+    const amount = parsed !== null && Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    if (!best || exDate > best.exDate) best = { exDate, amount };
+  }
+  return best;
+}
+
+/** "2.3 - Buy" -> 2.3 (1 = strong buy ... 5 = sell); null when missing or out of range. */
+export function analystRating(value: unknown): number | null {
+  const rating = typeof value === "string" ? Number.parseFloat(value) : num(value);
+  return rating !== null && Number.isFinite(rating) && rating >= 1 && rating <= 5 ? rating : null;
+}
+
+/**
+ * Next and last earnings report from the quote's timestamps. Yahoo puts the latest report in earningsTimestamp and
+ * the next one (often an estimate) in earningsTimestampStart/End, but either can hold past or future dates.
+ */
+export function earningsDates(q: RawQuote, now: number): { next: string | null; last: string | null } {
+  const times = [q.earningsTimestamp, q.earningsTimestampStart, q.earningsTimestampEnd]
+    .map(toIso)
+    .filter((iso): iso is string => iso !== null)
+    .map((iso) => Date.parse(iso));
+  const future = times.filter((t) => t > now);
+  const past = times.filter((t) => t <= now);
+  return {
+    next: future.length ? new Date(Math.min(...future)).toISOString() : null,
+    last: past.length ? new Date(Math.max(...past)).toISOString() : null,
   };
 }
 
@@ -233,13 +311,15 @@ const QUOTE_BATCH = 100;
 
 async function fetchQuoteBatch(symbols: string[]): Promise<Quote[]> {
   const raw = (await upstream(() => yf.quote(symbols, { return: "array" }, callOptions()))) as unknown as RawQuote[];
-  return (raw ?? []).filter((q) => q && typeof q.symbol === "string").map(mapQuote);
+  const fetchedAt = new Date().toISOString();
+  return (raw ?? []).filter((q) => q && typeof q.symbol === "string").map((q) => ({ ...mapQuote(q), fetchedAt }));
 }
 
 /**
  * Quotes for many symbols. Each symbol is cached individually (15 s while its session trades, 5 min otherwise),
  * misses are fetched in one batched request, and symbols Yahoo does not know are omitted from the result.
- * If Yahoo fails, recently expired quotes (up to 1 hour old) are served instead.
+ * If Yahoo fails, recently expired quotes (up to 1 hour old) are served instead, marked stale: true so routes and
+ * screens can say the prices are delayed rather than present them as live.
  */
 export async function getQuotes(symbols: string[]): Promise<Map<string, Quote>> {
   const now = Date.now();
@@ -273,15 +353,18 @@ export async function getQuotes(symbols: string[]): Promise<Map<string, Quote>> 
       }
     }
   } catch (error) {
-    let servedStale = false;
+    let servedStale = 0;
+    let oldest: string | null = null;
     for (const symbol of sorted) {
       const slot = quoteSlots.get(symbol);
-      if (slot?.quote && slot.staleUntil > Date.now()) {
-        result.set(symbol, slot.quote);
-        servedStale = true;
+      if (slot?.quote && slot.staleUntil > Date.now() && !result.has(symbol)) {
+        result.set(symbol, slot.quote.stale ? slot.quote : { ...slot.quote, stale: true });
+        servedStale++;
+        if (slot.quote.fetchedAt && (oldest === null || slot.quote.fetchedAt < oldest)) oldest = slot.quote.fetchedAt;
       }
     }
-    if (!servedStale && result.size === 0) throw error;
+    if (servedStale === 0 && result.size === 0) throw error;
+    if (servedStale > 0) console.warn(`[yahoo] quote refresh failed; served ${servedStale} stale quotes (oldest fetched ${oldest ?? "unknown"})`, error);
   }
   return result;
 }
@@ -321,6 +404,11 @@ function barsTtl(): number {
  */
 export async function getDailyBars(symbol: string, days: number): Promise<DailyBar[]> {
   return cached(`bars:${symbol}:${days}`, { ttlMs: barsTtl(), staleMs: 6 * HOUR }, () => fetchChart(symbol, days, "1d"));
+}
+
+/** True when getDailyBars(symbol, days) can be served from the cache (fresh or stale) without calling Yahoo. */
+export function hasCachedDailyBars(symbol: string, days: number): boolean {
+  return peek(`bars:${symbol}:${days}`) !== undefined;
 }
 
 const RANGE_SPEC: Record<ChartRange, { days: number; interval: "1d" | "1wk" }> = {
@@ -453,14 +541,26 @@ export async function getSummary(symbol: string): Promise<{ profile: StockProfil
 
 const SEARCH_TYPES = new Set(["EQUITY", "ETF", "INDEX", "MUTUALFUND", "CRYPTOCURRENCY", "FUTURE", "CURRENCY"]);
 
-/** Ticker autocomplete (cached 1 hour). Equities and ETFs are listed first. */
+/** Yahoo answers queries it cannot parse with a 400 ("Invalid Search Query"): that means no results, not an outage. */
+function isInvalidQuery(error: unknown): boolean {
+  return error instanceof Error && (error.name === "BadRequestError" || /Invalid Search Query/i.test(error.message));
+}
+
+/**
+ * Ticker autocomplete (cached 1 hour). Equities and ETFs are listed first. Yahoo only understands Latin text, so
+ * Chinese queries return no results here; the client resolves them from lib/names-zh.ts.
+ */
 export async function searchSymbols(query: string): Promise<SymbolSearchResult[]> {
   const q = query.trim().slice(0, 40);
-  if (!q) return [];
+  if (!q || hasCjk(q) || !/[a-z0-9]/i.test(q)) return [];
   return cached(`search:${q.toLowerCase()}`, { ttlMs: HOUR, staleMs: 6 * HOUR }, async () => {
-    const res = (await upstream(() => yf.search(q, { quotesCount: 10, newsCount: 0 }, callOptions()))) as unknown as {
-      quotes?: Array<Record<string, unknown>>;
-    };
+    let res: { quotes?: Array<Record<string, unknown>> };
+    try {
+      res = (await upstream(() => yf.search(q, { quotesCount: 10, newsCount: 0 }, callOptions()))) as unknown as typeof res;
+    } catch (error) {
+      if (isInvalidQuery(error)) return [];
+      throw error;
+    }
     const rank = (type: string | null) => (type === "EQUITY" ? 0 : type === "ETF" ? 1 : type === "INDEX" ? 2 : 3);
     return (res.quotes ?? [])
       .filter((r) => r.isYahooFinance !== false && typeof r.symbol === "string" && SEARCH_TYPES.has(String(r.quoteType)))

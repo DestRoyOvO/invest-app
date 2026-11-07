@@ -92,6 +92,25 @@ function quote(symbol: string, overrides: Partial<Quote> = {}): Quote {
     extendedChangePercent: null,
     extendedSession: null,
     regularMarketTime: null,
+    fiftyDayAverage: null,
+    twoHundredDayAverage: null,
+    fiftyTwoWeekChangePercent: null,
+    priceToBook: null,
+    forwardEps: null,
+    dividendRate: null,
+    analystRating: null,
+    sharesOutstanding: null,
+    nextEarningsDate: null,
+    earningsDateEstimated: null,
+    lastEarningsDate: null,
+    dividendDate: null,
+    exDividendDate: null,
+    dividendAmount: null,
+    expenseRatio: null,
+    netAssets: null,
+    ytdReturnPercent: null,
+    fetchedAt: null,
+    stale: false,
     ...overrides,
   };
 }
@@ -233,6 +252,17 @@ describe("getMarketOverview", () => {
     expect(overview.movers.gainers.every((q) => !MARKET_BOARD.some((b) => b.symbol === q.symbol))).toBe(true);
     expect(overview.news).toEqual([newsItem]);
     expect(overview.warnings).toEqual([]);
+  });
+
+  it("warns when some quotes are stale cached copies", async () => {
+    const quotes = allQuotes();
+    quotes.set("^GSPC", { ...(quotes.get("^GSPC") as Quote), stale: true, fetchedAt: "2026-11-07T14:00:00.000Z" });
+    yahoo.getQuotes.mockResolvedValue(quotes);
+    yahoo.getSparkline.mockResolvedValue([1, 2, 3]);
+    news.getMarketNews.mockResolvedValue([newsItem]);
+
+    const overview = await getMarketOverview();
+    expect(overview.warnings).toEqual(["quotes_stale"]);
   });
 
   it("degrades failed sections instead of failing the response", async () => {

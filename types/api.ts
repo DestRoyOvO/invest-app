@@ -16,6 +16,11 @@
 //   GET  /api/stock/[symbol]                 -> StockDetail           (404 not_found for unknown symbols)
 //   GET  /api/stock/[symbol]/chart?range=1y  -> ChartData
 //   GET  /api/stock/[symbol]/signal          -> SignalReport
+//   GET  /api/history?symbols=A,B&range=1y   -> HistoryResponse       (max 25 symbols, aligned daily adjusted closes)
+//   GET  /api/screener?universe=stocks       -> ScreenerResponse      (universe: stocks | etfs)
+//   GET  /api/stock/[symbol]/factors         -> FactorProfile
+//   GET  /api/calendar?symbols=A,B&days=30   -> CalendarResponse      (max 100 symbols; scope=universe adds the stock universe)
+//   GET  /api/discover?screen=day_gainers    -> DiscoverResponse      (market-wide Yahoo screens, quality-filtered)
 //   POST /api/ai/analyze   AnalyzeRequest    -> text/plain stream (see AI_STREAM_ERROR)
 //   POST /api/ai/chat      ChatRequest       -> text/plain stream
 //   GET  /api/auth/status                    -> AuthStatus
@@ -78,6 +83,41 @@ export interface Quote {
   extendedSession: "PRE" | "POST" | null;
   /** Time of the last regular-session trade. */
   regularMarketTime: string | null;
+  /** 50- and 200-session simple moving averages of the close. */
+  fiftyDayAverage: number | null;
+  twoHundredDayAverage: number | null;
+  /** Price change over the last 52 weeks, in percent units. */
+  fiftyTwoWeekChangePercent: number | null;
+  priceToBook: number | null;
+  /** Analyst consensus EPS for the next fiscal year. */
+  forwardEps: number | null;
+  /** Forward annual dividend per share. */
+  dividendRate: number | null;
+  /** Mean analyst rating: 1 = strong buy ... 5 = sell. */
+  analystRating: number | null;
+  sharesOutstanding: number | null;
+  /** Next earnings report (ISO), when Yahoo knows one in the future. */
+  nextEarningsDate: string | null;
+  /** True when the company has not confirmed nextEarningsDate yet (Yahoo's estimate). */
+  earningsDateEstimated: boolean | null;
+  /** Most recent earnings report in the past (ISO). */
+  lastEarningsDate: string | null;
+  /** Next or most recent dividend payment date (ISO); Yahoo often leaves a past date here. */
+  dividendDate: string | null;
+  /** Ex-date of the announced cash dividend (ISO), from Yahoo's corporate actions; null when none is announced. */
+  exDividendDate: string | null;
+  /** Cash dividend per share going ex on exDividendDate. */
+  dividendAmount: number | null;
+  /** Funds: annual net expense ratio (decimal, 0.000945 = 0.0945%). */
+  expenseRatio: number | null;
+  /** Funds: total net assets. */
+  netAssets: number | null;
+  /** Funds: year-to-date return in percent units. */
+  ytdReturnPercent: number | null;
+  /** When the server fetched this quote from Yahoo (ISO). */
+  fetchedAt: string | null;
+  /** True when the latest refresh failed and an older cached quote (see fetchedAt) is shown instead. */
+  stale: boolean;
 }
 
 export interface QuotesResponse {
@@ -116,7 +156,7 @@ export interface MarketOverview {
     mostActive: Quote[];
   };
   news: NewsItem[];
-  /** Sections that failed upstream and were omitted or served stale, e.g. ["news"]. */
+  /** Sections that failed upstream and were omitted or served stale, e.g. ["news"]; "quotes_stale" when some quotes are old. */
   warnings: string[];
 }
 
@@ -242,6 +282,163 @@ export interface ChartData {
   range: ChartRange;
   interval: "1d" | "1wk";
   bars: Bar[];
+}
+
+export type HistoryRange = "6mo" | "1y" | "2y" | "5y";
+
+/** Daily dividend- and split-adjusted closes of several symbols on one shared session calendar. */
+export interface HistoryResponse {
+  asOf: string;
+  range: HistoryRange;
+  /** Session dates (epoch ms, UTC midnight), ascending: the union of the returned symbols' sessions. */
+  dates: number[];
+  /** Closes per symbol aligned to `dates`; null where the symbol has no bar that session. */
+  closes: Record<string, Array<number | null>>;
+  /** Requested symbols without any bars in the range (unknown, delisted, or failed upstream). */
+  missing: string[];
+  /** True when some symbols failed upstream; they are in `missing` and the response is cached only briefly. */
+  degraded: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Screener and style factors (definitions in lib/factors.ts)
+// ---------------------------------------------------------------------------
+
+export type StyleFactorKey = "momentum" | "reversal" | "high52" | "volatility" | "beta";
+
+export type ScreenerUniverse = "stocks" | "etfs";
+
+export interface ScreenerRow {
+  symbol: string;
+  name: string;
+  /** Sector of a universe stock; null for ETFs. */
+  sector: SectorKey | null;
+  quoteType: string | null;
+  price: number | null;
+  changePercent: number | null;
+  marketCap: number | null;
+  trailingPE: number | null;
+  forwardPE: number | null;
+  priceToBook: number | null;
+  /** Decimal. */
+  dividendYield: number | null;
+  /** 1 = strong buy ... 5 = sell. */
+  analystRating: number | null;
+  nextEarningsDate: string | null;
+  earningsDateEstimated: boolean | null;
+  /** Price over the 52-week high, minus 1 (ratio, at most 0). */
+  fromHigh52: number | null;
+  /** Price over the 50- and 200-day averages, minus 1 (ratios). */
+  vs50d: number | null;
+  vs200d: number | null;
+  /** Average daily dollar volume over 3 months. */
+  dollarVolume: number | null;
+  /** Funds only: net expense ratio (decimal), net assets, year-to-date return (percent units). */
+  expenseRatio: number | null;
+  netAssets: number | null;
+  ytdReturnPercent: number | null;
+  /** Total returns over 21, 63 and 126 sessions (ratios); null without enough price history. */
+  return1m: number | null;
+  return3m: number | null;
+  return6m: number | null;
+  rsi14: number | null;
+  /** The model's technical-only reading, 0..100 (see SignalReport.technicalScore). */
+  technicalScore: number | null;
+  /** Raw style factor values (lib/factors.ts). */
+  factors: Record<StyleFactorKey, number | null>;
+  /** Percentile of each raw value within the universe, 0..100 (higher = larger raw value). */
+  percentiles: Record<StyleFactorKey, number | null>;
+}
+
+export interface ScreenerResponse {
+  asOf: string;
+  universe: ScreenerUniverse;
+  rows: ScreenerRow[];
+  /** Symbols whose price history failed to load: their bar-based columns are null. */
+  partial: string[];
+  warnings: string[];
+}
+
+export interface FactorProfile {
+  symbol: string;
+  asOf: string;
+  values: Record<StyleFactorKey, number | null>;
+  /** Percentile of each value among the stock universe's current values, 0..100. */
+  percentiles: Record<StyleFactorKey, number | null>;
+  /** Number of universe stocks the percentiles compare against. */
+  universeSize: number;
+  inUniverse: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Discover: market-wide screens
+// ---------------------------------------------------------------------------
+
+/** Yahoo's predefined screens (their definitions, not ours) plus Yahoo's trending symbols. */
+export type DiscoverScreen =
+  | "day_gainers"
+  | "day_losers"
+  | "most_actives"
+  | "undervalued_large_caps"
+  | "growth_technology_stocks"
+  | "most_shorted_stocks"
+  | "trending";
+
+export interface DiscoverResponse {
+  asOf: string;
+  screen: DiscoverScreen;
+  /** Rows after the quality filter (US-listed equities above the market-cap and price floors), in Yahoo's order. */
+  quotes: Quote[];
+  /** Rows Yahoo returned before the quality filter. */
+  scanned: number;
+  /** Size of Yahoo's full result set when it reports one. */
+  total: number | null;
+  /** The market-cap floor applied, in dollars. */
+  minMarketCap: number;
+}
+
+// ---------------------------------------------------------------------------
+// Events calendar
+// ---------------------------------------------------------------------------
+
+export type CalendarEventKind = "earnings" | "dividend" | "macro";
+
+export type MacroEventKey = "fomc" | "cpi" | "jobs";
+
+export interface CalendarEvent {
+  /** Stable id, e.g. "earnings:AAPL:2027-01-28". */
+  id: string;
+  kind: CalendarEventKind;
+  /** ISO timestamp. Dividend payment dates are dates only (UTC midnight). */
+  at: string;
+  /** Earnings: reported before the open, after the close or during the session (New York time); null when unknown. */
+  timing: "pre" | "post" | "intraday" | null;
+  /** The company has not confirmed the date (Yahoo's estimate), or a tentative FOMC date. */
+  estimated: boolean;
+  /** Earnings and dividends; null for macro releases. */
+  symbol: string | null;
+  /** Company name; null for macro releases (labelled from `macro`). */
+  name: string | null;
+  macro: MacroEventKey | null;
+  /** Macro: reference period of the data, e.g. "2026-10". */
+  period: string | null;
+  /** FOMC meeting with new economic projections. */
+  projections: boolean;
+  /** Dividends: cash dividend per share going ex on this date. */
+  amount: number | null;
+}
+
+export interface CalendarResponse {
+  asOf: string;
+  /** Window covered (ISO). */
+  from: string;
+  to: string;
+  /** Sorted by time. */
+  events: CalendarEvent[];
+  /** Requested symbols Yahoo returned no quote for. */
+  missing: string[];
+  /** Last macro event on file: the list needs updating after this date. */
+  macroCalendarEnds: string;
 }
 
 // ---------------------------------------------------------------------------

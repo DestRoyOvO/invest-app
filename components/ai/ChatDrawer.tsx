@@ -127,7 +127,7 @@ export function ChatDrawer() {
     const seed = chatSeed;
     const id = window.setTimeout(() => {
       clearChatSeed();
-      void send(seed);
+      void send(seed.text);
     }, 0);
     return () => window.clearTimeout(id);
   }, [chatOpen, chatSeed, aiState, clearChatSeed, send]);

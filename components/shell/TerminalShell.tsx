@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, type ReactNode } from "react";
 
 import { ChatDrawer } from "@/components/ai/ChatDrawer";
+import { AlertEngine } from "@/components/alerts/AlertEngine";
 import { NewsDrawer } from "@/components/news/NewsDrawer";
 import { useT } from "@/components/providers/PrefsProvider";
 import { useUi } from "@/components/providers/UiProvider";
@@ -86,6 +87,7 @@ export function TerminalShell({ children }: { children: ReactNode }) {
       <CommandPalette />
       <ChatDrawer />
       <NewsDrawer />
+      <AlertEngine />
     </div>
   );
 }

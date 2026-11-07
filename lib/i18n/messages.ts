@@ -3,6 +3,22 @@
 
 import type { Lang } from "@/types/api";
 
+import type { Widen } from "./define";
+import { helpMessages } from "./help";
+import { portMessages } from "./port";
+import { calendarMessages } from "./calendar";
+import { earningsMessages } from "./earnings";
+import { screenerMessages } from "./screener";
+import { discoverMessages } from "./discover";
+import { labMessages } from "./lab";
+import { riskMessages } from "./risk";
+import { chartMessages } from "./chart";
+import { researchMessages } from "./research";
+import { notesMessages } from "./notes";
+import { alertsMessages } from "./alerts";
+import { dataMessages } from "./data";
+import { marketsMessages } from "./markets";
+
 export const en = {
   common: {
     loading: "Loading…",
@@ -337,9 +353,21 @@ export const en = {
     network: "Network error. Check your connection.",
     notFound: "Not found.",
   },
+  help: helpMessages.en,
+  port: portMessages.en,
+  calendar: calendarMessages.en,
+  earnings: earningsMessages.en,
+  screener: screenerMessages.en,
+  discover: discoverMessages.en,
+  lab: labMessages.en,
+  risk: riskMessages.en,
+  chart: chartMessages.en,
+  research: researchMessages.en,
+  notes: notesMessages.en,
+  alerts: alertsMessages.en,
+  data: dataMessages.en,
+  markets: marketsMessages.en,
 } as const;
-
-type Widen<T> = { [K in keyof T]: T[K] extends string ? string : Widen<T[K]> };
 
 export type Messages = Widen<typeof en>;
 
@@ -677,6 +705,20 @@ export const zh: Messages = {
     network: "网络错误，请检查连接。",
     notFound: "未找到。",
   },
+  help: helpMessages.zh,
+  port: portMessages.zh,
+  calendar: calendarMessages.zh,
+  earnings: earningsMessages.zh,
+  screener: screenerMessages.zh,
+  discover: discoverMessages.zh,
+  lab: labMessages.zh,
+  risk: riskMessages.zh,
+  chart: chartMessages.zh,
+  research: researchMessages.zh,
+  notes: notesMessages.zh,
+  alerts: alertsMessages.zh,
+  data: dataMessages.zh,
+  markets: marketsMessages.zh,
 };
 
 export const MESSAGES: Record<Lang, Messages> = { en, zh };

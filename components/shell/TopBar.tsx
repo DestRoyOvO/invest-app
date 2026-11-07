@@ -4,6 +4,7 @@ import { Search } from "lucide-react";
 import Link from "next/link";
 
 import { useT } from "@/components/providers/PrefsProvider";
+import { AlertBell } from "@/components/alerts/AlertBell";
 import { useUi } from "@/components/providers/UiProvider";
 import { Kbd } from "@/components/ui/Badge";
 import { useOverview } from "@/hooks/useApi";
@@ -55,6 +56,7 @@ export function TopBar() {
         <div className="hidden pr-2 lg:block">
           <MarketClock state={data?.marketState} />
         </div>
+        <AlertBell />
         <AiStatusButton />
         <SettingsMenu />
       </div>

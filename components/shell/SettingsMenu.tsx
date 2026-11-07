@@ -3,6 +3,7 @@
 import { SlidersHorizontal } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 
+import { DataMenuSection } from "@/components/data/DataMenuSection";
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { IconButton } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
@@ -113,6 +114,7 @@ export function SettingsMenu() {
               { value: "cn", label: t.settings.redUp },
             ]}
           />
+          <DataMenuSection onNavigate={() => setOpen(false)} />
         </div>
       ) : null}
     </div>

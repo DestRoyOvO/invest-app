@@ -216,6 +216,8 @@ async function buildOverview(): Promise<MarketOverview> {
   const sparks = sparksResult.status === "fulfilled" ? sparksResult.value.sparks : new Map<string, number[]>();
   if (sparksResult.status === "rejected" || sparksResult.value.failed) warnings.push("sparklines");
 
+  if ([...quotes.values()].some((quote) => quote.stale)) warnings.push("quotes_stale");
+
   const board = buildBoard(quotes, sparks);
   if (board.length < BOARD_SYMBOLS.length) warnings.push("board");
 
@@ -258,6 +260,7 @@ export async function getStockDetail(symbol: string): Promise<StockDetail | null
   if (!quote) return null;
 
   const warnings: string[] = [];
+  if (quote.stale) warnings.push("quotes_stale");
   if (summaryResult.status === "rejected") console.warn(`[stock] summary unavailable for ${symbol}`, summaryResult.reason);
   const summary = summaryResult.status === "fulfilled" ? summaryResult.value : null;
   if (!summary) warnings.push("summary");

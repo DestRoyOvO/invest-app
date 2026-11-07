@@ -6,6 +6,7 @@ import { valuePortfolio, type ValuedPosition } from "@/lib/portfolio";
 import { labelForScore, SIGNAL_THRESHOLDS } from "@/lib/signal";
 import { normalizeSymbol } from "@/lib/symbols";
 import { getSector, MARKET_BOARD, MARKET_STATE_SYMBOL, SECTORS, sectorOfSymbol, UNIVERSE_STOCKS, type BoardSymbol } from "@/lib/universe";
+import { yahooSectorKey } from "@/lib/sectors";
 import type {
   AnalyzeRequest,
   ApiErrorCode,
@@ -754,21 +755,6 @@ async function sectorContext(key: SectorKey): Promise<ContextResult> {
 // Watchlist
 // ---------------------------------------------------------------------------
 
-/** Yahoo (Morningstar-style) sector names mapped onto the universe sectors, so groups are not split by naming. */
-const YAHOO_SECTOR_KEYS: Readonly<Record<string, SectorKey>> = {
-  technology: "technology",
-  "communication services": "communication",
-  "consumer cyclical": "consumer-discretionary",
-  "consumer defensive": "consumer-staples",
-  healthcare: "healthcare",
-  "financial services": "financials",
-  industrials: "industrials",
-  energy: "energy",
-  "basic materials": "materials",
-  utilities: "utilities",
-  "real estate": "real-estate",
-};
-
 const QUOTE_TYPE_GROUPS: Readonly<Record<string, string>> = {
   ETF: "ETFs and funds",
   MUTUALFUND: "ETFs and funds",
@@ -782,7 +768,7 @@ export function sectorGroup(symbol: string, quoteType: string | null, yahooSecto
   const universe = sectorOfSymbol(symbol);
   if (universe) return universe.label.en;
   if (quoteType && QUOTE_TYPE_GROUPS[quoteType]) return QUOTE_TYPE_GROUPS[quoteType];
-  const key = yahooSector ? YAHOO_SECTOR_KEYS[yahooSector.trim().toLowerCase()] : undefined;
+  const key = yahooSectorKey(yahooSector);
   const mapped = key ? getSector(key) : undefined;
   if (mapped) return mapped.label.en;
   return yahooSector ? cleanInline(yahooSector, 40) : "Unclassified";

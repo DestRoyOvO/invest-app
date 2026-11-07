@@ -38,6 +38,8 @@ const nextConfig: NextConfig = {
   // The floating dev indicator sits on top of the nav rail (bottom left) and covers the assistant button.
   // Build and runtime errors still open the error overlay.
   devIndicators: false,
+  // next dev would otherwise (re)write an AGENTS.md with tool-specific instructions into the repository root.
+  agentRules: false,
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
