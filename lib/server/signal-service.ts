@@ -1,14 +1,21 @@
 import "server-only";
 
 import type { DailyBar } from "@/lib/bars";
+import { dropFormingBar } from "@/lib/evaluation";
+import { riskSnapshot } from "@/lib/risk-forecast";
 import { computeSignalReport, type Fundamentals } from "@/lib/signal";
 import type { KeyStats, MarketState, Quote, SignalReport, StockProfile } from "@/types/api";
 
 import { cached, HOUR, MINUTE } from "./cache";
 import { getDailyBars, getQuote, getSummary, todayInExchange } from "./yahoo";
 
-/** Calendar days of daily history requested for the model (about 370 sessions). */
+/**
+ * Calendar days of daily history requested for the model (about 370 sessions): enough for the 252-session volatility
+ * blend, beta and the own-history volatility percentile of the risk forecast.
+ */
 const HISTORY_DAYS = 540;
+/** Market benchmark for beta. Same request as the screener's, so the bars come from one shared cache entry. */
+const BENCHMARK = "SPY";
 const REPORT_TTL_MS = 15 * MINUTE;
 /** If a refresh fails, the previous report (with its original asOf) is served for up to this long. */
 const REPORT_STALE_MS = HOUR;
@@ -85,10 +92,12 @@ export function toFundamentals(quote: Quote | null, summary: Summary | null, fal
  * lookup succeeded but found nothing, and there is no price history); that answer is cached like a report.
  */
 async function loadReport(symbol: string): Promise<SignalReport | null> {
-  const [barsResult, quoteResult, summaryResult] = await Promise.allSettled([
+  const [barsResult, quoteResult, summaryResult, benchmarkResult] = await Promise.allSettled([
     getDailyBars(symbol, HISTORY_DAYS),
     getQuote(symbol),
     getSummary(symbol),
+    // Only beta needs the benchmark; without it the report is still complete, with a null beta.
+    symbol === BENCHMARK ? Promise.resolve(null) : getDailyBars(BENCHMARK, HISTORY_DAYS),
   ]);
   const quote = quoteResult.status === "fulfilled" ? quoteResult.value : null;
   const summary = summaryResult.status === "fulfilled" ? summaryResult.value : null;
@@ -108,14 +117,25 @@ async function loadReport(symbol: string): Promise<SignalReport | null> {
     throw new SignalNotFoundError(symbol);
   }
 
-  const { bars, dropped } = dropPartialBar(allBars, quote?.marketState ?? null, todayInExchange());
-  return computeSignalReport({
+  const marketState = quote?.marketState ?? null;
+  const today = todayInExchange();
+  const { bars, dropped } = dropPartialBar(allBars, marketState, today);
+  const report = computeSignalReport({
     symbol,
     bars,
     fundamentals: toFundamentals(quote, summary, allBars[allBars.length - 1]?.c ?? null),
     asOf: new Date().toISOString(),
     droppedPartialBar: dropped,
   });
+  if (report.status !== "ok") return { ...report, risk: null };
+
+  // SPY trades on US hours whatever the symbol's market, so its forming bar goes by the New York clock (a bar dated
+  // today before the close is dropped) rather than by this symbol's market state; beta then only uses sessions both
+  // series completed.
+  let benchmark: readonly DailyBar[] | null = null;
+  if (symbol === BENCHMARK) benchmark = bars;
+  else if (benchmarkResult.status === "fulfilled" && benchmarkResult.value) benchmark = dropFormingBar(benchmarkResult.value, new Date().toISOString());
+  return { ...report, risk: riskSnapshot(bars, benchmark) };
 }
 
 /** Computes (and caches) the quant signal report for one symbol. */

@@ -1,4 +1,4 @@
-// InvestSeek quant signal engine (model v3).
+// InvestSeek quant signal engine (model v4).
 //
 // Pure and deterministic: no I/O and no clock reads (the caller passes `asOf`), so the same inputs always produce
 // the same report. Every factor value at session i reads only data up to i, which lets the live signal and the
@@ -15,6 +15,7 @@ import type {
   SignalReport,
 } from "@/types/api";
 
+import { mulberry32 } from "./research-stats";
 import {
   clamp,
   downsideDeviation,
@@ -34,13 +35,16 @@ import {
 // ---------------------------------------------------------------------------
 
 /** Bump when a weight, threshold or factor formula changes, then re-run `npm run evaluate`. */
-export const MODEL_VERSION = 3;
+export const MODEL_VERSION = 4;
 
 /** Minimum daily history for a signal: enough for MA100 plus a buffer for the volatility regime. */
 export const MIN_BARS = 120;
 
-/** Composite weights (they sum to 1). */
-export const FACTOR_WEIGHTS: Readonly<Record<FactorKey, number>> = {
+/**
+ * The hand-set priors of model v3 (never fitted to returns). v4 keeps them and only takes the volatility regime out
+ * of the directional composite.
+ */
+export const V3_FACTOR_WEIGHTS: Readonly<Record<FactorKey, number>> = {
   momentum: 0.2,
   trend: 0.15,
   rsi: 0.1,
@@ -50,6 +54,29 @@ export const FACTOR_WEIGHTS: Readonly<Record<FactorKey, number>> = {
   volatility: 0.15,
 };
 
+/**
+ * Factors computed and reported for risk, with no weight in the directional composites. The volatility regime
+ * measures how turbulent a stock is, not where it is heading: its rank IC with 10-session returns over 2014-2024 was
+ * about 0 (docs/evaluation.md).
+ */
+export const RISK_FACTORS = ["volatility"] as const satisfies readonly FactorKey[];
+
+/** `weights` without the given factors, the rest scaled up proportionally so they still sum to 1. */
+function withoutFactors(weights: Readonly<Record<FactorKey, number>>, dropped: readonly FactorKey[]): Record<FactorKey, number> {
+  const kept = (Object.keys(weights) as FactorKey[]).filter((key) => !dropped.includes(key));
+  const total = kept.reduce((sum, key) => sum + weights[key], 0);
+  const out = { ...weights };
+  for (const key of Object.keys(out) as FactorKey[]) out[key] = dropped.includes(key) ? 0 : weights[key] / total;
+  return out;
+}
+
+/**
+ * Composite weights (they sum to 1): the v3 priors with the risk factors removed and the remaining weights
+ * renormalized, a mechanical rescaling rather than a fit. Risk factors keep a weight of 0.
+ */
+export const FACTOR_WEIGHTS: Readonly<Record<FactorKey, number>> = withoutFactors(V3_FACTOR_WEIGHTS, RISK_FACTORS);
+
+/** The five price-based factors computed at every session; the directional ones are those with a positive weight. */
 export const TECHNICAL_FACTORS = ["momentum", "trend", "rsi", "volume", "volatility"] as const satisfies readonly FactorKey[];
 export type TechnicalFactorKey = (typeof TECHNICAL_FACTORS)[number];
 
@@ -74,6 +101,11 @@ export const BACKTEST_SETTINGS = {
   costBps: 10,
   /** Fewer trades than this flags a result as lowSample. */
   minTrades: 20,
+  /** The permutation test rotates the label sequence by at least this many sessions in either direction. */
+  permutationMinShift: 20,
+  /** Above this many valid rotations the test draws this many at random (seeded) instead of trying them all. */
+  permutationMaxShifts: 1000,
+  permutationSeed: 20_261_107,
 } as const;
 
 export const RSI_PERIOD = 14;
@@ -544,12 +576,15 @@ function technicalFactorsAt(s: PriceSeries, i: number): Record<TechnicalFactorKe
 
 const TECHNICAL_WEIGHT = TECHNICAL_FACTORS.reduce((sum, key) => sum + FACTOR_WEIGHTS[key], 0);
 
-/** Technical-only composite at i (rounded to 0.1): the five price factors re-weighted to sum to 1. */
-function technicalScoreAt(s: PriceSeries, i: number): number {
-  const factors = technicalFactorsAt(s, i);
+/** Technical-only composite of given factor scores (rounded to 0.1): the directional price factors re-weighted to sum to 1. */
+function technicalComposite(factors: Record<TechnicalFactorKey, FactorScore>): number {
   let total = 0;
   for (const key of TECHNICAL_FACTORS) total += FACTOR_WEIGHTS[key] * factors[key].score;
   return round(total / TECHNICAL_WEIGHT, 1);
+}
+
+function technicalScoreAt(s: PriceSeries, i: number): number {
+  return technicalComposite(technicalFactorsAt(s, i));
 }
 
 /** The five technical factors at the last bar (each imputed neutral when the history is too short for it). */
@@ -565,6 +600,39 @@ export function computeTechnicalFactors(bars: readonly DailyBar[]): Record<Techn
 export function technicalScoreSeries(bars: readonly DailyBar[]): Array<{ t: number; score: number | null }> {
   const s = prepareSeries(bars);
   return s.t.map((t, i) => ({ t, score: i >= MIN_BARS - 1 ? technicalScoreAt(s, i) : null }));
+}
+
+export interface TechnicalFactorPoint {
+  /** Session timestamp (epoch ms). */
+  t: number;
+  /** Technical-only composite, exactly as technicalScoreSeries reports it. */
+  score: number;
+  /** The five technical factor scores (0..100) the composite is built from, unrounded. */
+  factors: Record<TechnicalFactorKey, number>;
+}
+
+/**
+ * The technical composite and its factor scores for every session with at least MIN_BARS of history, in one pass
+ * (the offline research tests each factor on its own). Entries follow the bars that survive validation.
+ */
+export function technicalFactorSeries(bars: readonly DailyBar[]): TechnicalFactorPoint[] {
+  const s = prepareSeries(bars);
+  const out: TechnicalFactorPoint[] = [];
+  for (let i = MIN_BARS - 1; i < s.t.length; i++) {
+    const factors = technicalFactorsAt(s, i);
+    out.push({
+      t: s.t[i],
+      score: technicalComposite(factors),
+      factors: {
+        momentum: factors.momentum.score,
+        trend: factors.trend.score,
+        rsi: factors.rsi.score,
+        volume: factors.volume.score,
+        volatility: factors.volatility.score,
+      },
+    });
+  }
+  return out;
 }
 
 /** Technical-only composite at the last bar (rounded to 0.1), as in the report; null with fewer than MIN_BARS bars. */
@@ -787,25 +855,70 @@ function strategyMaxDrawdown(s: PriceSeries, trades: readonly Trade[], hold: num
   return worst;
 }
 
+function isStrongReading(label: SignalCode): boolean {
+  return label === "bullish" || label === "strong_bullish";
+}
+
+/**
+ * Window offsets of the non-overlapping trades opened on strong readings, with the label sequence rotated left by
+ * `shift` sessions (0 = as observed). The position is held through the close of k + hold, so a signal formed at that
+ * close trades the next morning.
+ */
+function tradeOffsets(labels: readonly SignalCode[], hold: number, shift = 0): number[] {
+  const n = labels.length;
+  const out: number[] = [];
+  let next = 0;
+  for (let k = 0; k < n; k++) {
+    if (k >= next && isStrongReading(labels[(k + shift) % n])) {
+      out.push(k);
+      next = k + hold;
+    }
+  }
+  return out;
+}
+
+/** Rotations the permutation test uses: every valid one, or a seeded random sample when there are too many. */
+function permutationShifts(n: number): number[] {
+  const { permutationMinShift: min, permutationMaxShifts: max, permutationSeed } = BACKTEST_SETTINGS;
+  const valid = n - 2 * min + 1;
+  if (valid <= 0) return [];
+  if (valid <= max) return Array.from({ length: valid }, (_, k) => min + k);
+  const random = mulberry32(permutationSeed + n);
+  return Array.from({ length: max }, () => min + Math.floor(random() * valid));
+}
+
+/**
+ * Circular-shift permutation test of the backtest edge (two-sided). `forward[k]` is the net return of a trade
+ * signalled at window offset k and `labels[k]` the reading there. Rotating the label sequence by at least
+ * permutationMinShift sessions keeps how often and in what runs strong readings occur, and keeps the returns, but
+ * breaks their alignment: the rotated edges show what random timing with the same trading pattern produces.
+ * pValue = (1 + rotations with |edge| >= |observed edge|) / (1 + rotations). Null without trades or rotations.
+ */
+export function permutationPValue(forward: readonly number[], labels: readonly SignalCode[], hold: number): number | null {
+  const shifts = permutationShifts(labels.length);
+  const observed = tradeOffsets(labels, hold);
+  const base = mean(forward);
+  if (observed.length === 0 || shifts.length === 0 || base === null) return null;
+  const edgeOf = (offsets: readonly number[]) => (mean(offsets.map((k) => forward[k])) ?? base) - base;
+  const threshold = Math.abs(edgeOf(observed)) - 1e-12;
+  let extreme = 0;
+  for (const shift of shifts) if (Math.abs(edgeOf(tradeOffsets(labels, hold, shift))) >= threshold) extreme += 1;
+  return (1 + extreme) / (1 + shifts.length);
+}
+
 function evaluateHold(s: PriceSeries, first: number, labels: readonly SignalCode[], hold: number): BacktestResult {
   const cost = BACKTEST_SETTINGS.costBps / 10_000;
   const baseline: number[] = [];
   const bearish: number[] = [];
-  const trades: Trade[] = [];
-  let nextSignal = first;
 
   for (let k = 0; k < labels.length; k++) {
     const i = first + k;
     const forward = s.close[i + hold] / s.open[i + 1] - 1 - cost;
     baseline.push(forward);
-    const label = labels[k];
-    if (label === "bearish" || label === "strong_bearish") bearish.push(forward);
-    if ((label === "bullish" || label === "strong_bullish") && i >= nextSignal) {
-      trades.push({ signal: i, ret: forward });
-      // The position is held through the close of i + hold; a signal formed at that close trades the next morning.
-      nextSignal = i + hold;
-    }
+    if (labels[k] === "bearish" || labels[k] === "strong_bearish") bearish.push(forward);
   }
+  const trades: Trade[] = tradeOffsets(labels, hold).map((k) => ({ signal: first + k, ret: baseline[k] }));
+  const pValue = permutationPValue(baseline, labels, hold);
 
   const returns = trades.map((trade) => trade.ret);
   const wins = returns.filter((r) => r > 0).length;
@@ -826,6 +939,7 @@ function evaluateHold(s: PriceSeries, first: number, labels: readonly SignalCode
     baselineWinRate: baseline.length > 0 ? round(baseline.filter((r) => r > 0).length / baseline.length, 4) : null,
     baselineAvgReturn,
     edge: avgReturn !== null && baselineAvgReturn !== null ? round(avgReturn - baselineAvgReturn, 5) : null,
+    pValue: pValue === null ? null : round(pValue, 4),
     // Annualized by the observed trade frequency (trades per year of window), not by 252 / hold: the strategy is flat
     // between trades, and scaling as if it were always invested would overstate the ratio by sqrt(window / (hold x trades)).
     sharpe:

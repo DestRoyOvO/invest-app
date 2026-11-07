@@ -456,7 +456,7 @@ export interface FactorResult {
   group: "technical" | "fundamental";
   /** 0..100, 50 = neutral, higher = more bullish. */
   score: number;
-  /** Weight in the composite, 0..1. */
+  /** Weight in the composite, 0..1. Model v4 gives the volatility regime 0: it is reported for risk only. */
   weight: number;
   /** True when the input data was missing and the neutral value 50 was used. */
   imputed: boolean;
@@ -483,7 +483,14 @@ export interface BacktestResult {
   baselineAvgReturn: number | null;
   /** avgReturn - baselineAvgReturn */
   edge: number | null;
-  /** Annualized: mean / std * sqrt(252 / holdDays). */
+  /**
+   * Two-sided circular-shift permutation p-value of the edge: the share of rotations of the label sequence (by at
+   * least 20 sessions, same trade rule) whose |edge| is at least as large. Small values mean the timing is hard to get
+   * by chance; the UI treats edges with pValue >= 0.01 as indistinguishable from random timing. Null without trades.
+   * Absent in reports computed before model v4.
+   */
+  pValue?: number | null;
+  /** Annualized by the observed trade frequency: mean / std * sqrt(trades * 252 / windowDays). */
   sharpe: number | null;
   /** Worst peak-to-trough of the daily marked-to-market equity curve (negative decimal). */
   maxDrawdown: number | null;
@@ -493,6 +500,36 @@ export interface BacktestResult {
   bearishAvgForwardReturn: number | null;
   /** trades < 20: the statistics are not meaningful and the UI greys them out. */
   lowSample: boolean;
+}
+
+/** A price range: the last close moved down and up by the same number of standard deviations of the log return. */
+export interface PriceRange {
+  low: number;
+  high: number;
+}
+
+/**
+ * Forward-looking risk of one symbol (lib/risk-forecast.ts). Unlike the directional score, these numbers have measured
+ * calibration: lib/risk-calibration.json holds how often past moves stayed inside the ranges and how often each
+ * volatility quintile fell 10% or more within a month. Volatilities are annualized decimals (0.32 = 32%).
+ */
+export interface SignalRisk {
+  /** Forecast of volatility: an equal blend of the 20- and 252-session variance of daily log returns, annualized. */
+  forecastVolatility: number | null;
+  /** Sessions the ranges cover. */
+  horizonDays: number;
+  /** Last completed close the ranges are centred on. Prices here keep six significant digits and at least two decimals. */
+  price: number | null;
+  /** Range over horizonDays at plus/minus one forecast standard deviation (about 68% for normal returns). */
+  range1: PriceRange | null;
+  /** Range at plus/minus two forecast standard deviations (about 95% for normal returns; real tails are fatter). */
+  range2: PriceRange | null;
+  /** Percentile (0..100) of the current 20-session volatility among its daily values over the last 252 sessions. */
+  ownPercentile: number | null;
+  /** Beta of daily returns to SPY over the last 252 sessions, on matching sessions. */
+  beta: number | null;
+  /** Annualized volatility of the last 63 daily returns (lib/factors.ts), the measure the universe quintiles use. */
+  volatility63: number | null;
 }
 
 export interface SignalReport {
@@ -519,6 +556,8 @@ export interface SignalReport {
     costBps: number;
     results: BacktestResult[];
   } | null;
+  /** Risk forecast; null when the history is too short for a report. Absent in reports computed before model v4. */
+  risk?: SignalRisk | null;
   meta: {
     bars: number;
     /** True when today's still-forming daily bar was excluded during market hours. */

@@ -14,11 +14,16 @@ import {
   type Fundamentals,
   labelForScore,
   MIN_BARS,
+  MODEL_VERSION,
+  permutationPValue,
   qualityFactor,
+  RISK_FACTORS,
   rsiToScore,
   runBacktest,
   TECHNICAL_FACTORS,
+  technicalFactorSeries,
   technicalScoreSeries,
+  V3_FACTOR_WEIGHTS,
   valueFactor,
   wilderRsiSeries,
 } from "./signal";
@@ -563,6 +568,59 @@ describe("technical factors", () => {
 // Labels and the composite
 // ---------------------------------------------------------------------------
 
+describe("model v4 weights", () => {
+  it("drops the risk factors from the v3 priors and rescales the rest proportionally", () => {
+    expect(MODEL_VERSION).toBe(4);
+    const dropped = RISK_FACTORS.reduce((sum, key) => sum + V3_FACTOR_WEIGHTS[key], 0);
+    expect(dropped).toBeCloseTo(0.15, 12);
+    for (const key of Object.keys(FACTOR_WEIGHTS) as Array<keyof typeof FACTOR_WEIGHTS>) {
+      const expected = (RISK_FACTORS as readonly string[]).includes(key) ? 0 : V3_FACTOR_WEIGHTS[key] / (1 - dropped);
+      expect(FACTOR_WEIGHTS[key]).toBeCloseTo(expected, 12);
+    }
+    expect(Object.values(FACTOR_WEIGHTS).reduce((a, b) => a + b, 0)).toBeCloseTo(1, 12);
+    // Relative weights among the remaining factors are unchanged: momentum still weighs twice as much as RSI.
+    expect(FACTOR_WEIGHTS.momentum / FACTOR_WEIGHTS.rsi).toBeCloseTo(2, 12);
+    expect(FACTOR_WEIGHTS.value / FACTOR_WEIGHTS.quality).toBeCloseTo(1.5, 12);
+  });
+
+  it("builds the technical score from the four directional price factors only", () => {
+    const points = technicalFactorSeries(randomWalk(500, 0.35, 79));
+    const directional = TECHNICAL_FACTORS.filter((key) => FACTOR_WEIGHTS[key] > 0);
+    expect(directional).toEqual(["momentum", "trend", "rsi", "volume"]);
+    const weight = directional.reduce((sum, key) => sum + FACTOR_WEIGHTS[key], 0);
+    let volatilityMoved = 0;
+    for (const point of points) {
+      const expected = directional.reduce((sum, key) => sum + FACTOR_WEIGHTS[key] * point.factors[key], 0) / weight;
+      expect(Math.abs(point.score - expected)).toBeLessThanOrEqual(0.05 + 1e-9);
+      if (Math.abs(point.factors.volatility - 50) > 20) volatilityMoved += 1;
+    }
+    // The volatility regime does move on this path; it just has no say in the score.
+    expect(volatilityMoved).toBeGreaterThan(50);
+  });
+});
+
+describe("technicalFactorSeries", () => {
+  it("reports the composite of technicalScoreSeries and its factors at every scored session", () => {
+    const bars = randomWalk(500, 0.35, 80);
+    const series = technicalScoreSeries(bars);
+    const points = technicalFactorSeries(bars);
+    expect(points).toHaveLength(bars.length - MIN_BARS + 1);
+    points.forEach((point, k) => {
+      const entry = series[MIN_BARS - 1 + k];
+      expect(point.t).toBe(entry.t);
+      expect(point.score).toBe(entry.score);
+      for (const key of TECHNICAL_FACTORS) {
+        expect(point.factors[key]).toBeGreaterThanOrEqual(0);
+        expect(point.factors[key]).toBeLessThanOrEqual(100);
+      }
+    });
+    // The live factors of the last session are the series' last entry.
+    const live = computeTechnicalFactors(bars);
+    for (const key of TECHNICAL_FACTORS) expect(points[points.length - 1].factors[key]).toBe(live[key].score);
+    expect(technicalFactorSeries(bars.slice(0, MIN_BARS - 1))).toEqual([]);
+  });
+});
+
 describe("labelForScore", () => {
   it("uses symmetric cut-offs at 28 / 42 / 58 / 72", () => {
     const cases: Array<[number, string]> = [
@@ -700,16 +758,28 @@ describe("computeSignalReport", () => {
   it("lowers coverage for missing inputs and short histories", () => {
     const bars = randomWalk(400, 0.3, 77);
     const etf = computeSignalReport({ symbol: "ETF", bars, fundamentals: NO_FUNDAMENTALS, asOf: AS_OF });
-    expect(etf.coverage).toBe(70);
+    expect(etf.coverage).toBe(Math.round(100 * (1 - FACTOR_WEIGHTS.value - FACTOR_WEIGHTS.quality)));
+    expect(etf.coverage).toBe(65);
     expect(etf.factors.filter((f) => f.imputed).map((f) => f.key)).toEqual(["value", "quality"]);
     expect(etf.confidence).not.toBe("high");
 
     const fx = computeSignalReport({ symbol: "FX", bars: bars.map((b) => ({ ...b, v: null })), fundamentals: NO_FUNDAMENTALS, asOf: AS_OF });
-    expect(fx.coverage).toBe(60);
+    expect(fx.coverage).toBe(53);
 
-    // 150 bars give 130 rolling volatility values of the 250 the regime percentile wants.
+    // 150 bars give 130 rolling volatility values of the 250 the regime percentile wants, but the volatility regime
+    // has no weight in model v4, so the short history no longer lowers coverage.
     const young = computeSignalReport({ symbol: "IPO", bars: bars.slice(0, 150), fundamentals: GOOD_FUNDAMENTALS, asOf: AS_OF });
-    expect(young.coverage).toBe(Math.round(100 * (1 - FACTOR_WEIGHTS.volatility * (1 - 130 / 250))));
+    expect(young.coverage).toBe(100);
+  });
+
+  it("reports the volatility regime for risk without letting it move the composite", () => {
+    const bars = randomWalk(400, 0.3, 78);
+    const report = computeSignalReport({ symbol: "VOL", bars, fundamentals: GOOD_FUNDAMENTALS, asOf: AS_OF });
+    const volatility = report.factors.find((f) => f.key === "volatility");
+    expect(volatility).toMatchObject({ weight: 0, imputed: false, rawUnit: "percent" });
+    expect(volatility?.raw).toBeGreaterThan(0);
+    const withoutVolatility = report.factors.filter((f) => f.key !== "volatility").reduce((sum, f) => sum + f.weight * f.score, 0);
+    expect(Math.abs((report.score ?? Number.NaN) - withoutVolatility)).toBeLessThanOrEqual(0.05 + 1e-9);
   });
 });
 
@@ -851,6 +921,24 @@ describe("runBacktest", () => {
     const avg = (xs: readonly number[]) => xs.reduce((sum, x) => sum + x, 0) / xs.length;
     const share = (xs: readonly number[], keep: (x: number) => boolean) => xs.filter(keep).length / xs.length;
     const sd = Math.sqrt(returns.reduce((sum, r) => sum + (r - avg(returns)) ** 2, 0) / (returns.length - 1));
+
+    // Permutation test: rotate the window's labels left by every shift of 20 to W - 20 sessions and re-run the rule.
+    const window = labels.slice(first, last + 1);
+    const edgeFor = (shift: number) => {
+      const taken: number[] = [];
+      for (let k = 0; k < window.length; k++) {
+        const flat = taken.length === 0 || k >= taken[taken.length - 1] + hold;
+        if (flat && window[(k + shift) % window.length].endsWith("bullish")) taken.push(k);
+      }
+      return avg(taken.map((k) => forward(first + k))) - avg(baseline);
+    };
+    const observed = Math.abs(edgeFor(0));
+    let extreme = 0;
+    let shifts = 0;
+    for (let shift = 20; shift <= window.length - 20; shift++) {
+      shifts += 1;
+      if (Math.abs(edgeFor(shift)) >= observed - 1e-12) extreme += 1;
+    }
     return {
       windowDays: last - first + 1,
       trades: returns.length,
@@ -863,6 +951,7 @@ describe("runBacktest", () => {
       bearishSignals: bearish.length,
       bearishHitRate: share(bearish, (r) => r < 0),
       bearishAvgForwardReturn: avg(bearish),
+      pValue: (1 + extreme) / (1 + shifts),
     };
   }
 
@@ -892,6 +981,9 @@ describe("runBacktest", () => {
           expectRounded(r.winRate, expected.winRate, 4);
           expectRounded(r.avgReturn, expected.avgReturn, 5);
           expectRounded(r.maxDrawdown, expected.maxDrawdown, 4);
+          expectRounded(r.pValue ?? null, expected.pValue, 4);
+        } else {
+          expect(r.pValue).toBeNull();
         }
         if (expected.trades > 1) expectRounded(r.sharpe, expected.sharpe, 2);
         if (expected.bearishSignals > 0) {
@@ -920,6 +1012,8 @@ describe("runBacktest", () => {
       expect(r.avgReturn).toBeCloseTo(expected, 5);
       expect(r.baselineAvgReturn).toBeCloseTo(expected, 5);
       expect(r.edge).toBe(0);
+      // Every rotation of an all-bullish sequence trades the same way, so the edge is as large as any random one.
+      expect(r.pValue).toBe(1);
       expect(r.sharpe).toBeNull(); // identical returns have no dispersion
       expect(r.maxDrawdown).toBe(0);
       expect(r.bearishSignals).toBe(0);
@@ -961,6 +1055,44 @@ describe("runBacktest", () => {
       expect(r.bearishSignals).toBe(r.windowDays);
       expect(r.bearishHitRate).toBe(1);
       expect(r.bearishAvgForwardReturn).toBeCloseTo(Math.exp(daily * r.holdDays) - 1 - COST, 5);
+      expect(r.pValue).toBeNull();
     }
+  });
+});
+
+describe("permutationPValue", () => {
+  /** Irregular strong / neutral readings with runs, as the technical score produces. */
+  function readings(n: number, seed: number): Array<"bullish" | "neutral"> {
+    const rand = mulberry32(seed);
+    const out: Array<"bullish" | "neutral"> = [];
+    let state: "bullish" | "neutral" = "neutral";
+    for (let k = 0; k < n; k++) {
+      if (rand() < 0.15) state = state === "bullish" ? "neutral" : "bullish";
+      out.push(state);
+    }
+    return out;
+  }
+
+  it("is small when strong readings line up with the gains and large when they do not", () => {
+    const labels = readings(250, 5);
+    const rand = mulberry32(6);
+    const noise = labels.map(() => 0.01 * gaussian(rand));
+    // Returns that are higher exactly after strong readings: no rotation of the labels times them as well.
+    const timed = noise.map((r, k) => r + (labels[k] === "bullish" ? 0.02 : 0));
+    const p = permutationPValue(timed, labels, 1) ?? 1;
+    expect(p).toBeLessThan(0.01);
+    expect(p).toBeGreaterThanOrEqual(1 / (1 + 211));
+    // Pure noise: the observed edge is typical of random timing.
+    expect(permutationPValue(noise, labels, 5)).toBeGreaterThan(0.05);
+  });
+
+  it("enumerates every rotation of at least 20 sessions and needs one", () => {
+    const labels = readings(60, 7);
+    const forward = labels.map((_, k) => Math.sin(k));
+    const p = permutationPValue(forward, labels, 3) ?? Number.NaN;
+    // 60 sessions allow rotations 20..40, so p is a multiple of 1/22.
+    expect(Math.abs(p * 22 - Math.round(p * 22))).toBeLessThan(1e-9);
+    expect(permutationPValue(forward.slice(0, 39), labels.slice(0, 39), 3)).toBeNull();
+    expect(permutationPValue(forward, labels.map(() => "neutral"), 3)).toBeNull();
   });
 });

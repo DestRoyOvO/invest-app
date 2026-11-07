@@ -708,23 +708,51 @@ describe("chat context", () => {
 });
 
 describe("evaluationLine", () => {
+  const label = (code: "strong_bullish" | "strong_bearish", selection: number, ci: [number, number] | null, episodes: number) => ({
+    code,
+    n: 600,
+    dates: 300,
+    episodes,
+    largestEpisodeShare: 0.2,
+    mean: 0.01,
+    excess: selection + 0.004,
+    timing: 0.004,
+    selection,
+    hitRate: 0.6,
+    beatMedian: 0.52,
+    ci: { excess: null, selection: ci, hitRate: null },
+  });
+  const ic = { mean: -0.01, t: -1.06, t2: -1.06, dates: 2700, phaseT: [-1.9, -0.03] as [number, number], fragile: false };
   const horizon = {
     days: 10,
     base: { n: 1000, mean: 0.0065, hitRate: 0.54 },
-    ic: { mean: -0.044, t: -1.69, dates: 63 },
-    labels: [
-      { code: "strong_bullish" as const, n: 10, mean: 0.0048, excess: -0.0017, hitRate: 0.54, hitCI: null },
-      { code: "strong_bearish" as const, n: 10, mean: 0.0282, excess: 0.0217, hitRate: 0.71, hitCI: null },
-    ],
+    ic,
+    subperiods: [],
+    labels: [label("strong_bullish", 0.0018, [-0.0023, 0.0057], 41), label("strong_bearish", 0.001, null, 66)],
   };
-  const evaluation = { ...SIGNAL_EVALUATION, universe: 50, from: "2024-01-02", to: "2025-12-31", horizons: [horizon] };
+  const holdout = {
+    ...SIGNAL_EVALUATION.holdout,
+    from: "2014-01-02",
+    to: "2024-04-29",
+    composite: { ...SIGNAL_EVALUATION.holdout.composite, mean: -0.0039, ci: [-0.024, 0.016] as [number, number] },
+    factors: SIGNAL_EVALUATION.holdout.factors.map((factor) => ({ ...factor, pass: false })),
+  };
+  const evaluation = { ...SIGNAL_EVALUATION, universe: 50, from: "2016-01-04", to: "2026-11-06", horizons: [horizon], holdout };
 
   it("summarizes the universe evaluation in one line", () => {
     expect(evaluationLine(evaluation)).toBe(
-      "- universe evaluation (50 large US stocks, technical score, signals 2024-01-02 to 2025-12-31): rank IC with 10-day forward returns -0.044 (t -1.69), " +
-        "so the score has not been a reliable forecast; average 10-day excess return after very strong readings -0.17%, after very weak readings +2.17%",
+      "- universe evaluation (50 large US stocks, technical score, signals 2016-01-04 to 2026-11-06): rank IC with 10-day forward returns -0.010 (Newey-West t -1.06), " +
+        "so the score has not been a reliable forecast; average 10-day return against the same-day universe after very strong readings +0.18% (95% CI -0.23% to +0.57%, 41 episodes), " +
+        "after very weak readings +0.10% (95% CI n/a, 66 episodes); holdout 2014-01-02 to 2024-04-29 " +
+        "(the weights were never fitted to it, but model v4 dropped the volatility regime after seeing it): rank IC -0.004 (95% CI -0.024 to 0.016), " +
+        "and no technical factor passed its pre-set test",
     );
-    expect(evaluationLine({ ...evaluation, horizons: [{ ...horizon, ic: { mean: 0.06, t: 2.5, dates: 63 } }] })).toContain("so higher scores were followed by higher returns;");
+    // A model that weights every factor gets no caveat.
+    const v3 = { ...evaluation, model: { ...evaluation.model, version: 3, weights: { ...evaluation.model.weights, volatility: 0.15 } } };
+    expect(evaluationLine(v3)).toContain("holdout 2014-01-02 to 2024-04-29 (the weights were never fitted to it): rank IC");
+    expect(evaluationLine({ ...evaluation, horizons: [{ ...horizon, ic: { ...ic, mean: 0.06, t: 2.5 } }] })).toContain("so higher scores were followed by higher returns;");
+    const passing = { ...holdout, factors: holdout.factors.map((factor) => ({ ...factor, pass: factor.key === "rsi" })) };
+    expect(evaluationLine({ ...evaluation, holdout: passing })).toContain("pre-set test passed by: rsi");
   });
 
   it("is omitted when the default horizon is missing", () => {

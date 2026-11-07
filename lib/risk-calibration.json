@@ -1,0 +1,265 @@
+{
+  "window": {
+    "from": "2016-01-01",
+    "to": "2026-11-06"
+  },
+  "subperiods": [
+    {
+      "from": "2016-01-01",
+      "to": "2020-12-31"
+    },
+    {
+      "from": "2021-01-01",
+      "to": "2023-12-31"
+    },
+    {
+      "from": "2024-01-01",
+      "to": "2026-12-31"
+    }
+  ],
+  "estimator": {
+    "shortWindow": 20,
+    "longWindow": 252,
+    "shortWeight": 0.5
+  },
+  "bands": {
+    "horizon": 10,
+    "overall": {
+      "n": 210230,
+      "within1": 0.71759,
+      "within2": 0.94477
+    },
+    "shortWindowOnly": {
+      "n": 210230,
+      "within1": 0.67313,
+      "within2": 0.9171
+    },
+    "subperiods": [
+      {
+        "from": "2016-01-01",
+        "to": "2020-12-31",
+        "n": 96943,
+        "within1": 0.72969,
+        "within2": 0.94323
+      },
+      {
+        "from": "2021-01-01",
+        "to": "2023-12-31",
+        "n": 58219,
+        "within1": 0.72035,
+        "within2": 0.95285
+      },
+      {
+        "from": "2024-01-01",
+        "to": "2026-12-31",
+        "n": 55068,
+        "within1": 0.69338,
+        "within2": 0.93895
+      }
+    ]
+  },
+  "qlike": {
+    "n": 210230,
+    "blend": 0.42642,
+    "shortWindowOnly": 0.54917
+  },
+  "persistence": {
+    "horizon": 63,
+    "dates": 43,
+    "volatility": {
+      "mean": 0.72061,
+      "min": 0.42734,
+      "t": 53.60816
+    },
+    "beta": {
+      "mean": 0.76504,
+      "min": 0.34936,
+      "t": 39.32403
+    }
+  },
+  "quintiles": {
+    "horizon": 21,
+    "threshold": -0.1,
+    "measure": "annualized volatility of the last 63 daily returns (lib/factors.ts)",
+    "breakpoints": {
+      "median": [
+        0.18161,
+        0.21835,
+        0.25117,
+        0.30972
+      ],
+      "latest": {
+        "date": "2026-11-06",
+        "values": [
+          0.2188,
+          0.25965,
+          0.30936,
+          0.37398
+        ]
+      }
+    },
+    "overall": [
+      {
+        "quintile": 1,
+        "n": 2064,
+        "medianVolatility": 0.16081,
+        "drawdown": 0.07267,
+        "loss": 0.02568
+      },
+      {
+        "quintile": 2,
+        "n": 1988,
+        "medianVolatility": 0.2026,
+        "drawdown": 0.13179,
+        "loss": 0.04728
+      },
+      {
+        "quintile": 3,
+        "n": 2011,
+        "medianVolatility": 0.2354,
+        "drawdown": 0.17006,
+        "loss": 0.06315
+      },
+      {
+        "quintile": 4,
+        "n": 1988,
+        "medianVolatility": 0.28046,
+        "drawdown": 0.21781,
+        "loss": 0.07344
+      },
+      {
+        "quintile": 5,
+        "n": 1935,
+        "medianVolatility": 0.39981,
+        "drawdown": 0.37261,
+        "loss": 0.1323
+      }
+    ],
+    "subperiods": [
+      {
+        "from": "2016-01-01",
+        "to": "2020-12-31",
+        "rows": [
+          {
+            "quintile": 1,
+            "n": 960,
+            "medianVolatility": 0.14924,
+            "drawdown": 0.06979,
+            "loss": 0.02604
+          },
+          {
+            "quintile": 2,
+            "n": 900,
+            "medianVolatility": 0.18049,
+            "drawdown": 0.10333,
+            "loss": 0.03556
+          },
+          {
+            "quintile": 3,
+            "n": 960,
+            "medianVolatility": 0.21238,
+            "drawdown": 0.13958,
+            "loss": 0.05
+          },
+          {
+            "quintile": 4,
+            "n": 900,
+            "medianVolatility": 0.25112,
+            "drawdown": 0.18667,
+            "loss": 0.04889
+          },
+          {
+            "quintile": 5,
+            "n": 900,
+            "medianVolatility": 0.36335,
+            "drawdown": 0.34,
+            "loss": 0.12556
+          }
+        ]
+      },
+      {
+        "from": "2021-01-01",
+        "to": "2023-12-31",
+        "rows": [
+          {
+            "quintile": 1,
+            "n": 576,
+            "medianVolatility": 0.16764,
+            "drawdown": 0.09201,
+            "loss": 0.03472
+          },
+          {
+            "quintile": 2,
+            "n": 560,
+            "medianVolatility": 0.21506,
+            "drawdown": 0.16786,
+            "loss": 0.05357
+          },
+          {
+            "quintile": 3,
+            "n": 556,
+            "medianVolatility": 0.25586,
+            "drawdown": 0.22302,
+            "loss": 0.07734
+          },
+          {
+            "quintile": 4,
+            "n": 560,
+            "medianVolatility": 0.30405,
+            "drawdown": 0.25536,
+            "loss": 0.1
+          },
+          {
+            "quintile": 5,
+            "n": 540,
+            "medianVolatility": 0.41983,
+            "drawdown": 0.38889,
+            "loss": 0.13148
+          }
+        ]
+      },
+      {
+        "from": "2024-01-01",
+        "to": "2026-12-31",
+        "rows": [
+          {
+            "quintile": 1,
+            "n": 528,
+            "medianVolatility": 0.16807,
+            "drawdown": 0.05682,
+            "loss": 0.01515
+          },
+          {
+            "quintile": 2,
+            "n": 528,
+            "medianVolatility": 0.20787,
+            "drawdown": 0.14205,
+            "loss": 0.06061
+          },
+          {
+            "quintile": 3,
+            "n": 495,
+            "medianVolatility": 0.23958,
+            "drawdown": 0.1697,
+            "loss": 0.07273
+          },
+          {
+            "quintile": 4,
+            "n": 528,
+            "medianVolatility": 0.29351,
+            "drawdown": 0.23106,
+            "loss": 0.08712
+          },
+          {
+            "quintile": 5,
+            "n": 495,
+            "medianVolatility": 0.42149,
+            "drawdown": 0.41414,
+            "loss": 0.14545
+          }
+        ]
+      }
+    ]
+  },
+  "dataHash": "0e311412"
+}

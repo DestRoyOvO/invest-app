@@ -1,0 +1,837 @@
+{
+  "window": {
+    "from": "2016-01-01",
+    "to": "2026-11-06"
+  },
+  "from": "2016-01-04",
+  "to": "2026-10-28",
+  "universe": 78,
+  "model": 4,
+  "rule": "A factor is called predictive only if its Holm-adjusted p over the 21 pre-registered tests is below 0.05 and its mean IC has the same sign in every subperiod.",
+  "alpha": 0.05,
+  "horizons": [
+    5,
+    21,
+    63
+  ],
+  "subperiods": [
+    {
+      "from": "2016-01-01",
+      "to": "2020-12-31"
+    },
+    {
+      "from": "2021-01-01",
+      "to": "2023-12-31"
+    },
+    {
+      "from": "2024-01-01",
+      "to": "2026-12-31"
+    }
+  ],
+  "factors": [
+    {
+      "key": "momentum",
+      "label": "12-1 momentum",
+      "direction": 1,
+      "results": [
+        {
+          "days": 5,
+          "dates": 545,
+          "ic": 0.00108,
+          "t": 0.09226,
+          "p": 0.92652,
+          "allDates": {
+            "ic": 0.0068,
+            "t": 0.71857,
+            "dates": 2723
+          },
+          "subperiodIc": [
+            0.00636,
+            -0.031,
+            0.02585
+          ],
+          "signs": [
+            1,
+            -1,
+            1
+          ],
+          "spread": -0.00036,
+          "spreadT": -0.29753,
+          "turnover": 0.12145,
+          "sectorNeutralIc": 0.00439,
+          "betaAdjustedIc": -0.00177,
+          "exWinnersIc": 0.00023,
+          "holmP": 1,
+          "bhQ": 0.92652,
+          "verdict": "not_predictive"
+        },
+        {
+          "days": 21,
+          "dates": 129,
+          "ic": 0.01457,
+          "t": 0.62437,
+          "p": 0.53349,
+          "allDates": {
+            "ic": -0.00075,
+            "t": -0.04393,
+            "dates": 2707
+          },
+          "subperiodIc": [
+            0.02593,
+            -0.00939,
+            0.02004
+          ],
+          "signs": [
+            1,
+            -1,
+            1
+          ],
+          "spread": 0.00225,
+          "spreadT": 0.3545,
+          "turnover": 0.2375,
+          "sectorNeutralIc": 0.01396,
+          "betaAdjustedIc": -0.00187,
+          "exWinnersIc": 0.00665,
+          "holmP": 1,
+          "bhQ": 0.62241,
+          "verdict": "not_predictive"
+        },
+        {
+          "days": 63,
+          "dates": 43,
+          "ic": -0.0041,
+          "t": -0.11566,
+          "p": 0.90847,
+          "allDates": {
+            "ic": -0.00399,
+            "t": -0.14173,
+            "dates": 2665
+          },
+          "subperiodIc": [
+            -0.01506,
+            -0.02883,
+            0.0428
+          ],
+          "signs": [
+            -1,
+            -1,
+            1
+          ],
+          "spread": 0.00153,
+          "spreadT": 0.10335,
+          "turnover": 0.40635,
+          "sectorNeutralIc": -0.00516,
+          "betaAdjustedIc": -0.02829,
+          "exWinnersIc": -0.01576,
+          "holmP": 1,
+          "bhQ": 0.92652,
+          "verdict": "not_predictive"
+        }
+      ]
+    },
+    {
+      "key": "reversal",
+      "label": "Short-term reversal (minus the 21-session return)",
+      "direction": -1,
+      "results": [
+        {
+          "days": 5,
+          "dates": 545,
+          "ic": 0.00704,
+          "t": 0.73474,
+          "p": 0.46281,
+          "allDates": {
+            "ic": 0.00366,
+            "t": 0.48163,
+            "dates": 2723
+          },
+          "subperiodIc": [
+            0.01132,
+            0.00288,
+            0.00387
+          ],
+          "signs": [
+            1,
+            1,
+            1
+          ],
+          "spread": 0.00048,
+          "spreadT": 0.47329,
+          "turnover": 0.39461,
+          "sectorNeutralIc": 0.00027,
+          "betaAdjustedIc": 0.0081,
+          "exWinnersIc": 0.00993,
+          "holmP": 1,
+          "bhQ": 0.57171,
+          "verdict": "not_predictive"
+        },
+        {
+          "days": 21,
+          "dates": 129,
+          "ic": 0.03309,
+          "t": 1.59844,
+          "p": 0.11241,
+          "allDates": {
+            "ic": 0.01552,
+            "t": 1.26538,
+            "dates": 2707
+          },
+          "subperiodIc": [
+            0.04893,
+            0.04877,
+            -0.01284
+          ],
+          "signs": [
+            1,
+            1,
+            -1
+          ],
+          "spread": 0.00607,
+          "spreadT": 1.25017,
+          "turnover": 0.81615,
+          "sectorNeutralIc": 0.02656,
+          "betaAdjustedIc": 0.03638,
+          "exWinnersIc": 0.04548,
+          "holmP": 1,
+          "bhQ": 0.39344,
+          "verdict": "not_predictive"
+        },
+        {
+          "days": 63,
+          "dates": 43,
+          "ic": 0.02668,
+          "t": 0.82011,
+          "p": 0.41678,
+          "allDates": {
+            "ic": 0.01582,
+            "t": 0.97582,
+            "dates": 2665
+          },
+          "subperiodIc": [
+            0.03587,
+            0.05401,
+            -0.01984
+          ],
+          "signs": [
+            1,
+            1,
+            -1
+          ],
+          "spread": 0.00871,
+          "spreadT": 0.6568,
+          "turnover": 0.77937,
+          "sectorNeutralIc": 0.00269,
+          "betaAdjustedIc": 0.00721,
+          "exWinnersIc": 0.04095,
+          "holmP": 1,
+          "bhQ": 0.54703,
+          "verdict": "not_predictive"
+        }
+      ]
+    },
+    {
+      "key": "high52",
+      "label": "52-week high (close over the 252-session high)",
+      "direction": 1,
+      "results": [
+        {
+          "days": 5,
+          "dates": 545,
+          "ic": -0.01268,
+          "t": -1.14278,
+          "p": 0.25363,
+          "allDates": {
+            "ic": -0.00837,
+            "t": -0.92277,
+            "dates": 2723
+          },
+          "subperiodIc": [
+            -0.00622,
+            -0.02932,
+            -0.00645
+          ],
+          "signs": [
+            -1,
+            -1,
+            -1
+          ],
+          "spread": -0.00216,
+          "spreadT": -1.74385,
+          "turnover": 0.36127,
+          "sectorNeutralIc": -0.0038,
+          "betaAdjustedIc": -0.00369,
+          "exWinnersIc": -0.0089,
+          "holmP": 1,
+          "bhQ": 0.48421,
+          "verdict": "not_predictive"
+        },
+        {
+          "days": 21,
+          "dates": 129,
+          "ic": -0.02675,
+          "t": -1.08728,
+          "p": 0.27895,
+          "allDates": {
+            "ic": -0.02917,
+            "t": -1.72702,
+            "dates": 2707
+          },
+          "subperiodIc": [
+            -0.01621,
+            -0.06043,
+            -0.00917
+          ],
+          "signs": [
+            -1,
+            -1,
+            -1
+          ],
+          "spread": -0.01138,
+          "spreadT": -1.86013,
+          "turnover": 0.59635,
+          "sectorNeutralIc": -0.0166,
+          "betaAdjustedIc": -0.02135,
+          "exWinnersIc": -0.02521,
+          "holmP": 1,
+          "bhQ": 0.48817,
+          "verdict": "not_predictive"
+        },
+        {
+          "days": 63,
+          "dates": 43,
+          "ic": -0.04645,
+          "t": -1.23795,
+          "p": 0.22261,
+          "allDates": {
+            "ic": -0.05159,
+            "t": -2.05347,
+            "dates": 2665
+          },
+          "subperiodIc": [
+            -0.02839,
+            -0.09198,
+            -0.02961
+          ],
+          "signs": [
+            -1,
+            -1,
+            -1
+          ],
+          "spread": -0.02721,
+          "spreadT": -1.68148,
+          "turnover": 0.69841,
+          "sectorNeutralIc": -0.02466,
+          "betaAdjustedIc": -0.02406,
+          "exWinnersIc": -0.04937,
+          "holmP": 1,
+          "bhQ": 0.48421,
+          "verdict": "not_predictive"
+        }
+      ]
+    },
+    {
+      "key": "volatility",
+      "label": "Low volatility (minus the 63-session volatility)",
+      "direction": -1,
+      "results": [
+        {
+          "days": 5,
+          "dates": 545,
+          "ic": -0.02117,
+          "t": -1.74848,
+          "p": 0.08094,
+          "allDates": {
+            "ic": -0.01736,
+            "t": -1.76272,
+            "dates": 2723
+          },
+          "subperiodIc": [
+            -0.01664,
+            -0.01384,
+            -0.03699
+          ],
+          "signs": [
+            -1,
+            -1,
+            -1
+          ],
+          "spread": -0.00312,
+          "spreadT": -2.38538,
+          "turnover": 0.10784,
+          "sectorNeutralIc": -0.02025,
+          "betaAdjustedIc": 0.00741,
+          "exWinnersIc": -0.01399,
+          "holmP": 1,
+          "bhQ": 0.39344,
+          "verdict": "not_predictive"
+        },
+        {
+          "days": 21,
+          "dates": 129,
+          "ic": -0.04075,
+          "t": -1.75964,
+          "p": 0.08086,
+          "allDates": {
+            "ic": -0.04173,
+            "t": -2.22023,
+            "dates": 2707
+          },
+          "subperiodIc": [
+            -0.01797,
+            -0.04418,
+            -0.07841
+          ],
+          "signs": [
+            -1,
+            -1,
+            -1
+          ],
+          "spread": -0.014,
+          "spreadT": -2.36699,
+          "turnover": 0.24375,
+          "sectorNeutralIc": -0.03996,
+          "betaAdjustedIc": 0.00582,
+          "exWinnersIc": -0.01981,
+          "holmP": 1,
+          "bhQ": 0.39344,
+          "verdict": "not_predictive"
+        },
+        {
+          "days": 63,
+          "dates": 43,
+          "ic": -0.06653,
+          "t": -1.52478,
+          "p": 0.13481,
+          "allDates": {
+            "ic": -0.07412,
+            "t": -2.48534,
+            "dates": 2665
+          },
+          "subperiodIc": [
+            -0.03249,
+            -0.09177,
+            -0.10086
+          ],
+          "signs": [
+            -1,
+            -1,
+            -1
+          ],
+          "spread": -0.04645,
+          "spreadT": -2.58056,
+          "turnover": 0.40794,
+          "sectorNeutralIc": -0.06697,
+          "betaAdjustedIc": 0.00437,
+          "exWinnersIc": -0.03609,
+          "holmP": 1,
+          "bhQ": 0.40443,
+          "verdict": "not_predictive"
+        }
+      ]
+    },
+    {
+      "key": "beta",
+      "label": "Low beta (minus the 252-session beta to SPY)",
+      "direction": -1,
+      "results": [
+        {
+          "days": 5,
+          "dates": 545,
+          "ic": -0.02723,
+          "t": -1.86077,
+          "p": 0.06332,
+          "allDates": {
+            "ic": -0.01948,
+            "t": -1.6325,
+            "dates": 2723
+          },
+          "subperiodIc": [
+            -0.02461,
+            -0.02122,
+            -0.03827
+          ],
+          "signs": [
+            -1,
+            -1,
+            -1
+          ],
+          "spread": -0.00313,
+          "spreadT": -2.07015,
+          "turnover": 0.03027,
+          "sectorNeutralIc": -0.02244,
+          "betaAdjustedIc": 0.01753,
+          "exWinnersIc": -0.0193,
+          "holmP": 1,
+          "bhQ": 0.39344,
+          "verdict": "not_predictive"
+        },
+        {
+          "days": 21,
+          "dates": 129,
+          "ic": -0.04806,
+          "t": -1.66197,
+          "p": 0.09897,
+          "allDates": {
+            "ic": -0.04785,
+            "t": -2.06254,
+            "dates": 2707
+          },
+          "subperiodIc": [
+            -0.03766,
+            -0.04863,
+            -0.06635
+          ],
+          "signs": [
+            -1,
+            -1,
+            -1
+          ],
+          "spread": -0.01369,
+          "spreadT": -1.84734,
+          "turnover": 0.06823,
+          "sectorNeutralIc": -0.04405,
+          "betaAdjustedIc": 0.02557,
+          "exWinnersIc": -0.03094,
+          "holmP": 1,
+          "bhQ": 0.39344,
+          "verdict": "not_predictive"
+        },
+        {
+          "days": 63,
+          "dates": 43,
+          "ic": -0.08716,
+          "t": -1.65642,
+          "p": 0.10509,
+          "allDates": {
+            "ic": -0.09624,
+            "t": -2.53543,
+            "dates": 2665
+          },
+          "subperiodIc": [
+            -0.08237,
+            -0.09724,
+            -0.08489
+          ],
+          "signs": [
+            -1,
+            -1,
+            -1
+          ],
+          "spread": -0.04096,
+          "spreadT": -1.86582,
+          "turnover": 0.13492,
+          "sectorNeutralIc": -0.08399,
+          "betaAdjustedIc": 0.02915,
+          "exWinnersIc": -0.06359,
+          "holmP": 1,
+          "bhQ": 0.39344,
+          "verdict": "not_predictive"
+        }
+      ]
+    },
+    {
+      "key": "technical",
+      "label": "Technical score (model v4)",
+      "direction": 1,
+      "results": [
+        {
+          "days": 5,
+          "dates": 545,
+          "ic": -0.0087,
+          "t": -0.91927,
+          "p": 0.35836,
+          "allDates": {
+            "ic": -0.00483,
+            "t": -0.6444,
+            "dates": 2723
+          },
+          "subperiodIc": [
+            -0.00794,
+            -0.00688,
+            -0.01196
+          ],
+          "signs": [
+            -1,
+            -1,
+            -1
+          ],
+          "spread": -0.00105,
+          "spreadT": -1.05719,
+          "turnover": 0.5027,
+          "sectorNeutralIc": -0.00303,
+          "betaAdjustedIc": -0.00803,
+          "exWinnersIc": -0.01229,
+          "holmP": 1,
+          "bhQ": 0.53755,
+          "verdict": "not_predictive"
+        },
+        {
+          "days": 21,
+          "dates": 129,
+          "ic": -0.01973,
+          "t": -0.98585,
+          "p": 0.32606,
+          "allDates": {
+            "ic": -0.01759,
+            "t": -1.47839,
+            "dates": 2707
+          },
+          "subperiodIc": [
+            -0.03504,
+            -0.01939,
+            0.00775
+          ],
+          "signs": [
+            -1,
+            -1,
+            1
+          ],
+          "spread": -0.00265,
+          "spreadT": -0.59346,
+          "turnover": 0.69583,
+          "sectorNeutralIc": -0.01507,
+          "betaAdjustedIc": -0.02751,
+          "exWinnersIc": -0.02901,
+          "holmP": 1,
+          "bhQ": 0.52672,
+          "verdict": "not_predictive"
+        },
+        {
+          "days": 63,
+          "dates": 43,
+          "ic": -0.01603,
+          "t": -0.46581,
+          "p": 0.64376,
+          "allDates": {
+            "ic": -0.02175,
+            "t": -1.16838,
+            "dates": 2665
+          },
+          "subperiodIc": [
+            -0.02164,
+            -0.01383,
+            -0.00821
+          ],
+          "signs": [
+            -1,
+            -1,
+            -1
+          ],
+          "spread": -0.00132,
+          "spreadT": -0.1011,
+          "turnover": 0.77937,
+          "sectorNeutralIc": -0.00093,
+          "betaAdjustedIc": -0.01882,
+          "exWinnersIc": -0.03159,
+          "holmP": 1,
+          "bhQ": 0.71152,
+          "verdict": "not_predictive"
+        }
+      ]
+    },
+    {
+      "key": "composite",
+      "label": "Composite (equal-weight z-scores of the five style factors)",
+      "direction": 1,
+      "results": [
+        {
+          "days": 5,
+          "dates": 545,
+          "ic": -0.01457,
+          "t": -1.17518,
+          "p": 0.24044,
+          "allDates": {
+            "ic": -0.00954,
+            "t": -0.93738,
+            "dates": 2723
+          },
+          "subperiodIc": [
+            -0.00453,
+            -0.0271,
+            -0.01905
+          ],
+          "signs": [
+            -1,
+            -1,
+            -1
+          ],
+          "spread": -0.00237,
+          "spreadT": -1.81083,
+          "turnover": 0.17978,
+          "sectorNeutralIc": -0.01032,
+          "betaAdjustedIc": 0.01503,
+          "exWinnersIc": -0.00738,
+          "holmP": 1,
+          "bhQ": 0.48421,
+          "verdict": "not_predictive"
+        },
+        {
+          "days": 21,
+          "dates": 129,
+          "ic": -0.02078,
+          "t": -0.82086,
+          "p": 0.41325,
+          "allDates": {
+            "ic": -0.02908,
+            "t": -1.46085,
+            "dates": 2707
+          },
+          "subperiodIc": [
+            0.00611,
+            -0.0414,
+            -0.04716
+          ],
+          "signs": [
+            1,
+            -1,
+            -1
+          ],
+          "spread": -0.00819,
+          "spreadT": -1.23162,
+          "turnover": 0.34635,
+          "sectorNeutralIc": -0.01458,
+          "betaAdjustedIc": 0.02665,
+          "exWinnersIc": -0.0061,
+          "holmP": 1,
+          "bhQ": 0.54703,
+          "verdict": "not_predictive"
+        },
+        {
+          "days": 63,
+          "dates": 43,
+          "ic": -0.05664,
+          "t": -1.34871,
+          "p": 0.18466,
+          "allDates": {
+            "ic": -0.06414,
+            "t": -2.01246,
+            "dates": 2665
+          },
+          "subperiodIc": [
+            -0.03295,
+            -0.0928,
+            -0.06027
+          ],
+          "signs": [
+            -1,
+            -1,
+            -1
+          ],
+          "spread": -0.0285,
+          "spreadT": -1.57989,
+          "turnover": 0.41746,
+          "sectorNeutralIc": -0.04367,
+          "betaAdjustedIc": 0.01616,
+          "exWinnersIc": -0.03638,
+          "holmP": 1,
+          "bhQ": 0.48421,
+          "verdict": "not_predictive"
+        }
+      ]
+    }
+  ],
+  "power": [
+    {
+      "days": 5,
+      "dates": 545,
+      "sdIc": 0.27442,
+      "minimumDetectableIc": 0.03298
+    },
+    {
+      "days": 21,
+      "dates": 129,
+      "sdIc": 0.26496,
+      "minimumDetectableIc": 0.06579
+    },
+    {
+      "days": 63,
+      "dates": 43,
+      "sdIc": 0.24603,
+      "minimumDetectableIc": 0.10729
+    }
+  ],
+  "bias": {
+    "benchmarks": {
+      "market": "SPY",
+      "equalWeight": "RSP"
+    },
+    "universeVsBenchmarks": [
+      {
+        "from": "2016-01-01",
+        "to": "2026-11-06",
+        "sessions": 2728,
+        "universe": 0.19124,
+        "equalWeight": 0.12032,
+        "market": 0.14551
+      },
+      {
+        "from": "2016-01-01",
+        "to": "2020-12-31",
+        "sessions": 1259,
+        "universe": 0.21837,
+        "equalWeight": 0.12951,
+        "market": 0.15448
+      },
+      {
+        "from": "2021-01-01",
+        "to": "2023-12-31",
+        "sessions": 753,
+        "universe": 0.15701,
+        "equalWeight": 0.09735,
+        "market": 0.10508
+      },
+      {
+        "from": "2024-01-01",
+        "to": "2026-12-31",
+        "sessions": 716,
+        "universe": 0.18664,
+        "equalWeight": 0.13469,
+        "market": 0.18187
+      }
+    ],
+    "exWinners": [
+      {
+        "symbol": "NVDA",
+        "annualReturn": 0.65607
+      },
+      {
+        "symbol": "AMD",
+        "annualReturn": 0.59909
+      },
+      {
+        "symbol": "CEG",
+        "annualReturn": 0.46196
+      },
+      {
+        "symbol": "AVGO",
+        "annualReturn": 0.35606
+      },
+      {
+        "symbol": "TSLA",
+        "annualReturn": 0.34098
+      },
+      {
+        "symbol": "LLY",
+        "annualReturn": 0.31522
+      },
+      {
+        "symbol": "AAPL",
+        "annualReturn": 0.27943
+      },
+      {
+        "symbol": "MSFT",
+        "annualReturn": 0.24894
+      },
+      {
+        "symbol": "CAT",
+        "annualReturn": 0.24321
+      },
+      {
+        "symbol": "DE",
+        "annualReturn": 0.24237
+      }
+    ],
+    "technicalVsMonthReturn": 0.77256
+  },
+  "dataHash": "0e311412"
+}
