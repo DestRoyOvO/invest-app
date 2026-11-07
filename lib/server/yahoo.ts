@@ -116,6 +116,10 @@ function recordOutcome(ok: boolean, now = Date.now()): void {
   }
 }
 
+/**
+ * Runs one Yahoo call under the pending-call cap and records its outcome for /api/health?ready=1. A rejection by the
+ * cap itself (UpstreamBusyError) is load on this server, not a Yahoo failure, so it is not recorded.
+ */
 export async function upstream<T>(call: () => Promise<T>): Promise<T> {
   if (upstreamState.pending >= MAX_PENDING_CALLS) throw new UpstreamBusyError();
   upstreamState.pending++;
