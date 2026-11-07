@@ -1,4 +1,4 @@
-// InvestSeek quant signal engine (model v3).
+// InvestSeek quant signal engine (model v4).
 //
 // Pure and deterministic: no I/O and no clock reads (the caller passes `asOf`), so the same inputs always produce
 // the same report. Every factor value at session i reads only data up to i, which lets the live signal and the
@@ -35,13 +35,16 @@ import {
 // ---------------------------------------------------------------------------
 
 /** Bump when a weight, threshold or factor formula changes, then re-run `npm run evaluate`. */
-export const MODEL_VERSION = 3;
+export const MODEL_VERSION = 4;
 
 /** Minimum daily history for a signal: enough for MA100 plus a buffer for the volatility regime. */
 export const MIN_BARS = 120;
 
-/** Composite weights (they sum to 1). */
-export const FACTOR_WEIGHTS: Readonly<Record<FactorKey, number>> = {
+/**
+ * The hand-set priors of model v3 (never fitted to returns). v4 keeps them and only takes the volatility regime out
+ * of the directional composite.
+ */
+export const V3_FACTOR_WEIGHTS: Readonly<Record<FactorKey, number>> = {
   momentum: 0.2,
   trend: 0.15,
   rsi: 0.1,
@@ -51,6 +54,29 @@ export const FACTOR_WEIGHTS: Readonly<Record<FactorKey, number>> = {
   volatility: 0.15,
 };
 
+/**
+ * Factors computed and reported for risk, with no weight in the directional composites. The volatility regime
+ * measures how turbulent a stock is, not where it is heading: its rank IC with 10-session returns over 2014-2024 was
+ * about 0 (docs/evaluation.md).
+ */
+export const RISK_FACTORS = ["volatility"] as const satisfies readonly FactorKey[];
+
+/** `weights` without the given factors, the rest scaled up proportionally so they still sum to 1. */
+function withoutFactors(weights: Readonly<Record<FactorKey, number>>, dropped: readonly FactorKey[]): Record<FactorKey, number> {
+  const kept = (Object.keys(weights) as FactorKey[]).filter((key) => !dropped.includes(key));
+  const total = kept.reduce((sum, key) => sum + weights[key], 0);
+  const out = { ...weights };
+  for (const key of Object.keys(out) as FactorKey[]) out[key] = dropped.includes(key) ? 0 : weights[key] / total;
+  return out;
+}
+
+/**
+ * Composite weights (they sum to 1): the v3 priors with the risk factors removed and the remaining weights
+ * renormalized, a mechanical rescaling rather than a fit. Risk factors keep a weight of 0.
+ */
+export const FACTOR_WEIGHTS: Readonly<Record<FactorKey, number>> = withoutFactors(V3_FACTOR_WEIGHTS, RISK_FACTORS);
+
+/** The five price-based factors computed at every session; the directional ones are those with a positive weight. */
 export const TECHNICAL_FACTORS = ["momentum", "trend", "rsi", "volume", "volatility"] as const satisfies readonly FactorKey[];
 export type TechnicalFactorKey = (typeof TECHNICAL_FACTORS)[number];
 

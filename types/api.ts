@@ -456,7 +456,7 @@ export interface FactorResult {
   group: "technical" | "fundamental";
   /** 0..100, 50 = neutral, higher = more bullish. */
   score: number;
-  /** Weight in the composite, 0..1. */
+  /** Weight in the composite, 0..1. Model v4 gives the volatility regime 0: it is reported for risk only. */
   weight: number;
   /** True when the input data was missing and the neutral value 50 was used. */
   imputed: boolean;

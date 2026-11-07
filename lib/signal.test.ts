@@ -14,13 +14,16 @@ import {
   type Fundamentals,
   labelForScore,
   MIN_BARS,
+  MODEL_VERSION,
   permutationPValue,
   qualityFactor,
+  RISK_FACTORS,
   rsiToScore,
   runBacktest,
   TECHNICAL_FACTORS,
   technicalFactorSeries,
   technicalScoreSeries,
+  V3_FACTOR_WEIGHTS,
   valueFactor,
   wilderRsiSeries,
 } from "./signal";
@@ -565,6 +568,37 @@ describe("technical factors", () => {
 // Labels and the composite
 // ---------------------------------------------------------------------------
 
+describe("model v4 weights", () => {
+  it("drops the risk factors from the v3 priors and rescales the rest proportionally", () => {
+    expect(MODEL_VERSION).toBe(4);
+    const dropped = RISK_FACTORS.reduce((sum, key) => sum + V3_FACTOR_WEIGHTS[key], 0);
+    expect(dropped).toBeCloseTo(0.15, 12);
+    for (const key of Object.keys(FACTOR_WEIGHTS) as Array<keyof typeof FACTOR_WEIGHTS>) {
+      const expected = (RISK_FACTORS as readonly string[]).includes(key) ? 0 : V3_FACTOR_WEIGHTS[key] / (1 - dropped);
+      expect(FACTOR_WEIGHTS[key]).toBeCloseTo(expected, 12);
+    }
+    expect(Object.values(FACTOR_WEIGHTS).reduce((a, b) => a + b, 0)).toBeCloseTo(1, 12);
+    // Relative weights among the remaining factors are unchanged: momentum still weighs twice as much as RSI.
+    expect(FACTOR_WEIGHTS.momentum / FACTOR_WEIGHTS.rsi).toBeCloseTo(2, 12);
+    expect(FACTOR_WEIGHTS.value / FACTOR_WEIGHTS.quality).toBeCloseTo(1.5, 12);
+  });
+
+  it("builds the technical score from the four directional price factors only", () => {
+    const points = technicalFactorSeries(randomWalk(500, 0.35, 79));
+    const directional = TECHNICAL_FACTORS.filter((key) => FACTOR_WEIGHTS[key] > 0);
+    expect(directional).toEqual(["momentum", "trend", "rsi", "volume"]);
+    const weight = directional.reduce((sum, key) => sum + FACTOR_WEIGHTS[key], 0);
+    let volatilityMoved = 0;
+    for (const point of points) {
+      const expected = directional.reduce((sum, key) => sum + FACTOR_WEIGHTS[key] * point.factors[key], 0) / weight;
+      expect(Math.abs(point.score - expected)).toBeLessThanOrEqual(0.05 + 1e-9);
+      if (Math.abs(point.factors.volatility - 50) > 20) volatilityMoved += 1;
+    }
+    // The volatility regime does move on this path; it just has no say in the score.
+    expect(volatilityMoved).toBeGreaterThan(50);
+  });
+});
+
 describe("technicalFactorSeries", () => {
   it("reports the composite of technicalScoreSeries and its factors at every scored session", () => {
     const bars = randomWalk(500, 0.35, 80);
@@ -724,16 +758,28 @@ describe("computeSignalReport", () => {
   it("lowers coverage for missing inputs and short histories", () => {
     const bars = randomWalk(400, 0.3, 77);
     const etf = computeSignalReport({ symbol: "ETF", bars, fundamentals: NO_FUNDAMENTALS, asOf: AS_OF });
-    expect(etf.coverage).toBe(70);
+    expect(etf.coverage).toBe(Math.round(100 * (1 - FACTOR_WEIGHTS.value - FACTOR_WEIGHTS.quality)));
+    expect(etf.coverage).toBe(65);
     expect(etf.factors.filter((f) => f.imputed).map((f) => f.key)).toEqual(["value", "quality"]);
     expect(etf.confidence).not.toBe("high");
 
     const fx = computeSignalReport({ symbol: "FX", bars: bars.map((b) => ({ ...b, v: null })), fundamentals: NO_FUNDAMENTALS, asOf: AS_OF });
-    expect(fx.coverage).toBe(60);
+    expect(fx.coverage).toBe(53);
 
-    // 150 bars give 130 rolling volatility values of the 250 the regime percentile wants.
+    // 150 bars give 130 rolling volatility values of the 250 the regime percentile wants, but the volatility regime
+    // has no weight in model v4, so the short history no longer lowers coverage.
     const young = computeSignalReport({ symbol: "IPO", bars: bars.slice(0, 150), fundamentals: GOOD_FUNDAMENTALS, asOf: AS_OF });
-    expect(young.coverage).toBe(Math.round(100 * (1 - FACTOR_WEIGHTS.volatility * (1 - 130 / 250))));
+    expect(young.coverage).toBe(100);
+  });
+
+  it("reports the volatility regime for risk without letting it move the composite", () => {
+    const bars = randomWalk(400, 0.3, 78);
+    const report = computeSignalReport({ symbol: "VOL", bars, fundamentals: GOOD_FUNDAMENTALS, asOf: AS_OF });
+    const volatility = report.factors.find((f) => f.key === "volatility");
+    expect(volatility).toMatchObject({ weight: 0, imputed: false, rawUnit: "percent" });
+    expect(volatility?.raw).toBeGreaterThan(0);
+    const withoutVolatility = report.factors.filter((f) => f.key !== "volatility").reduce((sum, f) => sum + f.weight * f.score, 0);
+    expect(Math.abs((report.score ?? Number.NaN) - withoutVolatility)).toBeLessThanOrEqual(0.05 + 1e-9);
   });
 });
 

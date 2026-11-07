@@ -8,7 +8,7 @@
   "universe": 78,
   "observations": 211143,
   "model": {
-    "version": 3,
+    "version": 4,
     "thresholds": {
       "strongBullish": 72,
       "bullish": 58,
@@ -16,13 +16,13 @@
       "strongBearish": 28
     },
     "weights": {
-      "momentum": 0.2,
-      "trend": 0.15,
-      "rsi": 0.1,
-      "volume": 0.1,
-      "value": 0.18,
-      "quality": 0.12,
-      "volatility": 0.15
+      "momentum": 0.23529,
+      "trend": 0.17647,
+      "rsi": 0.11765,
+      "volume": 0.11765,
+      "value": 0.21176,
+      "quality": 0.14118,
+      "volatility": 0
     }
   },
   "settings": {
@@ -43,13 +43,13 @@
         "hitRate": 0.54869
       },
       "ic": {
-        "mean": -0.00625,
-        "t": -0.86979,
-        "t2": -0.83794,
+        "mean": -0.00483,
+        "t": -0.6444,
+        "t2": -0.62647,
         "dates": 2723,
         "phaseT": [
-          -1.11291,
-          -0.33195
+          -1.04106,
+          -0.11317
         ],
         "fragile": false
       },
@@ -57,158 +57,158 @@
         {
           "from": "2016-01-01",
           "to": "2020-12-31",
-          "mean": -0.00818,
-          "t": -0.7273,
+          "mean": -0.00857,
+          "t": -0.7477,
           "dates": 1259
         },
         {
           "from": "2021-01-01",
           "to": "2023-12-31",
-          "mean": 0.00331,
-          "t": 0.24905,
+          "mean": 0.00305,
+          "t": 0.21798,
           "dates": 753
         },
         {
           "from": "2024-01-01",
           "to": "2026-12-31",
-          "mean": -0.01294,
-          "t": -1.02381,
+          "mean": -0.00657,
+          "t": -0.4752,
           "dates": 711
         }
       ],
       "labels": [
         {
           "code": "strong_bullish",
-          "n": 8992,
-          "dates": 1899,
-          "episodes": 26,
-          "largestEpisodeShare": 0.19884,
-          "mean": 0.00311,
-          "excess": -0.00015,
-          "timing": -0.0009,
-          "selection": 0.00075,
-          "hitRate": 0.54904,
-          "beatMedian": 0.50056,
+          "n": 3002,
+          "dates": 1253,
+          "episodes": 41,
+          "largestEpisodeShare": 0.12991,
+          "mean": 0.00235,
+          "excess": -0.0009,
+          "timing": -0.00106,
+          "selection": 0.00016,
+          "hitRate": 0.52898,
+          "beatMedian": 0.50766,
           "ci": {
             "excess": [
-              -0.00211,
-              0.00178
+              -0.00357,
+              0.00153
             ],
             "selection": [
-              -0.00058,
-              0.00223
+              -0.00186,
+              0.00218
             ],
             "hitRate": [
-              0.52395,
-              0.57177
+              0.49398,
+              0.56078
             ]
           }
         },
         {
           "code": "bullish",
-          "n": 59578,
-          "dates": 2590,
-          "episodes": 6,
-          "largestEpisodeShare": 0.26886,
-          "mean": 0.00258,
-          "excess": -0.00068,
-          "timing": -0.00066,
-          "selection": -0.00001,
-          "hitRate": 0.54542,
-          "beatMedian": 0.49631,
+          "n": 53887,
+          "dates": 2665,
+          "episodes": 2,
+          "largestEpisodeShare": 0.57461,
+          "mean": 0.0022,
+          "excess": -0.00105,
+          "timing": -0.00107,
+          "selection": 0.00002,
+          "hitRate": 0.54475,
+          "beatMedian": 0.49704,
           "ci": {
             "excess": [
-              -0.00199,
-              0.00047
+              -0.00233,
+              0.00005
             ],
             "selection": [
-              -0.0005,
-              0.00047
+              -0.00063,
+              0.00069
             ],
             "hitRate": [
-              0.52865,
-              0.56029
+              0.52826,
+              0.55954
             ]
           }
         },
         {
           "code": "neutral",
-          "n": 96398,
-          "dates": 2713,
+          "n": 128759,
+          "dates": 2723,
           "episodes": 1,
           "largestEpisodeShare": 1,
-          "mean": 0.00281,
-          "excess": -0.00045,
-          "timing": -0.00007,
-          "selection": -0.00038,
-          "hitRate": 0.54553,
-          "beatMedian": 0.49357,
+          "mean": 0.00322,
+          "excess": -0.00004,
+          "timing": 0.00019,
+          "selection": -0.00023,
+          "hitRate": 0.54777,
+          "beatMedian": 0.49322,
           "ci": {
             "excess": [
-              -0.00125,
-              0.00028
+              -0.00053,
+              0.00043
             ],
             "selection": [
-              -0.00075,
-              -0.00004
+              -0.00054,
+              0.00003
             ],
             "hitRate": [
-              0.52731,
-              0.56255
+              0.53001,
+              0.56514
             ]
           }
         },
         {
           "code": "bearish",
-          "n": 43096,
-          "dates": 2672,
-          "episodes": 1,
-          "largestEpisodeShare": 1,
-          "mean": 0.00502,
-          "excess": 0.00176,
-          "timing": 0.00112,
-          "selection": 0.00064,
-          "hitRate": 0.55824,
-          "beatMedian": 0.50007,
+          "n": 24419,
+          "dates": 2514,
+          "episodes": 4,
+          "largestEpisodeShare": 0.37532,
+          "mean": 0.00573,
+          "excess": 0.00248,
+          "timing": 0.00141,
+          "selection": 0.00106,
+          "hitRate": 0.56309,
+          "beatMedian": 0.50751,
           "ci": {
             "excess": [
-              -0.00008,
-              0.00398
+              0.00003,
+              0.0053
             ],
             "selection": [
-              -0.00006,
-              0.00139
+              0.0001,
+              0.00225
             ],
             "hitRate": [
-              0.53462,
-              0.58588
+              0.53984,
+              0.59215
             ]
           }
         },
         {
           "code": "strong_bearish",
-          "n": 2689,
-          "dates": 828,
-          "episodes": 57,
-          "largestEpisodeShare": 0.19189,
-          "mean": 0.00656,
-          "excess": 0.0033,
-          "timing": 0.00218,
-          "selection": 0.00112,
-          "hitRate": 0.58014,
-          "beatMedian": 0.50428,
+          "n": 686,
+          "dates": 411,
+          "episodes": 66,
+          "largestEpisodeShare": 0.10496,
+          "mean": 0.00924,
+          "excess": 0.00598,
+          "timing": 0.00251,
+          "selection": 0.00347,
+          "hitRate": 0.60496,
+          "beatMedian": 0.50729,
           "ci": {
             "excess": [
-              -0.01168,
-              0.01881
+              -0.01039,
+              0.01923
             ],
             "selection": [
-              -0.00443,
-              0.00709
+              -0.00492,
+              0.01092
             ],
             "hitRate": [
-              0.51563,
-              0.65498
+              0.52956,
+              0.68596
             ]
           }
         }
@@ -222,172 +222,172 @@
         "hitRate": 0.56532
       },
       "ic": {
-        "mean": -0.01074,
-        "t": -1.15266,
-        "t2": -1.13359,
+        "mean": -0.01006,
+        "t": -1.05679,
+        "t2": -1.05738,
         "dates": 2718,
         "phaseT": [
-          -2.03052,
-          0.05312
+          -1.91959,
+          -0.02802
         ],
-        "fragile": true
+        "fragile": false
       },
       "subperiods": [
         {
           "from": "2016-01-01",
           "to": "2020-12-31",
-          "mean": -0.01234,
-          "t": -0.84498,
+          "mean": -0.01311,
+          "t": -0.91186,
           "dates": 1259
         },
         {
           "from": "2021-01-01",
           "to": "2023-12-31",
-          "mean": -0.00455,
-          "t": -0.26401,
+          "mean": -0.00857,
+          "t": -0.46613,
           "dates": 753
         },
         {
           "from": "2024-01-01",
           "to": "2026-12-31",
-          "mean": -0.01451,
-          "t": -0.8812,
+          "mean": -0.00622,
+          "t": -0.35814,
           "dates": 706
         }
       ],
       "labels": [
         {
           "code": "strong_bullish",
-          "n": 8974,
-          "dates": 1894,
-          "episodes": 26,
-          "largestEpisodeShare": 0.19924,
-          "mean": 0.00605,
-          "excess": -0.001,
-          "timing": -0.00192,
-          "selection": 0.00092,
-          "hitRate": 0.55973,
-          "beatMedian": 0.49721,
+          "n": 3001,
+          "dates": 1252,
+          "episodes": 41,
+          "largestEpisodeShare": 0.12996,
+          "mean": 0.00538,
+          "excess": -0.00167,
+          "timing": -0.00351,
+          "selection": 0.00184,
+          "hitRate": 0.53515,
+          "beatMedian": 0.49717,
           "ci": {
             "excess": [
-              -0.00496,
-              0.00287
+              -0.00752,
+              0.00358
             ],
             "selection": [
-              -0.00167,
-              0.00354
+              -0.00225,
+              0.00567
             ],
             "hitRate": [
-              0.52452,
-              0.59073
+              0.49322,
+              0.57419
             ]
           }
         },
         {
           "code": "bullish",
-          "n": 59435,
-          "dates": 2585,
-          "episodes": 6,
-          "largestEpisodeShare": 0.2695,
-          "mean": 0.00558,
-          "excess": -0.00148,
-          "timing": -0.0012,
-          "selection": -0.00028,
-          "hitRate": 0.5607,
-          "beatMedian": 0.49543,
+          "n": 53770,
+          "dates": 2660,
+          "episodes": 2,
+          "largestEpisodeShare": 0.57368,
+          "mean": 0.00522,
+          "excess": -0.00183,
+          "timing": -0.00172,
+          "selection": -0.00012,
+          "hitRate": 0.56184,
+          "beatMedian": 0.49635,
           "ci": {
             "excess": [
-              -0.0039,
-              0.00079
+              -0.00402,
+              0.00016
             ],
             "selection": [
-              -0.00121,
-              0.00054
+              -0.00122,
+              0.00097
             ],
             "hitRate": [
-              0.53615,
-              0.58213
+              0.53855,
+              0.58414
             ]
           }
         },
         {
           "code": "neutral",
-          "n": 96232,
-          "dates": 2708,
+          "n": 128534,
+          "dates": 2718,
           "episodes": 1,
           "largestEpisodeShare": 1,
-          "mean": 0.00642,
-          "excess": -0.00064,
-          "timing": -0.00008,
-          "selection": -0.00055,
-          "hitRate": 0.55886,
-          "beatMedian": 0.49138,
+          "mean": 0.00717,
+          "excess": 0.00012,
+          "timing": 0.00038,
+          "selection": -0.00026,
+          "hitRate": 0.56404,
+          "beatMedian": 0.49357,
           "ci": {
             "excess": [
-              -0.00211,
-              0.00066
+              -0.00067,
+              0.00093
             ],
             "selection": [
-              -0.00114,
-              0.00006
+              -0.00072,
+              0.00015
             ],
             "hitRate": [
-              0.53552,
-              0.58319
+              0.54117,
+              0.58764
             ]
           }
         },
         {
           "code": "bearish",
-          "n": 43040,
-          "dates": 2667,
-          "episodes": 1,
-          "largestEpisodeShare": 1,
-          "mean": 0.01062,
-          "excess": 0.00357,
-          "timing": 0.00214,
-          "selection": 0.00142,
-          "hitRate": 0.58506,
-          "beatMedian": 0.5073,
+          "n": 24373,
+          "dates": 2509,
+          "episodes": 4,
+          "largestEpisodeShare": 0.37603,
+          "mean": 0.01054,
+          "excess": 0.00349,
+          "timing": 0.0021,
+          "selection": 0.00139,
+          "hitRate": 0.58216,
+          "beatMedian": 0.50814,
           "ci": {
             "excess": [
-              -0.00051,
-              0.00789
+              -0.00134,
+              0.00804
             ],
             "selection": [
-              0.0003,
-              0.00273
+              -0.00015,
+              0.00316
             ],
             "hitRate": [
-              0.55343,
-              0.61916
+              0.54943,
+              0.61781
             ]
           }
         },
         {
           "code": "strong_bearish",
-          "n": 2682,
-          "dates": 825,
-          "episodes": 57,
-          "largestEpisodeShare": 0.19239,
-          "mean": 0.00879,
-          "excess": 0.00173,
-          "timing": 0.00153,
-          "selection": 0.0002,
-          "hitRate": 0.60179,
-          "beatMedian": 0.49702,
+          "n": 685,
+          "dates": 410,
+          "episodes": 66,
+          "largestEpisodeShare": 0.10511,
+          "mean": 0.01253,
+          "excess": 0.00548,
+          "timing": 0.00445,
+          "selection": 0.00103,
+          "hitRate": 0.61314,
+          "beatMedian": 0.51825,
           "ci": {
             "excess": [
-              -0.02429,
-              0.02389
+              -0.0142,
+              0.02082
             ],
             "selection": [
-              -0.00676,
-              0.00758
+              -0.00943,
+              0.00961
             ],
             "hitRate": [
-              0.52157,
-              0.68602
+              0.54284,
+              0.69242
             ]
           }
         }
@@ -401,13 +401,13 @@
         "hitRate": 0.58212
       },
       "ic": {
-        "mean": -0.01772,
-        "t": -1.52708,
-        "t2": -1.41397,
+        "mean": -0.01676,
+        "t": -1.43335,
+        "t2": -1.35685,
         "dates": 2708,
         "phaseT": [
-          -1.69508,
-          -0.07085
+          -1.69149,
+          -0.1087
         ],
         "fragile": false
       },
@@ -415,158 +415,158 @@
         {
           "from": "2016-01-01",
           "to": "2020-12-31",
-          "mean": -0.02001,
-          "t": -1.0977,
+          "mean": -0.01798,
+          "t": -1.01657,
           "dates": 1259
         },
         {
           "from": "2021-01-01",
           "to": "2023-12-31",
-          "mean": -0.0144,
-          "t": -0.65482,
+          "mean": -0.02205,
+          "t": -0.94902,
           "dates": 753
         },
         {
           "from": "2024-01-01",
           "to": "2026-12-31",
-          "mean": -0.01716,
-          "t": -0.87651,
+          "mean": -0.00885,
+          "t": -0.43599,
           "dates": 696
         }
       ],
       "labels": [
         {
           "code": "strong_bullish",
-          "n": 8931,
-          "dates": 1884,
-          "episodes": 26,
-          "largestEpisodeShare": 0.2002,
-          "mean": 0.0112,
-          "excess": -0.00356,
-          "timing": -0.00488,
-          "selection": 0.00132,
-          "hitRate": 0.57821,
-          "beatMedian": 0.50073,
+          "n": 2999,
+          "dates": 1250,
+          "episodes": 41,
+          "largestEpisodeShare": 0.13004,
+          "mean": 0.01177,
+          "excess": -0.00298,
+          "timing": -0.00714,
+          "selection": 0.00416,
+          "hitRate": 0.57619,
+          "beatMedian": 0.5135,
           "ci": {
             "excess": [
-              -0.01005,
-              0.00278
+              -0.0123,
+              0.00595
             ],
             "selection": [
-              -0.00313,
-              0.00587
+              -0.00269,
+              0.01097
             ],
             "hitRate": [
-              0.53618,
-              0.61674
+              0.52734,
+              0.62585
             ]
           }
         },
         {
           "code": "bullish",
-          "n": 59148,
-          "dates": 2575,
-          "episodes": 6,
-          "largestEpisodeShare": 0.27081,
-          "mean": 0.01112,
-          "excess": -0.00364,
-          "timing": -0.00301,
-          "selection": -0.00062,
-          "hitRate": 0.57243,
-          "beatMedian": 0.49408,
+          "n": 53537,
+          "dates": 2650,
+          "episodes": 2,
+          "largestEpisodeShare": 0.57183,
+          "mean": 0.01038,
+          "excess": -0.00438,
+          "timing": -0.00398,
+          "selection": -0.0004,
+          "hitRate": 0.57245,
+          "beatMedian": 0.49506,
           "ci": {
             "excess": [
-              -0.00756,
-              0.00006
+              -0.00807,
+              -0.0011
             ],
             "selection": [
-              -0.00221,
-              0.00098
+              -0.00241,
+              0.00163
             ],
             "hitRate": [
-              0.54138,
-              0.60101
+              0.54201,
+              0.60111
             ]
           }
         },
         {
           "code": "neutral",
-          "n": 95909,
-          "dates": 2698,
+          "n": 128080,
+          "dates": 2708,
           "episodes": 1,
           "largestEpisodeShare": 1,
-          "mean": 0.01389,
-          "excess": -0.00086,
-          "timing": -0.00013,
-          "selection": -0.00074,
-          "hitRate": 0.5771,
-          "beatMedian": 0.49109,
+          "mean": 0.01473,
+          "excess": -0.00003,
+          "timing": 0.00059,
+          "selection": -0.00062,
+          "hitRate": 0.58074,
+          "beatMedian": 0.49264,
           "ci": {
             "excess": [
-              -0.00325,
-              0.00095
+              -0.00119,
+              0.00114
             ],
             "selection": [
-              -0.00187,
-              0.00026
+              -0.00135,
+              0.0001
             ],
             "hitRate": [
-              0.54687,
-              0.60667
+              0.55154,
+              0.61098
             ]
           }
         },
         {
           "code": "bearish",
-          "n": 42919,
-          "dates": 2657,
-          "episodes": 1,
-          "largestEpisodeShare": 1,
-          "mean": 0.02136,
-          "excess": 0.00661,
-          "timing": 0.00461,
-          "selection": 0.002,
-          "hitRate": 0.6043,
-          "beatMedian": 0.50705,
+          "n": 24286,
+          "dates": 2499,
+          "episodes": 4,
+          "largestEpisodeShare": 0.37738,
+          "mean": 0.02428,
+          "excess": 0.00953,
+          "timing": 0.00612,
+          "selection": 0.00341,
+          "hitRate": 0.61015,
+          "beatMedian": 0.51326,
           "ci": {
             "excess": [
-              0.00108,
-              0.01311
+              0.00341,
+              0.0163
             ],
             "selection": [
-              -0.00008,
-              0.00427
+              0.00069,
+              0.00627
             ],
             "hitRate": [
-              0.56451,
-              0.64798
+              0.57255,
+              0.65268
             ]
           }
         },
         {
           "code": "strong_bearish",
-          "n": 2676,
-          "dates": 821,
-          "episodes": 57,
-          "largestEpisodeShare": 0.19283,
-          "mean": 0.03203,
-          "excess": 0.01727,
-          "timing": 0.01347,
-          "selection": 0.0038,
-          "hitRate": 0.63378,
-          "beatMedian": 0.52803,
+          "n": 681,
+          "dates": 407,
+          "episodes": 66,
+          "largestEpisodeShare": 0.10573,
+          "mean": 0.03688,
+          "excess": 0.02213,
+          "timing": 0.01435,
+          "selection": 0.00778,
+          "hitRate": 0.62996,
+          "beatMedian": 0.53598,
           "ci": {
             "excess": [
-              -0.01022,
-              0.04755
+              -0.00043,
+              0.04783
             ],
             "selection": [
-              -0.00416,
-              0.01491
+              -0.00881,
+              0.0263
             ],
             "hitRate": [
-              0.55243,
-              0.72191
+              0.5486,
+              0.72706
             ]
           }
         }
@@ -584,15 +584,15 @@
     "alpha": 0.05,
     "composite": {
       "key": "composite",
-      "mean": 0.00105,
-      "t": 0.10752,
+      "mean": -0.00388,
+      "t": -0.38523,
       "dates": 2588,
-      "p": 0.45719,
+      "p": 0.64997,
       "holmP": null,
       "pass": false,
       "ci": [
-        -0.01805,
-        0.02015
+        -0.02359,
+        0.01584
       ]
     },
     "factors": [
@@ -645,20 +645,20 @@
     "horizons": [
       {
         "days": 5,
-        "mean": 0.00347,
-        "t": 0.46792,
+        "mean": 0.00065,
+        "t": 0.08404,
         "dates": 2593
       },
       {
         "days": 10,
-        "mean": 0.00105,
-        "t": 0.10752,
+        "mean": -0.00388,
+        "t": -0.38523,
         "dates": 2588
       },
       {
         "days": 20,
-        "mean": -0.00326,
-        "t": -0.26502,
+        "mean": -0.00754,
+        "t": -0.59248,
         "dates": 2578
       }
     ]
