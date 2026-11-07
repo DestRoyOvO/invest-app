@@ -2,6 +2,7 @@ import "server-only";
 
 import { isFresh } from "./cache";
 import { buildCompanyMatcher, planCompanyQueries } from "./news";
+import { DIVIDENDS_CALLS, FINANCIALS_CALLS, hasCachedDividends, hasCachedFinancials, hasCachedOwnership, OWNERSHIP_CALLS } from "./research";
 import { hasCachedDailyBars, hasCachedNewsSearch, hasCachedSummary, hasFreshQuote, peekQuote, peekSummary } from "./yahoo";
 
 // How many Yahoo calls a public request is about to make, so a route can charge one rate-limit unit per call with
@@ -21,7 +22,7 @@ function signalReportKey(symbol: string): string {
 
 /**
  * Uncached news searches behind getCompanyNews for the symbol. None while Yahoo's "unknown symbol" answer is fresh in
- * the quote cache, because getStockDetail then answers 404 before it searches. Otherwise the plan depends on the
+ * the quote cache, because getStockNews then answers 404 before it searches. Otherwise the plan depends on the
  * profile (industry and sector) and the company name; when those are not cached yet, every search is assumed to run.
  */
 function uncachedCompanyNewsSearches(symbol: string): number {
@@ -35,9 +36,31 @@ function uncachedCompanyNewsSearches(symbol: string): number {
   return planCompanyQueries(matcher, profile).filter((query) => !hasCachedNewsSearch(query.term, query.count)).length;
 }
 
-/** Uncached Yahoo calls behind getStockDetail(symbol): the quote, the summary and the company news searches. */
+/** Uncached Yahoo calls behind getStockDetail(symbol): the quote and the summary (news has its own route). */
 export function uncachedStockDetailCalls(symbol: string): number {
-  return (hasFreshQuote(symbol) ? 0 : 1) + (hasCachedSummary(symbol) ? 0 : 1) + uncachedCompanyNewsSearches(symbol);
+  return (hasFreshQuote(symbol) ? 0 : 1) + (hasCachedSummary(symbol) ? 0 : 1);
+}
+
+/** Uncached Yahoo calls behind getStockNews(symbol): the quote, the summary and the company news searches. */
+export function uncachedStockNewsCalls(symbol: string): number {
+  return uncachedStockDetailCalls(symbol) + uncachedCompanyNewsSearches(symbol);
+}
+
+/** Uncached Yahoo calls behind getFinancials(symbol): four statement requests plus the summary for the currency. */
+export function uncachedFinancialsCalls(symbol: string): number {
+  if (hasCachedFinancials(symbol)) return 0;
+  return FINANCIALS_CALLS + (hasCachedSummary(symbol) ? 0 : 1);
+}
+
+/** Uncached Yahoo calls behind getDividends(symbol): the dividend chart plus the quote. */
+export function uncachedDividendsCalls(symbol: string): number {
+  if (hasCachedDividends(symbol)) return 0;
+  return DIVIDENDS_CALLS + (hasFreshQuote(symbol) ? 0 : 1);
+}
+
+/** Uncached Yahoo calls behind getOwnership(symbol): one quoteSummary request. */
+export function uncachedOwnershipCalls(symbol: string): number {
+  return hasCachedOwnership(symbol) ? 0 : OWNERSHIP_CALLS;
 }
 
 /**

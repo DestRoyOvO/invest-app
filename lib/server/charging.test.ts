@@ -63,54 +63,81 @@ vi.mock("./yahoo", () => ({
   peekSummary: () => (fake.summaryState === "known" ? SUMMARY : fake.summaryState === "none" ? null : undefined),
 }));
 
-import { clearCache } from "./cache";
-import { extraUnits, MAX_COMPANY_NEWS_SEARCHES, uncachedSignalCalls, uncachedStockDetailCalls } from "./charging";
-import { getStockDetail } from "./market";
+import { clearCache, put } from "./cache";
+import {
+  extraUnits,
+  MAX_COMPANY_NEWS_SEARCHES,
+  uncachedDividendsCalls,
+  uncachedFinancialsCalls,
+  uncachedOwnershipCalls,
+  uncachedSignalCalls,
+  uncachedStockDetailCalls,
+  uncachedStockNewsCalls,
+} from "./charging";
+import { getStockDetail, getStockNews } from "./market";
+import { DIVIDENDS_CALLS, FINANCIALS_CALLS, OWNERSHIP_CALLS } from "./research";
 import { getSignalReport } from "./signal-service";
 
 const newsCalls = () => fake.calls.filter((call) => call.startsWith("news:"));
 
-describe("charging for /api/stock/[symbol]", () => {
-  beforeEach(() => {
-    fake.calls = [];
-    fake.fresh.clear();
-    fake.quoteKnown = false;
-    fake.unknown.clear();
-    fake.summaryState = "unknown";
-    clearCache();
-  });
+function resetFake() {
+  fake.calls = [];
+  fake.fresh.clear();
+  fake.quoteKnown = false;
+  fake.unknown.clear();
+  fake.summaryState = "unknown";
+  clearCache();
+}
 
-  it("predicts exactly the calls getStockDetail makes once the profile is known", async () => {
+describe("charging for /api/stock/[symbol]", () => {
+  beforeEach(resetFake);
+
+  it("predicts the quote and the summary, the only calls getStockDetail makes", async () => {
+    expect(uncachedStockDetailCalls("NVDA")).toBe(2);
     await getStockDetail("NVDA");
+    expect([...fake.calls].sort()).toEqual(["quote:NVDA", "summary:NVDA"]);
+    expect(newsCalls()).toEqual([]);
+    fake.fresh.add("quote:NVDA");
+    expect(uncachedStockDetailCalls("NVDA")).toBe(1);
+    fake.fresh.add("summary:NVDA");
+    expect(uncachedStockDetailCalls("NVDA")).toBe(0);
+  });
+});
+
+describe("charging for /api/stock/[symbol]/news", () => {
+  beforeEach(resetFake);
+
+  it("predicts exactly the calls getStockNews makes once the profile is known", async () => {
+    await getStockNews("NVDA");
     const searches = newsCalls();
     expect(searches.length).toBeGreaterThan(0);
     expect(fake.calls.length).toBe(2 + searches.length);
 
     fake.quoteKnown = true;
     fake.summaryState = "known";
-    expect(uncachedStockDetailCalls("NVDA")).toBe(fake.calls.length);
+    expect(uncachedStockNewsCalls("NVDA")).toBe(fake.calls.length);
 
     // Every search the loader just made is now fresh: only the quote and the summary remain.
     for (const call of searches) fake.fresh.add(call);
-    expect(uncachedStockDetailCalls("NVDA")).toBe(2);
+    expect(uncachedStockNewsCalls("NVDA")).toBe(2);
     fake.fresh.add("quote:NVDA");
     fake.fresh.add("summary:NVDA");
-    expect(uncachedStockDetailCalls("NVDA")).toBe(0);
+    expect(uncachedStockNewsCalls("NVDA")).toBe(0);
   });
 
   it("assumes the largest plan while the profile is unknown, never fewer calls than the loader makes", async () => {
-    await getStockDetail("NVDA");
-    expect(uncachedStockDetailCalls("NVDA")).toBe(2 + MAX_COMPANY_NEWS_SEARCHES);
+    await getStockNews("NVDA");
+    expect(uncachedStockNewsCalls("NVDA")).toBe(2 + MAX_COMPANY_NEWS_SEARCHES);
     expect(2 + MAX_COMPANY_NEWS_SEARCHES).toBeGreaterThanOrEqual(fake.calls.length);
     // Yahoo has no summary and the quote's name is unknown: still the upper bound.
     fake.summaryState = "none";
-    expect(uncachedStockDetailCalls("NVDA")).toBe(2 + MAX_COMPANY_NEWS_SEARCHES);
+    expect(uncachedStockNewsCalls("NVDA")).toBe(2 + MAX_COMPANY_NEWS_SEARCHES);
   });
 
   it("plans from the quote alone when Yahoo has no summary for the symbol", () => {
     fake.summaryState = "none";
     fake.quoteKnown = true;
-    const calls = uncachedStockDetailCalls("NVDA");
+    const calls = uncachedStockNewsCalls("NVDA");
     expect(calls).toBeGreaterThan(2);
     expect(calls).toBeLessThan(2 + MAX_COMPANY_NEWS_SEARCHES);
   });
@@ -118,8 +145,8 @@ describe("charging for /api/stock/[symbol]", () => {
   it("charges no news searches while Yahoo's answer that it does not know the symbol is cached", async () => {
     fake.unknown.add("ZZQXJ");
     // First request: nothing says the symbol is unknown yet, so the largest plan is charged.
-    expect(uncachedStockDetailCalls("ZZQXJ")).toBe(2 + MAX_COMPANY_NEWS_SEARCHES);
-    expect(await getStockDetail("ZZQXJ")).toBeNull();
+    expect(uncachedStockNewsCalls("ZZQXJ")).toBe(2 + MAX_COMPANY_NEWS_SEARCHES);
+    expect(await getStockNews("ZZQXJ")).toBeNull();
     // The loader stops after the quote and the summary: a 404 searches no news.
     expect([...fake.calls].sort()).toEqual(["quote:ZZQXJ", "summary:ZZQXJ"]);
 
@@ -127,13 +154,37 @@ describe("charging for /api/stock/[symbol]", () => {
     fake.summaryState = "none";
     fake.fresh.add("quote:ZZQXJ");
     fake.fresh.add("summary:ZZQXJ");
-    expect(uncachedStockDetailCalls("ZZQXJ")).toBe(0);
+    expect(uncachedStockNewsCalls("ZZQXJ")).toBe(0);
     fake.fresh.delete("summary:ZZQXJ");
-    expect(uncachedStockDetailCalls("ZZQXJ")).toBe(1);
+    expect(uncachedStockNewsCalls("ZZQXJ")).toBe(1);
 
     // Once the null expires, Yahoo is asked again and might know the symbol by then: the largest plan applies again.
     fake.fresh.delete("quote:ZZQXJ");
-    expect(uncachedStockDetailCalls("ZZQXJ")).toBe(2 + MAX_COMPANY_NEWS_SEARCHES);
+    expect(uncachedStockNewsCalls("ZZQXJ")).toBe(2 + MAX_COMPANY_NEWS_SEARCHES);
+  });
+});
+
+describe("charging for the research routes", () => {
+  beforeEach(resetFake);
+
+  it("charges the statement requests and the summary until the financials are cached", () => {
+    expect(uncachedFinancialsCalls("NVDA")).toBe(FINANCIALS_CALLS + 1);
+    fake.fresh.add("summary:NVDA");
+    expect(uncachedFinancialsCalls("NVDA")).toBe(FINANCIALS_CALLS);
+    put("research:financials:NVDA", null, { ttlMs: 60_000 });
+    expect(uncachedFinancialsCalls("NVDA")).toBe(0);
+  });
+
+  it("charges the dividend chart and the quote, and the ownership call, until each is cached", () => {
+    expect(uncachedDividendsCalls("KO")).toBe(DIVIDENDS_CALLS + 1);
+    fake.fresh.add("quote:KO");
+    expect(uncachedDividendsCalls("KO")).toBe(DIVIDENDS_CALLS);
+    put("research:dividends:KO", null, { ttlMs: 60_000 });
+    expect(uncachedDividendsCalls("KO")).toBe(0);
+
+    expect(uncachedOwnershipCalls("KO")).toBe(OWNERSHIP_CALLS);
+    put("research:ownership:KO", null, { ttlMs: 60_000 });
+    expect(uncachedOwnershipCalls("KO")).toBe(0);
   });
 });
 

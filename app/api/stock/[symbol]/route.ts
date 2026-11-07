@@ -20,7 +20,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ symbol: str
   const symbol = normalizeSymbol(decodeParam((await ctx.params).symbol));
   if (!symbol) return jsonError(400, "bad_request", "Invalid symbol.");
 
-  // An uncached page can take up to 7 Yahoo calls (quote, summary, news searches): each one beyond the first costs a unit.
+  // An uncached page takes up to 2 Yahoo calls (quote and summary; news has its own route): the second costs a unit.
   const charged = chargePublicRequest(request, extraUnits(uncachedStockDetailCalls(symbol)));
   if (charged) return charged;
 

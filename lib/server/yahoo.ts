@@ -5,6 +5,7 @@ import YahooFinance from "yahoo-finance2";
 import type {
   Bar,
   ChartData,
+  ChartInterval,
   ChartRange,
   KeyStats,
   MarketState,
@@ -14,7 +15,16 @@ import type {
   UpstreamHealth,
 } from "@/types/api";
 
-import { normalizeBars, type DailyBar, type RawChart } from "@/lib/bars";
+import {
+  foldTrailingSession,
+  latestSessions,
+  normalizeBars,
+  normalizeDividends,
+  normalizeIntradayBars,
+  normalizeSplits,
+  type DailyBar,
+  type RawChart,
+} from "@/lib/bars";
 import { hasCjk } from "@/lib/names-zh";
 
 import { cached, HOUR, isFresh, MINUTE, peek } from "./cache";
@@ -498,24 +508,121 @@ export function hasCachedDailyBars(symbol: string, days: number): boolean {
   return isFresh(`bars:${symbol}:${days}`);
 }
 
-const RANGE_SPEC: Record<ChartRange, { days: number; interval: "1d" | "1wk" }> = {
-  "1mo": { days: 35, interval: "1d" },
-  "3mo": { days: 95, interval: "1d" },
-  "6mo": { days: 186, interval: "1d" },
-  "1y": { days: 372, interval: "1d" },
-  "2y": { days: 737, interval: "1d" },
-  "5y": { days: 1835, interval: "1wk" },
+interface RangeSpec {
+  interval: ChartInterval;
+  /** Calendar days requested from Yahoo; "ytd" starts on January 1 and "max" at the first trade. */
+  from: number | "ytd" | "max";
+  /** Intraday ranges keep this many of the latest sessions. */
+  sessions?: number;
+}
+
+/**
+ * Yahoo's limits: 1m bars only within the last 30 days (8 days per request), 5m and 15m within 60 days, 60m within
+ * 730 days; beyond them it answers HTTP 422. The intraday windows below cover their sessions across long weekends.
+ */
+const RANGE_SPEC: Record<ChartRange, RangeSpec> = {
+  "1d": { interval: "5m", from: 7, sessions: 1 },
+  "5d": { interval: "15m", from: 12, sessions: 5 },
+  "1mo": { interval: "1d", from: 35 },
+  "3mo": { interval: "1d", from: 95 },
+  "6mo": { interval: "1d", from: 186 },
+  ytd: { interval: "1d", from: "ytd" },
+  "1y": { interval: "1d", from: 372 },
+  "2y": { interval: "1d", from: 737 },
+  "5y": { interval: "1wk", from: 1835 },
+  max: { interval: "1mo", from: "max" },
 };
 
 export const CHART_RANGES = Object.keys(RANGE_SPEC) as ChartRange[];
 
+export function isChartRange(value: string | null): value is ChartRange {
+  return value !== null && Object.hasOwn(RANGE_SPEC, value);
+}
+
+function isIntraday(interval: ChartInterval): boolean {
+  return interval === "5m" || interval === "15m";
+}
+
+function chartKey(symbol: string, range: ChartRange): string {
+  return `chart:v2:${symbol}:${range}`;
+}
+
+/**
+ * Intraday bars refresh every minute while the symbol's session trades (or before its quote is known) and every
+ * 10 minutes otherwise; daily and longer bars every 10 minutes, as the daily-bar cache does.
+ */
+function chartTtl(symbol: string, interval: ChartInterval): number {
+  if (!isIntraday(interval)) return barsTtl();
+  const quote = peekQuote(symbol);
+  return quote && !isSessionActive(quote.marketState) ? 10 * MINUTE : MINUTE;
+}
+
+function chartStart(spec: RangeSpec, now: number): Date {
+  if (spec.from === "max") return new Date("1970-01-02T00:00:00Z");
+  if (spec.from === "ytd") return new Date(Date.UTC(new Date(now).getUTCFullYear(), 0, 1));
+  return new Date(now - spec.from * 24 * HOUR);
+}
+
+const EMPTY_CHART = { meta: undefined, quotes: [] } satisfies RawChart;
+
+/** One chart() call with dividend and split events. Unknown or delisted symbols give an empty (cacheable) chart. */
+async function fetchChartData(symbol: string, range: ChartRange, now = Date.now()): Promise<ChartData> {
+  const spec = RANGE_SPEC[range];
+  const intraday = isIntraday(spec.interval);
+  let raw: RawChart;
+  try {
+    raw = (await upstream(() =>
+      yf.chart(symbol, { period1: chartStart(spec, now), interval: spec.interval, includePrePost: intraday, events: "div|split" }, callOptions()),
+    )) as unknown as RawChart;
+  } catch (error) {
+    if (!/No data found|symbol may be delisted/i.test(String(error))) throw error;
+    raw = EMPTY_CHART;
+  }
+  const meta = raw?.meta;
+  const gmtOffset = num(meta?.gmtoffset) ?? 0;
+  const timezone = str(meta?.exchangeTimezoneName);
+
+  let bars: Bar[];
+  let previousClose: number | null = null;
+  if (intraday) {
+    const latest = latestSessions(normalizeIntradayBars(raw), spec.sessions ?? 1, gmtOffset);
+    bars = latest.bars;
+    previousClose = latest.previousClose ?? num(meta?.previousClose);
+  } else {
+    let daily = normalizeBars(raw);
+    if (spec.interval === "1wk" || spec.interval === "1mo") daily = foldTrailingSession(daily, spec.interval);
+    if (spec.from === "ytd") {
+      const yearStart = Date.UTC(new Date(now).getUTCFullYear(), 0, 1);
+      daily = daily.filter((bar) => bar.t >= yearStart);
+    }
+    bars = daily.map((b) => ({ t: b.t, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }));
+  }
+
+  // Events inside the bars' span; a weekly or monthly bar covers its whole period.
+  const first = bars[0]?.t ?? Infinity;
+  const inRange = (t: number) => t >= first;
+  return {
+    symbol,
+    range,
+    interval: spec.interval,
+    intraday,
+    bars,
+    timezone,
+    previousClose,
+    dividends: normalizeDividends(raw, intraday).filter((d) => inRange(d.t)),
+    splits: normalizeSplits(raw, intraday).filter((s) => inRange(s.t)),
+  };
+}
+
+/** True when getChart(symbol, range) can be answered from the cache without calling Yahoo. */
+export function hasCachedChart(symbol: string, range: ChartRange): boolean {
+  return isFresh(chartKey(symbol, range));
+}
+
+/** Bars, dividends and splits for one range (see RANGE_SPEC), cached per symbol and range. */
 export async function getChart(symbol: string, range: ChartRange): Promise<ChartData> {
   const spec = RANGE_SPEC[range];
-  const bars = await cached(`chart:${symbol}:${range}`, { ttlMs: barsTtl(), staleMs: 6 * HOUR }, () =>
-    fetchChart(symbol, spec.days, spec.interval),
-  );
-  const out: Bar[] = bars.map((b) => ({ t: b.t, o: b.o, h: b.h, l: b.l, c: b.c, v: b.v }));
-  return { symbol, range, interval: spec.interval, bars: out };
+  return cached(chartKey(symbol, range), { ttlMs: chartTtl(symbol, spec.interval), staleMs: 6 * HOUR }, () => fetchChartData(symbol, range));
 }
 
 /** True when a sparkline can be answered from the cache without calling Yahoo. */
@@ -587,6 +694,7 @@ export function mapSummary(symbol: string, s: RawSummary): { profile: StockProfi
     profitMargin: num(fin.profitMargins),
     grossMargin: num(fin.grossMargins),
     operatingMargin: num(fin.operatingMargins),
+    ebitdaMargin: num(fin.ebitdaMargins),
     revenueGrowth: num(fin.revenueGrowth),
     earningsGrowth: num(fin.earningsGrowth),
     debtToEquity: debtToEquityPercent === null ? null : debtToEquityPercent / 100,
@@ -594,6 +702,7 @@ export function mapSummary(symbol: string, s: RawSummary): { profile: StockProfi
     totalDebt: num(fin.totalDebt),
     totalRevenue: num(fin.totalRevenue),
     freeCashflow: num(fin.freeCashflow),
+    financialCurrency: str(fin.financialCurrency),
     targetMeanPrice: num(fin.targetMeanPrice),
     targetHighPrice: num(fin.targetHighPrice),
     targetLowPrice: num(fin.targetLowPrice),

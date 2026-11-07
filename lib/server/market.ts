@@ -151,6 +151,7 @@ const EMPTY_STATS: KeyStats = {
   profitMargin: null,
   grossMargin: null,
   operatingMargin: null,
+  ebitdaMargin: null,
   revenueGrowth: null,
   earningsGrowth: null,
   debtToEquity: null,
@@ -158,6 +159,7 @@ const EMPTY_STATS: KeyStats = {
   totalDebt: null,
   totalRevenue: null,
   freeCashflow: null,
+  financialCurrency: null,
   targetMeanPrice: null,
   targetHighPrice: null,
   targetLowPrice: null,
@@ -250,10 +252,26 @@ export function getMarketOverview(): Promise<MarketOverview> {
 }
 
 // ---------------------------------------------------------------------------
-// Stock detail and chart
+// Stock detail, news and chart
 // ---------------------------------------------------------------------------
 
-/** Stock page payload; null when Yahoo does not know the symbol. Throws when the quote cannot be loaded. */
+/**
+ * Margins that do not apply come back from Yahoo as exactly 0: banks and insurers have no gross profit, and their
+ * EBITDA margin is 0 too. A real business never has a gross margin of exactly 0.000, so those zeros become null
+ * ("not available") instead of a misleading 0.0%.
+ */
+export function withApplicableMargins(stats: KeyStats): KeyStats {
+  return {
+    ...stats,
+    grossMargin: stats.grossMargin === 0 ? null : stats.grossMargin,
+    ebitdaMargin: stats.ebitdaMargin === 0 ? null : (stats.ebitdaMargin ?? null),
+  };
+}
+
+/**
+ * Stock page payload: quote, profile and key statistics. Null when Yahoo does not know the symbol; throws when the
+ * quote cannot be loaded. Company news has its own loader (getStockNews), so the price never waits for news searches.
+ */
 export async function getStockDetail(symbol: string): Promise<StockDetail | null> {
   const [quoteResult, summaryResult] = await Promise.allSettled([getQuote(symbol), getSummary(symbol)]);
   if (quoteResult.status === "rejected") throw quoteResult.reason;
@@ -269,25 +287,39 @@ export async function getStockDetail(symbol: string): Promise<StockDetail | null
     ? { profile: summary.profile, stats: fillStatsFromQuote(summary.stats, quote) }
     : summaryFromQuote(quote);
 
-  let news: NewsItem[] = [];
-  try {
-    news = await getCompanyNews(symbol, quote.name || profile.name, summary?.profile ?? null);
-  } catch (error) {
-    warnings.push("news");
-    log("warn", "stock.news_unavailable", { symbol, error });
-  }
+  return { asOf: new Date().toISOString(), quote, profile, stats: withApplicableMargins(stats), warnings };
+}
 
-  return { asOf: new Date().toISOString(), quote, profile, stats, news, warnings };
+/**
+ * Company news with industry and macro context for the quote page. Null when Yahoo does not know the symbol; throws
+ * when the quote cannot be loaded or every news search fails. The quote and the summary come from the same caches as
+ * getStockDetail, so the page's two requests share those loads.
+ */
+export async function getStockNews(symbol: string): Promise<NewsItem[] | null> {
+  const [quoteResult, summaryResult] = await Promise.allSettled([getQuote(symbol), getSummary(symbol)]);
+  if (quoteResult.status === "rejected") throw quoteResult.reason;
+  const quote = quoteResult.value;
+  if (!quote) return null;
+  const summary = summaryResult.status === "fulfilled" ? summaryResult.value : null;
+  return getCompanyNews(symbol, quote.name || summary?.profile.name || symbol, summary?.profile ?? null);
 }
 
 /**
  * Chart bars for the range. Null when the symbol is unknown (no quote and no bars); a known symbol without bars
- * in the range gets an empty chart. Throws when the bars cannot be loaded for a known symbol.
+ * in the range gets an empty chart. Throws when the bars cannot be loaded for a known symbol. The quote is only
+ * consulted when the chart comes back empty or fails, so a normal chart costs one upstream call.
  */
 export async function getChartData(symbol: string, range: ChartRange): Promise<ChartData | null> {
-  const [chartResult, quoteResult] = await Promise.allSettled([getChart(symbol, range), getQuote(symbol)]);
-  if (chartResult.status === "fulfilled" && chartResult.value.bars.length > 0) return chartResult.value;
-  if (quoteResult.status === "fulfilled" && quoteResult.value === null) return null;
-  if (chartResult.status === "rejected") throw chartResult.reason;
-  return chartResult.value;
+  let chart: ChartData | null = null;
+  let failure: unknown = null;
+  try {
+    chart = await getChart(symbol, range);
+    if (chart.bars.length > 0) return chart;
+  } catch (error) {
+    failure = error;
+  }
+  const quote = await getQuote(symbol).catch(() => undefined);
+  if (quote === null) return null;
+  if (failure !== null) throw failure;
+  return chart;
 }
