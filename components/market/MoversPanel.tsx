@@ -26,7 +26,6 @@ const SCREENS: Record<MoverList, DiscoverScreen> = { gainers: "day_gainers", los
 const ROWS = 8;
 const SCOPE_KEY = "investseek:movers:v1";
 
-
 /**
  * Today's movers with a scope switch: the whole US market from Yahoo's screens (the default, quality-filtered on the
  * server) or the universe of large caps behind the heatmap. Relative volume shows how unusual the trading is.
@@ -39,9 +38,11 @@ export function MoversPanel({ movers, loading, className }: { movers: MarketOver
   const discover = useDiscover(scope === "us" ? SCREENS[list] : null);
   const universeCount = UNIVERSE_STOCKS.length;
 
-  const rows: OverviewQuote[] = scope === "us" ? (discover.data?.quotes ?? []).slice(0, ROWS) : (movers?.[list] ?? []).slice(0, ROWS);
-  const isLoading = scope === "us" ? !discover.data && !discover.error : loading;
-  const failed = scope === "us" && discover.error && !discover.data;
+  // SWR keeps the previous key's data while the next loads: never show the gainers under the Losers tab.
+  const usData = discover.data?.screen === SCREENS[list] ? discover.data : undefined;
+  const rows: OverviewQuote[] = scope === "us" ? (usData?.quotes ?? []).slice(0, ROWS) : (movers?.[list] ?? []).slice(0, ROWS);
+  const isLoading = scope === "us" ? !usData && !discover.error : loading;
+  const failed = scope === "us" && discover.error && !usData;
   const title = scope === "us" ? t.markets.movers.titleUs : tpl(t.markets.movers.titleUniverse, { n: universeCount });
 
   const columns: DataTableColumn<OverviewQuote>[] = [
@@ -99,7 +100,7 @@ export function MoversPanel({ movers, loading, className }: { movers: MarketOver
         ]}
         className="border-b border-line px-1 max-sm:[&_[role=tab]]:h-10"
       />
-      <StaleBanner show={scope === "us" && Boolean(discover.error && discover.data)} since={discover.data?.asOf} />
+      <StaleBanner show={scope === "us" && Boolean(discover.error && usData)} since={usData?.asOf} />
       {failed ? (
         <ErrorState error={discover.error} onRetry={() => discover.mutate()} compact />
       ) : (
@@ -114,8 +115,10 @@ export function MoversPanel({ movers, loading, className }: { movers: MarketOver
           empty={t.markets.movers.empty}
         />
       )}
-      {scope === "us" && discover.data ? (
-        <p className="border-t border-line px-3 py-1.5 text-micro text-fg-3">{tpl(t.markets.movers.usNote, { cap: tpl(t.markets.movers.dollars, { value: formatCompact(discover.data.minMarketCap, lang) }) })}</p>
+      {scope === "us" && usData ? (
+        <p className="border-t border-line px-3 py-1.5 text-micro text-fg-3">
+          {tpl(t.markets.movers.usNote, { cap: tpl(t.markets.movers.dollars, { value: formatCompact(usData.minMarketCap, lang) }) })}
+        </p>
       ) : null}
     </Panel>
   );
