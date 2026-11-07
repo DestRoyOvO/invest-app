@@ -264,7 +264,8 @@ density. `active` marks an open menu or a pressed toggle.
 ```
 
 Badges are sans 600 11px caps. `up` / `down` tones only for price or P&L. AiChip replaces sparkle icons: `accent`,
-`muted` (unavailable) or `current` (inherits the button text color).
+`muted` (unavailable) or `current` (inherits the button text color). The chip already says AI, so the text after it
+drops the word ("[AI] ready", not "[AI] AI ready"); the accessible name then still starts with the visible text.
 
 ### Tabs and Segmented
 
@@ -393,8 +394,9 @@ const columns: DataTableColumn<Quote>[] = [
 
 No library. The child must be one focusable element. The card opens after 200ms on hover or at once on keyboard focus,
 renders in a portal (overflow cannot clip it), flips and clamps to the viewport, links itself with
-`aria-describedby`, stays open while hovered and closes on Escape or blur. Touch screens get no hover: never put the
-only copy of a number in a hover card.
+`aria-describedby`, stays open while hovered and closes on Escape or blur. Escape closes only the card: a Drawer or
+menu around it stays open until the next Escape. Touch screens get no hover: never put the only copy of a number in a
+hover card.
 
 ### Toast
 
@@ -489,6 +491,7 @@ Focus moves in, Tab is trapped, Escape closes and focus returns. Mark the first 
 
 1. Replace `.label` on headings and table heads with `.panel-title` (through Panel) or `.col-head`.
 2. Put tickers in `.mono`; leave numbers in `.num`.
+- **Escape**: closes the innermost layer only (a hover card before the drawer it sits in).
 3. Move tables to DataTable with colgroup widths; drop `table-fixed` equal columns.
 4. Replace red/green on readings with neutral Meter or text; keep Delta for prices and P&L.
 5. Rebuild the grid as two column stacks; remove `row-span` and stretched panels.

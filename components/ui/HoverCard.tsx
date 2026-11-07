@@ -76,17 +76,21 @@ export function HoverCard({ children, content, side = "bottom", delay = 200, var
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(place);
     };
+    // Escape dismisses only the card. Listening in the capture phase on window runs before the document listeners of
+    // a surrounding Drawer or menu, and stopping the event there keeps them from closing too (WCAG 1.4.13).
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      setOpen(false);
     };
     window.addEventListener("scroll", onMove, true);
     window.addEventListener("resize", onMove);
-    document.addEventListener("keydown", onKey);
+    window.addEventListener("keydown", onKey, true);
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener("scroll", onMove, true);
       window.removeEventListener("resize", onMove);
-      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("keydown", onKey, true);
     };
   }, [open, side, content]);
 
