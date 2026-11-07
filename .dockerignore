@@ -1,0 +1,19 @@
+# Keep the build context small and free of secrets. Settings reach the container at run time (env_file in
+# docker-compose.yml or --env-file), never through the image.
+.env*
+.git
+.github
+.claude
+.next
+.vercel
+node_modules
+coverage
+out
+build
+docs/screenshots
+npm-debug.log*
+*.log
+*.tsbuildinfo
+Dockerfile
+docker-compose.yml
+.dockerignore

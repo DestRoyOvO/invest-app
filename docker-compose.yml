@@ -1,0 +1,49 @@
+# InvestSeek for one person on an always-on machine (home server, NAS or a small VPS). See docs/deployment.md.
+#
+#   docker compose up -d --build                     http://127.0.0.1:3000, reachable from this machine only
+#   docker compose --profile https up -d --build     adds Caddy with automatic HTTPS for SITE_DOMAIN
+#
+# The app reads its settings from .env.local, the same file `npm run dev` uses. Compose itself reads SITE_DOMAIN,
+# APP_PORT, TRUST_PROXY and GIT_SHA from the shell or from a .env file next to this one.
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        GIT_SHA: ${GIT_SHA:-}
+    image: investseek:latest
+    restart: unless-stopped
+    env_file:
+      - path: .env.local
+        required: false
+    environment:
+      # Caddy appends the visitor's address to X-Forwarded-For, and rate limits should use it. This is safe because
+      # the app's port is published on 127.0.0.1 only, so nobody else can reach it directly and forge the header.
+      # If you publish the port on your network without a proxy, set TRUST_PROXY=0.
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+    ports:
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
+    # The image's HEALTHCHECK (liveness, GET /api/health) applies. Point uptime monitors at /api/health?ready=1.
+
+  caddy:
+    image: caddy:2-alpine
+    profiles: ["https"]
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    # Automatic HTTPS: Caddy obtains and renews a certificate for SITE_DOMAIN (DNS must point here and ports 80 and 443
+    # must be reachable) and redirects http to https.
+    command: ["caddy", "reverse-proxy", "--from", "${SITE_DOMAIN:-localhost}", "--to", "app:3000"]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  caddy-data:
+  caddy-config:

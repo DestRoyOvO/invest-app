@@ -19,6 +19,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // A self-contained server in .next/standalone for the Docker image (see Dockerfile). Vercel ignores it, and
+  // `npm start` keeps working.
+  output: "standalone",
   poweredByHeader: false,
   reactStrictMode: true,
   // `npm run dev` binds to 127.0.0.1 only; allow both loopback host names for dev assets and HMR.
