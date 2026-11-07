@@ -6,6 +6,7 @@ import { latestTechnicalScore, wilderRsiSeries } from "@/lib/signal";
 import { percentileRank } from "@/lib/stats";
 import { BROAD_ETFS, SECTORS, sectorOfSymbol, UNIVERSE_STOCKS } from "@/lib/universe";
 import type { FactorProfile, Quote, ScreenerResponse, ScreenerRow, ScreenerUniverse, StyleFactorKey } from "@/types/api";
+import type { ScreenRow } from "@/types/screener";
 
 import { cached, HOUR, MINUTE } from "./cache";
 import { dropPartialBar } from "./signal-service";
@@ -13,8 +14,9 @@ import { getDailyBars, getQuotes, todayInExchange } from "./yahoo";
 
 // The screener snapshot: one row per universe symbol with valuation and dividend fields from the batched quote, plus
 // returns, RSI, the model's technical reading and the style factors (lib/factors.ts) from daily bars. The snapshot is
-// shared by every visitor and rebuilt at most every few minutes; daily bars come from the same cached request as the
-// quant signal, so a symbol whose quote page was opened costs nothing extra.
+// shared by every visitor and rebuilt at most every 10 minutes; daily bars come from the same cached request as the
+// quant signal, so a symbol whose quote page was opened costs nothing extra. Rows carry the ScreenerRow contract plus
+// the dividend columns in types/screener.ts; filtering, sorting and export happen in the browser (lib/screens.ts).
 
 /** Calendar days of daily bars: the signal engine's request, long enough for 12-1 momentum and 252-session beta. */
 const HISTORY_DAYS = 540;
@@ -64,7 +66,7 @@ export function barMetrics(bars: readonly DailyBar[], benchmark: readonly DatedC
   };
 }
 
-/** Quote-based columns of one row. Exported for tests. */
+/** Quote-based columns of one row (no extra Yahoo call: everything comes from the batched quote). Exported for tests. */
 export function quoteColumns(symbol: string, quote: Quote | undefined) {
   const price = quote?.price ?? null;
   return {
@@ -79,6 +81,8 @@ export function quoteColumns(symbol: string, quote: Quote | undefined) {
     forwardPE: quote?.forwardPE ?? null,
     priceToBook: quote?.priceToBook ?? null,
     dividendYield: quote?.dividendYield ?? null,
+    dividendRate: quote?.dividendRate ?? null,
+    exDividendDate: quote?.exDividendDate ?? null,
     analystRating: quote?.analystRating ?? null,
     nextEarningsDate: quote?.nextEarningsDate ?? null,
     earningsDateEstimated: quote?.earningsDateEstimated ?? null,
@@ -121,7 +125,7 @@ async function buildSnapshot(universe: ScreenerUniverse): Promise<ScreenerRespon
   const warnings: string[] = [];
   if (!benchmark) warnings.push("benchmark");
   const partial: string[] = [];
-  const rows: ScreenerRow[] = symbols.map((symbol, i) => {
+  const rows: ScreenRow[] = symbols.map((symbol, i) => {
     const quote = quotes.get(symbol);
     const bars = barsList[i];
     if (!bars) partial.push(symbol);

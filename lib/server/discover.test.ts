@@ -17,7 +17,7 @@ vi.mock("./yahoo", async (importOriginal) => {
 import { GET as discoverRoute } from "@/app/api/discover/route";
 
 import { clearCache } from "./cache";
-import { getDiscover, passesQuality } from "./discover";
+import { getDiscover, MAX_ROWS, passesQuality, SCAN_COUNT } from "./discover";
 import { resetRateLimits } from "./rate-limit";
 import { mapQuote } from "./yahoo";
 
@@ -63,7 +63,7 @@ describe("getDiscover", () => {
   it("filters a predefined screen and keeps Yahoo's order and total", async () => {
     mocks.screener.mockResolvedValue({ total: 371, quotes: [raw("AAA"), raw("JUNK", { marketCap: 1e8 }), raw("BBB")] });
     const res = await getDiscover("day_gainers");
-    expect(mocks.screener.mock.calls[0][0]).toMatchObject({ scrIds: "day_gainers" });
+    expect(mocks.screener.mock.calls[0][0]).toMatchObject({ scrIds: "day_gainers", count: SCAN_COUNT });
     expect(res.quotes.map((q) => q.symbol)).toEqual(["AAA", "BBB"]);
     expect(res).toMatchObject({ screen: "day_gainers", scanned: 3, total: 371, minMarketCap: 1e9 });
     expect(res.quotes[0].fetchedAt).not.toBeNull();
@@ -75,6 +75,32 @@ describe("getDiscover", () => {
     const large = await getDiscover("most_actives", 1e10);
     expect(large.quotes.map((q) => q.symbol)).toEqual(["BIG"]);
     expect(mocks.screener).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the first 50 passing rows of a deep scan", async () => {
+    const quotes = Array.from({ length: 120 }, (_, i) => raw(`S${i}`, { marketCap: i % 2 === 0 ? 5e9 : 1e8 }));
+    mocks.screener.mockResolvedValue({ total: 371, quotes });
+    const res = await getDiscover("day_losers");
+    expect(SCAN_COUNT).toBe(250);
+    expect(res.quotes).toHaveLength(MAX_ROWS);
+    expect(res.quotes[0].symbol).toBe("S0");
+    expect(res.quotes[1].symbol).toBe("S2");
+    expect(res).toMatchObject({ scanned: 120, total: 371 });
+  });
+
+  it("finds large caps far down a list for a high floor", async () => {
+    const quotes = Array.from({ length: 250 }, (_, i) => raw(`S${i}`, { marketCap: i >= 230 ? 2e11 : 2e9 }));
+    mocks.screener.mockResolvedValue({ total: 300, quotes });
+    const res = await getDiscover("day_gainers", 1e11);
+    expect(res.quotes.map((q) => q.symbol)).toEqual(Array.from({ length: 20 }, (_, i) => `S${230 + i}`));
+  });
+
+  it("reads Yahoo's epoch-second earnings times from screen rows", async () => {
+    const next = Math.floor(Date.now() / 1000) + 5 * 86_400;
+    mocks.screener.mockResolvedValue({ total: 1, quotes: [raw("ERN", { earningsTimestampStart: next, isEarningsDateEstimate: true, volume: 1 })] });
+    const res = await getDiscover("growth_technology_stocks");
+    expect(res.quotes[0].nextEarningsDate).toBe(new Date(next * 1000).toISOString());
+    expect(res.quotes[0].earningsDateEstimated).toBe(true);
   });
 
   it("prices trending symbols through the batched quotes", async () => {

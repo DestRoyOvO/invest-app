@@ -122,7 +122,12 @@ describe("row building", () => {
     expect(columns.vs50d).toBeCloseTo(0.25);
     expect(columns.vs200d).toBeCloseTo(-0.2);
     expect(quoteColumns("SPY", quote("SPY", { quoteType: "ETF" })).sector).toBeNull();
-    expect(quoteColumns("GONE", undefined)).toMatchObject({ name: "GONE", price: null, fromHigh52: null });
+    expect(quoteColumns("GONE", undefined)).toMatchObject({ name: "GONE", price: null, fromHigh52: null, dividendRate: null, exDividendDate: null });
+  });
+
+  it("carries the dividend columns from the quote", () => {
+    const columns = quoteColumns("KO", quote("KO", { dividendRate: 2.04, exDividendDate: "2026-11-28T05:00:00.000Z" }));
+    expect(columns).toMatchObject({ dividendRate: 2.04, exDividendDate: "2026-11-28T05:00:00.000Z", dividendYield: 0.01 });
   });
 
   it("computes returns, RSI, the technical reading and the style factors from bars", () => {
@@ -180,6 +185,23 @@ describe("getScreener", () => {
     const calls = yahoo.getDailyBars.mock.calls.length;
     await getScreener("stocks");
     expect(yahoo.getDailyBars.mock.calls.length).toBe(calls);
+  });
+
+  it("serves the dividend columns on every row", async () => {
+    yahoo.getQuotes.mockImplementation(async (symbols) => new Map(symbols.map((s) => [s, quote(s, { dividendRate: 1.5, exDividendDate: "2026-12-01T05:00:00.000Z" })])));
+    const snapshot = await getScreener("stocks");
+    expect(snapshot.rows[0]).toMatchObject({ dividendRate: 1.5, exDividendDate: "2026-12-01T05:00:00.000Z" });
+  });
+
+  it("warns when quotes are stale or the benchmark history is missing", async () => {
+    yahoo.getQuotes.mockImplementation(async (symbols) => new Map(symbols.map((s) => [s, quote(s, { stale: s === "MSFT" })])));
+    yahoo.getDailyBars.mockImplementation(async (symbol) => {
+      if (symbol === "SPY") throw new Error("Yahoo down");
+      return bars(seedOf(symbol));
+    });
+    const snapshot = await getScreener("stocks");
+    expect(snapshot.warnings).toEqual(expect.arrayContaining(["benchmark", "quotes_stale"]));
+    expect(snapshot.rows.every((r) => r.factors.beta === null)).toBe(true);
   });
 
   it("covers the ETF universe with fund fields", async () => {

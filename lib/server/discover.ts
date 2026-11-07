@@ -8,7 +8,9 @@ import { callOptions, getQuotes, mapQuote, upstream, yf } from "./yahoo";
 // Market-wide screens from Yahoo's predefined screeners (day gainers, losers, most active, and a few idea lists) and
 // Yahoo's trending symbols. Yahoo's lists include micro caps, OTC names and funds, so rows pass a quality filter:
 // US-listed equities only, with a market-cap and a price floor. One Yahoo call per screen every two minutes, shared
-// by every visitor.
+// by every visitor. Each call asks for Yahoo's top 250 rows, the most one request returns, so a high cap floor such as
+// $100B still finds the large names further down a list sorted by percent change; the response keeps the first 50 that
+// pass, which is more than any list on screen shows.
 
 export const DISCOVER_SCREENS: readonly DiscoverScreen[] = [
   "day_gainers",
@@ -23,8 +25,10 @@ export const DISCOVER_SCREENS: readonly DiscoverScreen[] = [
 /** Default market-cap floor: $1B keeps the lists to investable names. */
 export const DEFAULT_MIN_MARKET_CAP = 1e9;
 const MIN_PRICE = 2;
-/** Rows requested from Yahoo: enough that a few dozen survive the filter. */
-const SCAN_COUNT = 100;
+/** Rows requested from Yahoo per screen: the most one request returns. */
+export const SCAN_COUNT = 250;
+/** Rows a response keeps after the quality filter, in Yahoo's order. */
+export const MAX_ROWS = 50;
 const TTL_MS = 2 * MINUTE;
 const STALE_MS = HOUR;
 
@@ -69,11 +73,17 @@ async function loadTrending(): Promise<ScreenRows> {
   return { rows, total: symbols.length };
 }
 
-/** A screen's rows after the quality filter (cached two minutes, served stale for an hour if Yahoo fails). */
+/**
+ * A screen's first 50 rows after the quality filter, in Yahoo's order (cached two minutes, served stale for an hour if
+ * Yahoo fails). The cap floor is applied to the cached rows, so changing it costs no Yahoo call.
+ */
 export async function getDiscover(screen: DiscoverScreen, minMarketCap = DEFAULT_MIN_MARKET_CAP): Promise<DiscoverResponse> {
   const { rows, total } = await cached(`discover:${screen}`, { ttlMs: TTL_MS, staleMs: STALE_MS }, () =>
     screen === "trending" ? loadTrending() : loadScreen(screen),
   );
-  const quotes = rows.filter((row) => passesQuality(row.quote, row.market, minMarketCap)).map((row) => row.quote);
+  const quotes = rows
+    .filter((row) => passesQuality(row.quote, row.market, minMarketCap))
+    .slice(0, MAX_ROWS)
+    .map((row) => row.quote);
   return { asOf: new Date().toISOString(), screen, quotes, scanned: rows.length, total, minMarketCap };
 }
