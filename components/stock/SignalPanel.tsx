@@ -60,7 +60,7 @@ function ScoreGauge({ score, label, valueText, weak, strong }: { score: number; 
   );
 }
 
-/** An input of the reading: its raw value and its 0-100 score as a neutral bar from the midline. */
+/** An input of the reading: its raw value and its 0-100 score as a neutral bar from the midline (Meter colors). */
 function InputRow({ factor, t }: { factor: FactorResult; t: Messages }) {
   const offset = factor.score - 50;
   const width = `${(Math.min(Math.abs(offset), 50) / 50) * 50}%`;
@@ -80,8 +80,8 @@ function InputRow({ factor, t }: { factor: FactorResult; t: Messages }) {
           )}
         </div>
       </div>
-      <div aria-hidden className="relative h-1.5 bg-line">
-        <span className="absolute -inset-y-0.5 left-1/2 w-px bg-line-2" />
+      <div aria-hidden className="relative h-1.5 bg-line-2">
+        <span className="absolute -inset-y-0.5 left-1/2 w-px -translate-x-1/2 bg-fg-2" />
         {!factor.imputed ? <span className={cn("absolute inset-y-0 bg-fg-3", offset >= 0 ? "left-1/2" : "right-1/2")} style={{ width }} /> : null}
       </div>
       <div className={cn("num text-right text-xs", factor.imputed ? "text-fg-3" : "text-fg")}>{factor.imputed ? DASH : Math.round(factor.score)}</div>

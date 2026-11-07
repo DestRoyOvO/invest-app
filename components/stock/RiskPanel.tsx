@@ -93,8 +93,8 @@ function QuintileLadder({ quintile, t }: { quintile: number; t: Messages }) {
               {extreme ? <span className="truncate">{extreme}</span> : null}
               {current ? <span className="sr-only">({r.thisStock})</span> : null}
             </span>
-            <span aria-hidden className="relative h-1.5 bg-line">
-              <span className={cn("absolute inset-y-0 left-0", current ? "bg-fg-2" : "bg-fg-3")} style={{ width: `${((row.drawdown ?? 0) / max) * 100}%` }} />
+            <span aria-hidden className="relative h-1.5 bg-line-2">
+              <span className="absolute inset-y-0 left-0 bg-fg-3" style={{ width: `${((row.drawdown ?? 0) / max) * 100}%` }} />
             </span>
             <span className="num text-right">{pct(row.drawdown, 0)}</span>
           </li>

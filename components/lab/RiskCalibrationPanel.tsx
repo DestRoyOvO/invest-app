@@ -30,7 +30,7 @@ type SubperiodRow = (typeof RISK_CALIBRATION.quintiles.subperiods)[number];
 
 function DrawdownBar({ value, max }: { value: number | null; max: number }) {
   return (
-    <span aria-hidden className="relative inline-block h-1.5 w-8 bg-line align-middle">
+    <span aria-hidden className="relative inline-block h-1.5 w-8 bg-line-2 align-middle">
       <span className="absolute inset-y-0 left-0 bg-fg-3" style={{ width: `${(Math.max(value ?? 0, 0) / max) * 100}%` }} />
     </span>
   );

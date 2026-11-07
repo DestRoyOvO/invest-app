@@ -98,7 +98,7 @@ export function FactorTestsPanel() {
   ];
 
   return (
-    <Panel title={l.title} code="FCT" id="factors" actions={<Badge tone={tally.passed > 0 ? "info" : "neutral"}>{tpl(l.verdict, { passed: tally.passed, tests: tally.tests })}</Badge>}>
+    <Panel title={l.title} code="FCT" id="factors" actions={<Badge>{tpl(l.verdict, { passed: tally.passed, tests: tally.tests })}</Badge>}>
       <p className="max-w-prose px-3 pt-3 pb-2 text-xs leading-5 text-fg-2">{tpl(l.lead, { from: research.from, to: research.to })}</p>
       <ScrollRegion label={l.caption}>
         <DataTable rows={research.factors} columns={columns} rowKey={(row) => row.key} caption={l.caption} minWidth="48rem" className="overflow-x-visible!" />
