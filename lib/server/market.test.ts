@@ -214,11 +214,14 @@ describe("buildSectors", () => {
 
     const technology = sectors[0];
     expect(technology.stocks.map((q) => q.symbol)).toEqual(["AAPL", "NVDA", "MSFT"]);
-    expect(technology.etf?.symbol).toBe("XLK");
     expect(technology.changePercent).toBeCloseTo((2 * 4_000 - 1 * 5_000) / 9_000);
+    // Slim rows: only the fields the heatmap and the sector tables show.
+    expect(Object.keys(technology.stocks[0]).sort()).toEqual(
+      ["avgVolume", "change", "changePercent", "fiftyTwoWeekHigh", "fiftyTwoWeekLow", "marketCap", "name", "price", "symbol", "trailingPE", "volume"],
+    );
 
     const energy = sectors.find((s) => s.key === "energy");
-    expect(energy).toEqual({ key: "energy", etf: null, changePercent: null, stocks: [] });
+    expect(energy).toEqual({ key: "energy", changePercent: null, stocks: [] });
   });
 });
 

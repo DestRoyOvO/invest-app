@@ -133,12 +133,62 @@ export interface BoardItem {
   spark: number[];
 }
 
+/**
+ * The quote fields the overview's heatmap, sector tables and movers show. The overview is polled by every open tab, so
+ * its rows carry this slim subset of Quote; a page that needs more fields loads them from /api/quotes.
+ */
+export type OverviewQuote = Pick<
+  Quote,
+  "symbol" | "name" | "price" | "change" | "changePercent" | "volume" | "avgVolume" | "marketCap" | "trailingPE" | "fiftyTwoWeekHigh" | "fiftyTwoWeekLow"
+>;
+
 export interface SectorSnapshot {
   key: SectorKey;
-  etf: Quote | null;
   /** Market-cap-weighted average change of the constituents, in percent units. */
   changePercent: number | null;
-  stocks: Quote[];
+  /** Constituents with a quote, largest market cap first. */
+  stocks: OverviewQuote[];
+}
+
+/** Stocks that meet a condition (`count`) out of the stocks with the data to tell (`of`). */
+export interface BreadthTally {
+  count: number;
+  of: number;
+}
+
+export interface SectorBreadth {
+  key: SectorKey;
+  advancers: number;
+  decliners: number;
+  above50d: BreadthTally;
+  above200d: BreadthTally;
+}
+
+/**
+ * Breadth of the stock universe (the heatmap's constituents, lib/universe.ts), from the same quotes as the heatmap:
+ * how many stocks rose today, trade above their moving averages or sit near a 52-week extreme, and the equal-weight
+ * S&P 500 against the cap-weighted one.
+ */
+export interface MarketBreadth {
+  /** Universe stocks with a quote. */
+  stocks: number;
+  /** Stocks up, down and unchanged today; stocks without a change are left out. */
+  advancers: number;
+  decliners: number;
+  unchanged: number;
+  /** Price above the 50- and 200-session simple averages. */
+  above50d: BreadthTally;
+  above200d: BreadthTally;
+  /** Price within `nearExtreme` of the 52-week high, or of the 52-week low. */
+  nearHigh: BreadthTally;
+  nearLow: BreadthTally;
+  /** Distance from a 52-week extreme that counts as near, as a ratio: 0.03 = within 3%. */
+  nearExtreme: number;
+  /** Today's change of the equal-weight (RSP) and the cap-weighted (SPY) S&P 500 ETFs, in percent units. */
+  equalWeight: number | null;
+  capWeight: number | null;
+  /** In the order of SECTORS (lib/universe.ts). */
+  sectors: SectorBreadth[];
 }
 
 export interface MarketOverview {
@@ -149,12 +199,15 @@ export interface MarketOverview {
   board: BoardItem[];
   /** In the order of SECTORS (lib/universe.ts). */
   sectors: SectorSnapshot[];
+  /** Movers among the universe stocks (the market-wide lists are /api/discover). */
   movers: {
-    gainers: Quote[];
-    losers: Quote[];
+    gainers: OverviewQuote[];
+    losers: OverviewQuote[];
     /** Highest dollar volume (price x volume). */
-    mostActive: Quote[];
+    mostActive: OverviewQuote[];
   };
+  /** Null when no universe stock has a quote. */
+  breadth: MarketBreadth | null;
   news: NewsItem[];
   /** Sections that failed upstream and were omitted or served stale, e.g. ["news"]; "quotes_stale" when some quotes are old. */
   warnings: string[];
