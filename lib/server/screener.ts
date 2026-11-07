@@ -3,8 +3,9 @@ import "server-only";
 import type { DailyBar } from "@/lib/bars";
 import { crossSectionalPercentiles, FACTOR_KEYS, styleFactorsAt, type DatedClose } from "@/lib/factors";
 import { latestTechnicalScore, wilderRsiSeries } from "@/lib/signal";
+import { ETF_UNIVERSE, universeSymbols } from "@/lib/screens";
 import { percentileRank } from "@/lib/stats";
-import { BROAD_ETFS, SECTORS, sectorOfSymbol, UNIVERSE_STOCKS } from "@/lib/universe";
+import { sectorOfSymbol } from "@/lib/universe";
 import type { FactorProfile, Quote, ScreenerResponse, ScreenerRow, ScreenerUniverse, StyleFactorKey } from "@/types/api";
 import type { ScreenRow } from "@/types/screener";
 
@@ -24,12 +25,8 @@ const BENCHMARK = "SPY";
 const SNAPSHOT_TTL_MS = 10 * MINUTE;
 const SNAPSHOT_STALE_MS = 2 * HOUR;
 
-/** Liquid ETFs: the broad market, the SPDR sector funds and the related funds shown on sector pages. */
-export const ETF_UNIVERSE: string[] = [...new Set([...BROAD_ETFS, ...SECTORS.flatMap((sector) => [sector.etf, ...sector.relatedEtfs])])];
-
-export function universeSymbols(universe: ScreenerUniverse): string[] {
-  return universe === "etfs" ? ETF_UNIVERSE : UNIVERSE_STOCKS;
-}
+/** The ETF universe and the symbols of each universe live with the screener model (lib/screens.ts), shared with the client. */
+export { ETF_UNIVERSE, universeSymbols };
 
 const EMPTY_FACTORS: Record<StyleFactorKey, number | null> = { momentum: null, reversal: null, high52: null, volatility: null, beta: null };
 

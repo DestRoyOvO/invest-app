@@ -29,6 +29,7 @@ import {
   normalizeScreen,
   parseCapParam,
   parseNumberInput,
+  PHONE_COLUMNS,
   PRESETS,
   presetsFor,
   rangeKeysFor,
@@ -286,18 +287,19 @@ describe("sorting", () => {
 });
 
 describe("column sets", () => {
-  it("lead with the symbol and only use fields the universe has", () => {
+  it("lead with the symbol and the name and only use fields the universe has", () => {
     for (const universe of ["stocks", "etfs"] as const) {
       for (const [set, keys] of Object.entries(COLUMN_SETS[universe])) {
-        expect(keys[0], `${universe}/${set}`).toBe("symbol");
+        expect(keys.slice(0, 2), `${universe}/${set}`).toEqual(["symbol", "name"]);
         for (const key of keys) expect(METRICS[key].universes, `${universe}/${set}/${key}`).toContain(universe);
+        for (const key of PHONE_COLUMNS[universe][set as keyof (typeof COLUMN_SETS)["stocks"]]) expect(keys, `${universe}/${set} phone`).toContain(key);
       }
     }
   });
 
   it("gives ETFs their fund columns", () => {
-    expect(columnsFor({ universe: "etfs", columns: "overview" })).toEqual(["symbol", "name", "price", "chg", "assets", "er", "ytd", "r1m", "r3m", "r6m", "vol", "beta"]);
-    expect(columnsFor({ universe: "stocks", columns: "factors" })).toEqual(["symbol", "name", "price", "momPct", "revPct", "highPct", "volPct", "betaPct"]);
+    expect(columnsFor({ universe: "etfs", columns: "overview" })).toEqual(["symbol", "name", "price", "assets", "er", "ytd", "r1m", "r3m", "r6m", "vol", "beta"]);
+    expect(columnsFor({ universe: "stocks", columns: "factors" })).toEqual(["symbol", "name", "momPct", "revPct", "highPct", "volPct", "betaPct"]);
   });
 });
 

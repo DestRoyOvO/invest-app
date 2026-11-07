@@ -14,11 +14,18 @@ import type { ScreenerUniverse, SectorKey } from "@/types/api";
 import type { ScreenRow } from "@/types/screener";
 
 import { createLocalStore } from "./local-store";
-import { SECTOR_KEYS } from "./universe";
+import { BROAD_ETFS, SECTOR_KEYS, SECTORS, UNIVERSE_STOCKS } from "./universe";
 
 export type { SortDirection, SortState } from "@/components/ui/table-sort";
 
 export const UNIVERSES: readonly ScreenerUniverse[] = ["stocks", "etfs"];
+
+/** Liquid ETFs: the broad market, the SPDR sector funds and the related funds shown on sector pages. */
+export const ETF_UNIVERSE: readonly string[] = [...new Set([...BROAD_ETFS, ...SECTORS.flatMap((sector) => [sector.etf, ...sector.relatedEtfs])])];
+
+export function universeSymbols(universe: ScreenerUniverse): readonly string[] {
+  return universe === "etfs" ? ETF_UNIVERSE : UNIVERSE_STOCKS;
+}
 
 const BOTH = UNIVERSES;
 const STOCKS: readonly ScreenerUniverse[] = ["stocks"];
@@ -58,8 +65,9 @@ export const METRICS = {
   fpe: { unit: "multiple", value: (r) => r.forwardPE, universes: STOCKS, range: true },
   pb: { unit: "multiple", value: (r) => r.priceToBook, universes: STOCKS, range: true },
   yield: { unit: "ratio", value: (r) => r.dividendYield, universes: BOTH, range: true },
-  div: { unit: "price", value: (r) => r.dividendRate ?? null, universes: BOTH, range: false },
-  exdiv: { unit: "date", value: (r) => r.exDividendDate ?? null, universes: BOTH, range: false },
+  // Yahoo's fund quotes carry no forward dividend rate or ex-date, so these two are stock columns.
+  div: { unit: "price", value: (r) => r.dividendRate ?? null, universes: STOCKS, range: false },
+  exdiv: { unit: "date", value: (r) => r.exDividendDate ?? null, universes: STOCKS, range: false },
   rating: { unit: "number", value: (r) => r.analystRating, universes: STOCKS, range: true },
   earnings: { unit: "date", value: (r) => r.nextEarningsDate, universes: STOCKS, range: false },
   ytd: { unit: "percent", value: (r) => r.ytdReturnPercent, universes: ETFS, range: true },
@@ -459,27 +467,34 @@ export function firstSortDirection(key: MetricKey): SortDirection {
 // Column sets
 // ---------------------------------------------------------------------------
 
-const MOMENTUM_SET: readonly MetricKey[] = ["symbol", "name", "price", "chg", "r1m", "r3m", "r6m", "high", "ma50", "ma200", "rsi"];
-const RISK_SET: readonly MetricKey[] = ["symbol", "name", "price", "chg", "vol", "volPct", "beta", "betaPct", "high", "dvol"];
-const FACTOR_SET: readonly MetricKey[] = ["symbol", "name", "price", "momPct", "revPct", "highPct", "volPct", "betaPct"];
+// Each set fits a 1440px screen with the filter rail open; phones show the symbol and two of the columns.
+const MOMENTUM_SET: readonly MetricKey[] = ["symbol", "name", "r1m", "r3m", "r6m", "high", "ma50", "ma200", "rsi"];
+const RISK_SET: readonly MetricKey[] = ["symbol", "name", "vol", "volPct", "beta", "betaPct", "high", "dvol"];
+const FACTOR_SET: readonly MetricKey[] = ["symbol", "name", "momPct", "revPct", "highPct", "volPct", "betaPct"];
 
 export const COLUMN_SETS: Readonly<Record<ScreenerUniverse, Readonly<Record<ColumnSetKey, readonly MetricKey[]>>>> = {
   stocks: {
-    overview: ["symbol", "name", "sector", "price", "chg", "cap", "pe", "yield", "rating", "earnings"],
-    valuation: ["symbol", "name", "price", "cap", "pe", "fpe", "pb", "yield", "rating"],
+    overview: ["symbol", "name", "sector", "price", "chg", "cap", "pe", "earnings"],
+    valuation: ["symbol", "name", "cap", "pe", "fpe", "pb", "yield", "rating"],
     momentum: MOMENTUM_SET,
     risk: RISK_SET,
     dividends: ["symbol", "name", "price", "yield", "div", "exdiv", "pe", "cap"],
     factors: FACTOR_SET,
   },
   etfs: {
-    overview: ["symbol", "name", "price", "chg", "assets", "er", "ytd", "r1m", "r3m", "r6m", "vol", "beta"],
-    valuation: ["symbol", "name", "price", "assets", "er", "pe", "yield"],
+    overview: ["symbol", "name", "price", "assets", "er", "ytd", "r1m", "r3m", "r6m", "vol", "beta"],
+    valuation: ["symbol", "name", "assets", "er", "pe", "yield"],
     momentum: MOMENTUM_SET,
     risk: RISK_SET,
-    dividends: ["symbol", "name", "price", "yield", "div", "exdiv", "er", "assets"],
+    dividends: ["symbol", "name", "price", "yield", "er", "assets", "ytd"],
     factors: FACTOR_SET,
   },
+};
+
+/** The two columns after the symbol that phones keep for each set. */
+export const PHONE_COLUMNS: Readonly<Record<ScreenerUniverse, Readonly<Record<ColumnSetKey, readonly [MetricKey, MetricKey]>>>> = {
+  stocks: { overview: ["price", "chg"], valuation: ["pe", "yield"], momentum: ["r3m", "high"], risk: ["vol", "beta"], dividends: ["yield", "div"], factors: ["momPct", "volPct"] },
+  etfs: { overview: ["price", "ytd"], valuation: ["er", "yield"], momentum: ["r3m", "high"], risk: ["vol", "beta"], dividends: ["yield", "er"], factors: ["momPct", "volPct"] },
 };
 
 export function columnsFor(screen: Pick<Screen, "universe" | "columns">): readonly MetricKey[] {
@@ -683,7 +698,7 @@ const CSV_HEADERS: Readonly<Record<MetricKey, string>> = {
 
 const CSV_COLUMNS: Readonly<Record<ScreenerUniverse, readonly MetricKey[]>> = {
   stocks: ["symbol", "name", "sector", "price", "chg", "cap", "pe", "fpe", "pb", "yield", "div", "exdiv", "rating", "earnings", "high", "ma50", "ma200", "dvol", "r1m", "r3m", "r6m", "rsi", "vol", "beta", "momPct", "revPct", "highPct", "volPct", "betaPct"],
-  etfs: ["symbol", "name", "price", "chg", "assets", "er", "ytd", "pe", "yield", "div", "exdiv", "high", "ma50", "ma200", "dvol", "r1m", "r3m", "r6m", "rsi", "vol", "beta", "momPct", "revPct", "highPct", "volPct", "betaPct"],
+  etfs: ["symbol", "name", "price", "chg", "assets", "er", "ytd", "pe", "yield", "high", "ma50", "ma200", "dvol", "r1m", "r3m", "r6m", "rsi", "vol", "beta", "momPct", "revPct", "highPct", "volPct", "betaPct"],
 };
 
 /** Text that Excel or Sheets would run as a formula gets a leading apostrophe (CSV injection). */
