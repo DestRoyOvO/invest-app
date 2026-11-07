@@ -18,7 +18,10 @@
  * downloaded is dropped. Fundamentals are excluded because point-in-time fundamentals are not available. The universe
  * is today's large caps, so results carry survivorship and selection bias. This is research, not a trading system.
  *
- * Usage: npm run evaluate -- [--offline] [--cache <dir>] [--config scripts/evaluation.config.json]
+ * A run stops when a download fails or a symbol's bars end before the market's last session in the window, because an
+ * older cached file would otherwise mix into the results; --allow-partial goes on with a warning instead.
+ *
+ * Usage: npm run evaluate -- [--offline] [--cache <dir>] [--allow-partial] [--config scripts/evaluation.config.json]
  *                            [--out docs/evaluation.md] [--json lib/signal-evaluation.json]
  */
 
@@ -34,6 +37,7 @@ import {
   dropFormingBar,
   evaluateSignalModel,
   evaluationVerdict,
+  staleSymbols,
   type EvaluationConfig,
   type HoldoutTest,
   type Interval,
@@ -162,14 +166,38 @@ export interface LoadOptions {
   cacheDir: string;
   /** Read the cache only, never call Yahoo. */
   offline: boolean;
+  /** Go on when a download fails, with whatever older file the cache holds for that symbol. */
+  allowPartial?: boolean;
 }
 
-/** Bars per symbol from the cache, refreshed from Yahoo first unless offline. Symbols without data map to []. */
+/**
+ * Bars per symbol from the cache, refreshed from Yahoo first unless offline. Symbols without data map to []. Throws when
+ * a download fails, unless allowPartial: the cache would still hold an older file for that symbol.
+ */
 export async function loadBars(options: LoadOptions): Promise<Record<string, DailyBar[]>> {
-  if (!options.offline) await fetchToCache(options.symbols, options.from, options.cacheDir);
+  if (!options.offline) {
+    const failed = await fetchToCache(options.symbols, options.from, options.cacheDir);
+    if (failed.length > 0) {
+      const problem = `Download failed for ${failed.join(", ")}; the cache holds an older file or nothing for them.`;
+      if (!options.allowPartial) throw new Error(`${problem} Run again, or pass --allow-partial to go on with the cache.`);
+      console.warn(`${problem} Going on because of --allow-partial.`);
+    }
+  }
   const out: Record<string, DailyBar[]> = {};
   for (const symbol of options.symbols) out[symbol] = readCachedBars(options.cacheDir, symbol) ?? [];
   return out;
+}
+
+/**
+ * Stops the run when a symbol's bars end before the market's last session up to `to` (a failed or older download in
+ * the cache), unless allowPartial, which only warns. Shared by npm run evaluate and npm run research.
+ */
+export function checkCoverage(bars: Readonly<Record<string, readonly DailyBar[]>>, symbols: readonly string[], market: string, to: string, allowPartial: boolean): void {
+  const stale = staleSymbols(bars, symbols, market, to);
+  if (stale.length === 0) return;
+  const problem = `Bars end before ${market}'s last session up to ${to} for ${stale.join(", ")}.`;
+  if (!allowPartial) throw new Error(`${problem} Refresh the cache (run without --offline), or pass --allow-partial to go on.`);
+  console.warn(`${problem} Going on because of --allow-partial.`);
 }
 
 // ---------------------------------------------------------------------------
@@ -400,8 +428,10 @@ export function renderEvaluationReport(
     `Yahoo daily charts via yahoo-finance2, from ${symbols.dataFrom} (the earlier bars warm up the score) to ${evaluation.period.to}. ` +
       `${counts.length} stocks plus ${symbols.market} and ${symbols.equalWeight}; last bar ${lastDates.join(", ") || "n/a"}. ` +
       `${short.length > 0 ? `Shorter histories: ${short.join(", ")}. ` : ""}${evaluation.data.missing.length > 0 ? `No data: ${evaluation.data.missing.join(", ")}. ` : ""}` +
-      "The bar count and last date of every symbol are in lib/signal-evaluation.json (data.fingerprint). " +
-      "Yahoo recomputes adjusted closes in single precision on every request, so a fresh download can move the fourth or fifth decimal of these statistics; the cached bars reproduce them exactly.",
+      `The bar count and last date of every symbol are in lib/signal-evaluation.json (data.fingerprint), and data.hash (${evaluation.data.hash}) identifies the exact bars. ` +
+      "Yahoo recomputes adjusted closes in single precision on every request, so no two downloads are identical: one can flip a reading or a return sign near a cut-off. " +
+      "In one comparison of two downloads the rare readings' hit rates moved by up to 0.15 points and their interval bounds by up to 0.25 points, t-statistics by less than 0.001 and ICs by about 0.00001. " +
+      "The cached bars reproduce every number exactly.",
     "",
   );
   return lines.join("\n");
@@ -425,16 +455,18 @@ async function main() {
   const config = readConfig(arg("config", DEFAULT_CONFIG_PATH));
   const cacheDir = arg("cache", DEFAULT_CACHE_DIR);
   const offline = process.argv.includes("--offline");
+  const allowPartial = process.argv.includes("--allow-partial");
   const outPath = arg("out", "docs/evaluation.md");
   const jsonPath = arg("json", "lib/signal-evaluation.json");
   const benchmarks = { market: config.data.market, equalWeight: config.data.equalWeight, dataFrom: config.data.from };
 
   console.log(`${offline ? "Reading" : "Downloading"} daily bars from ${config.data.from} (cache: ${cacheDir})`);
-  const bars = await loadBars({ symbols: [...UNIVERSE_STOCKS, benchmarks.market, benchmarks.equalWeight], from: config.data.from, cacheDir, offline });
+  const bars = await loadBars({ symbols: [...UNIVERSE_STOCKS, benchmarks.market, benchmarks.equalWeight], from: config.data.from, cacheDir, offline, allowPartial });
   const stocks = Object.fromEntries(UNIVERSE_STOCKS.map((symbol) => [symbol, bars[symbol] ?? []]));
   if (Object.values(stocks).every((series) => series.length === 0)) {
     throw new Error(`No bars for any universe stock in ${cacheDir}${offline ? " (run without --offline to download them)" : ""}.`);
   }
+  checkCoverage(bars, [...UNIVERSE_STOCKS, benchmarks.equalWeight], benchmarks.market, config.signal.main.to, allowPartial);
 
   const evaluation = evaluateSignalModel({
     config: config.signal,

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { DailyBar } from "@/lib/bars";
 
-import { RESEARCH_FACTORS } from "./evaluation";
+import { dataHash, RESEARCH_FACTORS } from "./evaluation";
 import {
   betaAdjustedReturns,
   buildPanel,
@@ -224,6 +224,17 @@ describe("runResearch", () => {
 
   it("is reproducible: the same bars and settings give identical JSON", () => {
     expect(JSON.stringify(runResearch(fixture()))).toBe(JSON.stringify({ research, risk }));
+  });
+
+  it("stamps both results with the hash of the bars they used", () => {
+    const input = fixture();
+    const expected = dataHash(input.bars, [...input.symbols, "SPY", "RSP"], WINDOW.to);
+    expect(research.dataHash).toBe(expected);
+    expect(risk.dataHash).toBe(expected);
+    const shorter = runResearch({ ...input, risk: { ...RISK, window: { from: WINDOW.from, to: "2018-12-31" } } });
+    expect(shorter.risk.dataHash).toBe(dataHash(input.bars, [...input.symbols, "SPY", "RSP"], "2018-12-31"));
+    expect(shorter.risk.bands.overall.n).toBeLessThan(risk.bands.overall.n);
+    expect(shorter.research).toEqual(research);
   });
 
   it("tests every pre-registered factor at every horizon and applies the adoption rule", () => {

@@ -4,10 +4,12 @@ import type { DailyBar } from "@/lib/bars";
 
 import config from "../scripts/evaluation.config.json";
 import {
+  barsHash,
   benchmarkGap,
   cleanDailyBars,
   countEpisodes,
   cutBars,
+  dataHash,
   decomposeLabel,
   dropFormingBar,
   evaluateSignalModel,
@@ -19,6 +21,7 @@ import {
   IC_T_RELIABLE,
   LABEL_CODES,
   RESEARCH_FACTORS,
+  staleSymbols,
   summarizeIc,
   type EvaluationConfig,
   type EvaluationInput,
@@ -231,6 +234,33 @@ describe("bar handling", () => {
   });
 });
 
+describe("data hash and coverage", () => {
+  const bars: DailyBar[] = sessions(30).map((t, i) => ({ t, o: 10 + i, h: 11 + i, l: 9 + i, c: 10.5 + i, adjClose: (10.5 + i) * 0.97, v: 1000 + i }));
+  const end = new Date(bars[24].t).toISOString().slice(0, 10);
+
+  it("tells a download whose adjusted closes moved in the last bits from the same bars", () => {
+    const jittered = bars.map((bar, i) => (i === 7 ? { ...bar, adjClose: bar.adjClose * (1 + 1e-7) } : bar));
+    expect(barsHash(bars)).toMatch(/^[0-9a-f]{8}$/);
+    expect(barsHash([...bars])).toBe(barsHash(bars));
+    expect(barsHash(jittered)).not.toBe(barsHash(bars));
+    expect(dataHash({ A: jittered, B: bars }, ["A", "B"], end)).not.toBe(dataHash({ A: bars, B: bars }, ["A", "B"], end));
+  });
+
+  it("hashes the cleaned bars up to the window end, whatever their order or the symbol order", () => {
+    const messy = [...bars].reverse().concat(bars.slice(0, 2));
+    const later = bars.map((bar) => ({ ...bar, c: bar.c * 2 })).slice(25);
+    expect(dataHash({ A: messy, B: [...bars, ...later] }, ["B", "A"], end)).toBe(dataHash({ A: bars, B: bars }, ["A", "B"], end));
+    expect(dataHash({ A: bars }, ["A", "NONE"], end)).not.toBe(dataHash({ A: bars }, ["A"], end));
+  });
+
+  it("finds symbols whose bars stop before the market's last session in the window", () => {
+    const all = { SPY: bars, A: bars, B: bars.slice(0, 20), C: [], D: [...bars.slice(0, 10), ...bars.slice(26)] };
+    expect(staleSymbols(all, ["A", "B", "C", "D"], "SPY", end)).toEqual(["B", "D"]);
+    // Bars after the window end do not count, so a cache refreshed later still covers the window.
+    expect(staleSymbols({ SPY: bars.slice(0, 25), A: bars }, ["A"], "SPY", end)).toEqual([]);
+  });
+});
+
 describe("benchmarkGap", () => {
   it("annualizes the daily-rebalanced universe and the benchmarks on the market's sessions", () => {
     const dates = sessions(253);
@@ -313,6 +343,9 @@ describe("evaluateSignalModel", () => {
     expect(result.data.fingerprint.S00).toEqual([DATES.filter((t) => t <= Date.parse("2021-06-30T00:00:00Z")).length, "2021-06-30"]);
     expect(result.data.fingerprint.SPY?.[0]).toBeGreaterThan(0);
     expect(result.data.missing).toEqual([]);
+    expect(result.data.hash).toBe(
+      dataHash({ ...input.bars, SPY: input.market.bars, RSP: input.equalWeight.bars }, [...Object.keys(input.bars), "SPY", "RSP"], FIXTURE_CONFIG.main.to),
+    );
   });
 
   it("lists symbols without bars as missing", () => {
@@ -371,6 +404,14 @@ describe("committed research (lib/factor-research.json, lib/risk-calibration.jso
       }
     }
     expect(FACTOR_RESEARCH.power.map((p) => p.days)).toEqual(config.factors.horizons);
+  });
+
+  it("came from the same download as the evaluation", () => {
+    // Every window ends on the same day, so the three files must carry the same data hash.
+    expect(new Set([config.signal.main.to, config.factors.window.to, config.risk.window.to]).size).toBe(1);
+    expect(FACTOR_RESEARCH.dataHash).toMatch(/^[0-9a-f]{8}$/);
+    expect(FACTOR_RESEARCH.dataHash).toBe(SIGNAL_EVALUATION.data.hash);
+    expect(RISK_CALIBRATION.dataHash).toBe(SIGNAL_EVALUATION.data.hash);
   });
 
   it("calibrates the forecast that lib/risk-forecast.ts computes", () => {

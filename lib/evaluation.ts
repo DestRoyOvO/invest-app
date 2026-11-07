@@ -145,8 +145,12 @@ export interface SignalEvaluation {
   holdout: HoldoutResult;
   /** How far the hand-picked universe beat broad benchmarks: a gauge of hindsight in its selection. */
   hindsight: { main: BenchmarkGap; holdout: BenchmarkGap };
-  /** Bars per symbol and the last bar date, after the window cut; symbols without bars are listed as missing. */
-  data: { missing: string[]; fingerprint: Record<string, [number, string | null]> };
+  /**
+   * Bars per symbol and the last bar date, after the window cut; symbols without bars are listed as missing. `hash`
+   * (dataHash) identifies the exact bars: the same cache gives the same hash, a fresh download does not, because
+   * Yahoo's adjusted closes change in the last bits on every request.
+   */
+  data: { missing: string[]; fingerprint: Record<string, [number, string | null]>; hash: string };
 }
 
 // ---------------------------------------------------------------------------
@@ -206,6 +210,8 @@ export interface FactorResearch {
   factors: Array<{ key: ResearchFactor; label: string; direction: 1 | -1; results: FactorHorizonResult[] }>;
   /** The smallest mean IC the design detects with 80% power at the 5% level. */
   power: Array<{ days: number; dates: number; sdIc: number | null; minimumDetectableIc: number | null }>;
+  /** dataHash of the bars up to the window end; it equals SignalEvaluation.data.hash when both ran on the same download and window end. */
+  dataHash: string;
   bias: {
     benchmarks: { market: string; equalWeight: string };
     /** The universe against its benchmarks over the window and each subperiod (selection bias gauge). */
@@ -261,6 +267,8 @@ export interface RiskCalibration {
     overall: QuintileRow[];
     subperiods: Array<DateRange & { rows: QuintileRow[] }>;
   };
+  /** dataHash of the bars up to the window end (see FactorResearch.dataHash). */
+  dataHash: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -392,6 +400,44 @@ export function dropFormingBar(bars: readonly DailyBar[], fetchedAt: string): Da
   const sessionDate = Date.UTC(part("year"), part("month") - 1, part("day"));
   const minutes = part("hour") * 60 + part("minute");
   return last.t === sessionDate && minutes < SESSION_FINAL_MINUTES ? bars.slice(0, -1) : [...bars];
+}
+
+const FNV_OFFSET = 0x811c9dc5;
+const FNV_PRIME = 0x01000193;
+
+/** 32-bit FNV-1a of an ASCII string, continuing from `hash`. */
+function fnv1a(text: string, hash = FNV_OFFSET): number {
+  let h = hash;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), FNV_PRIME) >>> 0;
+  return h;
+}
+
+/** 8-hex-digit FNV-1a hash of the fields the scripts use (time, open, close, adjusted close, volume) of every bar. */
+export function barsHash(bars: readonly DailyBar[]): string {
+  let hash = FNV_OFFSET;
+  for (const bar of bars) hash = fnv1a(`${bar.t},${bar.o},${bar.c},${bar.adjClose},${bar.v};`, hash);
+  return hash.toString(16).padStart(8, "0");
+}
+
+/**
+ * One hash over the cleaned bars up to `to` of the given symbols, in sorted order. It tells two downloads apart, so a
+ * published number can be traced to the exact cache that produced it; it is not a security measure.
+ */
+export function dataHash(bars: Readonly<Record<string, readonly DailyBar[]>>, symbols: readonly string[], to: string): string {
+  let hash = FNV_OFFSET;
+  for (const symbol of [...new Set(symbols)].sort()) hash = fnv1a(`${symbol}:${barsHash(cutBars(cleanDailyBars(bars[symbol] ?? []), to))};`, hash);
+  return hash.toString(16).padStart(8, "0");
+}
+
+/**
+ * Symbols with bars whose last session up to `to` is not the market's last session up to `to`: a download that failed
+ * or stopped early, whose older cached file would otherwise mix into the run. Symbols without bars are left out (the
+ * evaluation lists them as missing).
+ */
+export function staleSymbols(bars: Readonly<Record<string, readonly DailyBar[]>>, symbols: readonly string[], market: string, to: string): string[] {
+  const lastSession = (symbol: string) => cutBars(cleanDailyBars(bars[symbol] ?? []), to).at(-1)?.t ?? null;
+  const marketLast = lastSession(market);
+  return symbols.filter((symbol) => (bars[symbol]?.length ?? 0) > 0 && lastSession(symbol) !== marketLast);
 }
 
 function adjustedClose(bar: DailyBar): number {
@@ -849,6 +895,14 @@ export function evaluateSignalModel(input: EvaluationInput): SignalEvaluation {
       main: benchmarkGap(stockSeries, market, equalWeight, config.main),
       holdout: benchmarkGap(stockSeries, market, equalWeight, config.holdout),
     },
-    data: { missing, fingerprint },
+    data: {
+      missing,
+      fingerprint,
+      hash: dataHash(
+        { ...input.bars, [input.market.symbol]: input.market.bars, [input.equalWeight.symbol]: input.equalWeight.bars },
+        [...symbols, input.market.symbol, input.equalWeight.symbol],
+        config.main.to,
+      ),
+    },
   };
 }

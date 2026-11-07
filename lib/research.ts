@@ -15,6 +15,7 @@ import {
   benchmarkGap,
   cleanDailyBars,
   cutBars,
+  dataHash,
   isoToTime,
   RESEARCH_FACTORS,
   timeToIso,
@@ -445,7 +446,7 @@ export function researchFactors(
   settings: FactorStudySettings,
   benchmarks: { market: string; equalWeight: string },
   equalWeight: readonly DailyBar[],
-): FactorResearch {
+): Omit<FactorResearch, "dataHash"> {
   const winners = exPostWinners(panel, settings.excludeWinners);
   const winnerSet = new Set(winners.map((w) => w.s));
   const raws: Raw[] = [];
@@ -521,7 +522,7 @@ export function researchFactors(
  * 20-session estimate, persistence of volatility and beta, and how often each volatility quintile fell by the
  * threshold within the horizon. Dates need at least `minStocks` stocks for the cross-sectional parts.
  */
-export function calibrateRisk(panel: Panel, settings: RiskStudySettings, minStocks: number): RiskCalibration {
+export function calibrateRisk(panel: Panel, settings: RiskStudySettings, minStocks: number): Omit<RiskCalibration, "dataHash"> {
   const N = panel.T.length;
   const from = panel.T.findIndex((t) => t >= isoToTime(settings.window.from));
   const H = settings.bandHorizon;
@@ -666,12 +667,19 @@ export function calibrateRisk(panel: Panel, settings: RiskStudySettings, minStoc
 // Both studies
 // ---------------------------------------------------------------------------
 
-/** Runs the factor study and the risk calibration; the risk part reuses the factor panel when both windows end together. */
+/**
+ * Runs the factor study and the risk calibration; the risk part reuses the factor panel when both windows end together.
+ * Each result carries the dataHash of its bars, so it can be matched with the evaluation run on the same download.
+ */
 export function runResearch(input: ResearchInput): { research: FactorResearch; risk: RiskCalibration } {
   const { bars, benchmarks, factors, risk } = input;
   const options = { symbols: input.symbols, sectors: input.sectors, market: benchmarks.market, minStocks: factors.minStocksPerDate };
   const panel = buildPanel(bars, { ...options, window: factors.window });
   const research = researchFactors(panel, factors, benchmarks, bars[benchmarks.equalWeight] ?? []);
   const riskPanel = risk.window.to === factors.window.to ? panel : buildPanel(bars, { ...options, window: risk.window });
-  return { research, risk: calibrateRisk(riskPanel, risk, factors.minStocksPerDate) };
+  const hashed = [...input.symbols, benchmarks.market, benchmarks.equalWeight];
+  return {
+    research: { ...research, dataHash: dataHash(bars, hashed, factors.window.to) },
+    risk: { ...calibrateRisk(riskPanel, risk, factors.minStocksPerDate), dataHash: dataHash(bars, hashed, risk.window.to) },
+  };
 }
