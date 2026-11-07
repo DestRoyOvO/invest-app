@@ -32,6 +32,13 @@ export interface LocalStoreOptions<T> {
   initial?: () => T;
 }
 
+const registry = new Map<string, LocalStore<unknown>>();
+
+/** Every store created in this page so far, by key (used by backup and restore). */
+export function registeredLocalStores(): ReadonlyMap<string, LocalStore<unknown>> {
+  return registry;
+}
+
 export function createLocalStore<T>({ key, sanitize, empty, initial }: LocalStoreOptions<T>): LocalStore<T> {
   if (!key.startsWith(STORAGE_PREFIX)) throw new Error(`Local store keys must start with "${STORAGE_PREFIX}"`);
   const listeners = new Set<() => void>();
@@ -70,7 +77,7 @@ export function createLocalStore<T>({ key, sanitize, empty, initial }: LocalStor
     }
   }
 
-  return {
+  const store: LocalStore<T> = {
     key,
     sanitize,
     subscribe(listener) {
@@ -97,4 +104,6 @@ export function createLocalStore<T>({ key, sanitize, empty, initial }: LocalStor
       write(change(read()));
     },
   };
+  registry.set(key, store as LocalStore<unknown>);
+  return store;
 }

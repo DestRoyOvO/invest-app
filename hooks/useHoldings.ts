@@ -15,7 +15,8 @@ export interface Position {
 
 export type Holdings = Record<string, Position>;
 
-const STORAGE_KEY = "investseek:holdings:v1";
+export const HOLDINGS_STORAGE_KEY = "investseek:holdings:v1";
+const STORAGE_KEY = HOLDINGS_STORAGE_KEY;
 const EMPTY: Holdings = {};
 const listeners = new Set<() => void>();
 let snapshot: Holdings | null = null;

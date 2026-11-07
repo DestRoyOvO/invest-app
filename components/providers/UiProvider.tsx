@@ -28,6 +28,16 @@ interface UiContextValue {
   newsItem: NewsItem | null;
   openNews: (item: NewsItem) => void;
   closeNews: () => void;
+
+  /** Symbol whose position editor is open, or null. The editor is mounted once in the shell. */
+  positionEditor: string | null;
+  openPositionEditor: (symbol: string) => void;
+  closePositionEditor: () => void;
+
+  /** Alert editor: a symbol to prefill, "" for a blank rule, or null when closed. Mounted once in the shell. */
+  alertEditor: string | null;
+  openAlertEditor: (symbol?: string) => void;
+  closeAlertEditor: () => void;
 }
 
 const UiContext = createContext<UiContextValue | null>(null);
@@ -37,6 +47,8 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const [chatOpen, setChatOpen] = useState(false);
   const [chatSeed, setChatSeed] = useState<ChatSeed | null>(null);
   const [newsItem, setNewsItem] = useState<NewsItem | null>(null);
+  const [positionEditor, setPositionEditor] = useState<string | null>(null);
+  const [alertEditor, setAlertEditor] = useState<string | null>(null);
 
   const openChat = useCallback((seed?: string | ChatSeed) => {
     if (seed) setChatSeed(typeof seed === "string" ? { text: seed } : seed);
@@ -56,8 +68,14 @@ export function UiProvider({ children }: { children: ReactNode }) {
       newsItem,
       openNews: (item) => setNewsItem(item),
       closeNews: () => setNewsItem(null),
+      positionEditor,
+      openPositionEditor: (symbol) => setPositionEditor(symbol),
+      closePositionEditor: () => setPositionEditor(null),
+      alertEditor,
+      openAlertEditor: (symbol) => setAlertEditor(symbol ?? ""),
+      closeAlertEditor: () => setAlertEditor(null),
     }),
-    [commandOpen, chatOpen, chatSeed, openChat, newsItem],
+    [commandOpen, chatOpen, chatSeed, openChat, newsItem, positionEditor, alertEditor],
   );
 
   return <UiContext value={value}>{children}</UiContext>;

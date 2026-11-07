@@ -8,12 +8,14 @@ import { DEFAULT_WATCHLIST, MAX_WATCHLIST } from "@/lib/universe";
 // The watchlist lives in localStorage (no account needed). useSyncExternalStore keeps every component
 // and every open tab in sync, and avoids hydration mismatches by rendering an empty list on the server.
 
-const STORAGE_KEY = "investseek:watchlist:v1";
+export const WATCHLIST_STORAGE_KEY = "investseek:watchlist:v1";
+const STORAGE_KEY = WATCHLIST_STORAGE_KEY;
 const EMPTY: string[] = [];
 const listeners = new Set<() => void>();
 let snapshot: string[] | null = null;
 
-function sanitize(value: unknown): string[] {
+/** Turns stored or imported data into a valid watchlist (normalized, unique, capped); exported for backups. */
+export function sanitizeWatchlist(value: unknown): string[] {
   if (!Array.isArray(value)) return [...DEFAULT_WATCHLIST];
   const out: string[] = [];
   for (const item of value) {
@@ -27,7 +29,7 @@ function sanitize(value: unknown): string[] {
 function read(): string[] {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw === null ? [...DEFAULT_WATCHLIST] : sanitize(JSON.parse(raw));
+    return raw === null ? [...DEFAULT_WATCHLIST] : sanitizeWatchlist(JSON.parse(raw));
   } catch {
     return [...DEFAULT_WATCHLIST];
   }

@@ -1,0 +1,32 @@
+import { getAnalystActivity } from "@/lib/server/earnings";
+import { jsonError, jsonOk, upstreamError } from "@/lib/server/http";
+import { limitPublicRequest } from "@/lib/server/request-guard";
+import { normalizeSymbol } from "@/lib/symbols";
+
+const CACHE_SECONDS = 1800;
+
+function decodeParam(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+/** GET /api/stock/[symbol]/analysts -> AnalystActivity (404 not_found when Yahoo has none, e.g. for funds). */
+export async function GET(request: Request, ctx: { params: Promise<{ symbol: string }> }): Promise<Response> {
+  const limited = limitPublicRequest(request);
+  if (limited) return limited;
+
+  const { symbol: param } = await ctx.params;
+  const symbol = normalizeSymbol(decodeParam(param));
+  if (!symbol) return jsonError(400, "bad_request", "Invalid symbol.");
+
+  try {
+    const data = await getAnalystActivity(symbol);
+    if (!data) return jsonError(404, "not_found", `No analysts data for ${symbol}.`);
+    return jsonOk(data, { cacheSeconds: CACHE_SECONDS });
+  } catch (error) {
+    return upstreamError("api/stock/analysts", error);
+  }
+}

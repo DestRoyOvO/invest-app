@@ -4,8 +4,10 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, type ReactNode } from "react";
 
 import { ChatDrawer } from "@/components/ai/ChatDrawer";
+import { AlertEditorHost } from "@/components/alerts/AlertEditorHost";
 import { AlertEngine } from "@/components/alerts/AlertEngine";
 import { NewsDrawer } from "@/components/news/NewsDrawer";
+import { PositionEditorHost } from "@/components/portfolio/PositionEditorHost";
 import { useT } from "@/components/providers/PrefsProvider";
 import { useUi } from "@/components/providers/UiProvider";
 import { useLastSymbol } from "@/hooks/useLastSymbol";
@@ -88,6 +90,8 @@ export function TerminalShell({ children }: { children: ReactNode }) {
       <ChatDrawer />
       <NewsDrawer />
       <AlertEngine />
+      <PositionEditorHost />
+      <AlertEditorHost />
     </div>
   );
 }
