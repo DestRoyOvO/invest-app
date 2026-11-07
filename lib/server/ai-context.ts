@@ -527,12 +527,28 @@ export function evaluationLine(evaluation = SIGNAL_EVALUATION): string | null {
   const { holdout } = evaluation;
   const passed = holdout.factors.filter((factor) => factor.pass).map((factor) => factor.key);
   const holdoutCi = holdout.composite.ci ? `${fmtNumber(holdout.composite.ci[0], 3)} to ${fmtNumber(holdout.composite.ci[1], 3)}` : NA;
+  // No weight was fitted to the holdout, but a factor dropped after seeing it makes it a weaker test of the current model.
+  const weights = evaluation.model.weights;
+  const names: Record<keyof typeof weights, string> = {
+    momentum: "momentum",
+    trend: "trend",
+    rsi: "RSI",
+    volume: "volume",
+    value: "valuation",
+    quality: "quality",
+    volatility: "volatility regime",
+  };
+  const dropped = (Object.keys(names) as Array<keyof typeof weights>).filter((key) => weights[key] === 0).map((key) => names[key]);
+  const holdoutUse =
+    dropped.length === 0
+      ? "the weights were never fitted to it"
+      : `the weights were never fitted to it, but model v${evaluation.model.version} dropped the ${dropped.join(" and ")} after seeing it`;
   return (
     `- universe evaluation (${evaluation.universe} large US stocks, technical score, signals ${evaluation.from} to ${evaluation.to}): ` +
     `rank IC with ${days}-day forward returns ${fmtNumber(horizon.ic.mean, 3)} (Newey-West t ${fmtNumber(horizon.ic.t, 2)}), so ${EVALUATION_VERDICT_TEXT[evaluationVerdict(horizon)]}; ` +
     `average ${days}-day return against the same-day universe after very strong readings ${after(findLabel(horizon, "strong_bullish"))}, ` +
     `after very weak readings ${after(findLabel(horizon, "strong_bearish"))}; ` +
-    `holdout ${holdout.from} to ${holdout.to} (the weights were never fitted to it): rank IC ${fmtNumber(holdout.composite.mean, 3)} (95% CI ${holdoutCi}), ` +
+    `holdout ${holdout.from} to ${holdout.to} (${holdoutUse}): rank IC ${fmtNumber(holdout.composite.mean, 3)} (95% CI ${holdoutCi}), ` +
     (passed.length === 0 ? "and no technical factor passed its pre-set test" : `pre-set test passed by: ${passed.join(", ")}`)
   );
 }

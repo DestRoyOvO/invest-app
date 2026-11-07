@@ -14,7 +14,8 @@ If this document and the code disagree, the code wins and this file is the bug.
   其 15% 的权重按比例分给其余因子（机械的重新归一化，不是拟合）；波动率仍然计算并展示，用于风险。
 - 技术评分实际上是**短期相对强弱**：它与过去 21 个交易日收益的截面秩相关约 +0.77。在 2016–2026 年、78 只大盘股上，
   它**没有预测过收益**：5 / 10 / 20 日秩 IC 为 -0.005 / -0.010 / -0.017，Newey-West t 都不到 2；2014–2024 留出样本上
-  10 日 IC 为 -0.004，五个技术因子都没有通过事先设定的检验。
+  10 日 IC 为 -0.004，五个技术因子都没有通过事先设定的检验。去掉波动率状态是在看过这份留出样本之后决定的，
+  所以对 v4 来说它已不是独立的检验。
 - 历史表现表改为固定区间、全部交易日的 IC 加 Newey-West t、按日期分块的 bootstrap 区间，并把超额收益拆成
   "择时"（读数出现时大盘涨跌）和"选股"（相对同日股票池）。10 日"弱势"读数相对同日股票池只有 +0.10%（区间 -0.94% 至 +0.96%）。
 - 个股回测新增**循环置换检验**：把读数序列平移至少 20 个交易日重新回测，给出 p 值。78 只股票里 p < 0.05 的比例约 5%，
@@ -330,10 +331,11 @@ same-day equal-weight universe), with 95% moving-block bootstrap intervals over 
   bought quickly. Against the same-day universe the very weak reading earned +0.10% over 10 sessions in 2016–2026,
   with an interval from -0.94% to +0.96%, spread over 66 episodes.
 - **Holdout** 2014-01-02 to 2024-04-29 (the decade before the window the model was first evaluated on): composite
-  10-session rank IC -0.004 (NW t -0.39, 95% CI -0.024 to +0.016); momentum -0.003, trend -0.004, RSI +0.002, volume
-  -0.002, volatility regime +0.005; none passes the one-sided Holm test fixed in advance. Dropping the volatility
-  regime used this table, so for v4 the decade is no longer a clean holdout; removing a factor with an IC near zero
-  cannot create an edge.
+  10-session rank IC -0.004 (NW t -0.39, 95% CI -0.024 to +0.016); momentum -0.002, trend -0.004, RSI +0.002, volume
+  -0.002, volatility regime +0.005; none passes the one-sided Holm test fixed in advance. No weight was fitted to these
+  years, but v4 dropped the volatility regime after seeing this table (the other weights were only rescaled), so for
+  v4 the decade is no longer an independent test. The change moved the composite's holdout IC from +0.001 (v3) to
+  -0.004; both are zero within the interval.
 - **Hindsight gap**: the universe, equal-weighted, returned 19.1% a year over the window against 12.0% for RSP and 14.6%
   for SPY. The 78 names are today's leaders, so absolute returns in every table are flattered.
 - **Factor research** ([factor-research.md](factor-research.md)): none of seven pre-registered factors (12-1 momentum,

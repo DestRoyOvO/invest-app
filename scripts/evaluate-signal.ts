@@ -39,8 +39,9 @@ import {
   type Interval,
   type SignalEvaluation,
 } from "../lib/evaluation";
-import { FACTOR_WEIGHTS, MODEL_VERSION, SIGNAL_THRESHOLDS, TECHNICAL_FACTORS } from "../lib/signal";
+import { FACTOR_WEIGHTS, MODEL_VERSION, SIGNAL_THRESHOLDS, TECHNICAL_FACTORS, V3_FACTOR_WEIGHTS, type TechnicalFactorKey } from "../lib/signal";
 import { UNIVERSE_STOCKS } from "../lib/universe";
+import type { FactorKey } from "../types/api";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -234,6 +235,20 @@ export function renderEvaluationReport(
   const directional = TECHNICAL_FACTORS.filter((key) => weights[key] > 0).map(inSentence);
   const unweighted = TECHNICAL_FACTORS.filter((key) => weights[key] === 0).map(inSentence);
   const factorName = (key: HoldoutTest["key"]) => (key !== "composite" && weights[key] === 0 ? `${FACTOR_NAME[key]} (no weight)` : FACTOR_NAME[key]);
+  // Whether the weighted factors keep the proportions of the v3 priors (v4 only rescaled them), so the text can say so.
+  const weighted = (Object.keys(weights) as FactorKey[]).filter((key) => weights[key] > 0);
+  const scale = weighted.map((key) => weights[key] / V3_FACTOR_WEIGHTS[key]);
+  const rescaledPriors = scale.length > 0 && scale.every((s) => Math.abs(s - scale[0]) < 1e-4);
+  // The holdout never fitted a weight, but a factor dropped after seeing it makes it a weaker test of the current model.
+  const holdoutUse =
+    unweighted.length === 0
+      ? "the model's weights were never fitted to these years"
+      : `no weight was fitted to these years, but model v${evaluation.model.version} dropped the ${list(unweighted)} after seeing them`;
+  const passed = holdout.factors
+    .filter((f) => f.pass)
+    .map((f) => f.key)
+    .filter((key): key is TechnicalFactorKey => key !== "composite")
+    .map(inSentence);
 
   push(
     "# Signal evaluation",
@@ -268,7 +283,7 @@ export function renderEvaluationReport(
       ? `At no horizon does the Newey-West t reach |t| = 2: over this decade the technical score has **not predicted** which of these stocks did better. It describes short-term relative strength.`
       : `The Newey-West t reaches |t| = 2 at ${reliable.map((h) => `${h.days} sessions`).join(", ")}. Read it together with the holdout and the hindsight gap below before treating it as an edge.`,
     "",
-    `Holdout ${holdout.from} to ${holdout.to} (the model's weights were never fitted to these years): the composite's ${holdout.horizon}-session rank IC is ${num(holdout.composite.mean)} ` +
+    `Holdout ${holdout.from} to ${holdout.to} (${holdoutUse}): the composite's ${holdout.horizon}-session rank IC is ${num(holdout.composite.mean)} ` +
       `(Newey-West t ${num(holdout.composite.t, 2)}, 95% CI ${holdout.composite.ci ? `${num(holdout.composite.ci[0])} to ${num(holdout.composite.ci[1])}` : "n/a"}), ` +
       `${holdout.composite.pass ? "which passes" : "which does not pass"} the one-sided 5% test; ` +
       `${holdout.factors.filter((f) => f.pass).length === 0 ? "none of the five technical factors passes" : `${holdout.factors.filter((f) => f.pass).map((f) => f.key).join(", ")} pass`} the Holm-adjusted test.`,
@@ -311,11 +326,15 @@ export function renderEvaluationReport(
     `Signals ${holdout.from} to ${holdout.to}, the decade before the window the model was first evaluated on (2024-04-30 to 2026-11-06). ` +
       `The rule was fixed before the run: primary horizon ${holdout.horizon} sessions, all-dates rank IC with a Newey-West t, one-sided in the designed direction ` +
       `(a higher score should precede a higher return), the composite tested at ${holdout.alpha * 100}% and the five technical factors with Holm's adjustment at ${holdout.alpha * 100}%. ` +
-      "A factor that fails gets no weight in a directional reading." +
-      (unweighted.length > 0
-        ? ` Dropping the ${list(unweighted)} from the score used this table, so for the current model the decade is no longer a clean holdout; ` +
-          "removing a factor with an IC near zero cannot create an edge, and the per-factor tests are unchanged."
-        : ""),
+      (!holdout.composite.pass && passed.length === 0
+        ? "Neither the composite nor any factor passes, so the score is described as short-term relative strength, not as a forecast."
+        : `${holdout.composite.pass ? "The composite passes" : "The composite does not pass"}; ${passed.length === 0 ? "no factor passes" : `${list(passed)} ${passed.length > 1 ? "pass" : "passes"}`}.`),
+    "",
+    unweighted.length === 0
+      ? "The weights are hand-set priors and were never fitted to these years."
+      : `No weight was fitted to these years, but model v${evaluation.model.version} took the ${list(unweighted)} out of the score after seeing this table` +
+          `${rescaledPriors ? " and only rescaled the other hand-set weights in proportion" : ""}. For the current model the decade is therefore no longer an independent test; ` +
+          "the per-factor rows do not depend on the weights.",
     "",
     "| Signal | Rank IC | Newey-West t | One-sided p | Holm p | Passes |",
     "|---|---:|---:|---:|---:|---|",

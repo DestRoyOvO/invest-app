@@ -743,9 +743,13 @@ describe("evaluationLine", () => {
     expect(evaluationLine(evaluation)).toBe(
       "- universe evaluation (50 large US stocks, technical score, signals 2016-01-04 to 2026-11-06): rank IC with 10-day forward returns -0.010 (Newey-West t -1.06), " +
         "so the score has not been a reliable forecast; average 10-day return against the same-day universe after very strong readings +0.18% (95% CI -0.23% to +0.57%, 41 episodes), " +
-        "after very weak readings +0.10% (95% CI n/a, 66 episodes); holdout 2014-01-02 to 2024-04-29 (the weights were never fitted to it): rank IC -0.004 (95% CI -0.024 to 0.016), " +
+        "after very weak readings +0.10% (95% CI n/a, 66 episodes); holdout 2014-01-02 to 2024-04-29 " +
+        "(the weights were never fitted to it, but model v4 dropped the volatility regime after seeing it): rank IC -0.004 (95% CI -0.024 to 0.016), " +
         "and no technical factor passed its pre-set test",
     );
+    // A model that weights every factor gets no caveat.
+    const v3 = { ...evaluation, model: { ...evaluation.model, version: 3, weights: { ...evaluation.model.weights, volatility: 0.15 } } };
+    expect(evaluationLine(v3)).toContain("holdout 2014-01-02 to 2024-04-29 (the weights were never fitted to it): rank IC");
     expect(evaluationLine({ ...evaluation, horizons: [{ ...horizon, ic: { ...ic, mean: 0.06, t: 2.5 } }] })).toContain("so higher scores were followed by higher returns;");
     const passing = { ...holdout, factors: holdout.factors.map((factor) => ({ ...factor, pass: factor.key === "rsi" })) };
     expect(evaluationLine({ ...evaluation, holdout: passing })).toContain("pre-set test passed by: rsi");
