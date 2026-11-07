@@ -141,3 +141,38 @@ export function log(level: LogEventLevel, event: string, fields: LogFields = {})
     SINKS[level](JSON.stringify({ ts: new Date().toISOString(), level, event, logError: true }));
   }
 }
+
+interface Throttle {
+  lastAt: number;
+  suppressed: number;
+}
+
+// Keyed by names from code, never from requests, so the map stays as small as the number of call sites.
+const throttles = new Map<string, Throttle>();
+
+/**
+ * log() for events that clients can trigger at will, such as rejected sign-ins: at most one line per `key` every
+ * `intervalMs`, so a flood of requests cannot fill the logs too. The next line written carries `suppressed`, the number
+ * of events dropped since the previous one.
+ */
+export function logThrottled(
+  key: string,
+  intervalMs: number,
+  level: LogEventLevel,
+  event: string,
+  fields: LogFields = {},
+  now: number = Date.now(),
+): void {
+  const throttle = throttles.get(key);
+  if (throttle && now - throttle.lastAt < intervalMs) {
+    throttle.suppressed += 1;
+    return;
+  }
+  throttles.set(key, { lastAt: now, suppressed: 0 });
+  log(level, event, throttle?.suppressed ? { ...fields, suppressed: throttle.suppressed } : fields);
+}
+
+/** Test helper. */
+export function resetLogThrottles(): void {
+  throttles.clear();
+}

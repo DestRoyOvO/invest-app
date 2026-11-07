@@ -153,6 +153,16 @@ without them. In private mode:
 The same session also unlocks the AI features, so one sign-in covers both. If a session expires while a tab stays open,
 data requests fail until the page is reloaded and sends you to `/unlock`.
 
+Sign-in attempts are limited in every mode: 5 per client and 30 for the whole server in 15 minutes, right or wrong. In
+private mode these limits also decide when a browser without a session can open the site:
+
+- Browsers that are already signed in are never affected.
+- Without a trusted proxy, every visitor shares one per-client limit, so five wrong passwords from anyone delay a new
+  sign-in for up to 15 minutes. Behind Caddy or nginx, set `TRUST_PROXY=1` (Compose does) so that each client has its
+  own limit; then only the server-wide limit, 30 attempts from several addresses, can delay you.
+- Wrong passwords are logged as `auth.sign_in_failed` and rejected attempts as `auth.rate_limited`, with the client
+  address (or `direct` without a trusted proxy) and never the password, so an attack shows in `docker compose logs`.
+
 ## Settings
 
 All settings are environment variables, read and validated in one place (`lib/server/env.ts`). Put them in
@@ -249,6 +259,8 @@ chat messages are never written: the logger redacts such fields by name and mask
 | `ai.request_failed` | error | DeepSeek rejected a request. `status` 401 means a bad key, 402 an empty balance. |
 | `ai.deadline_exceeded`, `ai.stream_failed`, `ai.incomplete`, `ai.start_failed` | error | An AI answer could not be completed. |
 | `auth.sign_in_unavailable` | error | A sign-in was attempted while `SESSION_SECRET` is missing or too short. |
+| `auth.sign_in_failed` | warn | A wrong password. `client` is the address the rate limits use (`direct` without a trusted proxy). |
+| `auth.rate_limited` | warn | A sign-in over the per-client (`scope: "client"`) or server-wide (`scope: "server"`) limit. At most one line a minute per scope; `suppressed` counts the attempts left out since the previous line. |
 
 With Docker, `docker compose logs app | grep '"event":"ai.usage"'` or `jq` filters the lines.
 

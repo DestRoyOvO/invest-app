@@ -22,6 +22,7 @@ import {
   sessionCookieOptions,
   verifySessionToken,
 } from "./auth";
+import { resetLogThrottles } from "./log";
 import { RATE_LIMITS, resetRateLimits } from "./rate-limit";
 
 const SECRET = "0123456789abcdef0123456789abcdef-test";
@@ -225,6 +226,8 @@ describe("auth routes", () => {
     // These tests identify clients by X-Forwarded-For, which is only trusted behind a configured proxy.
     vi.stubEnv("TRUST_PROXY", "1");
     vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    resetLogThrottles();
   });
 
   afterEach(() => {
@@ -278,6 +281,21 @@ describe("auth routes", () => {
     expect(limited.status).toBe(429);
     expect(Number(limited.headers.get("retry-after"))).toBeGreaterThan(0);
     expect(limited.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("logs failed and rate-limited sign-ins with the client, never the password", async () => {
+    const attempt = () => login(loginRequest({ password: "wrong-qzx" }, { "x-forwarded-for": "203.0.113.7" }));
+    for (let i = 0; i < RATE_LIMITS.login.limit; i += 1) expect((await attempt()).status).toBe(401);
+    for (let i = 0; i < 3; i += 1) expect((await attempt()).status).toBe(429);
+
+    const lines = vi.mocked(console.warn).mock.calls.map(([line]) => JSON.parse(String(line)) as Record<string, unknown>);
+    const failed = lines.filter((line) => line.event === "auth.sign_in_failed");
+    expect(failed).toHaveLength(RATE_LIMITS.login.limit);
+    expect(failed[0]).toMatchObject({ level: "warn", client: "203.0.113.7" });
+    // Three rejected attempts, one line: a flood cannot fill the logs.
+    const limited = lines.filter((line) => line.event === "auth.rate_limited");
+    expect(limited).toEqual([expect.objectContaining({ scope: "client", client: "203.0.113.7", retryAfterSeconds: expect.any(Number) })]);
+    expect(JSON.stringify(lines)).not.toContain("wrong-qzx");
   });
 
   it("treats every address in one IPv6 /64 as the same client", async () => {

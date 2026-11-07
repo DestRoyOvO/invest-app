@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { formatLogLine, isLogLevelEnabled, isSensitiveKey, log, serializeError } from "./log";
+import { formatLogLine, isLogLevelEnabled, isSensitiveKey, log, logThrottled, resetLogThrottles, serializeError } from "./log";
 
 const NOW = new Date("2026-11-07T15:00:00.000Z");
 
@@ -140,5 +140,30 @@ describe("log", () => {
     expect(warn).toHaveBeenCalledTimes(1);
     expect(isLogLevelEnabled("debug", "info")).toBe(false);
     expect(isLogLevelEnabled("error", "info")).toBe(true);
+  });
+});
+
+describe("logThrottled", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    resetLogThrottles();
+  });
+
+  it("writes one line per key and interval, and the next line says how many were dropped", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const t0 = NOW.getTime();
+    logThrottled("limit:client", 60_000, "warn", "auth.rate_limited", { scope: "client" }, t0);
+    logThrottled("limit:client", 60_000, "warn", "auth.rate_limited", { scope: "client" }, t0 + 1_000);
+    logThrottled("limit:client", 60_000, "warn", "auth.rate_limited", { scope: "client" }, t0 + 59_999);
+    // Another key has its own interval.
+    logThrottled("limit:server", 60_000, "warn", "auth.rate_limited", { scope: "server" }, t0 + 2_000);
+    expect(warn).toHaveBeenCalledTimes(2);
+
+    logThrottled("limit:client", 60_000, "warn", "auth.rate_limited", { scope: "client" }, t0 + 60_000);
+    const lines = warn.mock.calls.map(([line]) => parse(String(line)));
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).not.toHaveProperty("suppressed");
+    expect(lines[1]).toMatchObject({ scope: "server" });
+    expect(lines[2]).toMatchObject({ event: "auth.rate_limited", scope: "client", suppressed: 2 });
   });
 });
