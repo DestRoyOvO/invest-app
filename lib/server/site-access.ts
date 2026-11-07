@@ -1,0 +1,98 @@
+import "server-only";
+
+// Decisions for proxy.ts, kept pure so the rules are unit tested apart from Next.js:
+// - which requests a private site (SITE_ACCESS=private) serves without a session, and where the rest go;
+// - the per-request Content-Security-Policy for pages in production.
+
+export const UNLOCK_PATH = "/unlock";
+
+/** Root-level files: public/ assets and Next's metadata routes (favicon, icons, manifest, robots). Never data. */
+const ROOT_STATIC_FILE = /^\/[^/]+\.(?:ico|png|svg|jpg|jpeg|gif|webp|avif|txt|xml|webmanifest|woff2?)$/i;
+
+export function isApiPath(pathname: string): boolean {
+  return pathname === "/api" || pathname.startsWith("/api/");
+}
+
+/**
+ * Paths a private site serves without a session: the health check (for monitors and the Docker HEALTHCHECK), the
+ * sign-in API, the unlock page, framework assets and root-level static files.
+ */
+export function isOpenPath(pathname: string): boolean {
+  const path = pathname.length > 1 && pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+  return (
+    path === "/api/health" ||
+    path.startsWith("/api/auth/") ||
+    path === UNLOCK_PATH ||
+    path.startsWith("/_next/") ||
+    path.startsWith("/__nextjs") ||
+    ROOT_STATIC_FILE.test(path)
+  );
+}
+
+/**
+ * A same-site path to continue to after unlocking. Anything that could leave the site (absolute or protocol-relative
+ * URLs, backslashes, control characters) or loop back to the unlock page becomes "/".
+ */
+export function safeNextPath(value: string | null | undefined): string {
+  if (!value || !value.startsWith("/") || value.startsWith("//") || value.includes("\\")) return "/";
+  if (/[\u0000-\u001f\u007f]/.test(value)) return "/";
+  if (value === UNLOCK_PATH || value.startsWith(`${UNLOCK_PATH}?`) || value.startsWith(`${UNLOCK_PATH}/`)) return "/";
+  return value;
+}
+
+/** The unlock page URL that returns to `pathname` + `search` (without Next's _rsc cache-busting parameter). */
+export function unlockUrl(pathname: string, search: string): string {
+  const params = new URLSearchParams(search);
+  params.delete("_rsc");
+  const query = params.toString();
+  const next = safeNextPath(query ? `${pathname}?${query}` : pathname);
+  return next === "/" ? UNLOCK_PATH : `${UNLOCK_PATH}?next=${encodeURIComponent(next)}`;
+}
+
+export type SiteDecision = { action: "next" } | { action: "redirect"; location: string } | { action: "unauthorized" };
+
+export interface SiteRequest {
+  pathname: string;
+  search: string;
+  isPrivate: boolean;
+  /** The request carries a valid session cookie (only checked on private sites). */
+  authenticated: boolean;
+  /** The ?next= parameter, read on the unlock page. */
+  next: string | null;
+}
+
+/** What proxy.ts does with a request: let it through, send it to the unlock page, or answer 401. */
+export function decideSiteAccess({ pathname, search, isPrivate, authenticated, next }: SiteRequest): SiteDecision {
+  if (pathname === UNLOCK_PATH) {
+    // A public site has nothing to unlock, and a signed-in visitor already has: continue to the page they wanted.
+    return isPrivate && !authenticated ? { action: "next" } : { action: "redirect", location: safeNextPath(next) };
+  }
+  if (!isPrivate || authenticated || isOpenPath(pathname)) return { action: "next" };
+  if (isApiPath(pathname)) return { action: "unauthorized" };
+  return { action: "redirect", location: unlockUrl(pathname, search) };
+}
+
+/** A fresh nonce for one response: 16 random bytes, base64. */
+export function createNonce(): string {
+  return Buffer.from(crypto.getRandomValues(new Uint8Array(16))).toString("base64");
+}
+
+/**
+ * The page policy for production. Scripts need this response's nonce, which Next.js adds to every script it renders
+ * when it finds the nonce in the request's CSP header; 'strict-dynamic' lets those scripts load the code-split chunks.
+ * Styles keep 'unsafe-inline' because React and the chart library set style attributes.
+ */
+export function contentSecurityPolicy(nonce: string): string {
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self' data:",
+    "connect-src 'self'",
+    "frame-ancestors 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+  ].join("; ");
+}

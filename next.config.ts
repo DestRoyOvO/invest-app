@@ -1,33 +1,21 @@
 import type { NextConfig } from "next";
 
+// Build-time configuration. It runs outside the app bundle, so it reads NODE_ENV directly instead of going through
+// lib/server/env.ts (which is for runtime settings).
 const isProd = process.env.NODE_ENV === "production";
 
-// Next.js injects inline bootstrap scripts, so script-src needs 'unsafe-inline' unless nonces are used.
-// The CSP is only applied in production because the dev server relies on eval for fast refresh.
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self' data:",
-  "connect-src 'self'",
-  "frame-ancestors 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "object-src 'none'",
-].join("; ");
+// Pages get a Content-Security-Policy with a per-request nonce from proxy.ts (production only, because the dev server
+// relies on eval for fast refresh). API responses are data, never documents, so they get the strictest policy.
+const apiContentSecurityPolicy = "default-src 'none'; frame-ancestors 'none'";
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
-  ...(isProd
-    ? [
-        { key: "Content-Security-Policy", value: contentSecurityPolicy },
-        { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
-      ]
-    : []),
+  // Pages opened from here (news articles, issue links) get no handle back to this window.
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  ...(isProd ? [{ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" }] : []),
 ];
 
 const nextConfig: NextConfig = {
@@ -41,7 +29,10 @@ const nextConfig: NextConfig = {
   // next dev would otherwise (re)write an AGENTS.md with tool-specific instructions into the repository root.
   agentRules: false,
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      { source: "/api/:path*", headers: [{ key: "Content-Security-Policy", value: apiContentSecurityPolicy }] },
+    ];
   },
 };
 

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { parseLoginRequest } from "@/lib/server/ai-schemas";
-import { createSessionToken, passwordMatches, readAuthConfig, SESSION_COOKIE, sessionCookieOptions } from "@/lib/server/auth";
+import { createSessionToken, passwordMatches, readAuthConfig, sessionCookieOptions } from "@/lib/server/auth";
 import { clientIp, jsonError } from "@/lib/server/http";
+import { log } from "@/lib/server/log";
 import { clientKey, consumeRateLimit, GLOBAL_KEY, RATE_LIMITS } from "@/lib/server/rate-limit";
 import { rateLimitedResponse, readJsonRequest, rejectCrossSite } from "@/lib/server/request-guard";
 
@@ -26,7 +27,7 @@ export async function POST(request: Request): Promise<Response> {
   if (!overall.ok) return rateLimitedResponse(overall.retryAfterSeconds, RATE_LIMITED_MESSAGE);
 
   if (!config.sessionKey || !config.password) {
-    console.error("[auth] SESSION_SECRET is missing or shorter than 32 characters; refusing to create sessions.");
+    log("error", "auth.sign_in_unavailable", { reason: "SESSION_SECRET is missing or shorter than 32 characters" });
     return jsonError(503, "ai_unavailable", "Sign-in is temporarily unavailable.");
   }
 
@@ -40,6 +41,6 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const response = new NextResponse(null, { status: 204, headers: { "Cache-Control": "no-store" } });
-  response.cookies.set(SESSION_COOKIE, createSessionToken(config.sessionKey), sessionCookieOptions());
+  response.cookies.set(config.cookieName, createSessionToken(config.sessionKey), sessionCookieOptions());
   return response;
 }
