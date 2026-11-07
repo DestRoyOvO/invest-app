@@ -27,8 +27,20 @@ export function isUpstreamReady(stats: UpstreamStats, now: number = Date.now()):
   return !(sustained && recent);
 }
 
-/** Body and status for GET /api/health; `ready` adds the upstream statistics and answers 503 when not ready. */
-export function buildHealth({ ready, now = Date.now() }: { ready: boolean; now?: number }): { status: 200 | 503; body: HealthResponse } {
+/**
+ * Body and status for GET /api/health; `ready` adds the upstream statistics and answers 503 when not ready. With
+ * `activity` false (a caller without a session on a private site) the times of the latest Yahoo calls are null: there
+ * only the owner causes Yahoo calls, so those times would tell a stranger when the owner last had the app open.
+ */
+export function buildHealth({
+  ready,
+  activity = true,
+  now = Date.now(),
+}: {
+  ready: boolean;
+  activity?: boolean;
+  now?: number;
+}): { status: 200 | 503; body: HealthResponse } {
   const env = readEnv();
   const body: HealthResponse = {
     ok: true,
@@ -42,5 +54,6 @@ export function buildHealth({ ready, now = Date.now() }: { ready: boolean; now?:
   if (!ready) return { status: 200, body };
   const stats = getUpstreamStats();
   const upstreamReady = isUpstreamReady(stats, now);
-  return { status: upstreamReady ? 200 : 503, body: { ...body, ok: upstreamReady, upstream: { ...stats, ready: upstreamReady } } };
+  const shown = activity ? stats : { ...stats, lastSuccessAt: null, lastFailureAt: null, failingSince: null };
+  return { status: upstreamReady ? 200 : 503, body: { ...body, ok: upstreamReady, upstream: { ...shown, ready: upstreamReady } } };
 }

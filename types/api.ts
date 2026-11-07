@@ -593,6 +593,7 @@ export interface AuthStatus {
 export interface UpstreamHealth {
   /** Calls queued in or running through the Yahoo client right now. */
   pending: number;
+  /** The three times below are null when nothing happened yet, and for callers without a session on a private site. */
   lastSuccessAt: string | null;
   lastFailureAt: string | null;
   /** Failed calls since the last success. Yahoo's own "unknown symbol" answers do not count as failures. */

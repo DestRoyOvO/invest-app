@@ -7,6 +7,7 @@ import packageJson from "@/package.json";
 import type { HealthResponse } from "@/types/api";
 
 import { APP_VERSION, buildHealth, DOWN_AFTER_FAILURES, isUpstreamReady } from "./health";
+import { createSessionToken, readAuthConfig } from "./session";
 import { getUpstreamStats, resetUpstreamStats, upstream, type UpstreamStats } from "./yahoo";
 
 const T0 = Date.parse("2026-11-07T15:00:00.000Z");
@@ -124,5 +125,36 @@ describe("GET /api/health", () => {
     expect(notReady.status).toBe(503);
     expect(((await notReady.json()) as HealthResponse).ok).toBe(false);
     expect((await health(new Request("http://localhost/api/health?ready=0"))).status).toBe(200);
+  });
+
+  it("shows the times of the latest Yahoo calls on a private site only to a signed-in caller", async () => {
+    vi.stubEnv("SITE_ACCESS", "private");
+    vi.stubEnv("ACCESS_PASSWORD", "correct horse battery staple");
+    vi.stubEnv("SESSION_SECRET", "0123456789abcdef0123456789abcdef-test");
+    vi.useFakeTimers();
+    for (let i = 0; i < DOWN_AFTER_FAILURES; i++) {
+      vi.setSystemTime(T0 + i * MINUTE);
+      await failCall();
+    }
+    const url = "http://localhost/api/health?ready=1";
+
+    const anonymous = await health(new Request(url));
+    expect(anonymous.status).toBe(503);
+    expect(((await anonymous.json()) as HealthResponse).upstream).toEqual({
+      pending: 0,
+      lastSuccessAt: null,
+      lastFailureAt: null,
+      consecutiveFailures: DOWN_AFTER_FAILURES,
+      failingSince: null,
+      ready: false,
+    });
+
+    const auth = readAuthConfig();
+    const cookie = `${auth.cookieName}=${createSessionToken(auth.sessionKey as Buffer)}`;
+    const owner = await health(new Request(url, { headers: { cookie } }));
+    expect(((await owner.json()) as HealthResponse).upstream).toMatchObject({
+      failingSince: iso(T0),
+      lastFailureAt: iso(T0 + (DOWN_AFTER_FAILURES - 1) * MINUTE),
+    });
   });
 });

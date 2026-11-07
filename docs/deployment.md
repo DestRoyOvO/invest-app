@@ -240,7 +240,9 @@ failures. Readiness recovers with the next successful call. It reflects calls th
 quiet server with no recent calls reports ready.
 
 Use liveness for container health checks and readiness for uptime monitors (for example Uptime Kuma or a hosted
-monitor). Both stay open in private mode.
+monitor). Both stay open in private mode. There, a caller without a session gets `null` for `lastSuccessAt`,
+`lastFailureAt` and `failingSince`: only the owner makes the app call Yahoo, so those times would show strangers when
+the owner last had it open. `ready`, `consecutiveFailures` and the status code are the same for everyone.
 
 ## Logs
 
