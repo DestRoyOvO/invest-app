@@ -18,12 +18,18 @@ import {
   forwardReturn,
   IC_T_RELIABLE,
   LABEL_CODES,
+  RESEARCH_FACTORS,
   summarizeIc,
   type EvaluationConfig,
   type EvaluationInput,
+  type FactorResearch,
+  type RiskCalibration,
 } from "./evaluation";
 import { EVALUATION_DAYS, SIGNAL_EVALUATION } from "./evaluation-data";
+import factorResearch from "./factor-research.json";
+import riskCalibration from "./risk-calibration.json";
 import { mulberry32 } from "./research-stats";
+import { RISK_SETTINGS } from "./risk-forecast";
 import { FACTOR_WEIGHTS, MODEL_VERSION, SIGNAL_THRESHOLDS, TECHNICAL_FACTORS } from "./signal";
 
 // ---------------------------------------------------------------------------
@@ -344,3 +350,36 @@ describe("committed evaluation (lib/signal-evaluation.json)", () => {
   });
 });
 
+describe("committed research (lib/factor-research.json, lib/risk-calibration.json)", () => {
+  const FACTOR_RESEARCH = factorResearch as unknown as FactorResearch;
+  const RISK_CALIBRATION = riskCalibration as unknown as RiskCalibration;
+
+  it("tested the current technical score on the pinned window; re-run npm run research after changing the model", () => {
+    expect(FACTOR_RESEARCH.model).toBe(MODEL_VERSION);
+    expect(FACTOR_RESEARCH.window).toEqual(config.factors.window);
+    expect(FACTOR_RESEARCH.horizons).toEqual(config.factors.horizons);
+    expect(FACTOR_RESEARCH.factors.map((f) => f.key)).toEqual([...RESEARCH_FACTORS]);
+    for (const factor of FACTOR_RESEARCH.factors) expect(factor.results.map((r) => r.days)).toEqual(config.factors.horizons);
+  });
+
+  it("applies the adoption rule as stated", () => {
+    for (const factor of FACTOR_RESEARCH.factors) {
+      for (const r of factor.results) {
+        const sameSign = r.ic !== null && r.signs.every((s) => s === Math.sign(r.ic as number));
+        expect(r.verdict).toBe((r.holmP ?? 1) < FACTOR_RESEARCH.alpha && sameSign ? "predictive" : "not_predictive");
+        expect(r.signs).toHaveLength(config.factors.subperiods.length);
+      }
+    }
+    expect(FACTOR_RESEARCH.power.map((p) => p.days)).toEqual(config.factors.horizons);
+  });
+
+  it("calibrates the forecast that lib/risk-forecast.ts computes", () => {
+    expect(RISK_CALIBRATION.estimator).toEqual({ shortWindow: RISK_SETTINGS.shortWindow, longWindow: RISK_SETTINGS.longWindow, shortWeight: RISK_SETTINGS.shortWeight });
+    expect(RISK_CALIBRATION.bands.horizon).toBe(RISK_SETTINGS.horizonDays);
+    expect(RISK_CALIBRATION.window).toEqual(config.risk.window);
+    const { quintiles } = RISK_CALIBRATION;
+    expect(quintiles.overall.map((row) => row.quintile)).toEqual([1, 2, 3, 4, 5]);
+    expect([...quintiles.breakpoints.median].sort((a, b) => a - b)).toEqual(quintiles.breakpoints.median);
+    expect(quintiles.overall[4].drawdown ?? 0).toBeGreaterThan(quintiles.overall[0].drawdown ?? 1);
+  });
+});

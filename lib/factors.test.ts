@@ -13,6 +13,7 @@ import {
   returnsOf,
   reversalAt,
   styleFactorsAt,
+  styleFactorSeries,
   volatilityAt,
   type DatedClose,
 } from "./factors";
@@ -114,6 +115,16 @@ describe("styleFactorsAt", () => {
     expect(short).toMatchObject({ momentum: null, high52: null, beta: null });
     expect(short.reversal).not.toBeNull();
     expect(short.volatility).not.toBeNull();
+  });
+
+  it("computes the same values at every session as a series", () => {
+    const stock = dated(fromReturns(noise(300, 4)));
+    const bench = dated(fromReturns(noise(300, 5)));
+    const series = styleFactorSeries(stock, bench);
+    expect(series).toHaveLength(stock.length);
+    for (const i of [0, 20, 21, 62, 63, 250, 251, 252, 299]) expect(series[i]).toEqual(styleFactorsAt(stock, bench, i));
+    expect(styleFactorSeries(stock, null).every((values) => values.beta === null)).toBe(true);
+    expect(styleFactorSeries([], null)).toEqual([]);
   });
 
   it("documents a direction and a lookback for every factor", () => {

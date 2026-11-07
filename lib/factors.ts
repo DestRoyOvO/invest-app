@@ -15,7 +15,8 @@
 // - beta:       beta of the last 252 daily returns to the benchmark (SPY) on matching sessions (Frazzini & Pedersen 2014).
 //
 // Raw values keep their natural sign (a high "volatility" is a volatile stock). FACTOR_DIRECTION says which side the
-// literature expects to outperform; research and composites multiply by it.
+// literature expects to outperform; research and composites multiply by it. In this universe none of the five has
+// predicted returns under the pre-registered test (docs/factor-research.md), so the app treats them as descriptive.
 
 import type { StyleFactorKey } from "@/types/api";
 
@@ -155,6 +156,23 @@ export function styleFactorsAt(stock: readonly DatedClose[], benchmark: readonly
     volatility: volatilityAt(returns, i),
     beta: benchmark ? betaAt(returns, alignBenchmarkReturns(stock, benchmark), i) : null,
   };
+}
+
+/**
+ * All five raw factor values at every session, in the stock's order (the offline research ranks them across stocks
+ * date by date). Entry i equals styleFactorsAt(stock, benchmark, i); the shared inputs are prepared once.
+ */
+export function styleFactorSeries(stock: readonly DatedClose[], benchmark: readonly DatedClose[] | null): StyleFactorValues[] {
+  const closes = stock.map((bar) => bar.c);
+  const returns = returnsOf(closes);
+  const aligned = benchmark ? alignBenchmarkReturns(stock, benchmark) : null;
+  return stock.map((_, i) => ({
+    momentum: momentumAt(closes, i),
+    reversal: reversalAt(closes, i),
+    high52: high52At(closes, i),
+    volatility: volatilityAt(returns, i),
+    beta: aligned ? betaAt(returns, aligned, i) : null,
+  }));
 }
 
 /**

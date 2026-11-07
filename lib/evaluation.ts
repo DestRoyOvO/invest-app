@@ -150,6 +150,117 @@ export interface SignalEvaluation {
 }
 
 // ---------------------------------------------------------------------------
+// Shapes of lib/factor-research.json and lib/risk-calibration.json (scripts/research-factors.ts)
+// ---------------------------------------------------------------------------
+
+/** The seven pre-registered factors: the five style factors of lib/factors.ts, the technical score and their composite. */
+export const RESEARCH_FACTORS = ["momentum", "reversal", "high52", "volatility", "beta", "technical", "composite"] as const;
+export type ResearchFactor = (typeof RESEARCH_FACTORS)[number];
+
+export interface FactorHorizonResult {
+  days: number;
+  /** Non-overlapping dates (every h sessions from the first signal date). */
+  dates: number;
+  /** Mean cross-sectional Spearman IC with same-day excess returns on those dates, its classical t and two-sided p. */
+  ic: number | null;
+  t: number | null;
+  p: number | null;
+  /** p adjusted over all pre-registered tests (Holm controls the family-wise error, Benjamini-Hochberg the false discovery rate). */
+  holmP: number | null;
+  bhQ: number | null;
+  /** The IC on all dates with a Newey-West t (lag h), a robustness check. */
+  allDates: { ic: number | null; t: number | null; dates: number };
+  /** Mean IC in each configured subperiod and its sign (0 when missing). */
+  subperiodIc: Array<number | null>;
+  signs: Array<1 | -1 | 0>;
+  /** Mean highest-minus-lowest quintile of same-day excess returns per holding period (decimal) and its t. */
+  spread: number | null;
+  spreadT: number | null;
+  /** Mean share of the top quintile replaced at each rebalance. */
+  turnover: number | null;
+  /** On the same dates: ranks demeaned within sectors, returns net of trailing beta times SPY, and without the biggest ex-post winners. */
+  sectorNeutralIc: number | null;
+  betaAdjustedIc: number | null;
+  exWinnersIc: number | null;
+  /** "predictive" only when holmP < alpha and the IC has the same sign in every subperiod. */
+  verdict: "predictive" | "not_predictive";
+}
+
+export interface FactorResearch {
+  window: DateRange;
+  /** First and last signal date. */
+  from: string;
+  to: string;
+  universe: number;
+  /** Model version of the technical score that was tested. */
+  model: number;
+  /** The adoption rule, in words. */
+  rule: string;
+  alpha: number;
+  horizons: number[];
+  subperiods: DateRange[];
+  /** Factors in their literature direction: `direction` is -1 when the raw value (e.g. volatility) is expected to do worse. */
+  factors: Array<{ key: ResearchFactor; label: string; direction: 1 | -1; results: FactorHorizonResult[] }>;
+  /** The smallest mean IC the design detects with 80% power at the 5% level. */
+  power: Array<{ days: number; dates: number; sdIc: number | null; minimumDetectableIc: number | null }>;
+  bias: {
+    benchmarks: { market: string; equalWeight: string };
+    /** The universe against its benchmarks over the window and each subperiod (selection bias gauge). */
+    universeVsBenchmarks: BenchmarkGap[];
+    /** The stocks with the highest annual return over the window, excluded in exWinnersIc. */
+    exWinners: Array<{ symbol: string; annualReturn: number }>;
+    /** Mean cross-sectional rank correlation of the technical score with the trailing 21-session return. */
+    technicalVsMonthReturn: number | null;
+  };
+}
+
+export interface BandCoverage {
+  n: number;
+  /** Share of moves inside plus/minus one and two forecast standard deviations. */
+  within1: number | null;
+  within2: number | null;
+}
+
+export interface QuintileRow {
+  /** 1 = lowest volatility, 5 = highest. */
+  quintile: number;
+  /** Stock-months. */
+  n: number;
+  medianVolatility: number | null;
+  /** Share of stock-months with a peak-to-trough drop at or beyond the threshold within the horizon. */
+  drawdown: number | null;
+  /** Share of stock-months whose return over the horizon was at or below the threshold. */
+  loss: number | null;
+}
+
+export interface RiskCalibration {
+  window: DateRange;
+  subperiods: DateRange[];
+  /** The forecast of lib/risk-forecast.ts: sqrt(w * var(short) + (1 - w) * var(long)) of daily log returns. */
+  estimator: { shortWindow: number; longWindow: number; shortWeight: number };
+  bands: { horizon: number; overall: BandCoverage; shortWindowOnly: BandCoverage; subperiods: Array<DateRange & BandCoverage> };
+  /** Mean QLIKE loss of the blend and of the short-window estimate alone (lower is better). */
+  qlike: { n: number; blend: number | null; shortWindowOnly: number | null };
+  /** Rank correlation of trailing volatility and beta with their realized values over the next `horizon` sessions. */
+  persistence: {
+    horizon: number;
+    dates: number;
+    volatility: { mean: number | null; min: number | null; t: number | null };
+    beta: { mean: number | null; min: number | null; t: number | null };
+  };
+  /** How bad a normal month was, by quintile of trailing 63-session volatility across the universe. */
+  quintiles: {
+    horizon: number;
+    threshold: number;
+    measure: string;
+    /** The four boundaries between quintiles (annualized volatility, lowest first): median over dates and at the window end. */
+    breakpoints: { median: number[]; latest: { date: string; values: number[] } | null };
+    overall: QuintileRow[];
+    subperiods: Array<DateRange & { rows: QuintileRow[] }>;
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Verdict helpers used by the app
 // ---------------------------------------------------------------------------
 
