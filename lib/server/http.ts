@@ -4,17 +4,23 @@ import { NextResponse } from "next/server";
 
 import type { ApiErrorBody, ApiErrorCode } from "@/types/api";
 
-/** JSON success response. `cacheSeconds` sets a shared CDN cache (s-maxage + stale-while-revalidate). */
+import { readEnv } from "./env";
+import { log } from "./log";
+
+/**
+ * Cache-Control for a successful response. Public sites let a shared CDN cache it (s-maxage plus
+ * stale-while-revalidate). A private site (SITE_ACCESS=private) must never have a shared cache hand its data to an
+ * anonymous client, so there the response is private to the browser and revalidated on every use.
+ */
+export function cacheControlFor(cacheSeconds: number | undefined, siteAccess = readEnv().siteAccess): string {
+  if (!cacheSeconds || cacheSeconds <= 0) return "no-store";
+  if (siteAccess === "private") return "private, max-age=0";
+  return `public, max-age=0, s-maxage=${cacheSeconds}, stale-while-revalidate=${cacheSeconds * 4}`;
+}
+
+/** JSON success response. `cacheSeconds` sets a shared CDN cache on public sites (see cacheControlFor). */
 export function jsonOk<T>(data: T, options: { cacheSeconds?: number; status?: number } = {}): NextResponse<T> {
-  const headers = new Headers();
-  if (options.cacheSeconds && options.cacheSeconds > 0) {
-    headers.set(
-      "Cache-Control",
-      `public, max-age=0, s-maxage=${options.cacheSeconds}, stale-while-revalidate=${options.cacheSeconds * 4}`,
-    );
-  } else {
-    headers.set("Cache-Control", "no-store");
-  }
+  const headers = new Headers({ "Cache-Control": cacheControlFor(options.cacheSeconds) });
   return NextResponse.json(data, { status: options.status ?? 200, headers });
 }
 
@@ -27,7 +33,7 @@ export function jsonError(status: number, code: ApiErrorCode, message: string, h
 
 /** Logs the real error on the server and returns a generic 502 to the client. */
 export function upstreamError(context: string, error: unknown): NextResponse<ApiErrorBody> {
-  console.error(`[${context}]`, error);
+  log("error", "http.upstream_error", { route: context, error });
   return jsonError(502, "upstream_error", "Market data provider is unavailable. Please retry shortly.");
 }
 
@@ -110,11 +116,11 @@ function lastHop(header: string | null): string | null {
  */
 export function clientIp(request: Request): string {
   const headers = request.headers;
-  if (process.env.VERCEL) {
+  const env = readEnv();
+  if (env.onVercel) {
     return headers.get("x-real-ip")?.trim() || firstHop(headers.get("x-forwarded-for")) || "unknown";
   }
-  const trustProxy = (process.env.TRUST_PROXY ?? "").toLowerCase();
-  if (trustProxy === "1" || trustProxy === "true") {
+  if (env.trustProxy) {
     return lastHop(headers.get("x-forwarded-for")) || headers.get("x-real-ip")?.trim() || "unknown";
   }
   return "direct";

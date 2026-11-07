@@ -15,11 +15,14 @@ import {
   passwordMatches,
   readAuthConfig,
   readCookie,
+  SECURE_SESSION_COOKIE,
   SESSION_COOKIE,
   SESSION_TTL_SECONDS,
+  sessionCookieName,
   sessionCookieOptions,
   verifySessionToken,
 } from "./auth";
+import { resetLogThrottles } from "./log";
 import { RATE_LIMITS, resetRateLimits } from "./rate-limit";
 
 const SECRET = "0123456789abcdef0123456789abcdef-test";
@@ -179,6 +182,19 @@ describe("auth modes", () => {
     expect(isLoopbackHost(null)).toBe(false);
   });
 
+  it("names the cookie __Host-is_session in production, so subdomains cannot plant one", () => {
+    expect(sessionCookieName({ isProduction: true })).toBe(SECURE_SESSION_COOKIE);
+    expect(SECURE_SESSION_COOKIE).toBe("__Host-is_session");
+    expect(sessionCookieName({ isProduction: false })).toBe(SESSION_COOKIE);
+
+    const production = readAuthConfig({ ACCESS_PASSWORD: "pw", SESSION_SECRET: SECRET, NODE_ENV: "production" });
+    expect(production.cookieName).toBe(SECURE_SESSION_COOKIE);
+    const token = createSessionToken(production.sessionKey as Buffer);
+    expect(getAuthStatus(requestWith({ cookie: `${SECURE_SESSION_COOKIE}=${token}` }), production, true).authenticated).toBe(true);
+    // The development name is not read in production.
+    expect(getAuthStatus(requestWith({ cookie: `${SESSION_COOKIE}=${token}` }), production, true).authenticated).toBe(false);
+  });
+
   it("sets secure cookies only in production", () => {
     expect(sessionCookieOptions({ NODE_ENV: "production" })).toEqual({
       httpOnly: true,
@@ -210,6 +226,8 @@ describe("auth routes", () => {
     // These tests identify clients by X-Forwarded-For, which is only trusted behind a configured proxy.
     vi.stubEnv("TRUST_PROXY", "1");
     vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    resetLogThrottles();
   });
 
   afterEach(() => {
@@ -265,6 +283,21 @@ describe("auth routes", () => {
     expect(limited.headers.get("set-cookie")).toBeNull();
   });
 
+  it("logs failed and rate-limited sign-ins with the client, never the password", async () => {
+    const attempt = () => login(loginRequest({ password: "wrong-qzx" }, { "x-forwarded-for": "203.0.113.7" }));
+    for (let i = 0; i < RATE_LIMITS.login.limit; i += 1) expect((await attempt()).status).toBe(401);
+    for (let i = 0; i < 3; i += 1) expect((await attempt()).status).toBe(429);
+
+    const lines = vi.mocked(console.warn).mock.calls.map(([line]) => JSON.parse(String(line)) as Record<string, unknown>);
+    const failed = lines.filter((line) => line.event === "auth.sign_in_failed");
+    expect(failed).toHaveLength(RATE_LIMITS.login.limit);
+    expect(failed[0]).toMatchObject({ level: "warn", client: "203.0.113.7" });
+    // Three rejected attempts, one line: a flood cannot fill the logs.
+    const limited = lines.filter((line) => line.event === "auth.rate_limited");
+    expect(limited).toEqual([expect.objectContaining({ scope: "client", client: "203.0.113.7", retryAfterSeconds: expect.any(Number) })]);
+    expect(JSON.stringify(lines)).not.toContain("wrong-qzx");
+  });
+
   it("treats every address in one IPv6 /64 as the same client", async () => {
     for (let i = 1; i <= RATE_LIMITS.login.limit; i += 1) {
       expect((await login(loginRequest({ password: "wrong" }, { "x-forwarded-for": `2001:db8:1:2::${i}` }))).status).toBe(401);
@@ -300,6 +333,30 @@ describe("auth routes", () => {
   it("answers 400 when no password is configured", async () => {
     vi.stubEnv("ACCESS_PASSWORD", "");
     expect((await login(loginRequest({ password: PASSWORD }))).status).toBe(400);
+  });
+
+  it("sets the __Host- cookie with Secure and no Domain in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    const response = await login(loginRequest({ password: PASSWORD }));
+    expect(response.status).toBe(204);
+    const setCookie = response.headers.get("set-cookie") ?? "";
+    expect(setCookie).toMatch(/^__Host-is_session=v1\./);
+    expect(setCookie).toMatch(/Secure/i);
+    expect(setCookie).toMatch(/Path=\//);
+    expect(setCookie).not.toMatch(/Domain=/i);
+
+    const logoutResponse = await logout(
+      new Request("http://localhost:3000/api/auth/logout", { method: "POST", headers: { "sec-fetch-site": "same-origin" } }),
+    );
+    expect(logoutResponse.headers.get("set-cookie") ?? "").toMatch(/^__Host-is_session=;.*Max-Age=0/i);
+  });
+
+  it("logs a structured line when sign-in is unavailable", async () => {
+    vi.stubEnv("SESSION_SECRET", "short");
+    await login(loginRequest({ password: PASSWORD }));
+    const line = JSON.parse(String(vi.mocked(console.error).mock.calls[0]?.[0])) as Record<string, unknown>;
+    expect(line).toMatchObject({ level: "error", event: "auth.sign_in_unavailable" });
+    expect(JSON.stringify(line)).not.toContain(PASSWORD);
   });
 
   it("logs out by expiring the cookie", async () => {

@@ -7,6 +7,7 @@ import type { ApiErrorBody } from "@/types/api";
 import { checkAiAccess } from "./auth";
 import { aiTextResponse, AiNotConfiguredError, streamChat, type LlmMessage } from "./deepseek";
 import { BodyError, clientIp, jsonError, readJsonBody } from "./http";
+import { log } from "./log";
 import { checkDailyBudget, clientKey, consumeDailyBudget, consumeRateLimit, RATE_LIMITS, refundDailyBudget, type RateLimitRule } from "./rate-limit";
 
 // Guards shared by the state-changing POST routes (AI, login, logout), and the final step of the AI pipeline.
@@ -118,7 +119,7 @@ export function openAiStream(request: Request, { messages, maxTokens, temperatur
   } catch (error) {
     refundDailyBudget();
     if (error instanceof AiNotConfiguredError) return jsonError(403, "ai_unavailable", "AI is not configured on this server.");
-    console.error("[ai] could not start the stream", error instanceof Error ? error.name : "unknown error");
+    log("error", "ai.start_failed", { type: error instanceof Error ? error.name : "unknown" });
     return jsonError(500, "internal_error", "Could not start the AI response.");
   }
 }

@@ -26,7 +26,7 @@
 //   GET  /api/auth/status                    -> AuthStatus
 //   POST /api/auth/login   { password }      -> 204, or 401 unauthorized
 //   POST /api/auth/logout                    -> 204
-//   GET  /api/health                         -> HealthResponse
+//   GET  /api/health                         -> HealthResponse (liveness; ?ready=1 adds upstream readiness, 503 when down)
 
 export type Lang = "en" | "zh";
 
@@ -628,10 +628,35 @@ export interface AuthStatus {
   aiAvailable: boolean;
 }
 
+/** Yahoo call statistics kept by lib/server/yahoo.ts upstream(), for /api/health?ready=1. */
+export interface UpstreamHealth {
+  /** Calls queued in or running through the Yahoo client right now. */
+  pending: number;
+  /** The three times below are null when nothing happened yet, and for callers without a session on a private site. */
+  lastSuccessAt: string | null;
+  lastFailureAt: string | null;
+  /** Failed calls since the last success. Yahoo's own "unknown symbol" answers do not count as failures. */
+  consecutiveFailures: number;
+  /** Start of the current failure streak; null while the latest call succeeded. */
+  failingSince: string | null;
+  /** False after sustained failure: 5+ failed calls in a row over 2+ minutes, the latest within 15 minutes. */
+  ready: boolean;
+}
+
 export interface HealthResponse {
-  ok: true;
+  /** Always true for the liveness check. With ?ready=1 it equals upstream.ready (and the status is 503 when false). */
+  ok: boolean;
   time: string;
   aiConfigured: boolean;
+  /** package.json version of the running build. */
+  version: string;
+  /** Build commit (VERCEL_GIT_COMMIT_SHA or the GIT_SHA Docker build argument), or null. */
+  commit: string | null;
+  uptimeSeconds: number;
+  /** Where market data comes from (MARKET_DATA_SOURCE). */
+  dataSource: "yahoo" | "fixtures" | "record";
+  /** Only with ?ready=1. */
+  upstream?: UpstreamHealth;
 }
 
 // ---------------------------------------------------------------------------

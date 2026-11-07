@@ -18,6 +18,7 @@ import { notesMessages } from "./notes";
 import { alertsMessages } from "./alerts";
 import { dataMessages } from "./data";
 import { marketsMessages } from "./markets";
+import { accessMessages } from "./access";
 
 export const en = {
   common: {
@@ -369,6 +370,7 @@ export const en = {
   alerts: alertsMessages.en,
   data: dataMessages.en,
   markets: marketsMessages.en,
+  access: accessMessages.en,
 } as const;
 
 export type Messages = Widen<typeof en>;
@@ -722,6 +724,7 @@ export const zh: Messages = {
   alerts: alertsMessages.zh,
   data: dataMessages.zh,
   markets: marketsMessages.zh,
+  access: accessMessages.zh,
 };
 
 export const MESSAGES: Record<Lang, Messages> = { en, zh };

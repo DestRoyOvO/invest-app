@@ -1,0 +1,55 @@
+name: Bug report
+description: Something in the app does not work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. For a wrong price, ratio or date, the "Data issue" form asks for the details that
+        make data problems reproducible. Never paste your DeepSeek key, access password or session secret.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open /stock/NVDA
+        2. Switch the chart to 5Y
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Where the app runs
+      options:
+        - npm run dev
+        - npm run build && npm start
+        - Docker or docker compose
+        - Vercel
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The "version" and "commit" fields of /api/health, or the git commit.
+      placeholder: 0.3.0 (abc1234)
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and device
+      placeholder: Chrome 140 on Windows 11, Safari on iPhone
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server log lines or screenshots
+      description: The server writes one JSON line per event; lines around the problem help most. Check them for secrets first.
+      render: text

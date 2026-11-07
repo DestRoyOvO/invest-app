@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { BodyError, clientIp, readJsonBody } from "./http";
+import { BodyError, cacheControlFor, clientIp, jsonOk, readJsonBody, upstreamError } from "./http";
 
 function jsonRequest(body: BodyInit, headers: Record<string, string> = {}): Request {
   return new Request("http://localhost/api/test", {
@@ -65,12 +65,47 @@ describe("clientIp", () => {
 
   it("uses the right-most hop behind a trusted reverse proxy", () => {
     vi.stubEnv("VERCEL", "");
-    vi.stubEnv("TRUST_PROXY", "1");
-    expect(clientIp(withHeaders({ "x-forwarded-for": "6.6.6.6, 198.51.100.7" }))).toBe("198.51.100.7");
+    for (const value of ["1", "true", "yes"]) {
+      vi.stubEnv("TRUST_PROXY", value);
+      expect(clientIp(withHeaders({ "x-forwarded-for": "6.6.6.6, 198.51.100.7" }))).toBe("198.51.100.7");
+    }
+    vi.stubEnv("TRUST_PROXY", "maybe");
+    expect(clientIp(withHeaders({ "x-forwarded-for": "6.6.6.6, 198.51.100.7" }))).toBe("direct");
   });
 
   it("uses the platform header on Vercel", () => {
     vi.stubEnv("VERCEL", "1");
     expect(clientIp(withHeaders({ "x-real-ip": "192.0.2.44", "x-forwarded-for": "192.0.2.44" }))).toBe("192.0.2.44");
+  });
+});
+
+describe("cache headers", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("lets a shared cache keep public responses and never stores uncacheable ones", () => {
+    expect(cacheControlFor(60, "public")).toBe("public, max-age=0, s-maxage=60, stale-while-revalidate=240");
+    expect(cacheControlFor(0, "public")).toBe("no-store");
+    expect(cacheControlFor(undefined, "private")).toBe("no-store");
+  });
+
+  it("keeps responses out of shared caches on a private site", () => {
+    expect(cacheControlFor(60, "private")).toBe("private, max-age=0");
+    vi.stubEnv("SITE_ACCESS", "private");
+    expect(jsonOk({ ok: true }, { cacheSeconds: 15 }).headers.get("cache-control")).toBe("private, max-age=0");
+    vi.stubEnv("SITE_ACCESS", "public");
+    expect(jsonOk({ ok: true }, { cacheSeconds: 15 }).headers.get("cache-control")).toContain("s-maxage=15");
+  });
+});
+
+describe("upstreamError", () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it("logs one structured line and hides the detail from the client", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const response = upstreamError("api/quotes", new Error("socket hang up"));
+    expect(response.status).toBe(502);
+    expect(JSON.stringify(await response.json())).not.toContain("socket");
+    const line = JSON.parse(String(error.mock.calls[0]?.[0])) as Record<string, unknown>;
+    expect(line).toMatchObject({ level: "error", event: "http.upstream_error", route: "api/quotes", error: { name: "Error", message: "socket hang up" } });
   });
 });

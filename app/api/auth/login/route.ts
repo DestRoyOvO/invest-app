@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { parseLoginRequest } from "@/lib/server/ai-schemas";
-import { createSessionToken, passwordMatches, readAuthConfig, SESSION_COOKIE, sessionCookieOptions } from "@/lib/server/auth";
+import { createSessionToken, passwordMatches, readAuthConfig, sessionCookieOptions } from "@/lib/server/auth";
+import { MINUTE } from "@/lib/server/cache";
 import { clientIp, jsonError } from "@/lib/server/http";
+import { log, logThrottled } from "@/lib/server/log";
 import { clientKey, consumeRateLimit, GLOBAL_KEY, RATE_LIMITS } from "@/lib/server/rate-limit";
 import { rateLimitedResponse, readJsonRequest, rejectCrossSite } from "@/lib/server/request-guard";
 
@@ -10,6 +12,15 @@ import { rateLimitedResponse, readJsonRequest, rejectCrossSite } from "@/lib/ser
 
 const MAX_BODY_BYTES = 1024;
 const RATE_LIMITED_MESSAGE = "Too many sign-in attempts. Please wait and try again.";
+
+/**
+ * 429 for an attempt over the per-client or the server-wide limit. Logged at most once a minute per limit, so that a
+ * flood of attempts shows in the logs without filling them.
+ */
+function signInLimited(scope: "client" | "server", client: string, retryAfterSeconds: number): Response {
+  logThrottled(`auth.rate_limited:${scope}`, MINUTE, "warn", "auth.rate_limited", { scope, client, retryAfterSeconds });
+  return rateLimitedResponse(retryAfterSeconds, RATE_LIMITED_MESSAGE);
+}
 
 export async function POST(request: Request): Promise<Response> {
   const crossSite = rejectCrossSite(request);
@@ -20,13 +31,14 @@ export async function POST(request: Request): Promise<Response> {
 
   // Counted before the password is checked, so every attempt (right or wrong) uses the budget: first per client,
   // then for the whole server.
-  const perClient = consumeRateLimit(RATE_LIMITS.login, clientKey(clientIp(request)));
-  if (!perClient.ok) return rateLimitedResponse(perClient.retryAfterSeconds, RATE_LIMITED_MESSAGE);
+  const client = clientKey(clientIp(request));
+  const perClient = consumeRateLimit(RATE_LIMITS.login, client);
+  if (!perClient.ok) return signInLimited("client", client, perClient.retryAfterSeconds);
   const overall = consumeRateLimit(RATE_LIMITS.loginGlobal, GLOBAL_KEY);
-  if (!overall.ok) return rateLimitedResponse(overall.retryAfterSeconds, RATE_LIMITED_MESSAGE);
+  if (!overall.ok) return signInLimited("server", client, overall.retryAfterSeconds);
 
   if (!config.sessionKey || !config.password) {
-    console.error("[auth] SESSION_SECRET is missing or shorter than 32 characters; refusing to create sessions.");
+    log("error", "auth.sign_in_unavailable", { reason: "SESSION_SECRET is missing or shorter than 32 characters" });
     return jsonError(503, "ai_unavailable", "Sign-in is temporarily unavailable.");
   }
 
@@ -36,10 +48,12 @@ export async function POST(request: Request): Promise<Response> {
   if (!parsed.ok) return jsonError(400, "bad_request", "A password is required.");
 
   if (!passwordMatches(parsed.data.password, config.password)) {
+    // Every failure is logged: the limits above already cap them at 30 per 15 minutes.
+    log("warn", "auth.sign_in_failed", { client });
     return jsonError(401, "unauthorized", "Incorrect password.");
   }
 
   const response = new NextResponse(null, { status: 204, headers: { "Cache-Control": "no-store" } });
-  response.cookies.set(SESSION_COOKIE, createSessionToken(config.sessionKey), sessionCookieOptions());
+  response.cookies.set(config.cookieName, createSessionToken(config.sessionKey), sessionCookieOptions());
   return response;
 }

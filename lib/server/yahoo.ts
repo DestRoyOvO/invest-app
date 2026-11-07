@@ -11,12 +11,14 @@ import type {
   Quote,
   StockProfile,
   SymbolSearchResult,
+  UpstreamHealth,
 } from "@/types/api";
 
 import { normalizeBars, type DailyBar, type RawChart } from "@/lib/bars";
 import { hasCjk } from "@/lib/names-zh";
 
-import { cached, HOUR, MINUTE, peek } from "./cache";
+import { cached, HOUR, isFresh, MINUTE, peek } from "./cache";
+import { log } from "./log";
 
 // ---------------------------------------------------------------------------
 // Client
@@ -52,7 +54,27 @@ export const yf: YahooClient =
  * values, including stale ones, are still served.
  */
 const MAX_PENDING_CALLS = 200;
-let pendingCalls = 0;
+
+/** Call outcomes kept by upstream() for the readiness check. On globalThis so every route bundle shares one copy. */
+interface UpstreamState {
+  pending: number;
+  lastSuccessAt: number | null;
+  lastFailureAt: number | null;
+  consecutiveFailures: number;
+  /** Start of the current failure streak; null while the latest call succeeded. */
+  failingSince: number | null;
+}
+
+const globalUpstream = globalThis as unknown as { __investseekUpstream?: UpstreamState };
+const upstreamState: UpstreamState = (globalUpstream.__investseekUpstream ??= {
+  pending: 0,
+  lastSuccessAt: null,
+  lastFailureAt: null,
+  consecutiveFailures: 0,
+  failingSince: null,
+});
+
+export type UpstreamStats = Omit<UpstreamHealth, "ready">;
 
 export class UpstreamBusyError extends Error {
   constructor() {
@@ -73,14 +95,64 @@ export function callOptions() {
   return { validateResult: false as const, fetchOptions: { signal: AbortSignal.timeout(CALL_DEADLINE_MS) } };
 }
 
-export async function upstream<T>(call: () => Promise<T>): Promise<T> {
-  if (pendingCalls >= MAX_PENDING_CALLS) throw new UpstreamBusyError();
-  pendingCalls++;
-  try {
-    return await call();
-  } finally {
-    pendingCalls--;
+/**
+ * True for errors that carry Yahoo's own answer about the request (unknown symbol, no fundamentals, a query it cannot
+ * parse). Those show the service is up, so they do not count as failures. HTTP errors, timeouts and network errors do.
+ */
+export function isYahooAnswer(error: unknown): boolean {
+  if (!(error instanceof Error) || error.name === "HTTPError") return false;
+  return error.name === "BadRequestError" || /No data found|Quote not found|No fundamentals/i.test(error.message);
+}
+
+function recordOutcome(ok: boolean, now = Date.now()): void {
+  if (ok) {
+    upstreamState.lastSuccessAt = now;
+    upstreamState.consecutiveFailures = 0;
+    upstreamState.failingSince = null;
+  } else {
+    upstreamState.lastFailureAt = now;
+    upstreamState.consecutiveFailures++;
+    upstreamState.failingSince ??= now;
   }
+}
+
+/**
+ * Runs one Yahoo call under the pending-call cap and records its outcome for /api/health?ready=1. A rejection by the
+ * cap itself (UpstreamBusyError) is load on this server, not a Yahoo failure, so it is not recorded.
+ */
+export async function upstream<T>(call: () => Promise<T>): Promise<T> {
+  if (upstreamState.pending >= MAX_PENDING_CALLS) throw new UpstreamBusyError();
+  upstreamState.pending++;
+  try {
+    const result = await call();
+    recordOutcome(true);
+    return result;
+  } catch (error) {
+    recordOutcome(isYahooAnswer(error));
+    throw error;
+  } finally {
+    upstreamState.pending--;
+  }
+}
+
+function isoOrNull(ms: number | null): string | null {
+  return ms === null ? null : new Date(ms).toISOString();
+}
+
+/** A snapshot of the Yahoo call statistics for /api/health?ready=1. */
+export function getUpstreamStats(): UpstreamStats {
+  return {
+    pending: upstreamState.pending,
+    lastSuccessAt: isoOrNull(upstreamState.lastSuccessAt),
+    lastFailureAt: isoOrNull(upstreamState.lastFailureAt),
+    consecutiveFailures: upstreamState.consecutiveFailures,
+    failingSince: isoOrNull(upstreamState.failingSince),
+  };
+}
+
+/** Test helper. */
+export function resetUpstreamStats(): void {
+  Object.assign(upstreamState, { pending: 0, lastSuccessAt: null, lastFailureAt: null, consecutiveFailures: 0, failingSince: null });
 }
 
 // ---------------------------------------------------------------------------
@@ -364,7 +436,7 @@ export async function getQuotes(symbols: string[]): Promise<Map<string, Quote>> 
       }
     }
     if (servedStale === 0 && result.size === 0) throw error;
-    if (servedStale > 0) console.warn(`[yahoo] quote refresh failed; served ${servedStale} stale quotes (oldest fetched ${oldest ?? "unknown"})`, error);
+    if (servedStale > 0) log("warn", "yahoo.stale_served", { count: servedStale, oldestFetchedAt: oldest, error });
   }
   return result;
 }
@@ -372,6 +444,20 @@ export async function getQuotes(symbols: string[]): Promise<Map<string, Quote>> 
 export async function getQuote(symbol: string): Promise<Quote | null> {
   const quotes = await getQuotes([symbol]);
   return quotes.get(symbol) ?? null;
+}
+
+/** True when getQuotes would answer for the symbol without calling Yahoo (a fresh quote or a fresh "unknown"). */
+export function hasFreshQuote(symbol: string): boolean {
+  const slot = quoteSlots.get(symbol);
+  return slot !== undefined && slot.expiresAt > Date.now();
+}
+
+/**
+ * The last answer stored for the symbol, fresh or not, without loading: its quote, null when Yahoo did not know the
+ * symbol (the negative cache), undefined when nothing is stored.
+ */
+export function peekQuote(symbol: string): Quote | null | undefined {
+  return quoteSlots.get(symbol)?.quote;
 }
 
 // ---------------------------------------------------------------------------
@@ -406,9 +492,10 @@ export async function getDailyBars(symbol: string, days: number): Promise<DailyB
   return cached(`bars:${symbol}:${days}`, { ttlMs: barsTtl(), staleMs: 6 * HOUR }, () => fetchChart(symbol, days, "1d"));
 }
 
-/** True when getDailyBars(symbol, days) can be served from the cache (fresh or stale) without calling Yahoo. */
+/** True when getDailyBars(symbol, days) can be answered from the cache without calling Yahoo. */
 export function hasCachedDailyBars(symbol: string, days: number): boolean {
-  return peek(`bars:${symbol}:${days}`) !== undefined;
+  // Fresh only: an expired entry is reloaded (its stale value is a fallback for a failed reload), which costs a call.
+  return isFresh(`bars:${symbol}:${days}`);
 }
 
 const RANGE_SPEC: Record<ChartRange, { days: number; interval: "1d" | "1wk" }> = {
@@ -431,12 +518,12 @@ export async function getChart(symbol: string, range: ChartRange): Promise<Chart
   return { symbol, range, interval: spec.interval, bars: out };
 }
 
-/** About one month of daily closes for sparklines (cached 30 minutes). */
-/** True when a sparkline can be served from the cache (fresh or stale) without calling Yahoo. */
+/** True when a sparkline can be answered from the cache without calling Yahoo. */
 export function hasCachedSparkline(symbol: string): boolean {
-  return peek(`spark:${symbol}`) !== undefined;
+  return isFresh(`spark:${symbol}`);
 }
 
+/** About one month of daily closes for sparklines (cached 30 minutes). */
 export async function getSparkline(symbol: string): Promise<number[]> {
   const bars = await cached(`spark:${symbol}`, { ttlMs: 30 * MINUTE, staleMs: 12 * HOUR }, () => fetchChart(symbol, 35, "1d"));
   // 6 significant digits keeps sub-dollar assets (e.g. DOGE-USD) from flattening while trimming float noise.
@@ -520,9 +607,23 @@ export function mapSummary(symbol: string, s: RawSummary): { profile: StockProfi
   return { profile, stats };
 }
 
+function summaryKey(symbol: string): string {
+  return `summary:${symbol}`;
+}
+
+/** True when getSummary can be answered from the cache without calling Yahoo. */
+export function hasCachedSummary(symbol: string): boolean {
+  return isFresh(summaryKey(symbol));
+}
+
+/** The cached summary, fresh or stale, without loading: null when Yahoo has none, undefined when nothing is cached. */
+export function peekSummary(symbol: string): { profile: StockProfile; stats: KeyStats } | null | undefined {
+  return peek<{ profile: StockProfile; stats: KeyStats } | null>(summaryKey(symbol));
+}
+
 /** Profile and key statistics (cached 6 hours). Returns null when Yahoo has no summary for the symbol. */
 export async function getSummary(symbol: string): Promise<{ profile: StockProfile; stats: KeyStats } | null> {
-  return cached(`summary:${symbol}`, { ttlMs: 6 * HOUR, staleMs: 24 * HOUR }, async () => {
+  return cached(summaryKey(symbol), { ttlMs: 6 * HOUR, staleMs: 24 * HOUR }, async () => {
     try {
       const raw = (await upstream(() => yf.quoteSummary(symbol, { modules: [...SUMMARY_MODULES] }, callOptions()))) as unknown as RawSummary;
       return mapSummary(symbol, raw ?? {});
@@ -585,11 +686,27 @@ export interface RawNewsItem {
   relatedTickers: string[];
 }
 
+const DEFAULT_NEWS_COUNT = 8;
+
+function newsQuery(query: string): string {
+  return query.trim().slice(0, 60);
+}
+
+function newsSearchKey(q: string, count: number): string {
+  return `news-search:${q.toLowerCase()}:${count}`;
+}
+
+/** True when searchNews(query, count) can be answered without calling Yahoo (fresh in the cache, or an empty query). */
+export function hasCachedNewsSearch(query: string, count = DEFAULT_NEWS_COUNT): boolean {
+  const q = newsQuery(query);
+  return !q || isFresh(newsSearchKey(q, count));
+}
+
 /** Yahoo news search (cached 10 minutes). Short 1-3 word queries work best. */
-export async function searchNews(query: string, count = 8): Promise<RawNewsItem[]> {
-  const q = query.trim().slice(0, 60);
+export async function searchNews(query: string, count = DEFAULT_NEWS_COUNT): Promise<RawNewsItem[]> {
+  const q = newsQuery(query);
   if (!q) return [];
-  return cached(`news-search:${q.toLowerCase()}:${count}`, { ttlMs: 10 * MINUTE, staleMs: 6 * HOUR }, async () => {
+  return cached(newsSearchKey(q, count), { ttlMs: 10 * MINUTE, staleMs: 6 * HOUR }, async () => {
     const res = (await upstream(() => yf.search(q, { quotesCount: 0, newsCount: count }, callOptions()))) as unknown as {
       news?: Array<Record<string, unknown>>;
     };

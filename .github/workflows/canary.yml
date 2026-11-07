@@ -1,0 +1,84 @@
+name: Yahoo canary
+
+# The app reads market data through yahoo-finance2, which follows Yahoo's unofficial API. When Yahoo changes it, the
+# app degrades quietly (stale prices, empty charts). This job calls the real getters once per US trading day and keeps
+# a single open issue up to date while the contract is broken. Pull-request CI never calls Yahoo.
+
+on:
+  schedule:
+    # 15:30 UTC on weekdays: 10:30 in New York in winter, 11:30 in summer, during the regular session either way.
+    - cron: "30 15 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: yahoo-canary
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Yahoo data contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      # Runner IP ranges are sometimes throttled by Yahoo, so one failure is retried after a pause before it counts.
+      - name: Smoke test (one retry)
+        id: smoke
+        run: |
+          set -o pipefail
+          if npx tsx --conditions=react-server scripts/smoke-yahoo.ts 2>&1 | tee smoke.log; then
+            exit 0
+          fi
+          echo "First attempt failed; retrying in 60 seconds."
+          sleep 60
+          npx tsx --conditions=react-server scripts/smoke-yahoo.ts 2>&1 | tee smoke.log
+
+      # Only a failed smoke test means the data contract broke; a failed checkout or npm ci is a CI problem.
+      - name: Open or update the canary issue
+        if: failure() && steps.smoke.outcome == 'failure'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("node:fs");
+            const title = "Yahoo data contract broken";
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const log = fs.existsSync("smoke.log") ? fs.readFileSync("smoke.log", "utf8").split("\n").slice(-60).join("\n") : "(no output)";
+            const body = [
+              `The Yahoo canary failed twice in a row on ${new Date().toISOString()}.`,
+              "",
+              `Run: ${run}`,
+              "",
+              "```text",
+              log,
+              "```",
+              "",
+              "Check for a newer yahoo-finance2 release and the library's issue tracker. A failure on a runner can also be",
+              "environmental (throttled IP ranges), so re-run the workflow before changing code.",
+            ].join("\n");
+            const open = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: "open",
+              creator: "github-actions[bot]",
+              per_page: 100,
+            });
+            const existing = open.find((issue) => issue.title === title && !issue.pull_request);
+            if (existing) {
+              await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: existing.number, body });
+              core.info(`Updated issue #${existing.number}`);
+            } else {
+              const created = await github.rest.issues.create({ owner: context.repo.owner, repo: context.repo.repo, title, body });
+              core.info(`Opened issue #${created.data.number}`);
+            }

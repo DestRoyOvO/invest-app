@@ -321,7 +321,12 @@ describe("fetchArticleText", () => {
       throw Object.assign(new Error("blocked"), { code: "ERR_ARTICLE_BLOCKED_ADDRESS" });
     };
     expect(await fetchArticleText("https://finance.yahoo.com/a", { transport: failing })).toBeNull();
-    expect(warn).toHaveBeenCalledWith("[article] fetch failed", { host: "finance.yahoo.com", reason: "ERR_ARTICLE_BLOCKED_ADDRESS" });
+    expect(JSON.parse(String(warn.mock.calls[0]?.[0]))).toMatchObject({
+      level: "warn",
+      event: "article.fetch_failed",
+      host: "finance.yahoo.com",
+      reason: "ERR_ARTICLE_BLOCKED_ADDRESS",
+    });
     warn.mockRestore();
   });
 

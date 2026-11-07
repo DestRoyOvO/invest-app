@@ -1,0 +1,103 @@
+name: Docker image
+
+# Builds the self-hosting image, starts it and waits for its own HEALTHCHECK, then checks that a production container
+# with an unsafe configuration refuses to start. Runs when the image, its build inputs or the server code these
+# checks exercise (startup, health, proxy and the nonce CSP) change.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - docker-compose.yml
+      - package.json
+      - package-lock.json
+      - next.config.ts
+      - instrumentation.ts
+      - proxy.ts
+      - app/api/health/**
+      - lib/server/env.ts
+      - lib/server/health.ts
+      - lib/server/log.ts
+      - lib/server/session.ts
+      - lib/server/site-access.ts
+      - lib/server/startup.ts
+      - lib/server/version.ts
+      - public/**
+      - .github/workflows/docker.yml
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - docker-compose.yml
+      - package.json
+      - package-lock.json
+      - next.config.ts
+      - instrumentation.ts
+      - proxy.ts
+      - app/api/health/**
+      - lib/server/env.ts
+      - lib/server/health.ts
+      - lib/server/log.ts
+      - lib/server/session.ts
+      - lib/server/site-access.ts
+      - lib/server/startup.ts
+      - lib/server/version.ts
+      - public/**
+      - .github/workflows/docker.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  image:
+    name: Build and health-check the image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate docker-compose.yml
+        run: docker compose config --quiet && docker compose --profile https config --quiet
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: investseek:ci
+          build-args: GIT_SHA=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Start and wait for the HEALTHCHECK
+        run: |
+          docker run -d --name investseek --health-interval=2s -p 127.0.0.1:3000:3000 investseek:ci
+          for _ in $(seq 1 45); do
+            [ "$(docker inspect --format '{{.State.Health.Status}}' investseek)" = healthy ] && break
+            sleep 2
+          done
+          docker logs investseek
+          test "$(docker inspect --format '{{.State.Health.Status}}' investseek)" = healthy
+          curl -fsS http://127.0.0.1:3000/api/health | tee health.json
+          grep -q '"commit":"${{ github.sha }}"' health.json
+          # The page carries a per-request nonce CSP and the static assets are served.
+          curl -fsS -D headers.txt -o page.html http://127.0.0.1:3000/watchlist
+          grep -qi "^content-security-policy: .*'nonce-" headers.txt
+          curl -fsS -o /dev/null "http://127.0.0.1:3000$(grep -o '/_next/static/[^"]*\.js' page.html | head -1)"
+
+      - name: Refuse an unsafe production configuration
+        run: |
+          set +e
+          timeout 60 docker run --rm -e ACCESS_PASSWORD=ci-only-password investseek:ci
+          code=$?
+          echo "exit code: $code"
+          test "$code" -eq 1

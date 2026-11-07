@@ -26,8 +26,7 @@ const sdk = vi.hoisted(() => {
 
 vi.mock("openai", () => ({ default: sdk.FakeOpenAI, APIError: sdk.APIError }));
 
-import { GET as health } from "@/app/api/health/route";
-import { AI_STREAM_ERROR, AI_STREAM_TRUNCATED, type HealthResponse } from "@/types/api";
+import { AI_STREAM_ERROR, AI_STREAM_TRUNCATED } from "@/types/api";
 
 import {
   aiTextResponse,
@@ -110,6 +109,25 @@ describe("deepseek client", () => {
       webhookSecret: null,
       logLevel: "warn",
     });
+  });
+
+  it("uses DEEPSEEK_BASE_URL only over https or on localhost", async () => {
+    sdk.create.mockResolvedValue(completion([chunk("ok")]));
+    vi.stubEnv("DEEPSEEK_BASE_URL", "http://127.0.0.1:4010/v1");
+    await readAll(streamChat({ messages: MESSAGES, maxTokens: 10, temperature: 0 }));
+    expect(sdk.constructed.at(-1)).toMatchObject({ baseURL: "http://127.0.0.1:4010/v1" });
+
+    // Same key, new URL: a fresh client, never the old one pointed somewhere else.
+    vi.stubEnv("DEEPSEEK_BASE_URL", "http://llm.example.com/v1");
+    await readAll(streamChat({ messages: MESSAGES, maxTokens: 10, temperature: 0 }));
+    expect(sdk.constructed.at(-1)).toMatchObject({ baseURL: "https://api.deepseek.com" });
+  });
+
+  it("logs token usage as one structured line", async () => {
+    sdk.create.mockResolvedValue(completion([chunk("ok"), { choices: [], usage: { prompt_tokens: 100, completion_tokens: 2, total_tokens: 102 } }]));
+    await readAll(streamChat({ messages: MESSAGES, maxTokens: 10, temperature: 0 }));
+    const line = JSON.parse(String(vi.mocked(console.info).mock.calls[0]?.[0])) as Record<string, unknown>;
+    expect(line).toMatchObject({ level: "info", event: "ai.usage", model: "deepseek-chat", promptTokens: 100, completionTokens: 2 });
   });
 
   it("reads the model from DEEPSEEK_MODEL with a safe default", () => {
@@ -226,7 +244,7 @@ describe("deepseek client", () => {
       const pending = readAll(streamChat({ messages: MESSAGES, maxTokens: 10, temperature: 0 }));
       await vi.advanceTimersByTimeAsync(120_000);
       expect(await pending).toBe(`partial${AI_STREAM_ERROR}upstream_error`);
-      expect(console.error).toHaveBeenCalledWith(expect.stringContaining("generation exceeded"));
+      expect(console.error).toHaveBeenCalledWith(expect.stringContaining('"event":"ai.deadline_exceeded"'));
     } finally {
       vi.useRealTimers();
     }
@@ -240,18 +258,6 @@ describe("deepseek client", () => {
     caller.abort();
     expect((await reader.read()).done).toBe(true);
     expect(console.error).not.toHaveBeenCalled();
-  });
-
-  it("reports whether AI is configured on the health endpoint without constructing a client", async () => {
-    const before = sdk.constructed.length;
-    const response = await health();
-    expect(response.headers.get("cache-control")).toBe("no-store");
-    const body = (await response.json()) as HealthResponse;
-    expect(body).toMatchObject({ ok: true, aiConfigured: true });
-    expect(Number.isNaN(Date.parse(body.time))).toBe(false);
-    vi.stubEnv("DEEPSEEK_API_KEY", "");
-    expect(((await (await health()).json()) as HealthResponse).aiConfigured).toBe(false);
-    expect(sdk.constructed.length).toBe(before);
   });
 
   it("wraps streams in a non-cacheable text response", () => {

@@ -3,7 +3,27 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { clearCache } from "./cache";
-import { analystRating, announcedDividend, earningsDates, getQuotes, mapQuote, searchSymbols, yf } from "./yahoo";
+import {
+  analystRating,
+  announcedDividend,
+  earningsDates,
+  getQuotes,
+  getSummary,
+  getUpstreamStats,
+  hasCachedNewsSearch,
+  hasCachedSummary,
+  hasFreshQuote,
+  isYahooAnswer,
+  mapQuote,
+  peekQuote,
+  peekSummary,
+  resetUpstreamStats,
+  searchNews,
+  searchSymbols,
+  upstream,
+  UpstreamBusyError,
+  yf,
+} from "./yahoo";
 
 const NOW = Date.parse("2026-11-07T15:00:00Z");
 
@@ -143,9 +163,15 @@ describe("getQuotes when Yahoo fails", () => {
     // Closed-market quotes are cached for 5 minutes; after that a refresh is attempted and fails.
     vi.setSystemTime(new Date("2026-11-07T15:06:00Z"));
     quoteSpy.mockRejectedValueOnce(new Error("Yahoo down"));
-    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const stale = (await getQuotes(["STALE1"])).get("STALE1");
     expect(stale).toMatchObject({ price: 10, stale: true, fetchedAt: "2026-11-07T15:00:00.000Z" });
+    expect(JSON.parse(String(warn.mock.calls[0]?.[0]))).toMatchObject({
+      level: "warn",
+      event: "yahoo.stale_served",
+      count: 1,
+      oldestFetchedAt: "2026-11-07T15:00:00.000Z",
+    });
 
     // Beyond the one-hour stale window nothing is left to serve.
     vi.setSystemTime(new Date("2026-11-07T16:10:00Z"));
@@ -175,5 +201,92 @@ describe("searchSymbols", () => {
     expect(await searchSymbols("zz~weird")).toEqual([]);
     searchSpy.mockRejectedValueOnce(new Error("fetch failed") as never);
     await expect(searchSymbols("apple")).rejects.toThrow("fetch failed");
+  });
+});
+
+describe("upstream", () => {
+  afterEach(() => resetUpstreamStats());
+
+  it("tracks pending calls and the outcome of each call", async () => {
+    let release: () => void = () => undefined;
+    const running = upstream(() => new Promise<string>((resolve) => (release = () => resolve("done"))));
+    expect(getUpstreamStats().pending).toBe(1);
+    release();
+    expect(await running).toBe("done");
+    expect(getUpstreamStats()).toMatchObject({ pending: 0, consecutiveFailures: 0, failingSince: null });
+    expect(getUpstreamStats().lastSuccessAt).not.toBeNull();
+
+    await expect(upstream(() => Promise.reject(new Error("fetch failed")))).rejects.toThrow("fetch failed");
+    await expect(upstream(() => Promise.reject(new Error("fetch failed")))).rejects.toThrow("fetch failed");
+    expect(getUpstreamStats()).toMatchObject({ pending: 0, consecutiveFailures: 2 });
+    expect(getUpstreamStats().failingSince).not.toBeNull();
+  });
+
+  it("fails fast once 200 calls are pending, without counting that as a Yahoo failure", async () => {
+    const releases: Array<() => void> = [];
+    const calls = Array.from({ length: 200 }, () => upstream(() => new Promise<void>((resolve) => releases.push(resolve))));
+    await expect(upstream(() => Promise.resolve("late"))).rejects.toBeInstanceOf(UpstreamBusyError);
+    expect(getUpstreamStats().consecutiveFailures).toBe(0);
+    for (const release of releases) release();
+    await Promise.all(calls);
+    expect(getUpstreamStats().pending).toBe(0);
+  });
+});
+
+describe("isYahooAnswer", () => {
+  it("separates Yahoo's answers about a request from outages", () => {
+    expect(isYahooAnswer(new Error("No data found, symbol may be delisted"))).toBe(true);
+    expect(isYahooAnswer(new Error("Quote not found for symbol: ZZZZ"))).toBe(true);
+    expect(isYahooAnswer(Object.assign(new Error("Invalid Search Query"), { name: "BadRequestError" }))).toBe(true);
+    // An HTTP error page that happens to say "not found" is a broken endpoint, not an answer.
+    expect(isYahooAnswer(Object.assign(new Error("<html>404 Not Found: No data found</html>"), { name: "HTTPError" }))).toBe(false);
+    expect(isYahooAnswer(Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" }))).toBe(false);
+    expect(isYahooAnswer("No data found")).toBe(false);
+  });
+});
+
+describe("cache probes for rate-limit charging", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    clearCache();
+  });
+
+  it("knows when a quote is fresh and keeps the last one for its name", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-11-07T15:00:00Z"));
+    expect(hasFreshQuote("PROBE1")).toBe(false);
+    vi.spyOn(yf, "quote").mockResolvedValueOnce([{ symbol: "PROBE1", shortName: "Probe Inc.", regularMarketPrice: 5, marketState: "CLOSED" }] as never);
+    await getQuotes(["PROBE1"]);
+    expect(hasFreshQuote("PROBE1")).toBe(true);
+    expect(peekQuote("PROBE1")?.name).toBe("Probe Inc.");
+    // Closed-market quotes are fresh for 5 minutes.
+    vi.setSystemTime(new Date("2026-11-07T15:06:00Z"));
+    expect(hasFreshQuote("PROBE1")).toBe(false);
+    expect(peekQuote("PROBE1")?.name).toBe("Probe Inc.");
+  });
+
+  it("keeps Yahoo's answer that it does not know a symbol as a fresh null", async () => {
+    expect(peekQuote("PROBE3")).toBeUndefined();
+    vi.spyOn(yf, "quote").mockResolvedValueOnce([] as never);
+    expect((await getQuotes(["PROBE3"])).size).toBe(0);
+    expect(hasFreshQuote("PROBE3")).toBe(true);
+    expect(peekQuote("PROBE3")).toBeNull();
+  });
+
+  it("probes the summary and news caches under the getters' own keys", async () => {
+    vi.spyOn(yf, "quoteSummary").mockResolvedValueOnce({ price: { shortName: "Probe" }, assetProfile: { industry: "Semiconductors" } } as never);
+    expect(hasCachedSummary("PROBE2")).toBe(false);
+    expect(peekSummary("PROBE2")).toBeUndefined();
+    await getSummary("PROBE2");
+    expect(hasCachedSummary("PROBE2")).toBe(true);
+    expect(peekSummary("PROBE2")?.profile.industry).toBe("Semiconductors");
+
+    vi.spyOn(yf, "search").mockResolvedValueOnce({ news: [] } as never);
+    expect(hasCachedNewsSearch(" Chip Stocks ", 5)).toBe(false);
+    await searchNews("chip stocks", 5);
+    expect(hasCachedNewsSearch(" Chip Stocks ", 5)).toBe(true);
+    expect(hasCachedNewsSearch("chip stocks")).toBe(false);
+    expect(hasCachedNewsSearch("   ")).toBe(true);
   });
 });

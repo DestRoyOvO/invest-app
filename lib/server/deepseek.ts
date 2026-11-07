@@ -6,13 +6,13 @@ import type { CompletionUsage } from "openai/resources/completions";
 
 import { AI_STREAM_ERROR, AI_STREAM_TRUNCATED, type ApiErrorCode } from "@/types/api";
 
-// DeepSeek is OpenAI-compatible, so the official SDK is used with a different base URL.
+import { readEnv } from "./env";
+import { log } from "./log";
+
+// DeepSeek is OpenAI-compatible, so the official SDK is used with DeepSeek's base URL (or DEEPSEEK_BASE_URL, which
+// env.ts only accepts over https, or plain http on localhost for a mock server in tests).
 // The client is created lazily and only from DEEPSEEK_API_KEY: without the key the AI features report
 // "not configured" instead of letting the SDK fall back to OPENAI_API_KEY and send it to DeepSeek.
-
-const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
-const DEFAULT_MODEL = "deepseek-chat";
-const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
 
 /** Time allowed until DeepSeek starts responding. The SDK retries once on connection errors, 408/409/429 and 5xx. */
 const REQUEST_TIMEOUT_MS = 60_000;
@@ -39,31 +39,25 @@ export class AiNotConfiguredError extends Error {
   }
 }
 
-function readApiKey(): string | null {
-  const key = process.env.DEEPSEEK_API_KEY?.trim();
-  return key ? key : null;
-}
-
 /** True when DEEPSEEK_API_KEY is set. Never constructs the client. */
 export function isAiConfigured(): boolean {
-  return readApiKey() !== null;
+  return readEnv().deepseekApiKey !== null;
 }
 
 /** DEEPSEEK_MODEL when it looks like a model id, otherwise deepseek-chat. */
 export function getModel(): string {
-  const model = process.env.DEEPSEEK_MODEL?.trim();
-  return model && MODEL_PATTERN.test(model) ? model : DEFAULT_MODEL;
+  return readEnv().deepseekModel;
 }
 
-let cachedClient: { key: string; client: OpenAI } | null = null;
+let cachedClient: { key: string; baseURL: string; client: OpenAI } | null = null;
 
 function getClient(): OpenAI | null {
-  const apiKey = readApiKey();
+  const { deepseekApiKey: apiKey, deepseekBaseUrl: baseURL } = readEnv();
   if (!apiKey) return null;
-  if (cachedClient?.key !== apiKey) {
+  if (cachedClient?.key !== apiKey || cachedClient.baseURL !== baseURL) {
     const client = new OpenAI({
       apiKey,
-      baseURL: DEEPSEEK_BASE_URL,
+      baseURL,
       timeout: REQUEST_TIMEOUT_MS,
       maxRetries: 1,
       // Explicit nulls stop the SDK from picking up OPENAI_* variables and forwarding them to DeepSeek.
@@ -74,7 +68,7 @@ function getClient(): OpenAI | null {
       // Pinned so that OPENAI_LOG=debug cannot make the SDK log request bodies (the prompts).
       logLevel: "warn",
     });
-    cachedClient = { key: apiKey, client };
+    cachedClient = { key: apiKey, baseURL, client };
   }
   return cachedClient.client;
 }
@@ -104,19 +98,23 @@ export function streamErrorCode(error: unknown): ApiErrorCode {
 function logUsage(model: string, usage: CompletionUsage, startedAt: number): void {
   // DeepSeek reports context-cache hits in a non-standard field.
   const cacheHit: unknown = (usage as unknown as Record<string, unknown>).prompt_cache_hit_tokens;
-  console.info(
-    `[ai] ${model} prompt=${usage.prompt_tokens} cached=${typeof cacheHit === "number" ? cacheHit : "n/a"} ` +
-      `completion=${usage.completion_tokens} ms=${Date.now() - startedAt}`,
-  );
+  log("info", "ai.usage", {
+    model,
+    promptTokens: usage.prompt_tokens,
+    cachedPromptTokens: typeof cacheHit === "number" ? cacheHit : null,
+    completionTokens: usage.completion_tokens,
+    ms: Date.now() - startedAt,
+  });
 }
 
 function logFailure(model: string, error: unknown, timedOut: boolean): void {
   if (timedOut) {
-    console.error(`[ai] ${model} generation exceeded ${GENERATION_DEADLINE_MS} ms`);
+    log("error", "ai.deadline_exceeded", { model, deadlineMs: GENERATION_DEADLINE_MS });
   } else if (error instanceof APIError) {
-    console.error(`[ai] ${model} request failed`, { status: error.status ?? null, type: error.name, message: error.message.slice(0, 300) });
+    // 401 is a bad key and 402 an empty DeepSeek balance: the status tells the owner which one to fix.
+    log("error", "ai.request_failed", { model, status: error.status ?? null, type: error.name, message: error.message.slice(0, 300) });
   } else {
-    console.error(`[ai] ${model} stream failed`, error instanceof Error ? error.name : "unknown error");
+    log("error", "ai.stream_failed", { model, type: error instanceof Error ? error.name : "unknown" });
   }
 }
 
@@ -191,7 +189,7 @@ export function streamChat({ messages, maxTokens, temperature, signal }: StreamC
               failure = "upstream_error";
             } else if (!upstream.signal.aborted) {
               failure = incompleteCompletionCode(emittedText, finishReason);
-              if (failure) console.error(`[ai] ${model} completion ended without a full answer`, { finishReason, emittedText });
+              if (failure) log("error", "ai.incomplete", { model, finishReason, emittedText });
             }
             if (failure) controller.enqueue(encoder.encode(`${AI_STREAM_ERROR}${failure}`));
             else if (finishReason === "length" && !upstream.signal.aborted) controller.enqueue(encoder.encode(AI_STREAM_TRUNCATED));

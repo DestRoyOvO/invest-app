@@ -76,6 +76,16 @@ export async function cached<T>(key: string, options: CacheOptions, load: () => 
   return promise;
 }
 
+/**
+ * True when cached(key, ...) would answer without starting a new load: the value is still fresh, or a load for the key
+ * is already in flight. Public routes use it to charge rate-limit units only for the upstream calls a request makes.
+ */
+export function isFresh(key: string): boolean {
+  const entry = store.get(key);
+  if (!entry) return false;
+  return entry.inflight !== undefined || (entry.hasValue && entry.expiresAt > Date.now());
+}
+
 /** Reads a fresh-or-stale value without loading. */
 export function peek<T>(key: string): T | undefined {
   const entry = store.get(key) as Entry<T> | undefined;
