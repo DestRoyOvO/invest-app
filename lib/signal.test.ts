@@ -19,6 +19,7 @@ import {
   rsiToScore,
   runBacktest,
   TECHNICAL_FACTORS,
+  technicalFactorSeries,
   technicalScoreSeries,
   valueFactor,
   wilderRsiSeries,
@@ -563,6 +564,28 @@ describe("technical factors", () => {
 // ---------------------------------------------------------------------------
 // Labels and the composite
 // ---------------------------------------------------------------------------
+
+describe("technicalFactorSeries", () => {
+  it("reports the composite of technicalScoreSeries and its factors at every scored session", () => {
+    const bars = randomWalk(500, 0.35, 80);
+    const series = technicalScoreSeries(bars);
+    const points = technicalFactorSeries(bars);
+    expect(points).toHaveLength(bars.length - MIN_BARS + 1);
+    points.forEach((point, k) => {
+      const entry = series[MIN_BARS - 1 + k];
+      expect(point.t).toBe(entry.t);
+      expect(point.score).toBe(entry.score);
+      for (const key of TECHNICAL_FACTORS) {
+        expect(point.factors[key]).toBeGreaterThanOrEqual(0);
+        expect(point.factors[key]).toBeLessThanOrEqual(100);
+      }
+    });
+    // The live factors of the last session are the series' last entry.
+    const live = computeTechnicalFactors(bars);
+    for (const key of TECHNICAL_FACTORS) expect(points[points.length - 1].factors[key]).toBe(live[key].score);
+    expect(technicalFactorSeries(bars.slice(0, MIN_BARS - 1))).toEqual([]);
+  });
+});
 
 describe("labelForScore", () => {
   it("uses symmetric cut-offs at 28 / 42 / 58 / 72", () => {

@@ -6,7 +6,7 @@ import { Delta } from "@/components/ui/Delta";
 import { Panel, PanelMeta } from "@/components/ui/Panel";
 import { ErrorState, SkeletonRows } from "@/components/ui/States";
 import { cn } from "@/lib/cn";
-import { evaluationVerdict, findHorizon } from "@/lib/evaluation";
+import { evaluationVerdict, excludesZero, findHorizon } from "@/lib/evaluation";
 import { EVALUATION_DAYS, SIGNAL_EVALUATION } from "@/lib/evaluation-data";
 import { formatMultiple, formatNumber, formatRatio, tpl } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/messages";
@@ -156,7 +156,17 @@ function TrackRecord({ technicalScore, t, lang }: { technicalScore: number | nul
                 </th>
                 <td className="num px-2 text-right text-fg-2">{formatNumber(row.n, 0, lang)}</td>
                 <td className="px-2 text-right">
-                  <Delta value={row.excess} kind="ratio" />
+                  {/* Return against the same-day universe (market moves removed), coloured only when its interval excludes 0. */}
+                  {excludesZero(row.ci.selection) ? (
+                    <Delta value={row.selection} kind="ratio" />
+                  ) : (
+                    <span className="num text-fg-2">{formatRatio(row.selection, { digits: 2, sign: true })}</span>
+                  )}
+                  {row.ci.selection ? (
+                    <span className="num ml-1 hidden text-xs text-fg-3 lg:inline">
+                      [{formatRatio(row.ci.selection[0], { digits: 2, sign: true })}, {formatRatio(row.ci.selection[1], { digits: 2, sign: true })}]
+                    </span>
+                  ) : null}
                 </td>
                 <td className="num px-3 text-right text-fg-2">{formatRatio(row.hitRate, { digits: 0 })}</td>
               </tr>

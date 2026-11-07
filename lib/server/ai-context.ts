@@ -510,17 +510,30 @@ const EVALUATION_VERDICT_TEXT = {
   none: "the score has not been a reliable forecast",
 } as const;
 
-/** One line from the offline universe evaluation (lib/signal-evaluation.json). */
+/**
+ * One line from the offline universe evaluation (lib/signal-evaluation.json): the rank IC with its Newey-West t, the
+ * extreme readings' return against the same-day universe (market moves removed) with their bootstrap intervals and
+ * episode counts, and the holdout decade.
+ */
 export function evaluationLine(evaluation = SIGNAL_EVALUATION): string | null {
   const horizon = findHorizon(evaluation, EVALUATION_DAYS);
   if (!horizon) return null;
-  const top = findLabel(horizon, "strong_bullish");
-  const bottom = findLabel(horizon, "strong_bearish");
   const days = horizon.days;
+  const after = (label: ReturnType<typeof findLabel>) => {
+    if (!label) return NA;
+    const ci = label.ci.selection;
+    return `${fmtRatio(label.selection, 2, true)} (95% CI ${ci ? `${fmtRatio(ci[0], 2, true)} to ${fmtRatio(ci[1], 2, true)}` : NA}, ${label.episodes} episodes)`;
+  };
+  const { holdout } = evaluation;
+  const passed = holdout.factors.filter((factor) => factor.pass).map((factor) => factor.key);
+  const holdoutCi = holdout.composite.ci ? `${fmtNumber(holdout.composite.ci[0], 3)} to ${fmtNumber(holdout.composite.ci[1], 3)}` : NA;
   return (
     `- universe evaluation (${evaluation.universe} large US stocks, technical score, signals ${evaluation.from} to ${evaluation.to}): ` +
-    `rank IC with ${days}-day forward returns ${fmtNumber(horizon.ic.mean, 3)} (t ${fmtNumber(horizon.ic.t, 2)}), so ${EVALUATION_VERDICT_TEXT[evaluationVerdict(horizon)]}; ` +
-    `average ${days}-day excess return after very strong readings ${fmtRatio(top?.excess, 2, true)}, after very weak readings ${fmtRatio(bottom?.excess, 2, true)}`
+    `rank IC with ${days}-day forward returns ${fmtNumber(horizon.ic.mean, 3)} (Newey-West t ${fmtNumber(horizon.ic.t, 2)}), so ${EVALUATION_VERDICT_TEXT[evaluationVerdict(horizon)]}; ` +
+    `average ${days}-day return against the same-day universe after very strong readings ${after(findLabel(horizon, "strong_bullish"))}, ` +
+    `after very weak readings ${after(findLabel(horizon, "strong_bearish"))}; ` +
+    `holdout ${holdout.from} to ${holdout.to} (not used to build the model): rank IC ${fmtNumber(holdout.composite.mean, 3)} (95% CI ${holdoutCi}), ` +
+    (passed.length === 0 ? "and no technical factor passed its pre-set test" : `pre-set test passed by: ${passed.join(", ")}`)
   );
 }
 

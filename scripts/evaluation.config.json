@@ -1,0 +1,46 @@
+{
+  "$comment": "Pinned settings of npm run evaluate (scripts/evaluate-signal.ts) and npm run research (scripts/research-factors.ts). The published numbers depend on them, so change them only for a stated reason and re-run both scripts. Dates are inclusive ISO dates; bars after a window end are never used.",
+  "data": {
+    "from": "2013-01-01",
+    "market": "SPY",
+    "equalWeight": "RSP"
+  },
+  "signal": {
+    "main": { "from": "2016-01-01", "to": "2026-11-06" },
+    "holdout": { "from": "2014-01-01", "to": "2024-04-29" },
+    "horizons": [5, 10, 20],
+    "minStocksPerDate": 20,
+    "episodeGapSessions": 10,
+    "bootstrap": { "blockLength": 20, "reps": 2000, "seed": 20261107 },
+    "holdoutTest": { "horizon": 10, "alpha": 0.05 },
+    "subperiods": [
+      { "from": "2016-01-01", "to": "2020-12-31" },
+      { "from": "2021-01-01", "to": "2023-12-31" },
+      { "from": "2024-01-01", "to": "2026-12-31" }
+    ]
+  },
+  "factors": {
+    "window": { "from": "2016-01-01", "to": "2026-11-06" },
+    "horizons": [5, 21, 63],
+    "minStocksPerDate": 20,
+    "alpha": 0.05,
+    "excludeWinners": 10,
+    "subperiods": [
+      { "from": "2016-01-01", "to": "2020-12-31" },
+      { "from": "2021-01-01", "to": "2023-12-31" },
+      { "from": "2024-01-01", "to": "2026-12-31" }
+    ]
+  },
+  "risk": {
+    "window": { "from": "2016-01-01", "to": "2026-11-06" },
+    "bandHorizon": 10,
+    "persistenceHorizon": 63,
+    "drawdownHorizon": 21,
+    "drawdownThreshold": -0.1,
+    "subperiods": [
+      { "from": "2016-01-01", "to": "2020-12-31" },
+      { "from": "2021-01-01", "to": "2023-12-31" },
+      { "from": "2024-01-01", "to": "2026-12-31" }
+    ]
+  }
+}

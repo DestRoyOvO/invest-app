@@ -550,12 +550,15 @@ function technicalFactorsAt(s: PriceSeries, i: number): Record<TechnicalFactorKe
 
 const TECHNICAL_WEIGHT = TECHNICAL_FACTORS.reduce((sum, key) => sum + FACTOR_WEIGHTS[key], 0);
 
-/** Technical-only composite at i (rounded to 0.1): the five price factors re-weighted to sum to 1. */
-function technicalScoreAt(s: PriceSeries, i: number): number {
-  const factors = technicalFactorsAt(s, i);
+/** Technical-only composite of given factor scores (rounded to 0.1): the directional price factors re-weighted to sum to 1. */
+function technicalComposite(factors: Record<TechnicalFactorKey, FactorScore>): number {
   let total = 0;
   for (const key of TECHNICAL_FACTORS) total += FACTOR_WEIGHTS[key] * factors[key].score;
   return round(total / TECHNICAL_WEIGHT, 1);
+}
+
+function technicalScoreAt(s: PriceSeries, i: number): number {
+  return technicalComposite(technicalFactorsAt(s, i));
 }
 
 /** The five technical factors at the last bar (each imputed neutral when the history is too short for it). */
@@ -571,6 +574,39 @@ export function computeTechnicalFactors(bars: readonly DailyBar[]): Record<Techn
 export function technicalScoreSeries(bars: readonly DailyBar[]): Array<{ t: number; score: number | null }> {
   const s = prepareSeries(bars);
   return s.t.map((t, i) => ({ t, score: i >= MIN_BARS - 1 ? technicalScoreAt(s, i) : null }));
+}
+
+export interface TechnicalFactorPoint {
+  /** Session timestamp (epoch ms). */
+  t: number;
+  /** Technical-only composite, exactly as technicalScoreSeries reports it. */
+  score: number;
+  /** The five technical factor scores (0..100) the composite is built from, unrounded. */
+  factors: Record<TechnicalFactorKey, number>;
+}
+
+/**
+ * The technical composite and its factor scores for every session with at least MIN_BARS of history, in one pass
+ * (the offline research tests each factor on its own). Entries follow the bars that survive validation.
+ */
+export function technicalFactorSeries(bars: readonly DailyBar[]): TechnicalFactorPoint[] {
+  const s = prepareSeries(bars);
+  const out: TechnicalFactorPoint[] = [];
+  for (let i = MIN_BARS - 1; i < s.t.length; i++) {
+    const factors = technicalFactorsAt(s, i);
+    out.push({
+      t: s.t[i],
+      score: technicalComposite(factors),
+      factors: {
+        momentum: factors.momentum.score,
+        trend: factors.trend.score,
+        rsi: factors.rsi.score,
+        volume: factors.volume.score,
+        volatility: factors.volatility.score,
+      },
+    });
+  }
+  return out;
 }
 
 /** Technical-only composite at the last bar (rounded to 0.1), as in the report; null with fewer than MIN_BARS bars. */
