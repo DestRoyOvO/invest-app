@@ -150,7 +150,7 @@ export interface SignalEvaluation {
 }
 
 // ---------------------------------------------------------------------------
-// Shapes of lib/factor-research.json and lib/risk-calibration.json (scripts/research-factors.ts)
+// Shapes of lib/factor-research.json and lib/risk-calibration.json (lib/research.ts, scripts/research-factors.ts)
 // ---------------------------------------------------------------------------
 
 /** The seven pre-registered factors: the five style factors of lib/factors.ts, the technical score and their composite. */
@@ -182,7 +182,10 @@ export interface FactorHorizonResult {
   sectorNeutralIc: number | null;
   betaAdjustedIc: number | null;
   exWinnersIc: number | null;
-  /** "predictive" only when holmP < alpha and the IC has the same sign in every subperiod. */
+  /**
+   * "predictive" only when holmP < alpha and the IC has the same sign in every subperiod. The test is two-sided, so
+   * read the verdict with the sign of `ic`: a negative IC means the factor worked against its literature direction.
+   */
   verdict: "predictive" | "not_predictive";
 }
 

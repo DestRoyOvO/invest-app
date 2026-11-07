@@ -14,6 +14,7 @@ import {
   pearson,
   percentileInterval,
   quantile,
+  quintileOf,
   quintileSort,
   ranks,
   spearman,
@@ -196,6 +197,23 @@ describe("portfolio sorts", () => {
     expect(sort?.spread).toBe(8);
     expect(sort?.top.sort()).toEqual([0, 1]);
     expect(quintileSort([1, 2, 3, 4], [1, 2, 3, 4])).toBeNull();
+  });
+
+  it("splits n sorted items into near-equal quintiles, lowest first", () => {
+    const sizes = (n: number) => {
+      const counts = [0, 0, 0, 0, 0];
+      for (let position = 0; position < n; position++) counts[quintileOf(position, n)] += 1;
+      return counts;
+    };
+    // The universe has 78 stocks, 77 when one lacks history.
+    expect(sizes(78)).toEqual([16, 16, 15, 16, 15]);
+    expect(sizes(77)).toEqual([16, 15, 16, 15, 15]);
+    expect(sizes(5)).toEqual([1, 1, 1, 1, 1]);
+    for (const n of [5, 23, 77, 78, 100]) {
+      for (let position = 1; position < n; position++) expect(quintileOf(position, n)).toBeGreaterThanOrEqual(quintileOf(position - 1, n));
+      expect(quintileOf(0, n)).toBe(0);
+      expect(quintileOf(n - 1, n)).toBe(4);
+    }
   });
 
   it("measures turnover as the share of new members", () => {

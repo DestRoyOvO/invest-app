@@ -334,6 +334,14 @@ export interface QuintileSort {
 }
 
 /**
+ * Quintile (0 = lowest, 4 = highest) of the item at `position` (0-based) in a sorted list of n: groups of
+ * floor(n / 5) or ceil(n / 5) items, lowest first.
+ */
+export function quintileOf(position: number, n: number): number {
+  return Math.floor((position * 5) / n);
+}
+
+/**
  * Sorts by x (ties by input order) into five groups of near-equal size and averages y in each; null below five
  * observations.
  */
@@ -345,7 +353,7 @@ export function quintileSort(x: readonly number[], y: readonly number[]): Quinti
   const counts = [0, 0, 0, 0, 0];
   const top: number[] = [];
   order.forEach((i, position) => {
-    const q = Math.floor((position * 5) / n);
+    const q = quintileOf(position, n);
     sums[q] += y[i];
     counts[q] += 1;
     if (q === 4) top.push(i);
