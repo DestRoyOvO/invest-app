@@ -518,7 +518,7 @@ export interface SignalRisk {
   forecastVolatility: number | null;
   /** Sessions the ranges cover. */
   horizonDays: number;
-  /** Last completed close the ranges are centred on. */
+  /** Last completed close the ranges are centred on. Prices here keep six significant digits and at least two decimals. */
   price: number | null;
   /** Range over horizonDays at plus/minus one forecast standard deviation (about 68% for normal returns). */
   range1: PriceRange | null;

@@ -12,6 +12,7 @@ import {
   qlike,
   RISK_SETTINGS,
   riskSnapshot,
+  roundPrice,
   shortWindowDailyVolatility,
 } from "./risk-forecast";
 
@@ -132,6 +133,18 @@ describe("qlike and drawdownWithin", () => {
   });
 });
 
+describe("roundPrice", () => {
+  it("keeps six significant digits and at least the cents", () => {
+    // Yahoo's single-precision closes carry noise past the cents.
+    expect(roundPrice(342.3699951171875)).toBe(342.37);
+    expect(roundPrice(325.591234)).toBe(325.591);
+    expect(roundPrice(1.23456789)).toBe(1.23457);
+    expect(roundPrice(0.000123456789)).toBe(0.000123457);
+    expect(roundPrice(712345.678)).toBe(712345.68);
+    expect(roundPrice(100)).toBe(100);
+  });
+});
+
 describe("riskSnapshot", () => {
   const market = closesFromLogReturns(gaussians(320, 7).map((z) => 0.01 * z));
   const marketReturns = logReturns(market);
@@ -143,14 +156,15 @@ describe("riskSnapshot", () => {
   it("fills every field from a long history", () => {
     const risk = riskSnapshot(bars(stock), bars(market));
     expect(risk.horizonDays).toBe(RISK_SETTINGS.horizonDays);
-    expect(risk.price).toBeCloseTo(stock[stock.length - 1], 10);
+    expect(risk.price).toBe(roundPrice(stock[stock.length - 1]));
     expect(risk.beta).toBeCloseTo(2, 1);
     expect(risk.forecastVolatility).toBeGreaterThan(0.25);
     expect(risk.forecastVolatility).toBeLessThan(0.4);
     // Unrounded forecast from the same returns: the report rounds volatilities to 4 decimals and prices to 6 digits.
     const daily = forecastDailyVolatility(logReturns(stock)) ?? 0;
     expect(risk.forecastVolatility).toBeCloseTo(daily * Math.sqrt(252), 4);
-    const price = risk.price ?? 0;
+    // The ranges come from the unrounded close.
+    const price = stock[stock.length - 1];
     expect(Math.abs((risk.range1?.high ?? 0) / (price * Math.exp(daily * Math.sqrt(10))) - 1)).toBeLessThan(1e-5);
     expect(Math.abs((risk.range2?.low ?? 0) / (price * Math.exp(-2 * daily * Math.sqrt(10))) - 1)).toBeLessThan(1e-5);
     expect(risk.ownPercentile).toBeGreaterThanOrEqual(0);

@@ -216,7 +216,7 @@ describe("getSignalReport", () => {
     if (!risk) throw new Error("risk missing");
     // The mocked benchmark moves exactly like the stock.
     expect(risk.beta).toBeCloseTo(1, 10);
-    expect(risk.price).toBeCloseTo(makeBars(300)[299].c, 10);
+    expect(risk.price).toBeCloseTo(makeBars(300)[299].c, 3);
     expect(risk.forecastVolatility).toBeGreaterThan(0);
     expect(risk.range1?.low).toBeLessThan(risk.price ?? 0);
     expect(risk.range2?.high).toBeGreaterThan(risk.range1?.high ?? Infinity);
@@ -245,8 +245,31 @@ describe("getSignalReport", () => {
     vi.mocked(getQuote).mockResolvedValue(makeQuote({ marketState: "REGULAR" }));
     const report = await getSignalReport("TEST");
     expect(report.meta).toEqual({ bars: 299, droppedPartialBar: true, lastBarDate: new Date(LAST_SESSION - DAY_MS).toISOString() });
-    expect(report.risk?.price).toBeCloseTo(makeBars(300)[298].c, 10);
+    expect(report.risk?.price).toBeCloseTo(makeBars(300)[298].c, 3);
     expect(report.risk?.beta).toBeCloseTo(1, 10);
+  });
+
+  it("drops the benchmark's forming bar by the New York clock, whatever the symbol's market", async () => {
+    // A symbol whose own market has closed (Hong Kong, say) while SPY is still trading: SPY's last bar jumps 50%.
+    vi.mocked(getQuote).mockResolvedValue(makeQuote({ marketState: "CLOSED" }));
+    vi.mocked(getDailyBars).mockImplementation(async (symbol) => {
+      const bars = makeBars(300);
+      if (symbol !== "SPY") return bars;
+      const last = bars[bars.length - 1];
+      return [...bars.slice(0, -1), { ...last, c: last.c * 1.5, adjClose: last.adjClose * 1.5 }];
+    });
+    vi.useFakeTimers({ now: Date.UTC(2026, 10, 6, 20, 0) }); // 15:00 in New York
+    try {
+      const during = await getSignalReport("HK");
+      expect(during.meta.droppedPartialBar).toBe(false);
+      expect(during.risk?.beta).toBeCloseTo(1, 10); // SPY's forming bar is left out
+      clearCache();
+      vi.setSystemTime(Date.UTC(2026, 10, 6, 22, 0)); // 17:00, after the close
+      const after = await getSignalReport("HK");
+      expect(Math.abs((after.risk?.beta ?? 1) - 1)).toBeGreaterThan(0.01); // now the jump counts
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("still reports when the quote or the summary is unavailable", async () => {

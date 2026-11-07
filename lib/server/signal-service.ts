@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { DailyBar } from "@/lib/bars";
+import { dropFormingBar } from "@/lib/evaluation";
 import { riskSnapshot } from "@/lib/risk-forecast";
 import { computeSignalReport, type Fundamentals } from "@/lib/signal";
 import type { KeyStats, MarketState, Quote, SignalReport, StockProfile } from "@/types/api";
@@ -128,10 +129,12 @@ async function loadReport(symbol: string): Promise<SignalReport | null> {
   });
   if (report.status !== "ok") return { ...report, risk: null };
 
-  // The benchmark's forming bar goes by the same rule; beta then only uses sessions both series completed.
+  // SPY trades on US hours whatever the symbol's market, so its forming bar goes by the New York clock (a bar dated
+  // today before the close is dropped) rather than by this symbol's market state; beta then only uses sessions both
+  // series completed.
   let benchmark: readonly DailyBar[] | null = null;
   if (symbol === BENCHMARK) benchmark = bars;
-  else if (benchmarkResult.status === "fulfilled" && benchmarkResult.value) benchmark = dropPartialBar(benchmarkResult.value, marketState, today).bars;
+  else if (benchmarkResult.status === "fulfilled" && benchmarkResult.value) benchmark = dropFormingBar(benchmarkResult.value, new Date().toISOString());
   return { ...report, risk: riskSnapshot(bars, benchmark) };
 }
 

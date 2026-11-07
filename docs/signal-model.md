@@ -59,8 +59,9 @@ to predict returns.
   (falling back to the raw close), and the open is scaled by the same per-bar factor `adjClose / close`. High and low
   are not used.
 - **Partial session.** While the regular session is open (`quote.marketState === "REGULAR"`), a bar dated today
-  (New York date) is still forming and is removed; `meta.droppedPartialBar` reports this. The benchmark's bars go by
-  the same rule, and beta only uses sessions both series completed.
+  (New York date) is still forming and is removed; `meta.droppedPartialBar` reports this. SPY trades on US hours
+  whatever the symbol's market, so its bar dated today is removed until 16:30 New York time; beta only uses sessions
+  both series completed.
 - **Minimum history.** With fewer than `MIN_BARS = 120` bars the report has `status: "insufficient_data"`, a `reason`,
   null `code / score / consensus / coverage / confidence`, no factors, no backtest and `risk: null`.
 - **Fundamentals** are only used for single stocks (`quoteType === "EQUITY"`); ETFs, indices, futures, currencies and
@@ -290,7 +291,7 @@ periods.
 | Field | Definition |
 |---|---|
 | `forecastVolatility` | `sqrt(0.5 · var20 + 0.5 · var252)` of daily log returns, annualized with √252. Fixed in advance (an equal blend of short and long memory, as in HAR models, Corsi 2009), not tuned. Needs 253 bars. |
-| `range1`, `range2` | `price · exp(∓ k · σ_daily · √10)` for `k = 1, 2`: the 10-session ranges around the last completed close, log-symmetric. |
+| `price`, `range1`, `range2` | The last completed close and `price · exp(∓ k · σ_daily · √10)` for `k = 1, 2`: the 10-session ranges around it, log-symmetric. Prices keep six significant digits and at least two decimals. |
 | `ownPercentile` | Mid-rank percentile of today's 20-session volatility among its values at each of the last 252 sessions. Needs 272 bars. |
 | `beta` | Beta of daily simple returns to SPY over the last 252 sessions on matching sessions (`lib/factors.ts`, at least 80% overlap). Not Yahoo's 5-year monthly beta in KeyStats. |
 | `volatility63` | Annualized volatility of the last 63 daily returns (`lib/factors.ts`), the measure of the universe quintiles below. |

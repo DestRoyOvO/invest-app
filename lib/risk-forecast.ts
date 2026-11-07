@@ -30,6 +30,12 @@ function isPrice(value: number | null | undefined): value is number {
   return isFiniteNumber(value) && value > 0;
 }
 
+/** A price for the report: six significant digits, but never fewer than two decimals, so cents survive at any level. */
+export function roundPrice(price: number): number {
+  const integerDigits = Math.max(1, Math.floor(Math.log10(Math.abs(price))) + 1);
+  return Number(price.toPrecision(Math.min(100, Math.max(6, integerDigits + 2))));
+}
+
 /** Daily log returns; entry k is ln(closes[k] / closes[k - 1]) and entry 0 is NaN, as are returns around bad prices. */
 export function logReturns(closes: readonly number[]): number[] {
   return closes.map((c, k) => (k > 0 && isPrice(closes[k - 1]) && isPrice(c) ? Math.log(c / closes[k - 1]) : Number.NaN));
@@ -159,16 +165,16 @@ export function riskSnapshot(bars: readonly DailyBar[], benchmark: readonly Dail
     beta = betaAt(returnsOf(series.closes), alignBenchmarkReturns(stock, market), last);
   }
 
-  // Rounded for the report like the engine's other numbers; prices keep six significant digits for any price level.
+  // Rounded for the report like the engine's other numbers; prices (the close and the ranges) go through roundPrice.
   const decimals = (x: number | null, digits: number) => (x === null ? null : round(x, digits));
   const range = (sigmas: number) => {
     const r = daily === null || price === null ? null : priceRange(price, daily, horizonDays, sigmas);
-    return r === null ? null : { low: Number(r.low.toPrecision(6)), high: Number(r.high.toPrecision(6)) };
+    return r === null ? null : { low: roundPrice(r.low), high: roundPrice(r.high) };
   };
   return {
     forecastVolatility: decimals(daily === null ? null : daily * Math.sqrt(tradingDays), 4),
     horizonDays,
-    price,
+    price: price === null ? null : roundPrice(price),
     range1: range(1),
     range2: range(2),
     ownPercentile: decimals(last >= 0 ? ownVolatilityPercentile(returns, last) : null, 1),
