@@ -11,8 +11,9 @@ import { hasCachedDailyBars, hasCachedNewsSearch, hasCachedSummary, hasFreshQuot
 /** Most news searches behind one company feed: ticker, brand, two industry searches and one macro search. */
 export const MAX_COMPANY_NEWS_SEARCHES = 5;
 
-/** Mirrors lib/server/signal-service.ts: the report's cache key and the days of history it loads. */
+/** Mirrors lib/server/signal-service.ts: the report's cache key, the days of history it loads and the beta benchmark. */
 const SIGNAL_HISTORY_DAYS = 540;
+const SIGNAL_BENCHMARK = "SPY";
 
 function signalReportKey(symbol: string): string {
   return `signal:${symbol}`;
@@ -39,10 +40,16 @@ export function uncachedStockDetailCalls(symbol: string): number {
   return (hasFreshQuote(symbol) ? 0 : 1) + (hasCachedSummary(symbol) ? 0 : 1) + uncachedCompanyNewsSearches(symbol);
 }
 
-/** Uncached Yahoo calls behind getSignalReport(symbol): none while the report is cached, else bars, quote and summary. */
+/**
+ * Uncached Yahoo calls behind getSignalReport(symbol): none while the report is cached, else bars, quote, summary and
+ * the benchmark's bars for beta (shared with every other report, and not loaded twice for the benchmark itself).
+ */
 export function uncachedSignalCalls(symbol: string): number {
   if (isFresh(signalReportKey(symbol))) return 0;
-  return (hasCachedDailyBars(symbol, SIGNAL_HISTORY_DAYS) ? 0 : 1) + (hasFreshQuote(symbol) ? 0 : 1) + (hasCachedSummary(symbol) ? 0 : 1);
+  const benchmark = symbol === SIGNAL_BENCHMARK || hasCachedDailyBars(SIGNAL_BENCHMARK, SIGNAL_HISTORY_DAYS) ? 0 : 1;
+  return (
+    (hasCachedDailyBars(symbol, SIGNAL_HISTORY_DAYS) ? 0 : 1) + (hasFreshQuote(symbol) ? 0 : 1) + (hasCachedSummary(symbol) ? 0 : 1) + benchmark
+  );
 }
 
 /** Units to charge beyond the one limitPublicRequest already took for the request itself. */

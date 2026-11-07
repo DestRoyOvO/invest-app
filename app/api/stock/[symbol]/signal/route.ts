@@ -24,7 +24,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ symbol: str
   const symbol = normalizeSymbol(decodeParam(param));
   if (!symbol) return jsonError(400, "bad_request", "Invalid symbol.");
 
-  // An uncached report loads bars, quote and summary: each Yahoo call beyond the first costs a unit.
+  // An uncached report loads bars, quote, summary and the SPY bars used for beta: each call beyond the first costs a unit.
   const charged = chargePublicRequest(request, extraUnits(uncachedSignalCalls(symbol)));
   if (charged) return charged;
 

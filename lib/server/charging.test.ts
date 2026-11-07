@@ -146,9 +146,10 @@ describe("charging for /api/stock/[symbol]/signal", () => {
   afterEach(() => clearCache());
 
   it("predicts the loads of an uncached report and nothing once the report is cached", async () => {
-    expect(uncachedSignalCalls("NVDA")).toBe(3);
+    expect(uncachedSignalCalls("NVDA")).toBe(4);
     await getSignalReport("NVDA");
-    expect(fake.calls).toHaveLength(3);
+    expect(fake.calls).toHaveLength(4);
+    expect(fake.calls).toContain("bars:SPY:540");
     // The probes must use the loader's own arguments (the 540-day history), or charging drifts from reality.
     for (const call of fake.calls) fake.fresh.add(call);
     clearCache();
@@ -157,6 +158,12 @@ describe("charging for /api/stock/[symbol]/signal", () => {
     fake.fresh.clear();
     await getSignalReport("NVDA");
     expect(uncachedSignalCalls("NVDA")).toBe(0);
+  });
+
+  it("does not load the benchmark twice for the benchmark's own report", async () => {
+    expect(uncachedSignalCalls("SPY")).toBe(3);
+    await getSignalReport("SPY");
+    expect(fake.calls).toHaveLength(3);
   });
 });
 

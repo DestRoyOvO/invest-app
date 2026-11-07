@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { cookies, headers } from "next/headers";
 
-import { Wordmark } from "@/components/shell/TopBar";
+import { Wordmark } from "@/components/ui/Wordmark";
 import { MESSAGES } from "@/lib/i18n/messages";
 import { resolvePrefs } from "@/lib/prefs";
 import { MAX_ACCESS_PASSWORD_LENGTH } from "@/lib/server/env";
@@ -32,11 +32,8 @@ export default async function UnlockPage({ searchParams }: Props) {
   return (
     <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 py-10">
       <div className="w-full max-w-sm rounded-sm border border-line bg-panel p-6">
-        <div className="flex items-center gap-2">
-          <Wordmark />
-          {/* Wordmark hides the name on phones to leave room in the top bar; this page has room and no other chrome. */}
-          <span className="num text-sm font-semibold tracking-[0.2em] text-fg sm:hidden">INVESTSEEK</span>
-        </div>
+        {/* The top bar hides the name on phones to save room; this page has room and no other chrome. */}
+        <Wordmark alwaysShowName />
         <h1 className="mt-6 text-base font-medium text-fg">{t.access.title}</h1>
         <p className="mt-1.5 mb-5 text-sm text-fg-3">{t.access.body}</p>
         <UnlockForm next={safeNextPath(Array.isArray(next) ? next[0] : next)} maxLength={MAX_ACCESS_PASSWORD_LENGTH} />
