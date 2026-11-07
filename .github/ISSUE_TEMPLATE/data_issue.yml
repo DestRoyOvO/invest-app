@@ -1,0 +1,70 @@
+name: Data issue
+description: A price, ratio, date or headline looks wrong.
+labels: ["data"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Market data comes from Yahoo Finance through an unofficial API, so some errors start there. The details below let
+        us tell an upstream error from a mapping or unit bug in the app.
+  - type: input
+    id: symbol
+    attributes:
+      label: Symbol
+      placeholder: NVDA, ^GSPC, BTC-USD
+    validations:
+      required: true
+  - type: input
+    id: field
+    attributes:
+      label: Field
+      description: Which value is wrong, and where it is shown.
+      placeholder: Dividend yield in Key statistics on the quote page
+    validations:
+      required: true
+  - type: input
+    id: shown
+    attributes:
+      label: Value shown in InvestSeek
+      placeholder: "48.2%"
+    validations:
+      required: true
+  - type: input
+    id: expected
+    attributes:
+      label: Value you expected
+      placeholder: "0.48%"
+  - type: input
+    id: source
+    attributes:
+      label: Source link for the expected value
+      description: Yahoo Finance, the company's filing or another reliable source.
+      placeholder: https://finance.yahoo.com/quote/NVDA/key-statistics
+    validations:
+      required: true
+  - type: input
+    id: time
+    attributes:
+      label: Time and time zone
+      description: When you saw it. Values change during the session, so the time matters.
+      placeholder: 2026-11-07 10:42 America/New_York
+    validations:
+      required: true
+  - type: dropdown
+    id: market-state
+    attributes:
+      label: Market state
+      description: As shown in the status bar.
+      options:
+        - Pre-market
+        - Regular session
+        - After hours
+        - Closed
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: Screenshot
+      description: Drag an image here, if you have one.

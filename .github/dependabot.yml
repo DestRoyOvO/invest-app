@@ -1,0 +1,30 @@
+# Dependency updates as pull requests, checked by CI (and the Docker workflow when the lockfile changes).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # yahoo-finance2 follows Yahoo's unofficial API, and its fixes often ship in minor releases that the "~" range in
+      # package.json does not pick up. A separate PR keeps that upgrade easy to review and to roll back.
+      # Dependabot puts a dependency in the first group that matches, so this group comes first.
+      yahoo-finance2:
+        patterns:
+          - yahoo-finance2
+      npm-dependencies:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - yahoo-finance2
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      github-actions:
+        patterns:
+          - "*"

@@ -36,8 +36,21 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      # Turbopack's build cache: restored from the closest earlier build of the same lockfile.
+      - name: Cache the Next.js build
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ hashFiles('app/**', 'components/**', 'hooks/**', 'lib/**', 'types/**', '*.ts', '*.mjs') }}
+          restore-keys: |
+            nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
       - name: Production build
         run: npm run build
+
+      # The Docker image copies this server; a missing file would only surface when the image is built.
+      - name: Standalone output present
+        run: test -f .next/standalone/server.js
 
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high

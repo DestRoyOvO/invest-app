@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest a new panel, function or improvement.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        InvestSeek is a research tool for one investor. Ideas that make the daily routine faster or the numbers easier to
+        trust fit best. It does not place trades and does not give investment advice.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you are trying to do
+      description: The situation and what is hard about it today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would help
+      description: How it could work. Sketches and examples from other tools are welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: data
+    attributes:
+      label: Data it needs
+      description: Which data the feature depends on, and where it could come from, if you know.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
