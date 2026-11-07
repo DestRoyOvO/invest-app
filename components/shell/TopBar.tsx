@@ -7,22 +7,12 @@ import { useT } from "@/components/providers/PrefsProvider";
 import { AlertBell } from "@/components/alerts/AlertBell";
 import { useUi } from "@/components/providers/UiProvider";
 import { Kbd } from "@/components/ui/Badge";
+import { Wordmark } from "@/components/ui/Wordmark";
 import { useOverview } from "@/hooks/useApi";
 
 import { AiStatusButton } from "./AiStatus";
 import { MarketClock } from "./MarketClock";
 import { SettingsMenu } from "./SettingsMenu";
-
-export function Wordmark() {
-  return (
-    <span className="flex items-center gap-2">
-      <span aria-hidden className="num flex size-6 items-center justify-center rounded-xs bg-accent text-[0.6875rem] font-semibold text-accent-fg">
-        IS
-      </span>
-      <span className="num hidden text-sm font-semibold tracking-[0.2em] text-fg sm:inline">INVESTSEEK</span>
-    </span>
-  );
-}
 
 export function TopBar() {
   const t = useT();
@@ -40,9 +30,9 @@ export function TopBar() {
         onClick={openCommand}
         aria-label={t.shell.openCommand}
         aria-haspopup="dialog"
-        className="flex h-8 min-w-0 max-w-xl flex-1 items-center gap-2 rounded-xs border border-line-2 bg-canvas px-2.5 text-left text-sm text-fg-3 transition-colors hover:border-fg-3"
+        className="flex h-8 min-w-0 max-w-xl flex-1 items-center gap-2 rounded-xs border border-input-border bg-input-bg px-2.5 text-left text-sm text-fg-3 transition-colors hover:border-fg-3"
       >
-        <span aria-hidden className="num text-accent">
+        <span aria-hidden className="mono text-accent">
           &gt;
         </span>
         <span className="min-w-0 flex-1 truncate">{t.shell.commandPlaceholder}</span>
