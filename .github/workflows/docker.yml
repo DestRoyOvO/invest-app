@@ -1,7 +1,8 @@
 name: Docker image
 
 # Builds the self-hosting image, starts it and waits for its own HEALTHCHECK, then checks that a production container
-# with an unsafe configuration refuses to start. Runs when the image or its inputs change.
+# with an unsafe configuration refuses to start. Runs when the image, its build inputs or the server code these
+# checks exercise (startup, health, proxy and the nonce CSP) change.
 
 on:
   push:
@@ -14,6 +15,16 @@ on:
       - package-lock.json
       - next.config.ts
       - instrumentation.ts
+      - proxy.ts
+      - app/api/health/**
+      - lib/server/env.ts
+      - lib/server/health.ts
+      - lib/server/log.ts
+      - lib/server/session.ts
+      - lib/server/site-access.ts
+      - lib/server/startup.ts
+      - lib/server/version.ts
+      - public/**
       - .github/workflows/docker.yml
   pull_request:
     paths:
@@ -24,6 +35,16 @@ on:
       - package-lock.json
       - next.config.ts
       - instrumentation.ts
+      - proxy.ts
+      - app/api/health/**
+      - lib/server/env.ts
+      - lib/server/health.ts
+      - lib/server/log.ts
+      - lib/server/session.ts
+      - lib/server/site-access.ts
+      - lib/server/startup.ts
+      - lib/server/version.ts
+      - public/**
       - .github/workflows/docker.yml
   workflow_dispatch:
 

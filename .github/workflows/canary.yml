@@ -35,6 +35,7 @@ jobs:
 
       # Runner IP ranges are sometimes throttled by Yahoo, so one failure is retried after a pause before it counts.
       - name: Smoke test (one retry)
+        id: smoke
         run: |
           set -o pipefail
           if npx tsx --conditions=react-server scripts/smoke-yahoo.ts 2>&1 | tee smoke.log; then
@@ -44,8 +45,9 @@ jobs:
           sleep 60
           npx tsx --conditions=react-server scripts/smoke-yahoo.ts 2>&1 | tee smoke.log
 
+      # Only a failed smoke test means the data contract broke; a failed checkout or npm ci is a CI problem.
       - name: Open or update the canary issue
-        if: failure()
+        if: failure() && steps.smoke.outcome == 'failure'
         uses: actions/github-script@v7
         with:
           script: |
