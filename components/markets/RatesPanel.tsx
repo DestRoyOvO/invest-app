@@ -4,6 +4,7 @@ import { AlertTriangle } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type PointerEvent, type RefObject } from "react";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Panel, PanelMeta } from "@/components/ui/Panel";
 import { ErrorState, Skeleton, StaleBanner } from "@/components/ui/States";
 import { useYieldCurve } from "@/hooks/useMarketsApi";
@@ -19,6 +20,13 @@ const AXIS_TENORS = new Set<TenorKey>(["1M", "3M", "6M", "1Y", "2Y", "5Y", "10Y"
 const KEY_TENORS: readonly TenorKey[] = ["3M", "2Y", "5Y", "10Y", "30Y"];
 const CHART_HEIGHT = 200;
 const PAD = { top: 12, right: 14, bottom: 24, left: 44 };
+
+interface TenorRow {
+  tenor: TenorKey;
+  latest: number | null;
+  monthAgo: number | null;
+  yearAgo: number | null;
+}
 
 interface Series {
   key: "current" | "monthAgo" | "yearAgo";
@@ -217,84 +225,76 @@ function RatesBody({ data }: { data: YieldCurveResponse }) {
     const i = data.tenors.indexOf(tenor);
     return curve && i >= 0 ? curve.yields[i] : null;
   };
-  const keyTenors = KEY_TENORS.filter((tenor) => data.tenors.includes(tenor));
+  const tenorRows: TenorRow[] = KEY_TENORS.filter((tenor) => data.tenors.includes(tenor)).map((tenor) => ({
+    tenor,
+    latest: at(current, tenor),
+    monthAgo: at(monthAgo, tenor),
+    yearAgo: at(yearAgo, tenor),
+  }));
+  const tenorColumns: DataTableColumn<TenorRow>[] = [
+    { key: "tenor", header: t.markets.rates.tenor, render: (row) => <span className="mono font-medium text-fg">{t.markets.rates.tenors[row.tenor]}</span> },
+    { key: "latest", header: t.markets.rates.latest, align: "right", width: "5rem", render: (row) => <span className="num text-fg">{percent(row.latest)}</span> },
+    { key: "monthAgo", header: t.markets.rates.monthAgo, align: "right", width: "5.5rem", render: (row) => <span className="num text-fg-2">{percent(row.monthAgo)}</span> },
+    {
+      key: "yearAgo",
+      header: t.markets.rates.yearAgo,
+      align: "right",
+      width: "5.25rem",
+      hideBelow: "sm",
+      render: (row) => <span className="num text-fg-2">{percent(row.yearAgo)}</span>,
+    },
+    {
+      key: "chg",
+      header: t.markets.rates.chg1m,
+      align: "right",
+      width: "5.75rem",
+      // A change in yield is a reading, not a price move: neutral ink with its sign.
+      render: (row) => (
+        <span className="num text-fg">
+          {signedBp(row.latest !== null && row.monthAgo !== null ? (row.latest - row.monthAgo) * 100 : null, t.markets.rates.bp)}
+        </span>
+      ),
+    },
+  ];
 
   return (
     <>
       <YieldCurveChart data={data} series={series} />
 
-      <table className="w-full table-fixed border-collapse text-data">
-        <caption className="sr-only">{t.markets.rates.chart}</caption>
-        <thead>
-          <tr className="shadow-[inset_0_-1px_0_var(--line)]">
-            <th scope="col" className="col-head h-8 px-3 text-left">
-              {t.markets.rates.tenor}
-            </th>
-            <th scope="col" className="col-head h-8 px-3 text-right">
-              {t.markets.rates.latest}
-            </th>
-            <th scope="col" className="col-head h-8 px-3 text-right">
-              {t.markets.rates.monthAgo}
-            </th>
-            <th scope="col" className="col-head h-8 px-3 text-right max-sm:hidden">
-              {t.markets.rates.yearAgo}
-            </th>
-            <th scope="col" className="col-head h-8 px-3 text-right">
-              {t.markets.rates.chg1m}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {keyTenors.map((tenor) => {
-            const latest = at(data.current, tenor);
-            const month = at(data.monthAgo, tenor);
-            return (
-              <tr key={tenor} className="h-row border-b border-line/70 last:border-b-0">
-                <th scope="row" className="mono px-3 text-left font-medium text-fg">
-                  {t.markets.rates.tenors[tenor]}
-                </th>
-                <td className="num px-3 text-right text-fg">{percent(latest)}</td>
-                <td className="num px-3 text-right text-fg-2">{percent(month)}</td>
-                <td className="num px-3 text-right text-fg-2 max-sm:hidden">{percent(at(data.yearAgo, tenor))}</td>
-                <td className="num px-3 text-right text-fg">
-                  {signedBp(latest !== null && month !== null ? (latest - month) * 100 : null, t.markets.rates.bp)}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      <DataTable rows={tenorRows} columns={tenorColumns} rowKey={(row) => row.tenor} caption={t.markets.rates.keyTenors} />
 
-      {/* Every tenor for screen readers; the chart above is drawn for the eye. */}
-      <table className="sr-only">
-        <caption>{t.markets.rates.chart}</caption>
-        <thead>
-          <tr>
-            <th scope="col">{t.markets.rates.tenor}</th>
-            {series
-              .slice()
-              .reverse()
-              .map((s) => (
-                <th key={s.key} scope="col">
-                  {s.label} {formatDate(s.curve.date, lang, "UTC")}
-                </th>
-              ))}
-          </tr>
-        </thead>
-        <tbody>
-          {data.tenors.map((tenor, i) => (
-            <tr key={tenor}>
-              <th scope="row">{t.markets.rates.tenors[tenor]}</th>
+      {/* Every tenor for screen readers; the chart above is drawn for the eye. A table ignores width: 1px, so a div clips it. */}
+      <div className="sr-only">
+        <table>
+          <caption>{t.markets.rates.chart}</caption>
+          <thead>
+            <tr>
+              <th scope="col">{t.markets.rates.tenor}</th>
               {series
                 .slice()
                 .reverse()
                 .map((s) => (
-                  <td key={s.key}>{percent(s.curve.yields[i])}</td>
+                  <th key={s.key} scope="col">
+                    {s.label} {formatDate(s.curve.date, lang, "UTC")}
+                  </th>
                 ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {data.tenors.map((tenor, i) => (
+              <tr key={tenor}>
+                <th scope="row">{t.markets.rates.tenors[tenor]}</th>
+                {series
+                  .slice()
+                  .reverse()
+                  .map((s) => (
+                    <td key={s.key}>{percent(s.curve.yields[i])}</td>
+                  ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <section aria-label={t.markets.rates.spreads} className="border-t border-line">
         <h3 className="col-head px-3 pt-2.5">{t.markets.rates.spreads}</h3>

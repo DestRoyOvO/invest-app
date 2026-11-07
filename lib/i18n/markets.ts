@@ -62,6 +62,7 @@ export const marketsMessages = defineMessages(
       relVol: "Rel vol",
       relVolTitle: "Volume today as a multiple of the 3-month daily average",
       usNote: "US-listed stocks with a market cap above {cap}, from Yahoo's screens.",
+      dollars: "${value}",
       empty: "No stocks in this list right now.",
     },
 
@@ -107,6 +108,7 @@ export const marketsMessages = defineMessages(
       monthAgo: "1M ago",
       yearAgo: "1Y ago",
       tenor: "Tenor",
+      keyTenors: "Key tenors",
       chg1m: "1M chg",
       bp: "{n} bp",
       spreads: "Spreads",
@@ -206,6 +208,7 @@ export const marketsMessages = defineMessages(
       relVol: "量比",
       relVolTitle: "今日成交量相对 3 个月日均成交量的倍数",
       usNote: "Yahoo 筛选的美国上市股票，市值 {cap} 以上。",
+      dollars: "{value}美元",
       empty: "此列表暂无股票。",
     },
 
@@ -225,8 +228,8 @@ export const marketsMessages = defineMessages(
       bySector: "分板块",
       sector: "板块",
       upDownCol: "涨 / 跌",
-      above50Col: "高于 50 日",
-      above200Col: "高于 200 日",
+      above50Col: "50日线上",
+      above200Col: "200日线上",
       distribution: "今日涨跌分布",
       distributionLabel: "{band}：{n} 只",
       bands: {
@@ -251,6 +254,7 @@ export const marketsMessages = defineMessages(
       monthAgo: "1 个月前",
       yearAgo: "1 年前",
       tenor: "期限",
+      keyTenors: "主要期限",
       chg1m: "1 个月变动",
       bp: "{n} 个基点",
       spreads: "利差",

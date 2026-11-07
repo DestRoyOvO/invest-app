@@ -72,6 +72,7 @@ export const WORLD_BOARD: readonly WorldSymbol[] = [
   { symbol: "^N225", code: "NKY", label: { en: "Nikkei 225", zh: "日经 225" }, region: "asia", timeZone: "Asia/Tokyo", place: { en: "Tokyo", zh: "东京" }, digits: 2, overnight: true },
   { symbol: "^HSI", code: "HSI", label: { en: "Hang Seng", zh: "恒生指数" }, region: "asia", timeZone: "Asia/Hong_Kong", place: { en: "Hong Kong", zh: "香港" }, digits: 2, overnight: true },
   { symbol: "000001.SS", code: "SHCOMP", label: { en: "Shanghai Composite", zh: "上证指数" }, region: "asia", timeZone: "Asia/Shanghai", place: { en: "Shanghai", zh: "上海" }, digits: 2 },
+  // Yahoo quotes CSI 300 but serves almost no daily bars for it (one bar a month on 2026-11-07), so its line is often empty.
   { symbol: "000300.SS", code: "CSI300", label: { en: "CSI 300", zh: "沪深 300" }, region: "asia", timeZone: "Asia/Shanghai", place: { en: "Shanghai", zh: "上海" }, digits: 2, overnight: true },
   { symbol: "399001.SZ", code: "SICOM", label: { en: "SZSE Component", zh: "深证成指" }, region: "asia", timeZone: "Asia/Shanghai", place: { en: "Shenzhen", zh: "深圳" }, digits: 2 },
   { symbol: "^KS11", code: "KOSPI", label: { en: "KOSPI", zh: "韩国综合" }, region: "asia", timeZone: "Asia/Seoul", place: { en: "Seoul", zh: "首尔" }, digits: 2, overnight: true },

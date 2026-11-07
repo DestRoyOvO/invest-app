@@ -116,7 +116,7 @@ function SectorTable({ breadth }: { breadth: MarketBreadth }) {
       key: "upDown",
       header: t.markets.breadth.upDownCol,
       align: "right",
-      width: "5rem",
+      width: "var(--breadth-ud)",
       render: (row) => (
         <span className="num text-fg">
           {row.advancers} / {row.decliners}
@@ -128,7 +128,7 @@ function SectorTable({ breadth }: { breadth: MarketBreadth }) {
       key: "above50",
       header: t.markets.breadth.above50Col,
       align: "right",
-      width: "7.25rem",
+      width: "var(--breadth-pct)",
       render: (row) => meterCell(row.above50d, `${getSector(row.key)?.label[lang]}: ${t.markets.breadth.above50}`),
       sortValue: (row) => sharePercent(row.above50d.count, row.above50d.of),
     },
@@ -136,7 +136,7 @@ function SectorTable({ breadth }: { breadth: MarketBreadth }) {
       key: "above200",
       header: t.markets.breadth.above200Col,
       align: "right",
-      width: "7.25rem",
+      width: "var(--breadth-pct)",
       render: (row) => meterCell(row.above200d, `${getSector(row.key)?.label[lang]}: ${t.markets.breadth.above200}`),
       sortValue: (row) => sharePercent(row.above200d.count, row.above200d.of),
     },
@@ -144,7 +144,10 @@ function SectorTable({ breadth }: { breadth: MarketBreadth }) {
   return (
     <section aria-label={t.markets.breadth.bySector} className="border-t border-line">
       <h3 className="col-head px-3 pt-2.5 pb-1">{t.markets.breadth.bySector}</h3>
-      <DataTable rows={breadth.sectors} columns={columns} rowKey={(row) => row.key} caption={t.markets.breadth.bySector} rowHref={(row) => `/sector/${row.key}`} />
+      {/* Column widths step up from sm, where the meters appear; phones keep room for the sector names. */}
+      <div className="[--breadth-pct:5rem] [--breadth-ud:5.5rem] sm:[--breadth-pct:7.25rem] sm:[--breadth-ud:6.25rem]">
+        <DataTable rows={breadth.sectors} columns={columns} rowKey={(row) => row.key} caption={t.markets.breadth.bySector} rowHref={(row) => `/sector/${row.key}`} />
+      </div>
     </section>
   );
 }

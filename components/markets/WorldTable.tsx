@@ -110,7 +110,12 @@ export function WorldTable({ entries, caption, compact = false, now }: WorldTabl
       align: "right",
       width: compact ? "4.75rem" : "6rem",
       hideBelow: compact ? undefined : "sm",
-      render: ({ row }) => <Sparkline data={row?.spark ?? []} width={compact ? 52 : 64} height={18} tone={directionOf(row?.changePercent)} />,
+      render: ({ row }) =>
+        row && row.spark.length > 1 ? (
+          <Sparkline data={row.spark} width={compact ? 52 : 64} height={18} tone={directionOf(row.changePercent)} />
+        ) : (
+          <span className="num text-fg-3">—</span>
+        ),
     },
   ];
 

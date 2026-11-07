@@ -15,7 +15,7 @@ import { useLocalString } from "@/hooks/useLocalValue";
 import { stockPath } from "@/lib/api-client";
 import { formatCompact, formatPrice, tpl } from "@/lib/format";
 import { UNIVERSE_STOCKS } from "@/lib/universe";
-import type { DiscoverScreen, Lang, MarketOverview, OverviewQuote } from "@/types/api";
+import type { DiscoverScreen, MarketOverview, OverviewQuote } from "@/types/api";
 
 import { relativeVolume } from "./metrics";
 
@@ -26,9 +26,6 @@ const SCREENS: Record<MoverList, DiscoverScreen> = { gainers: "day_gainers", los
 const ROWS = 8;
 const SCOPE_KEY = "investseek:movers:v1";
 
-function capFloor(value: number, lang: Lang): string {
-  return lang === "zh" ? `${formatCompact(value, "zh")}美元` : `$${formatCompact(value, "en")}`;
-}
 
 /**
  * Today's movers with a scope switch: the whole US market from Yahoo's screens (the default, quality-filtered on the
@@ -118,7 +115,7 @@ export function MoversPanel({ movers, loading, className }: { movers: MarketOver
         />
       )}
       {scope === "us" && discover.data ? (
-        <p className="border-t border-line px-3 py-1.5 text-micro text-fg-3">{tpl(t.markets.movers.usNote, { cap: capFloor(discover.data.minMarketCap, lang) })}</p>
+        <p className="border-t border-line px-3 py-1.5 text-micro text-fg-3">{tpl(t.markets.movers.usNote, { cap: tpl(t.markets.movers.dollars, { value: formatCompact(discover.data.minMarketCap, lang) }) })}</p>
       ) : null}
     </Panel>
   );

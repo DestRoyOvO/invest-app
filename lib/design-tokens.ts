@@ -239,6 +239,7 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   mark("accent", "canvas", "Focus ring on the canvas"),
   mark("spark", "panel", "Sparkline stroke"),
   mark("fg-3", "line-2", "Meter fill on its track"),
+  mark("fg", "line-2", "52-week position marker on its range track (heatmap card)"),
   ...[1, 2, 3, 4, 5, 6].map((n) => mark(`series-${n}`, "panel", `Chart series ${n}`)),
 ];
 
