@@ -1,30 +1,32 @@
 import { memo } from "react";
 
+import type { Direction } from "./delta-utils";
+import { sparklineGeometry } from "./glyphs";
+
 interface SparklineProps {
-  data: number[];
+  data: readonly number[];
   width?: number;
   height?: number;
-  /** Override the color direction; defaults to last vs first value. */
-  up?: boolean;
+  /** Direction of the change of the day: colors only the end dot (up, down, or neutral for flat). */
+  tone?: Direction;
+  /** Dashed reference line at the first value, so the direction of the period reads by position, not color. */
+  baseline?: boolean;
   className?: string;
+  /** Accessible description; the sparkline is decorative without it. */
   label?: string;
 }
 
-/** Minimal SVG line chart. Decorative unless `label` is given. */
-export const Sparkline = memo(function Sparkline({ data, width = 80, height = 24, up, className, label }: SparklineProps) {
-  const points = data.filter((v) => Number.isFinite(v));
-  if (points.length < 2) {
+const DOT: Record<Direction, string> = { up: "var(--up)", down: "var(--down)", flat: "var(--fg-3)" };
+
+/**
+ * Minimal SVG trend line in a neutral stroke (--spark). Only the 2.5px end dot is colored, by `tone`, which callers set
+ * from the change of the day so the line never contradicts the number beside it.
+ */
+export const Sparkline = memo(function Sparkline({ data, width = 80, height = 24, tone = "flat", baseline = false, className, label }: SparklineProps) {
+  const { path, end, baselineY } = sparklineGeometry(data, width, height);
+  if (!path || !end) {
     return <svg width={width} height={height} className={className} aria-hidden="true" />;
   }
-  const min = Math.min(...points);
-  const max = Math.max(...points);
-  const range = max - min || 1;
-  const step = width / (points.length - 1);
-  const pad = 1.5;
-  const path = points
-    .map((v, i) => `${i === 0 ? "M" : "L"}${(i * step).toFixed(1)},${(pad + (1 - (v - min) / range) * (height - pad * 2)).toFixed(1)}`)
-    .join(" ");
-  const rising = up ?? points[points.length - 1] >= points[0];
   return (
     <svg
       width={width}
@@ -35,7 +37,11 @@ export const Sparkline = memo(function Sparkline({ data, width = 80, height = 24
       aria-label={label}
       aria-hidden={label ? undefined : true}
     >
-      <path d={path} fill="none" stroke={rising ? "var(--up)" : "var(--down)"} strokeWidth={1.25} strokeLinejoin="round" strokeLinecap="round" />
+      {baseline && baselineY !== null ? (
+        <line x1={0} x2={width} y1={baselineY} y2={baselineY} stroke="var(--line-2)" strokeWidth={1} strokeDasharray="2 2" />
+      ) : null}
+      <path d={path} fill="none" stroke="var(--spark)" strokeWidth={1.25} strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={end.x} cy={end.y} r={2.5} fill={DOT[tone]} />
     </svg>
   );
 });

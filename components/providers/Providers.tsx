@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { SWRConfig } from "swr";
 
+import { ToastProvider } from "@/components/ui/Toast";
 import { ApiError, fetchJson } from "@/lib/api-client";
 import type { Prefs } from "@/lib/prefs";
 
@@ -22,7 +23,9 @@ export function Providers({ prefs, children }: { prefs: Prefs; children: ReactNo
   return (
     <SWRConfig value={swrConfig}>
       <PrefsProvider initial={prefs}>
-        <UiProvider>{children}</UiProvider>
+        <ToastProvider>
+          <UiProvider>{children}</UiProvider>
+        </ToastProvider>
       </PrefsProvider>
     </SWRConfig>
   );

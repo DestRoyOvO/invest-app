@@ -8,19 +8,39 @@ import { cn } from "@/lib/cn";
 
 import { IconButton } from "./Button";
 
+export type DrawerSide = "right" | "bottom" | "auto";
+
 interface DrawerProps {
   open: boolean;
   onClose: () => void;
   title: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  /** right: side panel; bottom: sheet from the bottom edge; auto: a bottom sheet on phones, a side panel from sm up. */
+  side?: DrawerSide;
+  /** Width of the side panel from the sm breakpoint. */
   widthClassName?: string;
 }
 
 const FOCUSABLE = 'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
 
-/** Right-side modal panel: focus moves inside on open, Tab is trapped, Escape closes, focus returns on close. */
-export function Drawer({ open, onClose, title, children, footer, widthClassName = "sm:w-[460px]" }: DrawerProps) {
+const CONTAINER: Record<DrawerSide, string> = {
+  right: "justify-end",
+  bottom: "items-end",
+  auto: "items-end sm:items-stretch sm:justify-end",
+};
+
+const SHEET = "max-h-[85dvh] rounded-t-sm border-t pb-[env(safe-area-inset-bottom)]";
+const PANEL: Record<DrawerSide, string> = {
+  right: "h-full border-l",
+  bottom: SHEET,
+  auto: `${SHEET} sm:h-full sm:max-h-none sm:rounded-none sm:border-t-0 sm:border-l sm:pb-0`,
+};
+
+/**
+ * Modal side panel or bottom sheet: focus moves inside on open, Tab is trapped, Escape closes, focus returns on close.
+ */
+export function Drawer({ open, onClose, title, children, footer, side = "right", widthClassName = "sm:w-[460px]" }: DrawerProps) {
   const t = useT();
   const titleId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -65,17 +85,17 @@ export function Drawer({ open, onClose, title, children, footer, widthClassName 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
+    <div className={cn("fixed inset-0 z-50 flex", CONTAINER[side])}>
       <div aria-hidden className="absolute inset-0 bg-black/55" onClick={onClose} />
       <div
         ref={panelRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={cn("relative flex h-full w-full flex-col border-l border-line bg-panel shadow-2xl", widthClassName)}
+        className={cn("relative flex w-full flex-col border-line bg-panel shadow-2xl", PANEL[side], side !== "bottom" && widthClassName)}
       >
-        <header className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-line px-3">
-          <h2 id={titleId} className="label truncate">
+        <header className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-line bg-panel-2 px-3">
+          <h2 id={titleId} className="panel-title truncate">
             {title}
           </h2>
           <IconButton label={t.common.close} icon={<X className="size-4" strokeWidth={1.75} />} onClick={onClose} size="sm" />
