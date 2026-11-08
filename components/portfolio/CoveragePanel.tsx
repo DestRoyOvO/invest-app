@@ -14,14 +14,24 @@ interface Excluded {
   reason: string;
 }
 
+interface CoveragePanelProps {
+  portfolio: Portfolio;
+  report: RiskReport;
+  /** Base-currency positions beyond the 24 largest. */
+  beyond: readonly string[];
+  /** Symbols whose price history failed upstream this time (a degraded /api/history response). */
+  failed: readonly string[];
+  loading: boolean;
+}
+
 /** Which positions the risk statistics cover, and why the others are left out. */
-export function CoveragePanel({ portfolio, report, beyond, loading }: { portfolio: Portfolio; report: RiskReport; beyond: readonly string[]; loading: boolean }) {
+export function CoveragePanel({ portfolio, report, beyond, failed, loading }: CoveragePanelProps) {
   const { t } = usePrefs();
   const c = t.port.coverage;
   const total = portfolio.rows.length + portfolio.foreign.length + portfolio.unpriced.length;
   const excluded: Excluded[] = [
     ...beyond.map((symbol) => ({ symbol, reason: c.beyond })),
-    ...(loading ? [] : report.missingHistory.map((symbol) => ({ symbol, reason: c.noHistory }))),
+    ...(loading ? [] : report.missingHistory.map((symbol) => ({ symbol, reason: failed.includes(symbol) ? c.historyFailed : c.noHistory }))),
     ...portfolio.foreign.map((p) => ({ symbol: p.symbol, reason: tpl(c.otherCurrency, { currency: p.currency }) })),
     ...portfolio.unpriced.map((p) => ({ symbol: p.symbol, reason: c.noQuote })),
   ];

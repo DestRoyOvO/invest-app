@@ -4,7 +4,7 @@ import { usePrefs } from "@/components/providers/PrefsProvider";
 import { cn } from "@/lib/cn";
 import { formatNumber, formatRatio, tpl } from "@/lib/format";
 import type { Portfolio } from "@/lib/portfolio";
-import { assetClassExposure, currencyExposure, fxPairSymbol, sectorExposure, type GroupInfo } from "@/lib/portfolio-analytics";
+import { assetClassExposure, currencyExposure, sectorExposure, type GroupInfo } from "@/lib/portfolio-analytics";
 import type { Quote } from "@/types/api";
 
 import { assetClassLabel, holdingGroupLabel } from "./labels";
@@ -94,8 +94,3 @@ export function ExposureTab({ portfolio, quotes, infoOf, fx }: ExposureTabProps)
   );
 }
 
-/** FX symbols the currency breakdown needs to convert the foreign positions into the base currency. */
-export function fxSymbols(portfolio: Portfolio): string[] {
-  const pairs = portfolio.foreign.map((p) => fxPairSymbol(p.currency, portfolio.baseCurrency)).filter((s): s is string => s !== null);
-  return [...new Set(pairs)].sort();
-}

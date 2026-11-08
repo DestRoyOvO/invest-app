@@ -1,7 +1,9 @@
 "use client";
 
+import { AlertTriangle } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
+import { useMemo, type ReactNode } from "react";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { useUi } from "@/components/providers/UiProvider";
@@ -14,20 +16,20 @@ import { Tabs } from "@/components/ui/Tabs";
 import { TickNumber } from "@/components/ui/TickNumber";
 import { useHistory, useQuotes } from "@/hooks/useApi";
 import { useLocalStore } from "@/hooks/useLocalStore";
-import { usePortfolio } from "@/hooks/usePortfolio";
+import { useNow, usePortfolio } from "@/hooks/usePortfolio";
 import { useProfiles } from "@/hooks/usePortfolioApi";
 import { formatDate, formatNumber, formatRatio, formatShortDate, tpl } from "@/lib/format";
-import { analyzeRisk, effectivePositionCount, historySymbols, projectedDividends, selectAnalyzed } from "@/lib/portfolio-analytics";
+import { analyzeRisk, effectivePositionCount, fxSymbolsFor, historySymbols, projectedDividends, selectAnalyzed } from "@/lib/portfolio-analytics";
 import { sectorOfSymbol } from "@/lib/universe";
 
 import { CorrelationTab } from "./CorrelationTab";
 import { CoveragePanel, MethodPanel } from "./CoveragePanel";
-import { dayFigures } from "./DayTiles";
-import { ExposureTab, fxSymbols } from "./ExposureTab";
+import { dayFigures, formatSessionDate } from "./day-figures";
+import { ExposureTab } from "./ExposureTab";
 import { LINK_BUTTON } from "./MyDayPanel";
 import { Money, SignedMoney } from "./money";
 import { PerformanceTab } from "./PerformanceTab";
-import { portViewStore, type PortTab } from "./port-view";
+import { parsePortTab, portViewStore, type PortTab } from "./port-view";
 import { RiskTab } from "./RiskTab";
 
 /** Sessions of a full year: fewer means a holding's history starts later, and the page says so. */
@@ -42,13 +44,16 @@ function pending(loading: boolean, node: ReactNode) {
  * The portfolio page (PORT; the CORR tab): KPIs of today's positions and of their past year, then hypothetical
  * performance against SPY or QQQ, exposure, risk by position and correlations. Everything uses the base-currency
  * positions (lib/portfolio.ts); the 24 largest are analyzed against SPY (lib/portfolio-analytics.ts).
+ *
+ * The tab lives in the URL (?tab=), so CORR, links, Back and Forward all select it. Tab clicks replace the history
+ * entry through the native History API, which Next.js syncs into useSearchParams without a server round trip.
  */
-export function PortfolioView({ initialTab }: { initialTab: PortTab }) {
+export function PortfolioView() {
   const { t, lang } = usePrefs();
   const { openPositionEditor } = useUi();
   const { holdings, quotes, portfolio, hydrated, loading, error, stale, staleSince, refresh } = usePortfolio();
   const prefs = useLocalStore(portViewStore);
-  const [tab, setTab] = useState<PortTab>(initialTab);
+  const tab = parsePortTab(useSearchParams().get("tab"));
 
   const selection = useMemo(() => selectAnalyzed(portfolio.rows), [portfolio.rows]);
   const analyzedKey = selection.analyzed.map((p) => p.symbol).sort().join(",");
@@ -58,15 +63,19 @@ export function PortfolioView({ initialTab }: { initialTab: PortTab }) {
   const qqq = useHistory(prefs.benchmark === "QQQ" && requestSymbols.length > 0 ? ["QQQ"] : [], "1y");
   const report = useMemo(() => analyzeRisk(selection.analyzed, history.data ?? null), [selection, history.data]);
   const historyLoading = requestSymbols.length > 0 && !history.data && !history.error;
+  // Some series failed upstream: the route lists them in `missing` and caches the response only briefly.
+  const failedHistory = useMemo(() => (history.data?.degraded ? history.data.missing : []), [history.data]);
 
   const profileSymbols = useMemo(() => portfolio.rows.filter((r) => !sectorOfSymbol(r.symbol) && quotes.get(r.symbol)?.quoteType === "EQUITY").map((r) => r.symbol), [portfolio.rows, quotes]);
   const { data: profiles } = useProfiles(profileSymbols);
   const infoOf = (symbol: string) => ({ quoteType: quotes.get(symbol)?.quoteType ?? null, sector: profiles?.profiles[symbol]?.sector ?? null });
-  const fxList = useMemo(() => fxSymbols(portfolio), [portfolio]);
+  // FX quotes for the currency breakdown, which converts the foreign positions into the base currency.
+  const fxList = useMemo(() => fxSymbolsFor(portfolio.foreign, portfolio.baseCurrency), [portfolio]);
   const { data: fxData } = useQuotes(fxList);
   const fx = useMemo(() => new Map((fxData?.quotes ?? []).map((q) => [q.symbol, q])), [fxData]);
 
-  const figures = dayFigures(portfolio, quotes);
+  const now = useNow();
+  const figures = dayFigures(portfolio, quotes, now);
   const dividends = projectedDividends(portfolio.rows, (s) => quotes.get(s)?.dividendRate ?? null);
   const effective = effectivePositionCount(portfolio.rows);
   const k = t.port.kpi;
@@ -74,8 +83,7 @@ export function PortfolioView({ initialTab }: { initialTab: PortTab }) {
   const held = Object.keys(holdings).length;
 
   const changeTab = (next: PortTab) => {
-    setTab(next);
-    window.history.replaceState(window.history.state, "", next === "overview" ? window.location.pathname : `?tab=${next}`);
+    window.history.replaceState(null, "", next === "overview" ? window.location.pathname : `?tab=${next}`);
   };
 
   if (hydrated && held === 0) {
@@ -115,13 +123,14 @@ export function PortfolioView({ initialTab }: { initialTab: PortTab }) {
         sub={tpl(t.watchlist.positionsCount, { n: figures.positions })}
       />
       <StatTile
-        label={k.dayPnl}
+        label={figures.sessionDate === null ? k.dayPnl : k.lastSessionPnl}
         value={pending(quotesLoading, <TickNumber value={figures.dayPnl}><SignedMoney value={figures.dayPnl} lang={lang} /></TickNumber>)}
         delta={quotesLoading ? undefined : <Delta value={figures.dayRatio} kind="ratio" digits={2} />}
+        sub={figures.sessionDate === null || quotesLoading ? undefined : formatSessionDate(figures.sessionDate, lang)}
       />
       <StatTile
         label={k.unrealized}
-        value={pending(quotesLoading, <SignedMoney value={figures.pnl} lang={lang} />)}
+        value={pending(quotesLoading, <TickNumber value={figures.pnl}><SignedMoney value={figures.pnl} lang={lang} /></TickNumber>)}
         delta={quotesLoading ? undefined : <Delta value={figures.pnlPct} kind="ratio" digits={1} />}
       />
       <StatTile label={t.watchlist.costBasis} value={pending(quotesLoading, <Money value={figures.costBasis} lang={lang} />)} />
@@ -175,14 +184,26 @@ export function PortfolioView({ initialTab }: { initialTab: PortTab }) {
   }
 
   const shortHistory = !historyLoading && report.sessions > 0 && report.sessions < FULL_YEAR_SESSIONS && report.since !== null;
+  // Beta, volatility, VaR and drawdown describe the analyzed positions only (the 24 largest with price history).
+  const subset = !historyLoading && !quotesLoading && report.symbols.length > 0 && report.symbols.length < figures.positions;
   return (
     <div className="grid gap-px bg-line p-px xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
       <h1 className="sr-only">{t.port.title}</h1>
       {tiles}
       <div className="bg-panel xl:col-span-2">
         <StaleBanner show={stale} since={staleSince} />
+        {failedHistory.length > 0 ? (
+          <div role="status" className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line bg-panel-2 px-3 py-1.5 text-xs text-warn">
+            <AlertTriangle aria-hidden className="size-3.5 shrink-0" strokeWidth={1.75} />
+            <span>{t.port.historyDegraded}</span>
+            <Button size="sm" onClick={() => void history.mutate()} className="max-sm:h-10">
+              {t.common.retry}
+            </Button>
+          </div>
+        ) : null}
         <p className="px-3 py-2 text-xs text-fg-2">
           {t.port.basis}
+          {subset ? ` ${tpl(t.port.subsetNote, { n: report.symbols.length, m: figures.positions })}` : ""}
           {shortHistory ? ` ${tpl(t.port.sessionsNote, { n: report.sessions, date: formatDate(report.since, lang, "UTC") })}` : ""}
         </p>
       </div>
@@ -206,7 +227,7 @@ export function PortfolioView({ initialTab }: { initialTab: PortTab }) {
         </Panel>
       </div>
       <div className="flex min-w-0 flex-col gap-px">
-        <CoveragePanel portfolio={portfolio} report={report} beyond={selection.beyond.map((p) => p.symbol)} loading={historyLoading || quotesLoading} />
+        <CoveragePanel portfolio={portfolio} report={report} beyond={selection.beyond.map((p) => p.symbol)} failed={failedHistory} loading={historyLoading || quotesLoading} />
         <MethodPanel />
       </div>
     </div>
