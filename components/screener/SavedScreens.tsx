@@ -1,7 +1,8 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useId, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
+import { flushSync } from "react-dom";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -12,6 +13,8 @@ import { useSavedScreens } from "@/hooks/useScreens";
 import { cn } from "@/lib/cn";
 import { tpl } from "@/lib/format";
 import { cleanScreenName, countActiveFilters, MAX_SAVED_SCREENS, MAX_SCREEN_NAME, screenFromParams, screenToQuery, type Screen } from "@/lib/screens";
+
+import { focusFirst } from "./focus";
 
 interface SavedScreensProps {
   screen: Screen;
@@ -30,6 +33,8 @@ export function SavedScreens({ screen, onOpen, bare = false, className }: SavedS
   const [error, setError] = useState<string | null>(null);
   const inputId = useId();
   const errorId = useId();
+  const listRef = useRef<HTMLUListElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const currentQuery = screenToQuery(screen);
 
   const onSubmit = (event: FormEvent) => {
@@ -44,8 +49,11 @@ export function SavedScreens({ screen, onOpen, bare = false, className }: SavedS
   };
 
   const onRemove = (id: string) => {
-    const removed = remove(id);
+    const removed = flushSync(() => remove(id));
     if (!removed) return;
+    // The row and its delete button are gone: focus the screen that took its place, the one above, or the name field.
+    const left = listRef.current?.querySelectorAll<HTMLElement>("button[data-saved-open]");
+    focusFirst(left?.[removed.index], left?.[removed.index - 1], inputRef.current);
     toast.show({
       message: tpl(t.screener.saved.removed, { name: removed.entry.name }),
       action: { label: t.screener.undo, onAction: () => restore(removed.entry, removed.index) },
@@ -57,7 +65,7 @@ export function SavedScreens({ screen, onOpen, bare = false, className }: SavedS
       {screens.length === 0 ? (
         <p className="text-sm text-fg-2">{t.screener.saved.empty}</p>
       ) : (
-        <ul className="-mx-3">
+        <ul ref={listRef} className="-mx-3">
           {screens.map((entry) => {
             const parsed = screenFromParams(new URLSearchParams(entry.query));
             const count = countActiveFilters(parsed.filters);
@@ -68,6 +76,7 @@ export function SavedScreens({ screen, onOpen, bare = false, className }: SavedS
                 {current ? <span aria-hidden className="absolute inset-y-1 left-0 w-0.5 bg-accent" /> : null}
                 <button
                   type="button"
+                  data-saved-open
                   onClick={() => onOpen(parsed)}
                   title={tpl(t.screener.saved.open, { name: entry.name })}
                   aria-current={current ? "true" : undefined}
@@ -91,6 +100,7 @@ export function SavedScreens({ screen, onOpen, bare = false, className }: SavedS
         </label>
         <div className="flex gap-1.5">
           <Input
+            ref={inputRef}
             id={inputId}
             size="sm"
             value={name}

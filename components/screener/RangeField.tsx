@@ -19,20 +19,28 @@ interface BoundInputProps {
   label: string;
   placeholder: string;
   onCommit: (value: number | null) => void;
+  resetToken: number;
 }
 
 /**
  * One bound. Every keystroke that parses applies at once (filtering is local), an unfinished entry such as "-" waits
- * and is flagged on blur, and a value changed from outside (a preset, Clear all) replaces the text.
+ * and is flagged on blur, and a value changed from outside (a preset, Clear all) replaces the text. An unfinished entry
+ * never reached the filters, so Clear all and presets also reset the text through `resetToken`.
  */
-function BoundInput({ metric, value, label, placeholder, onCommit }: BoundInputProps) {
+function BoundInput({ metric, value, label, placeholder, onCommit, resetToken }: BoundInputProps) {
   const { t } = usePrefs();
   const errorId = useId();
   const [text, setText] = useState(() => boundText(metric, value));
   const [synced, setSynced] = useState(value);
+  const [seenReset, setSeenReset] = useState(resetToken);
   const [invalid, setInvalid] = useState(false);
 
-  if (value !== synced) {
+  if (resetToken !== seenReset) {
+    setSeenReset(resetToken);
+    setSynced(value);
+    setText(boundText(metric, value));
+    setInvalid(false);
+  } else if (value !== synced) {
     setSynced(value);
     const parsed = parseNumberInput(text);
     const current = parsed.kind === "number" ? fromInput(metricUnit(metric), parsed.value) : null;
@@ -79,10 +87,12 @@ interface RangeFieldProps {
   metric: MetricKey;
   range: NumericRange | undefined;
   onChange: (range: NumericRange) => void;
+  /** Changes when the filters are replaced as a whole; see BoundInput. */
+  resetToken: number;
 }
 
 /** A min/max pair for one metric, labelled with the unit it takes ("Dividend yield %", "Market cap $B"). */
-export function RangeField({ metric, range, onChange }: RangeFieldProps) {
+export function RangeField({ metric, range, onChange, resetToken }: RangeFieldProps) {
   const { t } = usePrefs();
   const id = useId();
   const name = t.screener.metricNames[metric];
@@ -103,6 +113,7 @@ export function RangeField({ metric, range, onChange }: RangeFieldProps) {
           label={tpl(t.screener.filters.minLabel, { metric: name })}
           placeholder={t.screener.filters.min}
           onCommit={(value) => onChange({ min: value, max })}
+          resetToken={resetToken}
         />
         <BoundInput
           metric={metric}
@@ -110,6 +121,7 @@ export function RangeField({ metric, range, onChange }: RangeFieldProps) {
           label={tpl(t.screener.filters.maxLabel, { metric: name })}
           placeholder={t.screener.filters.max}
           onCommit={(value) => onChange({ min, max: value })}
+          resetToken={resetToken}
         />
       </div>
     </div>

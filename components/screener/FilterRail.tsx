@@ -50,13 +50,14 @@ interface RangeGroupProps {
   metrics: readonly MetricKey[];
   filters: ScreenFilters;
   onFiltersChange: (filters: ScreenFilters) => void;
+  resetToken: number;
 }
 
 /**
  * A collapsible group of min/max fields. It opens when one of its ranges gets a value (a preset, a link) and otherwise
  * keeps the state the person chose, so clearing the last field never folds the group away under the cursor.
  */
-function RangeGroup({ title, metrics, filters, onFiltersChange }: RangeGroupProps) {
+function RangeGroup({ title, metrics, filters, onFiltersChange, resetToken }: RangeGroupProps) {
   const { t } = usePrefs();
   const set = metrics.filter((key) => filters.ranges[key]).length;
   const [open, setOpen] = useState(set > 0);
@@ -74,7 +75,13 @@ function RangeGroup({ title, metrics, filters, onFiltersChange }: RangeGroupProp
       </summary>
       <div className="space-y-3 px-3 pt-1 pb-3">
         {metrics.map((key) => (
-          <RangeField key={key} metric={key} range={filters.ranges[key]} onChange={(range) => onFiltersChange(setRange(filters, key, range))} />
+          <RangeField
+            key={key}
+            metric={key}
+            range={filters.ranges[key]}
+            onChange={(range) => onFiltersChange(setRange(filters, key, range))}
+            resetToken={resetToken}
+          />
         ))}
       </div>
     </details>
@@ -86,10 +93,12 @@ interface FilterRailProps {
   onFiltersChange: (filters: ScreenFilters) => void;
   /** Rows per sector in the snapshot, shown beside the sector names. */
   sectorCounts: Partial<Record<SectorKey, number>>;
+  /** Changes when the filters are replaced as a whole (Clear all, a preset): unfinished bounds are dropped too. */
+  resetToken: number;
 }
 
 /** The screener's filter controls: sectors, trend, events, my lists and min/max ranges in collapsible groups. */
-export function FilterRail({ screen, onFiltersChange, sectorCounts }: FilterRailProps) {
+export function FilterRail({ screen, onFiltersChange, sectorCounts, resetToken }: FilterRailProps) {
   const { t, lang } = usePrefs();
   const { filters, universe } = screen;
   const update = (patch: Partial<ScreenFilters>) => onFiltersChange({ ...filters, ...patch });
@@ -193,6 +202,7 @@ export function FilterRail({ screen, onFiltersChange, sectorCounts }: FilterRail
             metrics={metrics}
             filters={filters}
             onFiltersChange={onFiltersChange}
+            resetToken={resetToken}
           />
         );
       })}

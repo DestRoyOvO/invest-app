@@ -3,7 +3,8 @@
 import { AlertTriangle, Download, Info, Link2, Loader2, PanelLeftClose, PanelLeftOpen, SlidersHorizontal, X } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState, type CSSProperties, type MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from "react";
+import { flushSync } from "react-dom";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -39,6 +40,8 @@ import {
   toCsv,
   universeSymbols,
   type ColumnSetKey,
+  type FilterChip,
+  type PresetKey,
   type Screen,
   type ScreenFilters,
   type SortState,
@@ -50,6 +53,7 @@ import type { ScreenRow } from "@/types/screener";
 import { screenColumns, tableMinWidthRem } from "./columns";
 import { chipLabel } from "./display";
 import { FilterRail } from "./FilterRail";
+import { firstFocusable, focusFirst } from "./focus";
 import { SavedScreens } from "./SavedScreens";
 import { useWatchToggle } from "./useWatchToggle";
 
@@ -106,6 +110,13 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
   const [railOpen, setRailOpen] = useState(true);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  // Bumped whenever the filters are replaced as a whole, so the rail also drops bounds still being typed ("-").
+  const [resetToken, setResetToken] = useState(0);
+  const railRef = useRef<HTMLDivElement>(null);
+  const presetsRef = useRef<HTMLUListElement>(null);
+  const chipsRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLDivElement>(null);
+  const showResultsRef = useRef<HTMLButtonElement>(null);
 
   // SWR keeps the previous key's data while a new one loads: never show stocks under the ETF switch.
   const snapshot = data && data.universe === screen.universe ? data : undefined;
@@ -131,7 +142,24 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
   const sortedHidden = screen.sort && isMetricKey(screen.sort.key) && !metrics.includes(screen.sort.key) ? screen.sort.key : null;
 
   const setFilters = (filters: ScreenFilters) => onScreenChange({ ...screen, filters });
-  const clearFilters = () => setFilters(EMPTY_FILTERS);
+  /** Replaces the filters as a whole (a preset, a saved screen): bounds still being typed in the rail go too. */
+  const replaceScreen = (next: Screen) => {
+    setResetToken((n) => n + 1);
+    onScreenChange(next);
+  };
+  const firstPreset = () => presetsRef.current?.querySelector<HTMLElement>("button");
+  // The control that was used disappears (chip row, empty state) or turns disabled (rail and sheet), so focus moves
+  // to `next` once the update is on screen rather than falling back to the top of the page.
+  const clearFilters = (next: () => HTMLElement | null | undefined) => {
+    flushSync(() => replaceScreen({ ...screen, filters: EMPTY_FILTERS }));
+    focusFirst(next());
+  };
+  const removeChip = (id: FilterChip["id"], index: number) => {
+    flushSync(() => setFilters(removeFilter(screen.filters, id)));
+    const left = chipsRef.current?.querySelectorAll<HTMLElement>("button[data-chip]");
+    focusFirst(left?.[index], left?.[index - 1], firstPreset());
+  };
+  const togglePreset = (key: PresetKey, pressed: boolean) => replaceScreen(pressed ? { ...screen, filters: EMPTY_FILTERS } : applyPreset(screen, key));
   const setUniverse = (universe: ScreenerUniverse) => onScreenChange(switchUniverse(screen, universe));
   const setColumns = (columns: ColumnSetKey) => onScreenChange({ ...screen, columns });
   const setSort = (sort: SortState | null) => onScreenChange({ ...screen, sort });
@@ -146,6 +174,11 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
   const allSelected = matches.length > 0 && selectedVisible.length === matches.length;
   const someSelected = selectedVisible.length > 0 && !allSelected;
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(matches.map((row) => row.symbol)));
+  /** Empties the selection; the selection bar goes away with the focused button, so focus moves to "Select all". */
+  const clearSelection = () => {
+    flushSync(() => setSelected(new Set()));
+    focusFirst(tableRef.current?.querySelector<HTMLElement>("thead input[type=checkbox]"));
+  };
 
   const addSelected = () => {
     const symbols = selectedVisible;
@@ -166,7 +199,7 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
           ? tpl(t.screener.selection.addedSkipped, { n: added.length, skipped: present })
           : tpl(t.screener.selection.added, { n: added.length });
     toast.show({ message, action: added.length > 0 ? { label: t.screener.undo, onAction: () => added.forEach(remove) } : undefined });
-    setSelected(new Set());
+    clearSelection();
   };
 
   const exportCsv = () => {
@@ -229,9 +262,9 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
   if (snapshot?.warnings.includes("benchmark")) warnings.push(t.screener.warnings.benchmark);
   if (snapshot?.warnings.includes("quotes_stale")) warnings.push(t.screener.warnings.stale);
 
-  const rail = <FilterRail screen={screen} onFiltersChange={setFilters} sectorCounts={counts} />;
+  const rail = <FilterRail screen={screen} onFiltersChange={setFilters} sectorCounts={counts} resetToken={resetToken} />;
   const openSaved = (next: Screen) => {
-    onScreenChange(next);
+    replaceScreen(next);
     setSheetOpen(false);
   };
 
@@ -244,12 +277,12 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
           <Panel
             title={t.screener.filters.title}
             actions={
-              <Button variant="ghost" size="sm" onClick={clearFilters} disabled={activeCount === 0}>
+              <Button variant="ghost" size="sm" onClick={() => clearFilters(() => firstFocusable(railRef.current))} disabled={activeCount === 0}>
                 {t.screener.filters.clear}
               </Button>
             }
           >
-            {rail}
+            <div ref={railRef}>{rail}</div>
           </Panel>
           <SavedScreens screen={screen} onOpen={openSaved} className="flex-1" />
         </div>
@@ -303,7 +336,7 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
               ]}
               className="w-full sm:w-44"
             />
-            <ul aria-label={t.screener.presets.label} className="no-scrollbar flex w-full min-w-0 gap-1.5 overflow-x-auto sm:w-auto sm:flex-1 sm:flex-wrap sm:overflow-visible">
+            <ul ref={presetsRef} aria-label={t.screener.presets.label} className="no-scrollbar flex w-full min-w-0 gap-1.5 overflow-x-auto sm:w-auto sm:flex-1 sm:flex-wrap sm:overflow-visible">
               {presetsFor(screen.universe).map((p) => {
                 const pressed = preset === p.key;
                 return (
@@ -312,7 +345,7 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
                       type="button"
                       aria-pressed={pressed}
                       title={t.screener.presetHints[p.key]}
-                      onClick={() => onScreenChange(pressed ? { ...screen, filters: EMPTY_FILTERS } : applyPreset(screen, p.key))}
+                      onClick={() => togglePreset(p.key, pressed)}
                       className={cn(chipClass, pressed ? "border-accent/40 bg-accent-soft text-accent" : "border-line-2 text-fg-2 hover:border-fg-3 hover:text-fg")}
                     >
                       {t.screener.presets[p.key]}
@@ -324,15 +357,16 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
           </div>
 
           {chips.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-1.5 border-b border-line px-3 py-2">
+            <div ref={chipsRef} className="flex flex-wrap items-center gap-1.5 border-b border-line px-3 py-2">
               <span className="sr-only">{t.screener.filters.active}</span>
-              {chips.map((chip) => {
+              {chips.map((chip, index) => {
                 const label = chipLabel(t, chip, sectorLabel);
                 return (
                   <button
                     key={chip.id}
                     type="button"
-                    onClick={() => setFilters(removeFilter(screen.filters, chip.id))}
+                    data-chip
+                    onClick={() => removeChip(chip.id, index)}
                     aria-label={tpl(t.screener.filters.remove, { label })}
                     className={cn(chipClass, "border-line-2 text-fg hover:border-fg-3")}
                   >
@@ -341,7 +375,7 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
                   </button>
                 );
               })}
-              <Button variant="ghost" size="sm" onClick={clearFilters} className="max-sm:h-10">
+              <Button variant="ghost" size="sm" onClick={() => clearFilters(firstPreset)} className="max-sm:h-10">
                 {t.screener.filters.clear}
               </Button>
             </div>
@@ -388,7 +422,7 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
               <Button variant="primary" size="sm" onClick={addSelected} className="max-sm:h-10">
                 {t.screener.selection.add}
               </Button>
-              <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())} className="max-sm:h-10">
+              <Button variant="ghost" size="sm" onClick={clearSelection} className="max-sm:h-10">
                 {t.screener.selection.clear}
               </Button>
             </div>
@@ -399,6 +433,7 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
           ) : (
             // Row clicks bubble here; keyboard users have the symbol link in each row.
             <div
+              ref={tableRef}
               onClick={onTableClick}
               style={{ "--eqs-wide": `${tableMinWidthRem(metrics)}rem` } as CSSProperties}
               className="relative [--eqs-max-h:max(22rem,calc(100dvh-19rem))] lg:min-h-64 lg:flex-1 lg:[--eqs-max-h:none]"
@@ -421,7 +456,7 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
                   <EmptyState
                     actions={
                       activeCount > 0 ? (
-                        <Button size="sm" onClick={clearFilters}>
+                        <Button size="sm" onClick={() => clearFilters(firstPreset)}>
                           {t.screener.filters.clear}
                         </Button>
                       ) : undefined
@@ -443,10 +478,10 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
         side="auto"
         footer={
           <div className="flex items-center justify-between gap-2 px-3 py-2">
-            <Button variant="ghost" onClick={clearFilters} disabled={activeCount === 0} className="max-sm:h-10">
+            <Button variant="ghost" onClick={() => clearFilters(() => showResultsRef.current)} disabled={activeCount === 0} className="max-sm:h-10">
               {t.screener.filters.clear}
             </Button>
-            <Button variant="primary" onClick={() => setSheetOpen(false)} className="max-sm:h-10">
+            <Button ref={showResultsRef} variant="primary" onClick={() => setSheetOpen(false)} className="max-sm:h-10">
               {tpl(t.screener.filters.showResults, { n: snapshot ? matches.length : universeSize })}
             </Button>
           </div>
