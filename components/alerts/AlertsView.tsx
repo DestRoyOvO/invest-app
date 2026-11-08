@@ -91,7 +91,8 @@ function HowItWorks() {
   const { t } = usePrefs();
   const items = t.alerts.page.howItems;
   return (
-    <Panel title={t.alerts.page.how}>
+    // Fills its column next to History on wide screens, so no empty block shows under the shorter of the two.
+    <Panel title={t.alerts.page.how} className="flex-1">
       <ul className="space-y-2 px-3 py-3 text-sm text-fg-2">
         {[items.cadence, items.catchUp, items.oneTab, items.local, items.notAdvice].map((text) => (
           <li key={text} className="flex gap-2.5">
@@ -346,6 +347,8 @@ function HistoryPanel() {
   return (
     <Panel
       title={words.history}
+      // Fills its column next to "How alerts work" on wide screens, so no empty block shows under it.
+      className="flex-1"
       actions={
         hydrated && log.length > 0 ? (
           <>
