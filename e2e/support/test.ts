@@ -12,7 +12,7 @@ import { BASE_URL, PINNED_NOW } from "./env";
 //   same moment the data was made for;
 // - consoleErrors (automatic): fails a test on any console error or uncaught page error (CSP violations and failed
 //   requests show up as console errors), unless the test allows that message explicitly;
-// - axe: runs axe-core and fails on serious or critical WCAG 2.x A/AA violations, with readable details;
+// - axe: runs axe-core and fails on serious or critical WCAG violations, with readable details;
 // - app: navigation that waits for the app to settle, and the stored display preferences (theme, language).
 
 export interface ConsoleErrors {
@@ -25,17 +25,25 @@ export interface ConsoleErrors {
   unexpected(): string[];
 }
 
+/** A finding axe may report for these elements until the change that fixes it lands. */
+export interface KnownViolation {
+  /** The axe rule id, e.g. "target-size". */
+  rule: string;
+  /** The elements it is known for, or their containers: the rule is skipped for them and everything inside. */
+  within: Locator;
+  /** Why it is accepted for now and what removes it. */
+  reason: string;
+}
+
 export interface A11yOptions {
   /** Limit the scan to these selectors (default: the whole page). */
   include?: string[];
-  /** Leave these selectors or elements out, each with the reason in a comment at the call site. */
-  exclude?: Array<string | Locator>;
-  /** Rules to skip, each with the reason in a comment at the call site. */
-  disableRules?: string[];
+  /** Known findings: only these rules, only on these elements. Every other rule still checks them. */
+  known?: KnownViolation[];
 }
 
 export interface Axe {
-  /** Fails when axe finds serious or critical WCAG 2.0, 2.1 or 2.2 A/AA violations. */
+  /** Fails when axe finds serious or critical violations of the WCAG 2.0, 2.1 or 2.2 A and AA rules. */
   check(options?: A11yOptions): Promise<void>;
 }
 
@@ -53,6 +61,10 @@ export interface App {
   isPhone: boolean;
 }
 
+/**
+ * WCAG 2.0, 2.1 and 2.2 at levels A and AA. 2.2 is included on purpose: its target-size rule (2.5.8, 24 by 24 CSS
+ * pixels) is the minimum docs/design-system.md sets for every control.
+ */
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22a", "wcag22aa"];
 
 /**
@@ -120,6 +132,19 @@ async function setPrefs(context: BrowserContext, prefs: { theme?: Theme; lang?: 
   await context.addCookies(cookies.map((cookie) => ({ ...cookie, url: BASE_URL, sameSite: "Lax" as const })));
 }
 
+/** One line per failing element (at most eight per rule) with axe's summary of what to fix. */
+function axeReport(url: string, violations: ReadonlyArray<{ id: string; impact?: string | null; help: string; helpUrl: string; nodes: ReadonlyArray<{ target: unknown[]; failureSummary?: string }> }>): string {
+  const rules = violations.map((violation) => {
+    const nodes = violation.nodes
+      .slice(0, 8)
+      .map((node) => `    - ${node.target.join(" ")}\n      ${(node.failureSummary ?? "").replace(/\n/g, "\n      ")}`)
+      .join("\n");
+    const more = violation.nodes.length > 8 ? `\n    ... and ${violation.nodes.length - 8} more` : "";
+    return `${violation.id} (${violation.impact}): ${violation.help}\n  ${violation.helpUrl}\n${nodes}${more}`;
+  });
+  return `Serious or critical accessibility violations on ${url}:\n\n${rules.join("\n\n")}`;
+}
+
 export const test = base.extend<{ consoleErrors: ConsoleErrors; axe: Axe; app: App }>({
   extraHTTPHeaders: async ({ extraHTTPHeaders }, provide) => {
     await provide({ ...extraHTTPHeaders, "x-forwarded-for": clientAddress() });
@@ -162,32 +187,44 @@ export const test = base.extend<{ consoleErrors: ConsoleErrors; axe: Axe; app: A
   axe: async ({ page }, provide, testInfo) => {
     await provide({
       async check(options: A11yOptions = {}) {
+        const known = options.known ?? [];
+        // Mark each known finding's elements, so the violations axe reports can be matched to them afterwards.
+        for (const [index, finding] of known.entries()) {
+          await finding.within.evaluateAll((elements, mark) => {
+            for (const element of elements) element.setAttribute("data-axe-known", `${element.getAttribute("data-axe-known") ?? ""} ${mark}`.trim());
+          }, `k${index}`);
+        }
         // @axe-core/playwright types its page with its own playwright-core peer (npm installed a newer one); at run
         // time it only calls the page's public methods, so the test runner's page is what it needs.
         let builder = new AxeBuilder({ page: page as unknown as ConstructorParameters<typeof AxeBuilder>[0]["page"] }).withTags(WCAG_TAGS);
         for (const selector of options.include ?? []) builder = builder.include(selector);
-        for (const [index, target] of (options.exclude ?? []).entries()) {
-          if (typeof target === "string") {
-            builder = builder.exclude(target);
-            continue;
-          }
-          // axe takes CSS selectors: mark the located elements and exclude the mark.
-          await target.evaluateAll((elements, mark) => elements.forEach((element) => element.setAttribute("data-axe-exclude", mark)), String(index));
-          builder = builder.exclude(`[data-axe-exclude="${index}"]`);
-        }
-        if (options.disableRules?.length) builder = builder.disableRules(options.disableRules);
         const results = await builder.analyze();
-        const blocking = results.violations.filter((violation) => violation.impact === "serious" || violation.impact === "critical");
         await testInfo.attach("axe-violations.json", { body: JSON.stringify(results.violations, null, 2), contentType: "application/json" });
-        const report = blocking.map((violation) => {
-          const nodes = violation.nodes
-            .slice(0, 8)
-            .map((node) => `    - ${node.target.join(" ")}\n      ${(node.failureSummary ?? "").replace(/\n/g, "\n      ")}`)
-            .join("\n");
-          const more = violation.nodes.length > 8 ? `\n    ... and ${violation.nodes.length - 8} more` : "";
-          return `${violation.id} (${violation.impact}): ${violation.help}\n  ${violation.helpUrl}\n${nodes}${more}`;
-        });
-        expect(blocking, `Serious or critical accessibility violations on ${page.url()}:\n\n${report.join("\n\n")}`).toEqual([]);
+
+        const serious = results.violations.filter((violation) => violation.impact === "serious" || violation.impact === "critical");
+        // For each node, whether it lies inside an element marked for a known finding of the same rule.
+        const targets = serious.flatMap((violation) => violation.nodes.map((node) => ({ rule: violation.id, target: node.target })));
+        const marks = known.map((finding, index) => ({ rule: finding.rule, mark: `k${index}` }));
+        const covered = await page.evaluate(
+          ({ targets, marks }) =>
+            targets.map(({ rule, target }) => {
+              // Nodes inside frames or shadow roots have nested selectors; the app has none, and they are never known.
+              if (target.length !== 1 || typeof target[0] !== "string") return false;
+              const element = document.querySelector(target[0]);
+              return marks.some((entry) => entry.rule === rule && element?.closest(`[data-axe-known~="${entry.mark}"]`) != null);
+            }),
+          { targets: targets.map(({ rule, target }) => ({ rule, target: target as unknown[] })), marks },
+        );
+        let position = 0;
+        const blocking = serious
+          .map((violation) => ({ ...violation, nodes: violation.nodes.filter(() => !covered[position++]) }))
+          .filter((violation) => violation.nodes.length > 0);
+
+        const used = new Set(targets.filter((_, i) => covered[i]).map(({ rule }) => rule));
+        for (const finding of known.filter((entry) => !used.has(entry.rule))) {
+          testInfo.annotations.push({ type: "axe-known-unused", description: `${finding.rule} no longer occurs on ${page.url()}: remove it (${finding.reason})` });
+        }
+        if (blocking.length > 0) throw new Error(axeReport(page.url(), blocking));
       },
     });
   },
