@@ -4,8 +4,6 @@ import { useMemo, useState } from "react";
 
 import {
   formatTarget,
-  isNonEquity,
-  knownNonEquity,
   periodMonth,
   RATING_KEYS,
   RATING_SHADES,
@@ -32,6 +30,8 @@ import { ratingWord } from "@/lib/i18n/yahoo-terms";
 import type { Lang } from "@/types/api";
 import type { AnalystAction, AnalystActivity } from "@/types/earnings";
 
+import { requestsCoverage, showsCoverage } from "./quote-utils";
+
 // Rating distribution by month, the price-target range against the price, and recent rating and target actions (ANR).
 // Ratings are opinions: one neutral hue (a lighter shade for each step away from "strong buy", RATING_SHADES), no buy or
 // sell colors.
@@ -44,12 +44,14 @@ export function AnalystsPanel({ symbol, className }: { symbol: string; className
   const { t } = usePrefs();
   const a = t.earnings.analysts;
   // Shares the quote page's request: the live price for the target marker, and the quote type, so funds and indices
-  // (which have no analyst coverage) are not asked for. The app's own funds and index symbols are known up front.
+  // (which have no analyst coverage) are not asked for. A symbol outside the app's lists waits for that type
+  // (requestsCoverage).
   const stock = useStock(symbol);
-  const noCoverage = knownNonEquity(symbol) || isNonEquity(stock.data?.quote.quoteType);
-  const { data, error, isLoading, mutate } = useAnalysts(noCoverage ? null : symbol);
+  const quote = stock.data?.quote;
+  const noCoverage = !showsCoverage(symbol, quote?.quoteType);
+  const { data, error, isLoading, mutate } = useAnalysts(requestsCoverage(symbol, quote) ? symbol : null);
   const now = useClock();
-  const price = stock.data?.quote.price ?? data?.currentPrice ?? null;
+  const price = quote?.price ?? data?.currentPrice ?? null;
 
   let body;
   if (data && now !== null) body = <AnalystsBody activity={data} price={price} now={now} />;

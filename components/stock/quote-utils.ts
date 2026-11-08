@@ -7,6 +7,7 @@ import { isDateOnly } from "@/lib/events";
 import { displayedSign } from "@/lib/format";
 import { priceDigits } from "@/lib/quote-figures";
 import { normalizeSymbol } from "@/lib/symbols";
+import { UNIVERSE_STOCKS } from "@/lib/universe";
 import type { Bar, Quote } from "@/types/api";
 
 import { MAX_COMPARE } from "./chart-utils";
@@ -115,11 +116,28 @@ export function quoteRanges(quote: RangeQuote, bars: readonly Bar[] | null, time
 /**
  * Whether the overview shows the earnings and analyst panels. Funds, indices, currencies and crypto report no earnings
  * and have no analyst coverage (their tabs drop Earnings and Analysts too). The app's own funds and index symbols are
- * known before the quote arrives, so their page never shows the panels; any other symbol keeps them (loading, in
- * parallel with the quote) until its quote type says otherwise, so a stock's page does not jump when the quote lands.
+ * known before the quote arrives, so their page never shows the panels; any other symbol keeps them (as skeletons)
+ * until its quote type says otherwise, so a stock's page does not jump when the quote lands.
  */
 export function showsCoverage(symbol: string, quoteType: string | null | undefined): boolean {
   return !knownNonEquity(symbol) && !isNonEquity(quoteType);
+}
+
+/** The stocks of the app's own universe: known to be stocks before their quote arrives. */
+const UNIVERSE: ReadonlySet<string> = new Set(UNIVERSE_STOCKS);
+
+/**
+ * Whether the earnings and analyst panels may request their data (/api/stock/<symbol>/earnings and /analysts, which
+ * answer 404 for a symbol without coverage). The app's universe stocks ask at once, in parallel with the quote; any
+ * other symbol waits for its quote and asks only when the quote type is a stock's (or missing, as tabsFor reads it), so
+ * the page of a fund or another instrument outside the app's lists (VFIAX, VTI) never asks for data that cannot exist
+ * and logs no 404. Meanwhile the panels keep their skeletons in place (showsCoverage). `quote` is the quote page's
+ * quote, undefined while it loads.
+ */
+export function requestsCoverage(symbol: string, quote: Pick<Quote, "quoteType"> | null | undefined): boolean {
+  if (knownNonEquity(symbol)) return false;
+  if (UNIVERSE.has(symbol)) return true;
+  return quote !== null && quote !== undefined && !isNonEquity(quote.quoteType);
 }
 
 /** The tab named in ?tab=, or the overview when it is missing, unknown or does not apply. */

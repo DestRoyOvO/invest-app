@@ -232,6 +232,13 @@ export const ROUTES: readonly RouteCase[] = [
   // A fund: only the overview and dividends tabs.
   { path: "/stock/SPY", ready: (page) => quoteReady(page, "SPY"), apis: ["/api/stock/SPY", "/api/stock/SPY/chart"] },
   { path: "/stock/SPY?tab=dividends", ready: (page) => firstRow(page, "Recent payments"), apis: ["/api/stock/SPY/dividends"] },
+  // A mutual fund outside the app's lists (the fixture data makes one of any four letters and an X): the page learns that
+  // it is a fund from its quote and asks for no earnings or analysts, which would answer 404 (a 4xx fails the sweep).
+  {
+    path: "/stock/VFIAX",
+    ready: (page) => quoteReady(page, "VFIAX"),
+    apis: ["", "/chart", "/signal", "/factors", "/news"].map((part) => `/api/stock/VFIAX${part}`),
+  },
   // An index, a crypto pair, a currency pair, a future and a Hong Kong listing: the overview only.
   { path: "/stock/%5EGSPC", ready: (page) => quoteReady(page, "^GSPC") },
   { path: "/stock/BTC-USD", ready: (page) => quoteReady(page, "BTC-USD") },
