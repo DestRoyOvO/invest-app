@@ -162,4 +162,32 @@ describe("quotes", () => {
     expect(duringSession?.marketState).toBe("REGULAR");
     expect((duringSession?.regularMarketTime as Date).toISOString()).toBe("2026-11-06T21:00:00.000Z");
   });
+
+  it("carry the after-hours trade of the latest session, as the intraday chart draws it", () => {
+    const quote = buildQuote(security("AAPL"), SATURDAY)!;
+    const chart = buildChart("AAPL", { period1: new Date("2026-11-06T09:00:00Z"), interval: "1m", includePrePost: true }, SATURDAY);
+    const bars = chart.quotes as Array<{ date: Date; close: number }>;
+    expect(quote.postMarketPrice).toBe(bars.at(-1)?.close);
+    expect((quote.postMarketTime as Date).toISOString()).toBe("2026-11-07T01:00:00.000Z");
+    expect(quote.postMarketChange).toBeCloseTo((quote.postMarketPrice as number) - (quote.regularMarketPrice as number), 6);
+    expect(quote.preMarketPrice).toBeUndefined();
+    // An hour into the after-hours session: the trade of 17:00 New York time.
+    const evening = buildQuote(security("AAPL"), Date.parse("2026-11-06T22:00:30Z"))!;
+    expect(evening.marketState).toBe("POST");
+    expect((evening.postMarketTime as Date).toISOString()).toBe("2026-11-06T22:00:00.000Z");
+    expect(evening.postMarketPrice).toBe(bars.find((bar) => bar.date.toISOString() === "2026-11-06T21:59:00.000Z")?.close);
+  });
+
+  it("carry the next session's pre-market trade while it trades, and nothing for indices", () => {
+    const monday = Date.parse("2026-11-09T13:30:00Z");
+    const quote = buildQuote(security("MSFT"), monday)!;
+    expect(quote.marketState).toBe("PRE");
+    expect(quote.preMarketPrice).toEqual(expect.any(Number));
+    expect((quote.preMarketTime as Date).getTime()).toBeLessThanOrEqual(monday);
+    expect(buildQuote(security("^GSPC"), SATURDAY)?.postMarketPrice).toBeUndefined();
+    // The pre-market path ends at the session's open, which the chart shows once the session is complete.
+    const [bar] = dailyRows(security("MSFT"), parseDayKey("2026-11-09"), parseDayKey("2026-11-09"));
+    const atOpen = buildQuote(security("MSFT"), Date.parse("2026-11-09T14:29:59Z"))!;
+    expect(Math.abs((atOpen.preMarketPrice as number) - bar.o)).toBeLessThan(bar.o * 0.01);
+  });
 });

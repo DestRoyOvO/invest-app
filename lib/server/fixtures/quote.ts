@@ -10,14 +10,27 @@ import {
   trailingEps,
   type DividendPayment,
 } from "./company";
-import { closeBefore, dailyRows, lastDayOfPreviousYear, priceDigits, type DailyRow } from "./prices";
+import { closeBefore, dailyRows, extendedPath, lastDayOfPreviousYear, priceDigits, type DailyRow } from "./prices";
 import { round } from "./random";
 import type { Security } from "./securities";
-import { DAY_MS, dailyStamp, latestCompletedSession, localToUtc, marketStateAt, sessionClose, zoneOffsetMinutes, zoneShortName } from "./sessions";
+import {
+  DAY_MS,
+  dailyStamp,
+  latestCompletedSession,
+  localToUtc,
+  marketStateAt,
+  nextTradingDay,
+  sessionClose,
+  sessionOpen,
+  zoneOffsetMinutes,
+  zoneShortName,
+} from "./sessions";
 
 // Quotes of the fixture data, shaped like yahoo-finance2's quote() result after validation: numbers as numbers, dates
 // as Date objects, percent fields in Yahoo's units (regularMarketChangePercent 1.25 means 1.25%). Prices are those of
-// the latest completed session; marketState follows the clock.
+// the latest completed session; marketState follows the clock. US stocks and funds also carry the after-hours trade
+// of that session (postMarket*, kept until the next pre-market, as Yahoo does) and, while the next session's
+// pre-market trades, its latest pre-market trade (preMarket*), both from the same paths as the intraday bars.
 
 export type RawQuote = Record<string, unknown>;
 
@@ -155,6 +168,7 @@ export function buildQuote(security: Security, now: number): RawQuote | null {
   if (security.type === "EQUITY") addCompanyFields(quote, security, latest, price);
   if (security.type === "ETF" || security.type === "MUTUALFUND") addFundFields(quote, security, latest, price, rows);
   addDividendFields(quote, security, latest, price);
+  addExtendedHours(quote, security, last, digits, now);
   if (security.type === "CRYPTOCURRENCY") {
     const supply = (security.sizeAtAnchor ?? 0) / security.anchorPrice;
     Object.assign(quote, {
@@ -221,6 +235,36 @@ function addCompanyFields(quote: RawQuote, security: Security, latest: number, p
   for (const key of Object.keys(quote)) if (quote[key] === undefined) delete quote[key];
 }
 
+const MINUTE_MS = 60_000;
+
+/**
+ * The latest extended-hours trades at `now` for US stocks and funds: the after-hours session of the latest completed
+ * session (from its close on, up to now) and the pre-market of the next session while it trades. Each price is the
+ * close of the last completed one-minute bar of the path the intraday chart draws, its time the end of that minute.
+ */
+function addExtendedHours(quote: RawQuote, security: Security, last: DailyRow, digits: number, now: number): void {
+  const profile = security.profile;
+  if (profile.pre === null || profile.post === null || (security.type !== "EQUITY" && security.type !== "ETF")) return;
+  const fields = (prefix: "preMarket" | "postMarket", path: Float64Array, start: number) => {
+    const minute = Math.min(path.length - 1, Math.floor((now - start) / MINUTE_MS));
+    if (minute < 1) return;
+    const price = round(path[minute], digits);
+    Object.assign(quote, {
+      [`${prefix}ChangePercent`]: ((price - last.c) / last.c) * 100,
+      [`${prefix}Price`]: price,
+      [`${prefix}Change`]: round(price - last.c, digits + 2),
+      [`${prefix}Time`]: new Date(start + minute * MINUTE_MS),
+    });
+  };
+  fields("postMarket", extendedPath(security, last, "post", last.c), sessionClose(profile, last.day));
+  const next = nextTradingDay(profile, last.day);
+  const preStart = localToUtc(profile.timeZone, next, profile.pre);
+  if (now >= preStart && now < sessionOpen(profile, next)) {
+    const [bar] = dailyRows(security, next, next);
+    if (bar) fields("preMarket", extendedPath(security, bar, "pre", last.c), preStart);
+  }
+}
+
 function addFundFields(quote: RawQuote, security: Security, latest: number, price: number, rows: readonly DailyRow[]): void {
   const base = lastDayOfPreviousYear(security, latest);
   const yearStart = rows.find((row) => row.day >= base)?.c ?? rows[0]?.c ?? price;
@@ -263,7 +307,7 @@ export function toScreenerQuote(quote: RawQuote): RawQuote {
     return r && typeof r.low === "number" && typeof r.high === "number" ? `${r.low} - ${r.high}` : value;
   };
   const out: RawQuote = { ...quote };
-  for (const key of ["regularMarketTime", "earningsTimestamp", "earningsTimestampStart", "earningsTimestampEnd", "dividendDate"]) {
+  for (const key of ["regularMarketTime", "postMarketTime", "preMarketTime", "earningsTimestamp", "earningsTimestampStart", "earningsTimestampEnd", "dividendDate"]) {
     if (key in out) out[key] = seconds(out[key]);
   }
   const firstTrade = out.firstTradeDateMilliseconds;

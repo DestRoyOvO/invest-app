@@ -382,16 +382,43 @@ function regularMinutes(security: Security, bar: DailyRow, minutes: number): Min
   return bars;
 }
 
-/** Thin extended-hours trading: a quiet walk from `start` (to `end` when given), carrying `volume` in total. */
-function extendedMinutes(security: Security, day: number, tag: string, minutes: number, start: number, end: number | null, volume: number, scaleOf: number): MinuteBar[] {
-  const next = prng(seedOf(security.symbol, day, tag));
+export type ExtendedSession = "pre" | "post";
+
+/**
+ * Thin extended-hours trading of a US listing on the day of `bar`: a quiet bridge from the previous close to the open
+ * (pre-market) or a quiet walk from the close (after hours), one point per minute, plus the generator that continues
+ * with the minutes' volumes.
+ */
+function extendedWalk(security: Security, bar: DailyRow, session: ExtendedSession, previousClose: number): { path: Float64Array; next: () => number } | null {
+  const profile = security.profile;
+  if (profile.pre === null || profile.post === null) return null;
+  const minutes = session === "pre" ? profile.open - profile.pre : profile.post - profile.close;
+  const next = prng(seedOf(security.symbol, bar.day, session));
   const path = new Float64Array(minutes + 1);
-  const scale = (scaleOf * dailyVol(security) * 0.25) / Math.sqrt(minutes);
-  if (end !== null) bridge(path, 0, minutes, start, end, scale, next);
+  const scale = (bar.c * dailyVol(security) * 0.25) / Math.sqrt(minutes);
+  if (session === "pre") bridge(path, 0, minutes, previousClose, bar.o, scale, next);
   else {
-    path[0] = start;
+    path[0] = bar.c;
     for (let k = 1; k <= minutes; k++) path[k] = path[k - 1] + scale * normalFrom(next);
   }
+  return { path, next };
+}
+
+/**
+ * The unrounded price `k` minutes into the pre-market (from `previousClose` to the open of `bar`) or the after-hours
+ * session (from the close of `bar`) of a US listing, for k from 0 to the session's length: the path the intraday bars
+ * are cut from, so the quote's extended-hours trade matches the chart. Empty for markets without extended hours.
+ */
+export function extendedPath(security: Security, bar: DailyRow, session: ExtendedSession, previousClose: number): Float64Array {
+  return extendedWalk(security, bar, session, previousClose)?.path ?? new Float64Array(0);
+}
+
+/** One-minute bars of an extended session, carrying `volume` in total. */
+function extendedMinutes(security: Security, bar: DailyRow, session: ExtendedSession, previousClose: number, volume: number): MinuteBar[] {
+  const walk = extendedWalk(security, bar, session, previousClose);
+  if (!walk) return [];
+  const { path, next } = walk;
+  const minutes = path.length - 1;
   return Array.from({ length: minutes }, (_, k) => {
     const o = path[k];
     const c = path[k + 1];
@@ -427,8 +454,8 @@ export function intradayRows(security: Security, bar: DailyRow, previousClose: n
   const length = profile.close - profile.open;
   const regular = aggregateMinutes(security, regularMinutes(security, bar, length), stepMinutes, localToUtc(tz, bar.day, profile.open), digits);
   if (!includePrePost || profile.pre === null || profile.post === null) return regular;
-  const pre = extendedMinutes(security, bar.day, "pre", profile.open - profile.pre, previousClose, bar.o, bar.v * 0.04, bar.c);
-  const post = extendedMinutes(security, bar.day, "post", profile.post - profile.close, bar.c, null, bar.v * 0.03, bar.c);
+  const pre = extendedMinutes(security, bar, "pre", previousClose, bar.v * 0.04);
+  const post = extendedMinutes(security, bar, "post", previousClose, bar.v * 0.03);
   return [
     ...aggregateMinutes(security, pre, stepMinutes, localToUtc(tz, bar.day, profile.pre), digits),
     ...regular,
