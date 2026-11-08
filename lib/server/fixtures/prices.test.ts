@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { buildChart } from "./chart";
-import { aggregateRows, ANCHOR_DAY, dailyRows, DOLLAR_INDEX, intradayRows } from "./prices";
+import { aggregateRows, ANCHOR_DAY, dailyRows, intradayRows } from "./prices";
 import { buildQuote } from "./quote";
 import { securityOf, type Security } from "./securities";
 import { dayKey, latestCompletedSession, parseDayKey, PROFILES } from "./sessions";
@@ -97,15 +97,17 @@ describe("daily bars", () => {
     const from = parseDayKey("2025-11-03");
     const to = parseDayKey("2026-11-06");
     const index = dailyRows(security("DX-Y.NYB"), from, to);
-    const currencies = DOLLAR_INDEX.weights.map(([symbol, weight]) => ({ weight, closes: new Map(dailyRows(security(symbol), from, to).map((row) => [row.day, row.c])) }));
+    const closes = (symbol: string) => new Map(dailyRows(security(symbol), from, to).map((row) => [row.day, row.c]));
+    const [euro, yen, pound, loonie, krona, franc] = ["EURUSD=X", "USDJPY=X", "GBPUSD=X", "CAD=X", "SEK=X", "CHF=X"].map(closes);
     expect(index.length).toBeGreaterThan(240);
     for (const row of index) {
-      const formula = currencies.reduce((value, { weight, closes }) => value * (closes.get(row.day) as number) ** weight, DOLLAR_INDEX.factor);
+      const on = (pair: Map<number, number>) => pair.get(row.day) as number;
+      // ICE's published formula, written out here rather than read from DOLLAR_INDEX, so a wrong constant there fails.
+      const ice = 50.14348112 * on(euro) ** -0.576 * on(yen) ** 0.136 * on(pound) ** -0.119 * on(loonie) ** 0.091 * on(krona) ** 0.042 * on(franc) ** 0.036;
       // Equal up to the rounding of the closes: the index to cents, the currencies to four (USD/JPY three) decimals.
-      expect(Math.abs(row.c / formula - 1), dayKey(row.day)).toBeLessThan(1e-4);
+      expect(Math.abs(row.c / ice - 1), dayKey(row.day)).toBeLessThan(1e-4);
     }
     // So a dearer euro is a cheaper dollar, day by day.
-    const euro = currencies[0].closes;
     const moves = index.slice(1).map((row, i) => [Math.log(row.c / index[i].c), Math.log((euro.get(row.day) as number) / (euro.get(index[i].day) as number))]);
     const mean = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
     const [mx, my] = [mean(moves.map(([x]) => x)), mean(moves.map(([, y]) => y))];
