@@ -11,23 +11,9 @@ import { expect, test, type KnownViolation, type Page, type Theme } from "../sup
 // finding that no longer occurs is reported as an "axe-known-unused" annotation, the cue to remove it; for a finding
 // that depends on the day's data (dataDependent), only at the default E2E_NOW, where it was seen.
 
-const KNOWN: Readonly<Record<string, (page: Page, phone: boolean) => KnownViolation[]>> = {
-  // On phones the tiles of this treemap are too small to show their change.
-  "/sector/technology": (page, phone) =>
-    phone
-      ? []
-      : [
-          {
-            rule: "label-content-name-mismatch",
-            within: page.getByRole("region", { name: "Sector heatmap" }).getByRole("option", { name: /^\S+ \d+\.\d{2}%$/ }),
-            reason:
-              'a heatmap tile whose change has no sign ("CSCO 0.00%") shows the symbol and the change in two spans without a space between them, which axe reads as "CSCO0.00%"; components/market/SectorHeatmap.tsx (int/pages)',
-            // Only a tile whose price did not move shows it: CSCO on the default instant's Friday, other tiles (or none)
-            // on other days, while the bug stays.
-            dataDependent: true,
-          },
-        ],
-};
+// None is accepted now. An entry is keyed by the route's path, e.g.
+// "/sector/technology": (page, phone) => [{ rule: "label-content-name-mismatch", within: page.getByRole(...), reason: "..." }].
+const KNOWN: Readonly<Record<string, (page: Page, phone: boolean) => KnownViolation[]>> = {};
 
 const PAGES = ROUTES.filter((route) => route.finalPath === undefined);
 
