@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
+import { Suspense, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { ChatDrawer } from "@/components/ai/ChatDrawer";
 import { AlertEditorHost } from "@/components/alerts/AlertEditorHost";
@@ -16,6 +16,7 @@ import { rememberSector, useLastSector } from "@/hooks/useRecents";
 import { GO_SHORTCUTS, safeDecode } from "@/lib/functions";
 
 import { CommandPalette } from "./CommandPalette";
+import { HashLanding } from "./HashLanding";
 import { MobileTabBar } from "./MobileTabBar";
 import { navGroups } from "./nav";
 import { NavRail } from "./NavRail";
@@ -125,6 +126,10 @@ export function TerminalShell({ children }: { children: ReactNode }) {
       <AlertEngine />
       <PositionEditorHost />
       <AlertEditorHost />
+      {/* Reads the search parameters, so it waits in a boundary of its own instead of opting the shell out of static rendering. */}
+      <Suspense fallback={null}>
+        <HashLanding />
+      </Suspense>
     </div>
   );
 }

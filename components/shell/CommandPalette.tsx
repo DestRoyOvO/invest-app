@@ -181,7 +181,8 @@ function PaletteDialog({ initialQuery }: { initialQuery: string }) {
   const closeFromDocument = useEffectEvent(() => closeCommand());
 
   // Modal behaviour: focus starts in the input and cannot leave the dialog, Escape closes it from anywhere, and focus
-  // returns to where it was when the dialog closes.
+  // returns to where it was when the dialog closes, without scrolling: a command such as RISK has just scrolled the
+  // page to its target.
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const input = inputRef.current;
@@ -201,7 +202,7 @@ function PaletteDialog({ initialQuery }: { initialQuery: string }) {
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("focusin", onFocusIn);
-      previous?.focus?.();
+      previous?.focus?.({ preventScroll: true });
     };
   }, []);
 
