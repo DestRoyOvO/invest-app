@@ -25,6 +25,20 @@ export function dataRows(table: Locator): Locator {
     .filter({ hasNot: page.locator("td[colspan]") });
 }
 
+/**
+ * The cell of a data row under the column with this header. Columns are counted among those shown: a column's header
+ * and its cells hide together below their breakpoint, so the positions agree on every screen. Fails when no shown
+ * column has that header.
+ */
+export async function cellUnder(table: Locator, row: Locator, header: string): Promise<Locator> {
+  const headers = table.getByRole("columnheader");
+  await headers.first().waitFor();
+  const names = (await headers.allTextContents()).map((text) => text.trim());
+  const index = names.indexOf(header);
+  if (index < 0) throw new Error(`No column "${header}" is shown; the columns are ${JSON.stringify(names)}`);
+  return row.getByRole("cell").nth(index);
+}
+
 /** Quotes by symbol, from the route the lists and the alert engine read (/api/quotes). */
 export async function listQuotes(request: APIRequestContext, symbols: readonly string[]): Promise<Map<string, Quote>> {
   const response = await request.get(`/api/quotes?symbols=${symbols.map(encodeURIComponent).join(",")}`);

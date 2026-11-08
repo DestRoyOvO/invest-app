@@ -1,9 +1,9 @@
 import { ALERTS_STORAGE_KEY, type AlertRule } from "@/lib/alerts";
 import { NOTES_STORAGE_KEY, sanitizeNotes, type NotesBook, type SymbolNote } from "@/lib/notes";
 
-import { dataRows, escapeRegExp, listQuotes, nyDate, nyDaysTo, pageQuote, panel, price, readLocal, serverNow, signedPct, writtenDate } from "../support/notes";
+import { cellUnder, dataRows, escapeRegExp, listQuotes, nyDate, nyDaysTo, pageQuote, panel, price, readLocal, serverNow, signedPct, writtenDate } from "../support/notes";
 import { SAMPLE_DATA } from "../support/routes";
-import { expect, test, type Page } from "../support/test";
+import { expect, test, type Locator, type Page } from "../support/test";
 
 // Thesis notes (lib/notes.ts): written on a quote page (reached from /notes or directly), with a thesis, conviction,
 // target and stop levels, a review date, tags and dated entries that keep the price of the moment; edited, deleted
@@ -22,6 +22,19 @@ function levelLine(kind: "target" | "stop", level: number, last: number): string
 /** "285.00+15.1%": a level with its signed distance from the price, as the notes list shows it. */
 function listedLevel(level: number, last: number): string {
   return `${price(level)}${signedPct((level / last - 1) * 100, 1)}`;
+}
+
+/**
+ * A note's target and stop in its row of the notes list, each where it belongs: in the Target and Stop columns on wide
+ * screens (a dash without a level), and on phones, where those columns are hidden, in the labelled line under the
+ * thesis ("Target 285.00+15.1%"). Only text on screen counts, not the line the wide layout hides.
+ */
+async function expectListedLevels(table: Locator, row: Locator, levels: Pick<SymbolNote, "target" | "stop">, last: number, phone: boolean): Promise<void> {
+  for (const [header, level] of [["Target", levels.target], ["Stop", levels.stop]] as const) {
+    if (!phone) await expect(await cellUnder(table, row, header)).toHaveText(level === null ? "—" : listedLevel(level, last));
+    else if (level === null) await expect(row).not.toContainText(header, { useInnerText: true });
+    else await expect(row).toContainText(`${header} ${listedLevel(level, last)}`, { useInnerText: true });
+  }
 }
 
 /** "in 13 days", "tomorrow", "today", "1 day overdue", "5 days overdue" (components/notes/format.ts). */
@@ -123,9 +136,9 @@ test.describe("writing a thesis", () => {
     if (!listed?.price) throw new Error("No NVDA quote for /notes");
     await notes.getByRole("link", { name: "All notes" }).click();
     await expect(page).toHaveURL(/\/notes$/);
-    const row = dataRows(panel(page, "Notes").getByRole("table")).filter({ hasText: thesis });
-    await expect(row).toContainText(listedLevel(target, listed.price));
-    await expect(row).toContainText(listedLevel(stop, listed.price));
+    const table = panel(page, "Notes").getByRole("table");
+    const row = dataRows(table).filter({ hasText: thesis });
+    await expectListedLevels(table, row, { target, stop }, listed.price, app.isPhone);
     await expect(row).toContainText(reviewWords(13));
   });
 
@@ -274,7 +287,8 @@ test.describe("the notes list", () => {
 
     await app.goto("/notes");
     const notesPanel = panel(page, "Notes");
-    const rows = dataRows(notesPanel.getByRole("table"));
+    const table = notesPanel.getByRole("table");
+    const rows = dataRows(table);
     // Each row starts with a link to the notes of its symbol.
     const symbols = rows.getByRole("link");
     await expect(symbols).toHaveText(plan.map((row) => row.symbol));
@@ -286,8 +300,7 @@ test.describe("the notes list", () => {
       else await expect(shown).toContainText(row.days === 0 ? "Due today" : reviewWords(row.days));
       const last = quotes.get(row.symbol)?.price;
       if (!last) throw new Error(`No quote for ${row.symbol}`);
-      if (row.note.target !== null) await expect(shown).toContainText(listedLevel(row.note.target, last));
-      if (row.note.stop !== null) await expect(shown).toContainText(listedLevel(row.note.stop, last));
+      await expectListedLevels(table, shown, row.note, last, app.isPhone);
     }
 
     // Tags with their counts, the most used first; a tag keeps the review order of its notes.
