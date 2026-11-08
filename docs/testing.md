@@ -204,4 +204,6 @@ Color contrast passes in both themes; `npx tsx scripts/check-contrast.ts` covers
   ^IRX, ^FVX, ^TNX and ^TYX, newest row first, in Treasury's columns.
 - Run the fixture tests (`npx vitest run lib/server/fixtures`) and the suite: the generator already covers the calls the
   branches add (earnings and analyst modules, options chains, fundamentals time series, ownership modules, intraday and
-  monthly charts with dividend and split events).
+  monthly charts with dividend and split events). Extend `lib/server/fixtures/app-data.test.ts` with their getters
+  (`getEarningsDetail`, `getAnalystActivity`, `getImpliedMove`, `getFinancials`, `getDividends`, `getOwnership`, the
+  1d, 5d, ytd and max chart ranges, and `getYieldCurve` with `fixtureTreasuryFetch`) so their mappers stay covered.
