@@ -74,11 +74,19 @@ describe("data labels", () => {
   });
 
   it("says when the last backup was", () => {
-    expect(lastBackupLabel(en, null)).toBe("No backup yet");
+    expect(lastBackupLabel(en, null)).toBe("Never backed up");
     expect(lastBackupLabel(en, 0)).toBe("Last backup today");
     expect(lastBackupLabel(en, 1)).toBe("Last backup yesterday");
     expect(lastBackupLabel(en, 12)).toBe("Last backup 12 days ago");
-    expect(lastBackupLabel(zh, 12)).toBe("上次备份在 12 天前");
+    expect(lastBackupLabel(zh, null)).toBe("尚未备份");
+    expect(lastBackupLabel(zh, 12)).toBe("上次备份 12 天前");
+  });
+
+  it("has a short form for the status bar", () => {
+    expect(lastBackupLabel(en, null, { short: true })).toBe("Never backed up");
+    expect(lastBackupLabel(en, 45, { short: true })).toBe("Last backup 45d ago");
+    expect(lastBackupLabel(zh, null, { short: true })).toBe("尚未备份");
+    expect(lastBackupLabel(zh, 45, { short: true })).toBe("上次备份 45 天前");
   });
 
   it("puts preference values into words", () => {

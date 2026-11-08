@@ -9,10 +9,12 @@ export const dataMessages = defineMessages(
     undo: "Undo",
     cancel: "Cancel",
     lastBackup: {
-      never: "No backup yet",
+      never: "Never backed up",
       today: "Last backup today",
       yesterday: "Last backup yesterday",
       days: "Last backup {n} days ago",
+      // The status bar's narrow form.
+      daysShort: "Last backup {n}d ago",
     },
     backup: {
       title: "Backup and restore",
@@ -216,7 +218,8 @@ export const dataMessages = defineMessages(
       never: "尚未备份",
       today: "今天已备份",
       yesterday: "昨天备份过",
-      days: "上次备份在 {n} 天前",
+      days: "上次备份 {n} 天前",
+      daysShort: "上次备份 {n} 天前",
     },
     backup: {
       title: "备份与恢复",

@@ -9,12 +9,14 @@ import { cn } from "@/lib/cn";
 import { tpl } from "@/lib/format";
 import { FUNCTION_GROUPS, FUNCTIONS, isFunctionActive } from "@/lib/functions";
 
+import { BackupReminderItem } from "./BackupReminder";
 import { CodeChip } from "./CodeChip";
 import { navItem, type NavContext } from "./nav";
 
 /**
  * The phone's More sheet: every function by group, code first. Symbol functions open the last viewed symbol, named under
- * the Research heading. DES is left out because it opens the same page as QT.
+ * the Research heading. DES is left out because it opens the same page as QT. While a backup is due, a row under DATA
+ * says so, as the status bar does on larger screens.
  */
 export function MoreSheet({ open, onClose, ctx }: { open: boolean; onClose: () => void; ctx: NavContext }) {
   const t = useT();
@@ -51,6 +53,7 @@ export function MoreSheet({ open, onClose, ctx }: { open: boolean; onClose: () =
                 })}
                 {/* Fills the last row of an odd group, so the grid's hairline color does not show through. */}
                 {items.length % 2 === 1 ? <li aria-hidden className="bg-panel" /> : null}
+                {group === "tools" ? <BackupReminderItem onNavigate={onClose} /> : null}
               </ul>
             </section>
           );
