@@ -2,7 +2,7 @@ import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { dockedRegionClass, stackClass, ToastCard, toastCardClass, ToastOutlet, ToastProvider } from "./Toast";
+import { dockedRegionClass, stackClass, ToastCard, toastCardClass, ToastOutlet, ToastProvider, ToastStacks } from "./Toast";
 
 // Server-rendered markup of the toasts: the live region the provider keeps, a toast card, and the outlet a dialog
 // renders for them. Moving the toasts into an outlet happens in the browser (a portal); the end-to-end specs check it.
@@ -84,6 +84,55 @@ describe("the stacks of a host", () => {
     expect(tokens(stackClass(true, true))).toContain("mt-2");
     expect(tokens(stackClass(false, true))).toContain("mt-2");
     expect(tokens(stackClass(false))).not.toContain("mt-2");
+  });
+});
+
+describe("ToastStacks", () => {
+  const removed = { id: "a", message: "Removed MSFT", action: { label: "Undo", onAction: noop } };
+  const saved = { id: "b", message: "Alert saved: AAPL" };
+  const copied = { id: "c", message: "Copied as Markdown." };
+  const stacks = (props: { docked: boolean; active: boolean; carried?: (typeof saved)[]; fresh?: (typeof saved)[] }) =>
+    html(createElement(ToastStacks, { carried: [], fresh: [], closeLabel: "Close", onDismiss: noop, ...props }));
+  /**
+   * The toast messages outside the polite live region and inside it, and how many live regions there are. The live
+   * region is the last element (it runs to the end of the markup), so everything before it is outside it.
+   */
+  const split = (markup: string) => {
+    const at = markup.indexOf('<div aria-live="polite"');
+    const tail = markup.slice(at);
+    expect(at, "a live region").toBeGreaterThanOrEqual(0);
+    expect(tail.split("<div").length, "the live region runs to the end").toBe(tail.split("</div>").length);
+    const messages = (part: string) => [...part.matchAll(/<div id="[^"]+" class="min-w-0 flex-1">([^<]*)<\/div>/g)].map((match) => match[1]);
+    return { outside: messages(markup.slice(0, at)), inside: messages(tail), regions: markup.split("aria-live=").length - 1 };
+  };
+
+  it("put the toasts first shown in a host in its polite live region, in a dialog's outlet and at the screen's edge", () => {
+    for (const docked of [true, false]) {
+      const markup = stacks({ docked, active: true, fresh: [saved, copied] });
+      expect(split(markup), `docked: ${docked}`).toEqual({ outside: [], inside: ["Alert saved: AAPL", "Copied as Markdown."], regions: 1 });
+      expect(markup.startsWith(`<div aria-live="polite" class="${stackClass(docked)}">`), `docked: ${docked}`).toBe(true);
+    }
+  });
+
+  it("keep the toasts carried in from another host out of the live region, before it, so they are not announced again", () => {
+    for (const docked of [true, false]) {
+      const markup = stacks({ docked, active: true, carried: [removed, saved], fresh: [copied] });
+      expect(split(markup), `docked: ${docked}`).toEqual({ outside: ["Removed MSFT", "Alert saved: AAPL"], inside: ["Copied as Markdown."], regions: 1 });
+      // The carried stack is a plain stack, not a second live region.
+      expect(markup.startsWith(`<div class="${stackClass(docked)}"><div data-toast`), `docked: ${docked}`).toBe(true);
+      expect(split(stacks({ docked, active: true, carried: [saved] })), `docked: ${docked}`).toEqual({ outside: ["Alert saved: AAPL"], inside: [], regions: 1 });
+    }
+  });
+
+  it("keep an empty live region in a host that shows no toasts, so a toast that lands there later is announced", () => {
+    // The screen's edge while a drawer hosts the toasts: nothing of the toasts, but the live region stays.
+    expect(stacks({ docked: false, active: false, carried: [removed], fresh: [copied] })).toBe(`<div aria-live="polite" class="${stackClass(false)}"></div>`);
+    expect(stacks({ docked: true, active: true })).toBe(`<div aria-live="polite" class="${stackClass(true)}"></div>`);
+  });
+
+  it("space the live region 8px from a carried stack only when both have toasts", () => {
+    expect(stacks({ docked: true, active: true, carried: [saved], fresh: [copied] })).toContain(`aria-live="polite" class="${stackClass(true, true)}"`);
+    expect(stacks({ docked: true, active: true, carried: [saved] })).toContain(`aria-live="polite" class="${stackClass(true)}"`);
   });
 });
 

@@ -14,7 +14,7 @@ import {
   type FocusEvent,
   type PointerEvent,
   type ReactNode,
-  type RefObject,
+  type Ref,
 } from "react";
 import { createPortal } from "react-dom";
 
@@ -79,8 +79,10 @@ const ToastContext = createContext<ToastApi | null>(null);
 /** Registers an outlet element and returns the function that removes it again. */
 const ToastOutletContext = createContext<((element: HTMLElement) => () => void) | null>(null);
 
+type ShownToast = ToastOptions & { id: string };
+
 interface ToastCardProps {
-  toast: ToastOptions & { id: string };
+  toast: ShownToast;
   docked: boolean;
   closeLabel: string;
   onDismiss: (id: string) => void;
@@ -112,6 +114,39 @@ export function ToastCard({ toast, docked, closeLabel, onDismiss }: ToastCardPro
       ) : null}
       <IconButton size="sm" label={closeLabel} aria-describedby={messageId} icon={<X className="size-3.5" strokeWidth={1.75} />} onClick={() => onDismiss(toast.id)} />
     </div>
+  );
+}
+
+interface ToastStacksProps {
+  /** In a dialog's outlet, or at the screen's edge. */
+  docked: boolean;
+  /** Whether this host shows the toasts now. */
+  active: boolean;
+  /** Toasts carried in from another host, where a live region already showed them. */
+  carried: readonly ShownToast[];
+  /** Toasts first shown here. */
+  fresh: readonly ShownToast[];
+  liveRef?: Ref<HTMLDivElement>;
+  closeLabel: string;
+  onDismiss: (id: string) => void;
+}
+
+/**
+ * One host's toasts: those carried in from another host (oldest, so first), outside the live region, so they are not
+ * announced again; then the polite live region with the toasts first shown here. A host that shows no toasts keeps
+ * its live region, empty: a toast that lands there later goes into a region that already exists, which is what gets
+ * it announced.
+ */
+export function ToastStacks({ docked, active, carried, fresh, liveRef, closeLabel, onDismiss }: ToastStacksProps) {
+  const cards = (list: readonly ShownToast[]) =>
+    list.map((toast) => <ToastCard key={toast.id} toast={toast} docked={docked} closeLabel={closeLabel} onDismiss={onDismiss} />);
+  return (
+    <>
+      {active && carried.length > 0 ? <div className={stackClass(docked)}>{cards(carried)}</div> : null}
+      <div ref={liveRef} aria-live="polite" className={stackClass(docked, active && carried.length > 0 && fresh.length > 0)}>
+        {active ? cards(fresh) : null}
+      </div>
+    </>
   );
 }
 
@@ -244,29 +279,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const region = { onPointerEnter, onPointerLeave, onFocus, onBlur };
   const moved = toasts.filter((toast) => carried.has(toast));
   const fresh = toasts.filter((toast) => !carried.has(toast));
-  const cards = (list: readonly ToastEntry[], docked: boolean) =>
-    list.map((toast) => <ToastCard key={toast.id} toast={toast} docked={docked} closeLabel={t.common.close} onDismiss={dismiss} />);
-  // One host's stacks: the carried toasts (oldest, so first), then the live stack, which stays mounted while empty.
-  const stacks = (docked: boolean, active: boolean, liveRef: RefObject<HTMLDivElement | null>) => (
-    <>
-      {active && moved.length > 0 ? <div className={stackClass(docked)}>{cards(moved, docked)}</div> : null}
-      <div ref={liveRef} aria-live="polite" className={stackClass(docked, active && moved.length > 0 && fresh.length > 0)}>
-        {active ? cards(fresh, docked) : null}
-      </div>
-    </>
-  );
+  const stacks = { carried: moved, fresh, closeLabel: t.common.close, onDismiss: dismiss };
 
   return (
     <ToastContext value={api}>
       <ToastOutletContext value={registerOutlet}>
         {children}
         <div ref={edgeRef} {...region} className={EDGE_REGION}>
-          {stacks(false, outlet === null, edgeLiveRef)}
+          <ToastStacks docked={false} active={outlet === null} liveRef={edgeLiveRef} {...stacks} />
         </div>
         {outlet
           ? createPortal(
               <div ref={dockedRef} {...region} className={dockedRegionClass(toasts.length)}>
-                {stacks(true, true, dockedLiveRef)}
+                <ToastStacks docked active liveRef={dockedLiveRef} {...stacks} />
               </div>,
               outlet,
             )
