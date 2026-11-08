@@ -342,7 +342,7 @@ export function renderEvaluationReport(
   const sameEverywhere = rowRule.every((r) => r.exempt.join() === rowRule[0].exempt.join() && r.grey.join() === rowRule[0].grey.join());
   push(
     `In the app (/lab and the track record on each quote page) a reading's row turns grey when its largest episode holds more than ${share(EPISODE_SHARE_LIMIT)} of its observations, ` +
-      "because one market stretch then dominates the row; its selection is then not colored even when the interval excludes zero. " +
+      "because one market stretch then dominates the row; its selection value is then not colored even when the interval excludes zero. " +
       `Readings seen on at least ${share(COMMON_READING_DATE_SHARE)} of all dates are exempt: they form one long run by construction ` +
       "(Neutral occurs nearly every session, so all of it is one episode), and without the exemption Neutral and the other everyday readings would always be grey. " +
       (sameEverywhere && rowRule.length > 0

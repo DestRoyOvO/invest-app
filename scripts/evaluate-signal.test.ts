@@ -38,6 +38,8 @@ describe("the evaluation report", () => {
   it("states the grey-row rule with its thresholds and what it does in this run", () => {
     const paragraph = greyParagraph(render(evaluation));
     expect(paragraph).toContain("largest episode holds more than 30% of its observations");
+    // What selectionTone (components/lab/evidence.ts) does to a grey row's value; the interval glyph is not claimed.
+    expect(paragraph).toContain("its selection value is then not colored even when the interval excludes zero");
     expect(paragraph).toContain("Readings seen on at least 50% of all dates are exempt");
     expect(paragraph).toContain("Here Strong, Neutral and Weak are exempt at every horizon, and no row is grey.");
   });
