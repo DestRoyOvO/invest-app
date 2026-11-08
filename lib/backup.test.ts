@@ -565,6 +565,26 @@ describe("saved screens in a restore", () => {
   });
 });
 
+describe("view settings in a restore", () => {
+  const CALENDAR = "investseek:calendar:v1";
+  const VIEW_KEYS = [CALENDAR, "investseek:chart:v1", "investseek:watchlist-view:v1", "investseek:port:v1"];
+
+  it("loads the stores of the calendar, chart, watchlist and portfolio views, so their values are sanitized too", async () => {
+    vi.resetModules();
+    const fresh = await import("./backup");
+    const stores = (await import("./local-store")).registeredLocalStores();
+    for (const key of VIEW_KEYS) expect(stores.has(key), key).toBe(false);
+    // A calendar view in an old shape: the calendar store would read it as its defaults.
+    const result = await fresh.parseBackup(serializeBackup(backupOf({ [CALENDAR]: { kinds: ["earnings"] }, "investseek:port:v1": { benchmark: "QQQ", range: "bogus" } })), {});
+    if (!result.ok) throw new Error(result.error);
+    for (const key of VIEW_KEYS) expect(stores.has(key), key).toBe(true);
+    expect(find(result.value.diff.merge, CALENDAR)).toMatchObject({ kind: "store", added: ["range", "filters"] });
+    const writes = fresh.planRestore({}, result.value.backup, "replace").writes;
+    expect(JSON.parse(writes[CALENDAR] as string)).toEqual({ range: "week", filters: ["holdings", "watchlist", "macro"] });
+    expect(JSON.parse(writes["investseek:port:v1"] as string)).toEqual({ benchmark: "QQQ", range: "1y" });
+  });
+});
+
 describe("backups made before the merged formats", () => {
   it("restores old alert rules and log entries, notes and AI note keys without errors", async () => {
     const { alertLogStore, alertsStore: rulesStore } = await import("./alerts");

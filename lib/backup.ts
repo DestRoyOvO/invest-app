@@ -19,8 +19,8 @@
 //
 // The file is validated with zod (components/data/backup-schema.ts), which is loaded only when a file is checked, so
 // validateBackup is async: the settings menu on every page imports this module for the backup age, and should not
-// download a validator. For the same reason the saved screens store is loaded when a file is checked
-// (loadRestoreStores), so a restore on /data sanitizes and previews saved screens like the stores the page imports.
+// download a validator. For the same reason the stores of other pages (saved screens, view settings) are loaded when a
+// file is checked (loadRestoreStores), so a restore on /data sanitizes and previews them like the stores it imports.
 //
 // Display preferences are restored only with values this version can show (isKnownPrefValue); the page applies them
 // through the preferences provider (components/data/prefs-sync.ts), as the settings menu does.
@@ -546,13 +546,19 @@ let restoreStores: Promise<unknown> | null = null;
 
 /**
  * Registers the stores a restore needs even on a page that never imported them, so their values are sanitized and
- * diffed like every other registered store: saved screens (lib/screens.ts, sanitizeSavedScreens) belong to the
- * screener, not to /data. Loaded on demand like the schema, so the settings menu on every page does not download the
- * screener model. A failed load is tried again with the next file; until then those keys restore as unknown keys,
- * and their store still sanitizes them when it reads them.
+ * diffed like every other registered store: saved screens (lib/screens.ts) and the view settings of the calendar, the
+ * chart, the watchlist and the portfolio page belong to those pages, not to /data. Loaded on demand like the schema,
+ * so the settings menu on every page does not download the screener model. A failed load is tried again with the next
+ * file; until then those keys restore as unknown keys, and their stores still sanitize them when they read them.
  */
 export function loadRestoreStores(): Promise<void> {
-  restoreStores ??= import("./screens").catch((error: unknown) => {
+  restoreStores ??= Promise.all([
+    import("./screens"),
+    import("@/components/calendar/calendar-prefs"),
+    import("@/components/stock/chart-settings"),
+    import("@/components/watchlist/watchlist-view"),
+    import("@/components/portfolio/port-view"),
+  ]).catch((error: unknown) => {
     restoreStores = null;
     throw error;
   });
@@ -561,7 +567,8 @@ export function loadRestoreStores(): Promise<void> {
 
 /**
  * Validates a backup file and previews both restore modes against the current storage. The default registry gains
- * the stores of loadRestoreStores first, so the preview and the restore that follows treat saved screens as a store.
+ * the stores of loadRestoreStores first, so the preview and the restore that follows treat saved screens and view
+ * settings as stores.
  */
 export async function parseBackup(
   text: string,
