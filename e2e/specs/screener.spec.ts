@@ -20,6 +20,7 @@ import {
   sortedSymbols,
   stored,
   tableIn,
+  visibleHeads,
 } from "../support/research";
 import { expect, test, type Page } from "../support/test";
 
@@ -139,14 +140,15 @@ async function checkPreset(view: Results, said: (typeof PRESETS_SAY)[number], ro
 /**
  * Opens each column set and checks the heads on screen: the select-all box (for `rows` results), the set's columns of
  * the universe (all of them on a desktop table with room for them; a phone keeps the symbol and the set's two phone
- * columns) and the watch star.
+ * columns) and the watch star. The heads are read in one page call per set.
  */
 async function checkColumnSets(view: Results, universe: ScreenerUniverse, rows: number, phone: boolean): Promise<void> {
   const columnSets = view.region.getByRole("tablist", { name: S.columnSets.label });
   for (const set of COLUMN_SET_KEYS) {
-    await columnSets.getByRole("tab", { name: S.columnSets[set], exact: true }).click();
-    await expect(columnSets.getByRole("tab", { name: S.columnSets[set], exact: true })).toHaveAttribute("aria-selected", "true");
-    await expect(view.table.getByRole("columnheader").filter({ visible: true })).toHaveText(columnHeads(universe, set, rows, phone));
+    const tab = columnSets.getByRole("tab", { name: S.columnSets[set], exact: true });
+    await tab.click();
+    await expect(tab).toHaveAttribute("aria-selected", "true");
+    await expect.poll(() => visibleHeads(view.table), { message: `the heads of the ${universe} ${set} set` }).toEqual(columnHeads(universe, set, rows, phone));
   }
 }
 
@@ -239,8 +241,8 @@ test.describe("screener", () => {
     await expect(page).toHaveURL(new RegExp(`[?&]cols=${COLUMN_SET_KEYS.at(-1)}(&|$)`));
   });
 
-  test("the ETF universe lists the funds by net assets, with the presets and column sets of funds", async ({ page, app, request }) => {
-    test.skip(app.isPhone, "The universe switch works the same on phones, where the column sets have a test of their own; one project is enough.");
+  test("the ETF universe lists the funds by net assets, with the presets that apply to funds", async ({ page, app, request }) => {
+    test.skip(app.isPhone, "The universe switch and the presets work the same on phones; one project is enough.");
     await app.goto("/screener");
     const view = results(page);
     await expect(view.table.getByRole("link", { name: "NVDA", exact: true })).toBeVisible();
@@ -262,11 +264,19 @@ test.describe("screener", () => {
     for (const said of forFunds) await checkPreset(view, said, funds.rows, Date.parse(funds.asOf));
     await view.region.getByRole("list", { name: S.presets.label }).getByRole("button", { name: S.presets[forFunds.at(-1)!.key], exact: true }).click();
     await expect(view.chips).toHaveCount(0);
+    await expect(view.table).toHaveAccessibleName(tpl(S.caption, { n: funds.rows.length, kind: S.kinds.etfs }));
+  });
 
-    // Each column set with the fund columns (net assets, fee and year to date among them), on a table with room for all
-    // of them: beside the filter rail the overview gives up its 1M column at 1440px (the next test).
+  test("each ETF column set shows the fund columns", async ({ page, app }) => {
+    test.skip(app.isPhone, "Phones show the symbol and two columns of each set, which the stock column sets test checks; one project is enough.");
+    // From a link, on a table with room for every set: beside the filter rail the overview gives up its 1M column at
+    // 1440px (the next test).
+    await app.goto("/screener?u=etfs");
+    const view = results(page);
+    await expect(view.table.getByRole("link", { name: "SPY", exact: true })).toBeVisible();
     await view.region.getByRole("button", { name: S.filters.hide, exact: true }).click();
-    await checkColumnSets(view, "etfs", funds.rows.length, false);
+    // The fund sets bring net assets, the fee and the return year to date.
+    await checkColumnSets(view, "etfs", ETF_UNIVERSE.length, false);
   });
 
   test("a 1440px screen fits the ETF overview beside the filter rail", async ({ page, app }) => {
@@ -275,7 +285,7 @@ test.describe("screener", () => {
     // lib/screens.ts: each column set fits a 1440px screen with the filter rail open.
     await app.goto("/screener?u=etfs");
     const view = results(page);
-    await expect(view.table.getByRole("columnheader").filter({ visible: true })).toHaveText(columnHeads("etfs", "overview", ETF_UNIVERSE.length, false));
+    await expect.poll(() => visibleHeads(view.table), { message: "the heads of the ETF overview" }).toEqual(columnHeads("etfs", "overview", ETF_UNIVERSE.length, false));
   });
 
   test("a column head sorts the rows by its values, then the other way, then back", async ({ page, app, request }) => {

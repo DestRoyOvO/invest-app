@@ -542,6 +542,16 @@ export async function columnTexts(table: Locator, header: string): Promise<strin
   return cells ?? [];
 }
 
+/**
+ * The column heads on screen, left to right, read in one go: the text of each head that takes up room (a column hidden
+ * at this width takes none), its hidden label included.
+ */
+export async function visibleHeads(table: Locator): Promise<string[]> {
+  return table.evaluate((element) =>
+    [...element.querySelectorAll("thead th")].filter((head) => head.getBoundingClientRect().width > 0).map((head) => (head.textContent ?? "").replace(/\s+/g, " ").trim()),
+  );
+}
+
 /** A number as the app prints it ("1,234.5", "−3.2%", "40.3"); null for a dash. */
 export function parseShown(text: string): number | null {
   const clean = text.replace(/−/g, "-").replace(/[,%+\s]/g, "");
