@@ -7,13 +7,13 @@
 [![CI](https://github.com/DestRoyOvO/invest-app/actions/workflows/ci.yml/badge.svg)](https://github.com/DestRoyOvO/invest-app/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-![市场总览（中文 · 浅色主题 · 红涨绿跌）：我的今日、本周看点、行情看板、市场宽度、板块热力图和异动榜](docs/screenshots/overview-light-zh.png)
+![市场总览（中文 · 浅色主题 · 红涨绿跌）：市场宽度、板块热力图和头条新闻](docs/screenshots/overview-light-zh.png)
 
 <table>
   <tr>
-    <td width="33%"><img src="docs/screenshots/quote-dark-en.png" alt="个股页：图表工作台、风险预测和财报面板"><br><sub>QT · 个股工作台</sub></td>
-    <td width="33%"><img src="docs/screenshots/portfolio-dark-en.png" alt="组合分析：风险指标、暴露和相对 SPY 的走势"><br><sub>PORT · 组合分析</sub></td>
-    <td width="33%"><img src="docs/screenshots/calendar-dark-en.png" alt="财经日历：财报、除息日和宏观数据发布"><br><sub>EVTS · 财经日历</sub></td>
+    <td width="33%"><img src="docs/screenshots/quote-dark-en.png" alt="个股页：盘后价格、下次财报和除息日、你的持仓、标出成本价、目标价和止损的图表工作台，以及关键统计"><br><sub>QT · 个股工作台</sub></td>
+    <td width="33%"><img src="docs/screenshots/portfolio-dark-en.png" alt="组合分析：市值、盈亏、风险指标，以及当前持仓相对 SPY 的走势和回撤"><br><sub>PORT · 组合分析</sub></td>
+    <td width="33%"><img src="docs/screenshots/calendar-dark-en.png" alt="四周的财经日历：财报、除息日和宏观数据发布"><br><sub>EVTS · 财经日历</sub></td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/screener-dark-en.png" alt="筛选器：筛选条件、预设和列组"><br><sub>EQS · 筛选器</sub></td>
@@ -21,10 +21,12 @@
     <td><img src="docs/screenshots/markets-dark-en.png" alt="按地区的全球市场和美国国债收益率曲线"><br><sub>WEI · 全球市场与利率</sub></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="docs/screenshots/overview-dark-en.png" alt="英文界面、深色主题的市场总览"><br><sub>English · 深色主题</sub></td>
-    <td><img src="docs/screenshots/mobile-light-zh.png" alt="手机上的市场总览"><br><sub>手机布局</sub></td>
+    <td colspan="2"><img src="docs/screenshots/overview-dark-en.png" alt="英文界面、深色主题的市场总览：我的今日、本周看点、行情看板、自选和板块表现"><br><sub>English · 深色主题</sub></td>
+    <td><img src="docs/screenshots/mobile-light-zh.png" alt="手机上的市场总览：我的今日和本周看点"><br><sub>手机布局</sub></td>
   </tr>
 </table>
+
+截图展示的是固定日期（2026-11-07，周六）的合成演示数据，用 `npm run screenshots` 重新生成（[说明](docs/testing.md#screenshots)）。
 
 ## 为什么做 InvestSeek
 

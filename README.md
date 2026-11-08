@@ -7,13 +7,13 @@
 [![CI](https://github.com/DestRoyOvO/invest-app/actions/workflows/ci.yml/badge.svg)](https://github.com/DestRoyOvO/invest-app/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-![Market overview in the dark theme: My day, the week ahead, the markets board, breadth, the sector heatmap and movers](docs/screenshots/overview-dark-en.png)
+![Market overview in the dark theme: My day, the week ahead, the markets board, the watchlist and sector performance](docs/screenshots/overview-dark-en.png)
 
 <table>
   <tr>
-    <td width="33%"><img src="docs/screenshots/quote-dark-en.png" alt="Quote page with the chart workstation, risk forecast and earnings panels"><br><sub>QT · quote workstation</sub></td>
-    <td width="33%"><img src="docs/screenshots/portfolio-dark-en.png" alt="Portfolio analytics with risk figures, exposure and performance against SPY"><br><sub>PORT · portfolio analytics</sub></td>
-    <td width="33%"><img src="docs/screenshots/calendar-dark-en.png" alt="Events calendar with earnings, ex-dividend dates and macro releases"><br><sub>EVTS · events calendar</sub></td>
+    <td width="33%"><img src="docs/screenshots/quote-dark-en.png" alt="Quote page with the after-hours trade, the next report and ex-dividend date, your position, the chart workstation with your cost, target and stop, and key statistics"><br><sub>QT · quote workstation</sub></td>
+    <td width="33%"><img src="docs/screenshots/portfolio-dark-en.png" alt="Portfolio analytics with value, P&L, risk figures, and today's holdings against SPY with their drawdown"><br><sub>PORT · portfolio analytics</sub></td>
+    <td width="33%"><img src="docs/screenshots/calendar-dark-en.png" alt="Events calendar over four weeks with earnings, ex-dividend dates and macro releases"><br><sub>EVTS · events calendar</sub></td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/screener-dark-en.png" alt="Screener with filters, presets and column sets"><br><sub>EQS · screener</sub></td>
@@ -21,10 +21,12 @@
     <td><img src="docs/screenshots/markets-dark-en.png" alt="World markets by region and the US Treasury yield curve"><br><sub>WEI · world markets and rates</sub></td>
   </tr>
   <tr>
-    <td colspan="2"><img src="docs/screenshots/overview-light-zh.png" alt="Market overview in Chinese with the light theme and red-up colors"><br><sub>中文 · light theme · red-up colors</sub></td>
-    <td><img src="docs/screenshots/mobile-light-zh.png" alt="Market overview on a phone"><br><sub>Phone layout</sub></td>
+    <td colspan="2"><img src="docs/screenshots/overview-light-zh.png" alt="Market overview in Chinese with the light theme and red-up colors: breadth, the sector heatmap and headlines"><br><sub>中文 · light theme · red-up colors</sub></td>
+    <td><img src="docs/screenshots/mobile-light-zh.png" alt="Market overview on a phone: My day and the week ahead"><br><sub>Phone layout</sub></td>
   </tr>
 </table>
+
+The screenshots show synthetic fixture data on a pinned date (Saturday 2026-11-07) and are regenerated with `npm run screenshots` ([how](docs/testing.md#screenshots)).
 
 ## Why InvestSeek
 

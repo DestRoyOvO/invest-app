@@ -1,5 +1,8 @@
+import { createElement, type ComponentProps } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { Delta } from "./Delta";
 import { deltaParts, directionOf, HEAT_EDGES, HEAT_STEPS, heatStep, heatStyle, withTrueMinus } from "./delta-utils";
 
 describe("heatStep", () => {
@@ -122,5 +125,44 @@ describe("withTrueMinus", () => {
     expect(withTrueMinus("0.00%")).toBe("0.00%");
     expect(withTrueMinus("—")).toBe("—");
     expect(withTrueMinus("1-2")).toBe("1-2");
+  });
+});
+
+describe("Delta", () => {
+  /** What a Delta shows: the direction of its color, of its arrow and of its text's sign. */
+  function shown(props: ComponentProps<typeof Delta>): { text: string; color: string; arrow: string; sign: string } {
+    const markup = renderToStaticMarkup(createElement(Delta, { ...props, arrow: true }));
+    const tone = /text-(up|down|fg-3)\b/.exec(markup)?.[1];
+    const arrow = markup.includes("▲") ? "up" : markup.includes("▼") ? "down" : "flat";
+    const text = markup.replace(/<span aria-hidden[^>]*>[▲▼]<\/span>/, "").replace(/<[^>]+>/g, "");
+    const sign = text.startsWith("+") ? "up" : text.startsWith("−") ? "down" : "flat";
+    return { text, color: tone === "fg-3" ? "flat" : (tone ?? "none"), arrow, sign };
+  }
+
+  it("colors and points a figure by the sign it shows, so one that rounds to zero is flat", () => {
+    const cases: Array<ComponentProps<typeof Delta>> = [
+      { value: -0.0027 },
+      { value: 0.004 },
+      { value: -0.006 },
+      { value: 0 },
+      { value: 1.234 },
+      { value: -12.5 },
+      { value: null },
+      { value: 0.04, digits: 1 },
+      { value: -0.06, digits: 1 },
+      { value: -0.0004, kind: "ratio", digits: 1 },
+      { value: 0.0123, kind: "ratio" },
+      { value: -0.004, kind: "change" },
+      { value: 0.00001, kind: "change" },
+      { value: 1.8, kind: "change" },
+      { value: 0, kind: "change" },
+    ];
+    for (const props of cases) {
+      const { text, color, arrow, sign } = shown(props);
+      expect({ color, arrow }, `${JSON.stringify(props)} shows ${text}`).toEqual({ color: sign, arrow: sign });
+    }
+    // The Energy sector of the README's overview image, down 0.0027%.
+    expect(shown({ value: -0.0027 })).toEqual({ text: "0.00%", color: "flat", arrow: "flat", sign: "flat" });
+    expect(shown({ value: -0.006 })).toEqual({ text: "−0.01%", color: "down", arrow: "down", sign: "down" });
   });
 });

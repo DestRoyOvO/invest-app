@@ -156,6 +156,14 @@ describe("format", () => {
     expect(formatPercent(2, { sign: false })).toBe("2.00%");
   });
 
+  it("leaves the sign off a percent that rounds to zero", () => {
+    expect(formatPercent(-0.0027)).toBe("0.00%");
+    expect(formatPercent(0.004)).toBe("0.00%");
+    expect(formatPercent(-0.004, { sign: false })).toBe("0.00%");
+    expect(formatPercent(-0.006)).toBe("-0.01%");
+    expect(formatRatio(-0.0004, { sign: true })).toBe("0.0%");
+  });
+
   it("formats ratios and multiples", () => {
     expect(formatRatio(0.2534)).toBe("25.3%");
     expect(formatRatio(-0.05, { sign: true })).toBe("-5.0%");

@@ -13,8 +13,11 @@ import { parseDayKey, PROFILES, type MarketProfile, type ProfileKey } from "./se
 
 export type QuoteType = "EQUITY" | "ETF" | "INDEX" | "FUTURE" | "CURRENCY" | "CRYPTOCURRENCY" | "MUTUALFUND";
 
-/** walk: geometric random walk; vix: mean-reverting volatility index; rate: a point on the Treasury curve. */
-export type PriceModelKind = "walk" | "vix" | "rate";
+/**
+ * walk: geometric random walk; vix: mean-reverting volatility index; rate: a point on the Treasury curve; dollar-index:
+ * the ICE US Dollar Index of the six currency walks it weighs (prices.ts, DOLLAR_INDEX).
+ */
+export type PriceModelKind = "walk" | "vix" | "rate" | "dollar-index";
 
 /** Symbols starting with this prefix are unknown to the fixture data, like an unlisted symbol is to Yahoo. */
 export const NOT_FOUND_PREFIX = "ZZ";
@@ -382,7 +385,7 @@ const MARKETS: readonly MarketRow[] = [
   us("^FVX", "Treasury Yield 5 Years", 0, 0, "WCB", "Chicago Options", 0, { model: "rate", tenorYears: 5 }),
   us("^TNX", "CBOE Interest Rate 10 Year T No", 0, 0, "WCB", "Chicago Options", 0, { model: "rate", tenorYears: 10 }),
   us("^TYX", "Treasury Yield 30 Years", 0, 0, "WCB", "Chicago Options", 0, { model: "rate", tenorYears: 30 }),
-  us("DX-Y.NYB", "US Dollar Index", 98.5, 0.07, "NYB", "ICE Futures", 0, { marketLoading: -0.1, drift: 0 }),
+  us("DX-Y.NYB", "US Dollar Index", 98.5, 0.07, "NYB", "ICE Futures", 0, { model: "dollar-index", marketLoading: -0.1, drift: 0 }),
   world("^GSPTSE", "S&P/TSX Composite index", 31500, 0.13, "toronto", "TOR", "Toronto", "ca_market", "CAD"),
   world("^STOXX50E", "EURO STOXX 50", 5800, 0.16, "zurich", "STU", "Stuttgart", "eu_market", "EUR"),
   world("^FTSE", "FTSE 100", 9900, 0.13, "london", "FGI", "FTSE Index", "gb_market", "GBP"),
@@ -400,6 +403,10 @@ const MARKETS: readonly MarketRow[] = [
   fx("EURUSD=X", "EUR/USD", 1.17, 0.07, "USD"),
   fx("USDJPY=X", "USD/JPY", 156, 0.09, "JPY"),
   fx("GBPUSD=X", "GBP/USD", 1.34, 0.07, "USD"),
+  // With EUR/USD, USD/JPY and GBP/USD, the currencies of the dollar index.
+  fx("CAD=X", "USD/CAD", 1.37, 0.06, "CAD"),
+  fx("SEK=X", "USD/SEK", 9.2, 0.09, "SEK"),
+  fx("CHF=X", "USD/CHF", 0.79, 0.07, "CHF"),
   fx("CNY=X", "USD/CNY", 7.0, 0.03, "CNY"),
   fx("HKD=X", "USD/HKD", 7.78, 0.005, "HKD"),
   future("GC=F", "Gold", 4300, 0.18, "CMX", "COMEX", 150_000, 0),
@@ -491,6 +498,8 @@ const LISTED: Readonly<Record<string, string>> = {
   IWM: "2000-05-26",
   IBB: "2001-02-09",
   "ETH-USD": "2017-11-09",
+  // The dollar index starts with the currency data it is computed from.
+  "DX-Y.NYB": "2003-12-01",
 };
 
 // ---------------------------------------------------------------------------
