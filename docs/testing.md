@@ -120,6 +120,12 @@ a few real splits show as events), intraday prices during a session (quotes show
 the next one trades), and Yahoo quirks such as the extra trailing row of weekly charts. The fixture client does not
 validate query options the way the library does, except for `fundamentalsTimeSeries`.
 
+Not realistic, so keep it out of screenshots: relations between instruments beyond the shared market and sector factors.
+Each walk runs on its own, so the dollar index does not follow the FX pairs (DXY 107 next to EUR/USD 1.31), an index
+does not follow its members (NDX and QQQ down over 52 weeks while NVDA, AMZN and MSFT are up), related indices such as
+the Shanghai Composite and the CSI 300 can move apart on the same day, and long histories (5Y, MAX) start at arbitrary
+levels. Company revenue comes from a random price-to-sales ratio, so it can be a few times off for the largest companies.
+
 Run the app on fixture data:
 
 ```bash
