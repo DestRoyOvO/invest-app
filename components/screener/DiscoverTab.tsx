@@ -73,7 +73,8 @@ function useColumns(keys: readonly ColumnKey[], now: number): DataTableColumn<Qu
       width: "6.5rem",
       render: (q) => <TickNumber value={q.price}>{formatPrice(q.price, lang)}</TickNumber>,
       sortValue: (q) => q.price,
-      hideBelow: "sm",
+      // By the table's width, so Trending in the right-hand column at xl drops the price and keeps room for the names.
+      hideBelowContainer: "md",
     },
     chg: {
       key: "chg",
