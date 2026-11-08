@@ -92,7 +92,7 @@ export function useAlertEngine(): void {
       if (document.visibilityState === "visible" && document.hasFocus()) return;
       for (const event of events.slice(0, MAX_NOTIFICATIONS)) {
         try {
-          const notification = new Notification(t.alerts.notifyTitle, { body: describeAlertEvent(event, t, lang), tag: event.id, icon: "/icon.svg" });
+          const notification = new Notification(t.alerts.notifyTitle, { body: describeAlertEvent(event, t, lang, "live"), tag: event.id, icon: "/icon.svg" });
           notification.onclick = () => {
             window.focus();
             markAlertEventsSeen([event.id]);
@@ -153,7 +153,7 @@ export function useAlertToasts(): void {
     for (const event of recent.reverse()) {
       toast.show({
         id: `alert:${event.id}`,
-        message: describeAlertEvent(event, t, lang),
+        message: describeAlertEvent(event, t, lang, "live"),
         duration: 10_000,
         action: {
           label: t.alerts.view,

@@ -23,6 +23,7 @@ import {
   clearAlertLog,
   markAlertEventsSeen,
   MAX_ALERT_RULES,
+  readRule,
   rearmAlertRule,
   removeAlertRule,
   restoreAlertLog,
@@ -143,8 +144,12 @@ function RulesPanel() {
 
   const rearm = (row: RuleRow) => {
     const at = new Date();
+    // Like a new rule, a re-armed rule whose condition already holds triggers at the next check; the toast says so.
+    // The reading is taken as the re-armed rule will see it: no earlier session range and no recorded side.
+    const reading = readRule({ ...row.rule, checkedSession: null, side: null }, row.quote, holdings, at);
+    const holdsNow = reading.met && reading.unavailable === null;
     rearmAlertRule(row.rule.id, at, baselineFromQuote(row.quote, at));
-    toast.show({ message: tpl(words.rearmed, { symbol: row.rule.symbol, rule: describeRule(row.rule, t, lang) }) });
+    toast.show({ message: tpl(holdsNow ? words.rearmedMet : words.rearmed, { symbol: row.rule.symbol, rule: describeRule(row.rule, t, lang) }) });
   };
 
   const columns: DataTableColumn<RuleRow>[] = [
@@ -323,7 +328,7 @@ function HistoryPanel() {
       // Messages wrap instead of disappearing behind an ellipsis on narrow screens.
       className: "whitespace-normal py-1.5",
       render: (event) => {
-        const text = describeAlertEvent(event, t, lang);
+        const text = describeAlertEvent(event, t, lang, "log");
         return (
           <span className="flex min-w-0 items-start gap-2" title={event.note ? `${text} · ${event.note}` : text}>
             <span aria-hidden className={cn("mt-[0.45rem] size-1.5 shrink-0 rounded-full", event.seen ? "bg-transparent" : "bg-accent")} />

@@ -2,7 +2,7 @@
 // wording is unit tested; the toast, the system notification, the alert center and /alerts all use it.
 
 import { withTrueMinus } from "@/components/ui/delta-utils";
-import type { AlertEvent, AlertKind, AlertReading, AlertRule } from "@/lib/alerts";
+import { utcDate, type AlertEvent, type AlertKind, type AlertReading, type AlertRule } from "@/lib/alerts";
 import { formatPercent, formatPrice, formatShortDate, tpl } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/messages";
 import type { Lang } from "@/types/api";
@@ -49,8 +49,15 @@ function reportDate(event: Pick<AlertEvent, "eventDate" | "estimated">, t: Messa
   return event.estimated ? tpl(t.alerts.event.estimatedDate, { date }) : date;
 }
 
+/**
+ * How a trigger is worded. "live" is for the moment it fires (the toast and the system notification), so it may say
+ * "today" or "in 11 days". "log" is for the alert center and the history, read hours or days later next to the time it
+ * fired: day moves carry their session date and nothing says "today", "tomorrow" or "in N days".
+ */
+export type AlertWording = "live" | "log";
+
 /** What happened, in one sentence, e.g. "NVDA traded below 170.00 on Nov 5 (low 168.20)". */
-export function describeAlertEvent(event: AlertEvent, t: Messages, lang: Lang): string {
+export function describeAlertEvent(event: AlertEvent, t: Messages, lang: Lang, wording: AlertWording = "log"): string {
   const words = t.alerts.event;
   const symbol = event.symbol;
   const level = formatPrice(event.value, lang);
@@ -73,12 +80,18 @@ export function describeAlertEvent(event: AlertEvent, t: Messages, lang: Lang): 
       }
       return tpl(up ? words.above : words.below, { symbol, level, price });
     }
-    case "day_move":
-      return tpl(words.dayMove, { symbol, change: signedPercent(event.observed) });
+    case "day_move": {
+      const change = signedPercent(event.observed);
+      if (wording === "live") return tpl(words.dayMove, { symbol, change });
+      // Events logged before the session was stored fall back to the UTC date of the trigger.
+      const session = event.session ?? utcDate(event.at) ?? event.at.slice(0, 10);
+      return tpl(words.dayMoveOn, { symbol, change, date: sessionDate(session, lang) });
+    }
     case "pnl_from_cost":
-      return tpl(words.pnl, { symbol, pnl: signedPercent(event.observed) });
+      return tpl(wording === "live" ? words.pnl : words.pnlWas, { symbol, pnl: signedPercent(event.observed) });
     case "earnings_within": {
       const date = reportDate(event, t, lang);
+      if (wording === "log") return tpl(words.earningsOn, { symbol, date });
       if (event.observed === 0) return tpl(words.earningsToday, { symbol, date });
       if (event.observed === 1) return tpl(words.earningsTomorrow, { symbol, date });
       return tpl(words.earnings, { symbol, date, n: event.observed ?? 0 });

@@ -109,7 +109,7 @@ export function AlertBell() {
                     <span className="min-w-0 flex-1">
                       <span className={cn("block text-sm", event.seen ? "text-fg-2" : "text-fg")}>
                         {event.seen ? null : <span className="sr-only">{t.alerts.bell.unseenItem}: </span>}
-                        {describeAlertEvent(event, t, lang)}
+                        {describeAlertEvent(event, t, lang, "log")}
                       </span>
                       <span className="mt-1 flex min-w-0 items-center gap-2 text-xs text-fg-3">
                         <span className="num shrink-0">{formatRelativeTime(event.at, lang, now?.getTime() ?? Date.parse(event.at))}</span>

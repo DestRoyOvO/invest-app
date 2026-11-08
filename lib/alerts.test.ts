@@ -131,6 +131,10 @@ describe("values and sanitizing", () => {
     const event = (id: string, at: string) => ({ id, ruleId: "r1", symbol: "NVDA", kind: "below", value: 170, at, seen: false });
     const log = sanitizeLog([event("a", "2026-11-01T10:00:00Z"), event("b", "2026-11-03T10:00:00Z"), event("a", "2026-11-05T10:00:00Z"), { id: "c" }]);
     expect(log.map((e) => e.id)).toEqual(["b", "a"]);
+    // Events logged before the session field existed read as null; a valid session is kept.
+    expect(log[0].session).toBeNull();
+    expect(sanitizeLog([{ ...event("d", "2026-11-05T10:00:00Z"), session: "2026-11-05" }])[0].session).toBe("2026-11-05");
+    expect(sanitizeLog([{ ...event("d", "2026-11-05T10:00:00Z"), session: "Nov 5" }])[0].session).toBeNull();
     const many = Array.from({ length: MAX_ALERT_EVENTS + 10 }, (_, i) => event(`e${i}`, new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString()));
     const capped = sanitizeLog(many);
     expect(capped).toHaveLength(MAX_ALERT_EVENTS);
@@ -161,7 +165,7 @@ describe("evaluate", () => {
     const check = evaluate(r, quote(), {}, NOW);
     expect(check.fire).toBe(true);
     expect(check.patch).toMatchObject({ checkedSession: SESSION, checkedHigh: 188.1, checkedLow: 181.2, done: true, triggerCount: 1, lastTriggeredSession: SESSION });
-    expect(check.event).toMatchObject({ id: `r1@${r.armedAt}`, symbol: "NVDA", kind: "above", value: 185, observed: 186.64, currency: "USD", extreme: null, missed: null, seen: false });
+    expect(check.event).toMatchObject({ id: `r1@${r.armedAt}`, symbol: "NVDA", kind: "above", value: 185, observed: 186.64, currency: "USD", extreme: null, missed: null, session: SESSION, seen: false });
     const after = evaluate({ ...r, ...check.patch }, quote({ price: 187 }), {}, NOW);
     expect(after.met).toBe(true);
     expect(after.fire).toBe(false);
@@ -245,7 +249,7 @@ describe("catchUp", () => {
     const r = rule({ kind: "below", value: 170 }, checked);
     const check = catchUp(r, bars, NOW, "USD");
     expect(check.fire).toBe(true);
-    expect(check.event).toMatchObject({ id: `r1@${r.armedAt}`, missed: { session: "2026-11-05", extreme: 168.2, sessions: 1 }, observed: 168.2, currency: "USD" });
+    expect(check.event).toMatchObject({ id: `r1@${r.armedAt}`, missed: { session: "2026-11-05", extreme: 168.2, sessions: 1 }, observed: 168.2, currency: "USD", session: "2026-11-05" });
     expect(check.patch).toMatchObject({ done: true, lastTriggeredSession: "2026-11-05", checkedSession: SESSION, checkedHigh: 188.1, checkedLow: 171, lastCheckedAt: NOW.toISOString() });
   });
 

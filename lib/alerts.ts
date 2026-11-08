@@ -76,6 +76,11 @@ export interface AlertEvent {
   estimated: boolean;
   /** Found in daily bars after the fact: the first session that reached the level, its high or low, and how many sessions did. */
   missed: { session: string; extreme: number; sessions: number } | null;
+  /**
+   * The session (YYYY-MM-DD) the trigger belongs to, so the log can date a day move ("on Nov 5") instead of saying
+   * "today" days later. Null in events logged before this field existed.
+   */
+  session: string | null;
   currency: string | null;
   note: string;
   at: string;
@@ -199,6 +204,7 @@ function sanitizeEvent(raw: unknown): AlertEvent | null {
     eventDate: isIsoTime(r.eventDate) ? r.eventDate : null,
     estimated: r.estimated === true,
     missed,
+    session: isSession(r.session) ? r.session : null,
     currency: typeof r.currency === "string" && /^[A-Za-z]{2,5}$/.test(r.currency) ? r.currency : null,
     note: typeof r.note === "string" ? r.note.trim().slice(0, MAX_ALERT_NOTE_CHARS) : "",
     at: r.at,
@@ -388,6 +394,7 @@ function makeEvent(rule: AlertRule, session: string, now: Date, fields: Partial<
     eventDate: null,
     estimated: false,
     missed: null,
+    session,
     currency: null,
     note: rule.note,
     at: now.toISOString(),
