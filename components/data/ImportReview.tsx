@@ -14,6 +14,7 @@ import { applyWrites, diffHoldings, mergeHoldings, StorageWriteError, undoChange
 import { combinePositions, type ImportRow, type RowError, type SkipReason } from "@/lib/broker-import";
 import { cn } from "@/lib/cn";
 import { DASH, formatPrice, tpl } from "@/lib/format";
+import { displayName } from "@/lib/names-zh";
 
 import { getEnv } from "./browser";
 import { useSymbolChecks } from "./hooks";
@@ -226,10 +227,12 @@ export function ImportReview({ rows, onImported }: { rows: readonly ImportRow[];
       header: t.data.review.columns.name,
       hideBelow: "md",
       render: (entry) => {
+        // A found symbol shows its name the way the rest of the app does (Chinese in Chinese); otherwise the file's own.
         const name = entry.status.kind === "ready" ? entry.status.name : entry.row.name;
+        const shown = entry.status.kind === "ready" ? displayName(entry.symbol, entry.status.name, lang) : entry.row.name;
         return (
           <span className="text-fg-2" title={name ?? undefined}>
-            {name ?? DASH}
+            {shown ?? DASH}
           </span>
         );
       },

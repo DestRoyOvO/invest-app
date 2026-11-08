@@ -79,6 +79,8 @@ export const earningsMessages = defineMessages(
       actions: "Recent actions",
       columns: { date: "Date", firm: "Firm", rating: "Rating", target: "Target" },
       action: { up: "Upgrade", down: "Downgrade", init: "Initiated", main: "Maintained", reit: "Reiterated" },
+      /** The rating cell's tooltip, e.g. "Maintained: Overweight". */
+      actionGrade: "{action}: {grade}",
       initShort: "Init.",
       noActions: "No rating or target changes in the last 90 days.",
       showAll: "Show all {n}",
@@ -164,6 +166,7 @@ export const earningsMessages = defineMessages(
       actions: "近期动作",
       columns: { date: "日期", firm: "机构", rating: "评级", target: "目标价" },
       action: { up: "上调", down: "下调", init: "首次覆盖", main: "维持", reit: "重申" },
+      actionGrade: "{action}：{grade}",
       initShort: "首次",
       noActions: "过去 90 天没有评级或目标价变动。",
       showAll: "显示全部 {n} 条",

@@ -11,6 +11,7 @@ import { stockPath } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { DASH, formatPrice, tpl } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/messages";
+import { displayName, fullName } from "@/lib/names-zh";
 import { firstSortDirection, metricUnit, metricValue, PHONE_COLUMNS, ratingKey, type ColumnSetKey, type MetricKey } from "@/lib/screens";
 import { getSector } from "@/lib/universe";
 import type { Lang, ScreenerUniverse } from "@/types/api";
@@ -54,7 +55,12 @@ function MetricCell({ metric, row, context }: { metric: MetricKey; row: ScreenRo
   const value = metricValue(metric, row);
   if (metric === "symbol") {
     return (
-      <Link href={stockPath(row.symbol)} data-row-link className="mono font-medium text-fg hover:text-accent focus-visible:outline-offset-[-2px]" title={row.name}>
+      <Link
+        href={stockPath(row.symbol)}
+        data-row-link
+        className="mono font-medium text-fg hover:text-accent focus-visible:outline-offset-[-2px]"
+        title={fullName(row.symbol, row.name, lang) ?? undefined}
+      >
         {row.symbol}
       </Link>
     );
@@ -62,7 +68,7 @@ function MetricCell({ metric, row, context }: { metric: MetricKey; row: ScreenRo
   if (metric === "name") {
     return (
       <span className="text-fg-2" title={row.name}>
-        {row.name}
+        {displayName(row.symbol, row.name, lang)}
       </span>
     );
   }
@@ -130,7 +136,8 @@ function metricColumn(metric: MetricKey, context: ScreenColumnContext): DataTabl
     align: numeric ? "right" : "left",
     width: width === null ? undefined : metricUnit(metric) === "percentile" ? `min(${width}rem, var(--eqs-pct-max, ${width}rem))` : `${width}rem`,
     render: (row) => <MetricCell metric={metric} row={row} context={context} />,
-    sortValue: (row) => metricValue(metric, row),
+    // Names sort as they read: by the Chinese name in Chinese. The CSV keeps Yahoo's English names.
+    sortValue: (row) => (metric === "name" ? displayName(row.symbol, row.name, context.lang) : metricValue(metric, row)),
     firstSort: firstSortDirection(metric),
     hideBelow: phone ? undefined : "sm",
   };

@@ -18,6 +18,7 @@ import { useHistory, useOverview, useQuotes, useSectorNews, useSparklines } from
 import { stockPath } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { formatCompact, formatPrice, tpl } from "@/lib/format";
+import { displayName } from "@/lib/names-zh";
 import { SECTORS, type SectorDef } from "@/lib/universe";
 import type { AnalyzeRequest, OverviewQuote } from "@/types/api";
 
@@ -61,7 +62,16 @@ export function SectorView({ sector }: { sector: SectorDef }) {
 
   const columns: DataTableColumn<OverviewQuote>[] = [
     { key: "symbol", header: t.columns.symbol, width: "5rem", render: (q) => <span className="mono font-medium text-fg">{q.symbol}</span>, sortValue: (q) => q.symbol },
-    { key: "name", header: t.columns.name, hideBelow: "sm", render: (q) => <span className="text-fg-2" title={q.name}>{q.name}</span> },
+    {
+      key: "name",
+      header: t.columns.name,
+      hideBelow: "sm",
+      render: (q) => (
+        <span className="text-fg-2" title={q.name}>
+          {displayName(q.symbol, q.name, lang)}
+        </span>
+      ),
+    },
     {
       key: "last",
       header: t.columns.last,

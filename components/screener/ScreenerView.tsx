@@ -45,7 +45,7 @@ function SnapshotMeta({ universe }: { universe: ScreenerUniverse }) {
  * What is on screen stays in the address bar (history.replaceState), so a link reopens the same screen.
  */
 export function ScreenerView() {
-  const { t } = usePrefs();
+  const { t, lang } = usePrefs();
   const params = useSearchParams();
   const search = params.toString();
   const [state, setState] = useState<ScreenerViewState>(() => viewFromParams(new URLSearchParams(search)));
@@ -69,10 +69,11 @@ export function ScreenerView() {
   const setCap = (cap: DiscoverCap) => setState((current) => ({ ...current, cap }));
   const discover = state.tab === "discover";
 
-  // generateMetadata titles the page from the URL on load; a tab switch is client state, so the title follows it here.
+  // generateMetadata titles the page from the URL on load; a tab switch is client state, so the title follows it here,
+  // and so does a language switch.
   useEffect(() => {
-    document.title = screenerPageTitle(state.tab, document.title);
-  }, [state.tab]);
+    document.title = screenerPageTitle(state.tab, lang, document.title);
+  }, [state.tab, lang]);
 
   return (
     <div className={cn("flex flex-col gap-px bg-line p-px", !discover && "lg:h-full")}>

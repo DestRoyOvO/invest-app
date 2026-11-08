@@ -33,6 +33,7 @@ import {
   type AlertRuleInput,
 } from "@/lib/alerts";
 import { formatPrice, tpl } from "@/lib/format";
+import { displayName } from "@/lib/names-zh";
 import { normalizeSymbol } from "@/lib/symbols";
 import type { Quote } from "@/types/api";
 
@@ -46,7 +47,9 @@ function QuoteLine({ quote }: { quote: Quote }) {
   const { t, lang } = usePrefs();
   return (
     <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
-      <span className="truncate text-fg-2">{quote.name}</span>
+      <span className="truncate text-fg-2" title={quote.name}>
+        {displayName(quote.symbol, quote.name, lang)}
+      </span>
       <span className="num text-fg-2">{tpl(t.alerts.editor.context.last, { price: formatPrice(quote.price, lang) })}</span>
       <Delta value={quote.changePercent} />
       {quote.stale ? <span className="text-warn">{t.alerts.reasons.stale}</span> : null}

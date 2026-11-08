@@ -1,22 +1,82 @@
 import { describe, expect, it } from "vitest";
 
-import { CHINESE_NAMES, chineseNameOf, hasCjk, searchChineseNames } from "./names-zh";
+import { CHINESE_NAMES, chineseNameOf, displayName, fullName, hasCjk, searchChineseNames, symbolTitle } from "./names-zh";
+import { ETF_UNIVERSE } from "./screens";
 import { normalizeSymbol } from "./symbols";
-import { UNIVERSE_STOCKS } from "./universe";
+import { BREADTH_REFERENCES, MARKET_BOARD, UNIVERSE_STOCKS, WORLD_BOARD } from "./universe";
+
+/** Every symbol the app lists by itself: the stock and ETF universes, the market and world boards, the breadth funds. */
+const APP_UNIVERSE = [
+  ...new Set([...UNIVERSE_STOCKS, ...ETF_UNIVERSE, ...MARKET_BOARD.map((item) => item.symbol), ...WORLD_BOARD.map((item) => item.symbol), ...Object.values(BREADTH_REFERENCES)]),
+];
+
+/**
+ * Universe symbols without an established Chinese name, so Chinese pages show Yahoo's English name for them. Add a
+ * symbol here rather than guess a name: a wrong Chinese name is worse than the English one.
+ */
+const WITHOUT_CHINESE_NAME: readonly string[] = [];
+
+/** Universe symbols that Chinese financial media call by a Latin name; Chinese pages show that name. */
+const LATIN_NAMES: readonly string[] = ["META", "TMUS", "BKNG"];
+
+/** One company's listings on two exchanges, which may share its name: the symbol tells the listings apart. */
+const SAME_COMPANY: readonly (readonly string[])[] = [["BABA", "9988.HK"]];
+
+/** Names compare the way search matches them: case and spaces ignored. */
+const nameKey = (name: string) => name.toLowerCase().replace(/\s+/g, "");
+
+/** The company behind a symbol: its first listing for one listed twice, the symbol itself otherwise. */
+const companyOf = (symbol: string) => SAME_COMPANY.find((listings) => listings.includes(symbol))?.[0] ?? symbol;
 
 describe("Chinese names", () => {
-  it("covers every universe stock with valid, unique symbols", () => {
+  it("lists valid, unique symbols", () => {
     const symbols = CHINESE_NAMES.map((entry) => entry.symbol);
     expect(new Set(symbols).size).toBe(symbols.length);
     for (const symbol of symbols) expect(normalizeSymbol(symbol)).toBe(symbol);
-    for (const symbol of UNIVERSE_STOCKS) expect(chineseNameOf(symbol), symbol).toBeDefined();
+  });
+
+  it("names every symbol of the app's universe apart from an explicit list", () => {
+    expect(APP_UNIVERSE.length).toBeGreaterThan(130);
+    expect(APP_UNIVERSE.filter((symbol) => !chineseNameOf(symbol))).toEqual(WITHOUT_CHINESE_NAME);
+    expect(APP_UNIVERSE.filter((symbol) => !hasCjk(chineseNameOf(symbol) ?? "中"))).toEqual(LATIN_NAMES);
+  });
+
+  it("never uses one name for two different companies", () => {
+    const owners = new Map<string, Set<string>>();
+    for (const entry of CHINESE_NAMES) {
+      for (const name of entry.names) {
+        const key = nameKey(name);
+        owners.set(key, (owners.get(key) ?? new Set()).add(companyOf(entry.symbol)));
+      }
+    }
+    const shared = [...owners].filter(([, companies]) => companies.size > 1).map(([name, companies]) => `${name}: ${[...companies].join(", ")}`);
+    expect(shared).toEqual([]);
+    for (const listings of SAME_COMPANY) expect(new Set(listings.map(chineseNameOf)).size, listings.join(", ")).toBe(1);
+  });
+
+  it("names a Hong Kong listing as the company, and finds the US listing first", () => {
+    expect(chineseNameOf("9988.HK")).toBe("阿里巴巴");
+    expect(chineseNameOf("9618.HK")).toBe("京东集团");
+    expect(searchChineseNames("阿里巴巴").map((r) => r.symbol)).toEqual(["BABA", "9988.HK"]);
+    expect(searchChineseNames("阿里巴巴港股")).toEqual([{ symbol: "9988.HK", name: "阿里巴巴" }]);
+    expect(searchChineseNames("京东").map((r) => r.symbol)).toEqual(["JD", "9618.HK"]);
+  });
+
+  it("keeps the names themselves tidy", () => {
+    for (const entry of CHINESE_NAMES) {
+      for (const name of entry.names) expect(name, entry.symbol).toBe(name.trim());
+      expect(new Set(entry.names.map(nameKey)).size, entry.symbol).toBe(entry.names.length);
+    }
   });
 
   it("ranks exact names before prefixes and substrings", () => {
     expect(searchChineseNames("苹果")[0]).toEqual({ symbol: "AAPL", name: "苹果" });
     expect(searchChineseNames("腾讯").map((r) => r.symbol)).toEqual(["0700.HK", "TME"]);
     expect(searchChineseNames("摩根").map((r) => r.symbol)).toEqual(["JPM", "MS"]);
-    expect(searchChineseNames("标普 500")[0].symbol).toBe("^GSPC");
+    expect(searchChineseNames("标普 500")[0]).toEqual({ symbol: "^GSPC", name: "标普500指数" });
+    // 纳指 alone is the Composite in Chinese market reports; 纳指100 is the Nasdaq-100.
+    expect(searchChineseNames("纳指").map((r) => r.symbol)).toEqual(["^IXIC", "^NDX", "QQQ"]);
+    expect(searchChineseNames("伯克希尔哈撒韦")[0]).toEqual({ symbol: "BRK-B", name: "伯克希尔·哈撒韦" });
   });
 
   it("matches Latin aliases case-insensitively and caps the result count", () => {
@@ -28,5 +88,71 @@ describe("Chinese names", () => {
   it("detects CJK text", () => {
     expect(hasCjk("英伟达")).toBe(true);
     expect(hasCjk("nvda")).toBe(false);
+    // Both ends of both ranges, escaped: U+F900 typed as a character turns into U+8C48 under Unicode normalization.
+    for (const ideograph of ["\u3400", "\u9fff", "\uf900", "\ufaff"]) expect(hasCjk(ideograph), ideograph).toBe(true);
+  });
+
+  it("leaves Hangul, emoji and other text to Yahoo search", () => {
+    for (const text of ["삼성전자", "samsung 전자", "apple 🍎", "😀", "\ue000", "\ua732", "\ufb00"]) expect(hasCjk(text), text).toBe(false);
+  });
+});
+
+describe("displayName", () => {
+  it("shows the Chinese name in Chinese when one is known", () => {
+    expect(displayName("AAPL", "Apple Inc.", "zh")).toBe("苹果");
+    expect(displayName("SPY", "State Street SPDR S&P 500 ETF Trust", "zh")).toBe("标普500 ETF");
+    expect(displayName("^GSPC", null, "zh")).toBe("标普500指数");
+  });
+
+  it("falls back to the English name, trimmed", () => {
+    expect(displayName("KRMN", " Karman Holdings Inc. ", "zh")).toBe("Karman Holdings Inc.");
+    expect(displayName("AAPL", "Apple Inc.", "en")).toBe("Apple Inc.");
+    expect(displayName(null, "Apple Inc.", "zh")).toBe("Apple Inc.");
+  });
+
+  it("keeps a Latin name Chinese media use, but not one that only repeats the ticker", () => {
+    expect(displayName("META", "Meta Platforms, Inc.", "zh")).toBe("Meta");
+    expect(displayName("IBM", "International Business Machines Corporation", "zh")).toBe("International Business Machines Corporation");
+  });
+
+  it("returns null when there is no name to show", () => {
+    expect(displayName("KRMN", null, "zh")).toBeNull();
+    expect(displayName("AAPL", "  ", "en")).toBeNull();
+    expect(displayName(undefined, undefined, "en")).toBeNull();
+  });
+});
+
+describe("fullName", () => {
+  it("gives both names where they differ", () => {
+    expect(fullName("AAPL", "Apple Inc.", "zh")).toBe("苹果 · Apple Inc.");
+    expect(fullName("^GSPC", null, "zh")).toBe("标普500指数");
+  });
+
+  it("gives the one name otherwise", () => {
+    expect(fullName("AAPL", "Apple Inc.", "en")).toBe("Apple Inc.");
+    expect(fullName("KRMN", "Karman Holdings Inc.", "zh")).toBe("Karman Holdings Inc.");
+    expect(fullName("KRMN", null, "en")).toBeNull();
+  });
+});
+
+describe("symbolTitle", () => {
+  it("puts the Chinese name in front of the symbol in Chinese", () => {
+    expect(symbolTitle("NVDA", "zh")).toBe("英伟达 NVDA");
+    expect(symbolTitle("BRK-B", "zh")).toBe("伯克希尔·哈撒韦 BRK-B");
+  });
+
+  it("keeps the symbol alone in English, without a Chinese name and for a Latin name", () => {
+    expect(symbolTitle("NVDA", "en")).toBe("NVDA");
+    expect(symbolTitle("KRMN", "zh")).toBe("KRMN");
+    expect(symbolTitle("META", "zh")).toBe("META");
+  });
+
+  it("leaves out a name that opens with the ticker, so no title repeats the symbol", () => {
+    expect(symbolTitle("TJX", "zh")).toBe("TJX");
+    expect(symbolTitle("EOG", "zh")).toBe("EOG");
+    expect(symbolTitle("CL=F", "zh")).toBe("WTI 原油 CL=F");
+    for (const { symbol } of CHINESE_NAMES) {
+      expect(symbolTitle(symbol, "zh").split(" ").filter((word) => word === symbol), symbol).toHaveLength(1);
+    }
   });
 });

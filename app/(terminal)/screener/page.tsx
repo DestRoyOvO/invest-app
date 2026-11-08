@@ -3,6 +3,7 @@ import { Suspense } from "react";
 
 import { ScreenerView } from "@/components/screener/ScreenerView";
 import { screenerTitle } from "@/components/screener/titles";
+import { requestLang } from "@/lib/i18n/request";
 
 interface Props {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -10,7 +11,7 @@ interface Props {
 
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   const { tab } = await searchParams;
-  return { title: screenerTitle(tab === "discover" ? "discover" : "screener") };
+  return { title: screenerTitle(tab === "discover" ? "discover" : "screener", await requestLang()) };
 }
 
 /** EQS and MOST: the screener over the stock and ETF universes, and market-wide lists on ?tab=discover. */

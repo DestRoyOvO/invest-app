@@ -25,6 +25,14 @@ describe("compareSortValues", () => {
     expect(compareSortValues("nvda", "NVDA", "asc")).toBe(0);
   });
 
+  it("sorts strings in the locale it is given: Chinese by pinyin under zh-CN", () => {
+    const names = ["英伟达", "Booking", "苹果", "安进", "宝洁", "微软"];
+    const inLocale = (locale: string) => [...names].sort((a, b) => compareSortValues(a, b, "asc", locale));
+    expect(inLocale("zh-CN")).toEqual(["安进", "宝洁", "苹果", "微软", "英伟达", "Booking"]);
+    expect(inLocale("en")).toEqual(["Booking", "安进", "宝洁", "微软", "英伟达", "苹果"]);
+    expect(compareSortValues("A2", "A10", "asc", "zh-CN")).toBeLessThan(0);
+  });
+
   it("orders booleans false before true, and mixed types deterministically", () => {
     expect(compareSortValues(false, true, "asc")).toBeLessThan(0);
     expect(compareSortValues(3, "x", "asc")).toBeLessThan(0);
@@ -54,6 +62,12 @@ describe("sortRows", () => {
   it("keeps a missing value last in both directions", () => {
     expect(sortRows(rows, (r) => r.pe, "asc").map((r) => r.symbol)).toEqual(["KO", "AAPL", "AMZN", "NVDA", "MSFT"]);
     expect(sortRows(rows, (r) => r.pe, "desc").map((r) => r.symbol)).toEqual(["NVDA", "AMZN", "AAPL", "KO", "MSFT"]);
+  });
+
+  it("passes the locale on to the string comparison", () => {
+    const named = [{ name: "英伟达" }, { name: "苹果" }, { name: "安进" }];
+    expect(sortRows(named, (r) => r.name, "asc", undefined, "zh-CN").map((r) => r.name)).toEqual(["安进", "苹果", "英伟达"]);
+    expect(sortRows(named, (r) => r.name, "desc", undefined, "zh-CN").map((r) => r.name)).toEqual(["英伟达", "苹果", "安进"]);
   });
 
   it("returns a copy and leaves the input untouched", () => {

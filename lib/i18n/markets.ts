@@ -228,7 +228,7 @@ export const marketsMessages = defineMessages(
       captionUniverse: "{n} 只大盘股中的{list}",
       relVol: "量比",
       relVolTitle: "今日成交量相对 3 个月日均成交量的倍数",
-      usNote: "Yahoo 筛选的美国上市股票，市值 {cap} 以上。",
+      usNote: "Yahoo 筛选的美国上市股票，市值 {cap}以上。",
       dollars: "{value}美元",
       empty: "此列表暂无股票。",
     },

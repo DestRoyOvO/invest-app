@@ -23,6 +23,7 @@ import {
   type EventFilter,
 } from "@/lib/events";
 import { formatDate, formatTime, tpl } from "@/lib/format";
+import { timeZoneLabel } from "@/lib/i18n/time-zone";
 
 import { portfolioTotals } from "./agenda-format";
 import { AgendaList } from "./AgendaList";
@@ -159,7 +160,7 @@ export function CalendarView() {
           footer={
             <p className="border-t border-line px-3 py-2 text-micro text-fg-3">
               {c.notes.times}
-              {zone ? ` ${tpl(c.notes.local, { zone })}` : ""}
+              {zone ? ` ${tpl(c.notes.local, { zone: timeZoneLabel(zone, lang) })}` : ""}
             </p>
           }
         >

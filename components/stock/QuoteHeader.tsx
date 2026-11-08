@@ -14,6 +14,7 @@ import type { Position } from "@/hooks/useHoldings";
 import { useChartSeries } from "@/hooks/useQuoteApi";
 import { eventDayKey } from "@/lib/events";
 import { formatCompact, formatNumber, formatRatio, formatTime, tpl } from "@/lib/format";
+import { displayName } from "@/lib/names-zh";
 import { formatQuotePrice, priceDigits } from "@/lib/quote-figures";
 import type { Lang, StockDetail } from "@/types/api";
 
@@ -96,6 +97,10 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, 
   const digits = priceDigits(symbol, quote.quoteType);
   const bars = useChartSeries(rangesNeedBars(quote) ? symbol : null, "2y");
   const ranges = quoteRanges(quote, bars.data?.bars ?? null, bars.data?.timezone ?? null);
+  // In Chinese a known company reads by its Chinese name, with the English legal name after it in a quieter line.
+  const englishName = profile.longName ?? quote.name;
+  const name = displayName(symbol, englishName, lang);
+  const englishAside = name !== englishName.trim() ? englishName : null;
 
   const why = () => openChat({ text: tpl(a.whyMovingPrompt, { symbol }), intent: { kind: "move", symbol } });
 
@@ -105,7 +110,12 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, 
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
             <h1 className="mono text-xl font-semibold tracking-tight text-fg">{symbol}</h1>
-            <span className="min-w-0 truncate text-sm text-fg-2">{profile.longName ?? quote.name}</span>
+            <span className="min-w-0 truncate text-sm text-fg-2">{name}</span>
+            {englishAside ? (
+              <span lang="en" className="min-w-0 truncate text-xs text-fg-3">
+                {englishAside}
+              </span>
+            ) : null}
             {quote.exchange ? <Badge>{quote.exchange}</Badge> : null}
             {quote.currency && quote.currency !== "USD" ? <Badge tone="info">{quote.currency}</Badge> : null}
             {quote.stale ? (

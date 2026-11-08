@@ -12,6 +12,7 @@ import { EmptyState, ErrorState, SkeletonRows, StaleBanner } from "@/components/
 import { useOwnership } from "@/hooks/useQuoteApi";
 import { ApiError } from "@/lib/api-client";
 import { formatCompact, formatDate, formatInteger, formatPrice, formatRatio, tpl } from "@/lib/format";
+import { insiderRole } from "@/lib/i18n/yahoo-terms";
 import type { Lang } from "@/types/api";
 import type { InsiderTrade, InstitutionHolder } from "@/types/research";
 
@@ -87,9 +88,9 @@ export function OwnershipTab({ symbol }: { symbol: string }) {
       className: "max-sm:py-1.5 max-sm:whitespace-normal",
       render: (trade) => (
         <span className="block min-w-0">
-          <span className="block truncate max-sm:whitespace-normal" title={[trade.name, trade.relation].filter(Boolean).join(" · ")}>
+          <span className="block truncate max-sm:whitespace-normal" title={[trade.name, trade.relation && insiderRole(trade.relation, lang)].filter(Boolean).join(" · ")}>
             <span className="text-fg">{readableName(trade.name)}</span>
-            {trade.relation ? <span className="text-fg-3"> · {trade.relation}</span> : null}
+            {trade.relation ? <span className="text-fg-3"> · {insiderRole(trade.relation, lang)}</span> : null}
           </span>
           <span className="num block text-xs text-fg-2 sm:hidden">
             {o.kinds[trade.kind]} · {formatDate(isoDay(trade.date), lang, "UTC")}

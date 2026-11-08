@@ -14,6 +14,7 @@ import { stockPath } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { buildAgenda, formatWeekSummary, nyDayKey, pickTopItems, rangeWindow, relativeDay, summarizeWeek, type AgendaItem, type EventFilter } from "@/lib/events";
 import { tpl } from "@/lib/format";
+import { displayName, fullName } from "@/lib/names-zh";
 
 import { dayShort, macroDetail, timeLabel } from "./agenda-format";
 import { PositionText } from "./AgendaList";
@@ -92,11 +93,11 @@ function WeekRow({ item, today }: { item: AgendaItem; today: string }) {
   const relative = relativeDay(item.day, today);
   const dayText = relative.kind === "today" ? c.days.today : relative.kind === "tomorrow" ? c.days.tomorrow : dayShort(item.day, lang);
   // The time column already says "Ex-date" or the session slot, so the name stands alone; the title has the rest.
-  const name = event.kind === "macro" && event.macro ? c.macro[event.macro] : (event.name ?? event.symbol ?? "");
+  const name = event.kind === "macro" && event.macro ? c.macro[event.macro] : (displayName(event.symbol, event.name, lang) ?? event.symbol ?? "");
   const title =
     event.kind === "macro" && event.macro
       ? [c.macro[event.macro], macroDetail(item, c, lang)].filter(Boolean).join(" ")
-      : `${name} · ${event.kind === "dividend" ? c.dividendNoAmount : c.earnings}`;
+      : `${fullName(event.symbol, event.name, lang) ?? name} · ${event.kind === "dividend" ? c.dividendNoAmount : c.earnings}`;
   return (
     <li className={cn("relative grid h-row grid-cols-[3.75rem_6.25rem_minmax(0,1fr)_auto] items-center gap-x-2.5 border-b border-line/70 px-3 text-data last:border-b-0 max-sm:h-11", event.symbol && "hover:bg-hover")}>
       <span className="truncate text-fg-2">{dayText}</span>

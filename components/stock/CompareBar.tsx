@@ -9,7 +9,7 @@ import { useSymbolSearch } from "@/hooks/useApi";
 import { useDebounced } from "@/hooks/useLocalValue";
 import { cn } from "@/lib/cn";
 import { tpl } from "@/lib/format";
-import { hasCjk, searchChineseNames } from "@/lib/names-zh";
+import { displayName, hasCjk, searchChineseNames } from "@/lib/names-zh";
 import { normalizeSymbol } from "@/lib/symbols";
 
 import { MAX_COMPARE, type SeriesSlot } from "./chart-utils";
@@ -43,7 +43,7 @@ interface CompareBarProps {
 
 /** Comparison overlays: active chips with a remove button, one-click defaults and a symbol search (Chinese names too). */
 export function CompareBar({ symbol, compare, slots, suggestions, onChange }: CompareBarProps) {
-  const { t } = usePrefs();
+  const { t, lang } = usePrefs();
   const [adding, setAdding] = useState(false);
   const [value, setValue] = useState("");
   const [active, setActive] = useState(-1);
@@ -57,8 +57,10 @@ export function CompareBar({ symbol, compare, slots, suggestions, onChange }: Co
   const { data } = useSymbolSearch(query);
   const full = compare.length >= MAX_COMPARE;
 
-  const results = value.trim()
-    ? (hasCjk(value) ? searchChineseNames(value, 6).map((r) => ({ symbol: r.symbol, name: r.name })) : (data?.results ?? []).slice(0, 6))
+  const results: Array<{ symbol: string; name: string; english: string | null }> = value.trim()
+    ? hasCjk(value)
+      ? searchChineseNames(value, 6).map((r) => ({ symbol: r.symbol, name: r.name, english: null }))
+      : (data?.results ?? []).slice(0, 6).map((r) => ({ symbol: r.symbol, name: displayName(r.symbol, r.name, lang) ?? r.name, english: r.name }))
     : [];
   const options = results.filter((r) => r.symbol !== symbol && !compare.includes(r.symbol));
 
@@ -214,7 +216,9 @@ export function CompareBar({ symbol, compare, slots, suggestions, onChange }: Co
                   className={cn("flex cursor-pointer items-center gap-2 px-2.5 py-1.5 text-xs max-sm:min-h-10", i === active ? "bg-hover text-fg" : "text-fg-2")}
                 >
                   <span className="mono w-20 shrink-0 font-medium text-fg">{option.symbol}</span>
-                  <span className="min-w-0 truncate">{option.name}</span>
+                  <span className="min-w-0 truncate" title={option.english ?? undefined}>
+                    {option.name}
+                  </span>
                 </li>
               ))}
             </ul>

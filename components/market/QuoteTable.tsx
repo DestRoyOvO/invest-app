@@ -13,6 +13,7 @@ import { stockPath } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { formatShortDate, tpl } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/messages";
+import { displayName } from "@/lib/names-zh";
 import { formatQuotePrice, priceDigits } from "@/lib/quote-figures";
 import type { Lang, Quote } from "@/types/api";
 
@@ -121,13 +122,13 @@ export function quoteColumns<Row>(columns: readonly QuoteColumn[], quoteOf: (row
         return {
           ...base,
           header: t.columns.name,
-          sortValue: sort((q) => q.name),
+          sortValue: sort((q) => displayName(q.symbol, q.name, lang)),
           render: (row) => {
             const q = quoteOf(row);
             return (
               <span className="flex min-w-0 items-center gap-2">
                 <span className="truncate text-fg-2" title={q?.name}>
-                  {q?.name ?? ""}
+                  {(q && displayName(q.symbol, q.name, lang)) ?? ""}
                 </span>
                 {earnings ? <EarningsBadge quote={q} now={now} t={t} lang={lang} /> : null}
               </span>

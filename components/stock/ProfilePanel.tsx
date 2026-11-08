@@ -7,6 +7,7 @@ import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Button } from "@/components/ui/Button";
 import { Panel } from "@/components/ui/Panel";
 import { DASH, formatInteger } from "@/lib/format";
+import { industryName, sectorName } from "@/lib/i18n/yahoo-terms";
 import type { StockProfile } from "@/types/api";
 
 function safeWebsite(url: string | null): string | null {
@@ -30,11 +31,15 @@ export function ProfilePanel({ profile, className }: { profile: StockProfile; cl
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 border-b border-line px-3 py-3 text-xs">
         <div className="min-w-0">
           <dt className="col-head">{s.sector}</dt>
-          <dd className="truncate text-fg">{profile.sector ?? DASH}</dd>
+          <dd className="truncate text-fg" title={profile.sector ?? undefined}>
+            {profile.sector ? sectorName(profile.sector, lang) : DASH}
+          </dd>
         </div>
         <div className="min-w-0">
           <dt className="col-head">{s.industry}</dt>
-          <dd className="truncate text-fg">{profile.industry ?? DASH}</dd>
+          <dd className="truncate text-fg" title={profile.industry ?? undefined}>
+            {profile.industry ? industryName(profile.industry, lang) : DASH}
+          </dd>
         </div>
         <div>
           <dt className="col-head">{s.employees}</dt>

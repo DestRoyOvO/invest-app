@@ -35,7 +35,8 @@ import { cn } from "@/lib/cn";
 import { tpl } from "@/lib/format";
 import { shortcutKeys } from "@/lib/functions";
 import type { Messages } from "@/lib/i18n/messages";
-import { chineseNameOf } from "@/lib/names-zh";
+import { quoteTypeName } from "@/lib/i18n/yahoo-terms";
+import { fullName } from "@/lib/names-zh";
 import { MAX_WATCHLIST, SECTORS } from "@/lib/universe";
 import type { Lang } from "@/types/api";
 
@@ -78,8 +79,7 @@ interface Row {
 
 function rowFor(item: PaletteItem, t: Messages, lang: Lang, holdings: Readonly<Record<string, unknown>>): Row {
   const symbolText = (symbol: string, name: string | null) => {
-    const zh = lang === "zh" ? chineseNameOf(symbol) : undefined;
-    const shown = [...new Set([zh, name].filter(Boolean))].join(" · ");
+    const shown = fullName(symbol, name, lang);
     return (
       <span className="flex min-w-0 flex-1 items-baseline gap-2.5">
         <span className="mono shrink-0 font-medium text-fg">{symbol}</span>
@@ -176,7 +176,11 @@ function PaletteDialog({ initialQuery }: { initialQuery: string }) {
   const debounced = useDebounced(trimmed, 180);
   const searchTerm = shouldSearch(debounced) ? debounced : "";
   const { data: search, isLoading } = useSymbolSearch(searchTerm);
-  const results = searchTerm && searchTerm === trimmed ? (search?.results ?? null) : null;
+  // A result line shows Yahoo's quote type (EQUITY, FUTURE): in the reader's language.
+  const results = useMemo(
+    () => (searchTerm && searchTerm === trimmed ? (search?.results.map((r) => ({ ...r, type: r.type && quoteTypeName(r.type, lang) })) ?? null) : null),
+    [searchTerm, trimmed, search, lang],
+  );
 
   const close = () => closeCommand();
   const closeFromDocument = useEffectEvent(() => closeCommand());

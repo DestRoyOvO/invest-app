@@ -14,6 +14,7 @@ import { useDiscover } from "@/hooks/useApi";
 import { useLocalString } from "@/hooks/useLocalValue";
 import { stockPath } from "@/lib/api-client";
 import { formatCompact, formatPrice, tpl } from "@/lib/format";
+import { displayName } from "@/lib/names-zh";
 import { UNIVERSE_STOCKS } from "@/lib/universe";
 import { relativeVolume } from "@/lib/volume";
 import type { DiscoverScreen, MarketOverview, OverviewQuote } from "@/types/api";
@@ -48,7 +49,7 @@ export function MoversPanel({ movers, loading, className }: { movers: MarketOver
 
   const columns: DataTableColumn<OverviewQuote>[] = [
     { key: "symbol", header: t.columns.symbol, width: "4.75rem", render: (q) => <span className="mono font-medium text-fg">{q.symbol}</span> },
-    { key: "name", header: t.columns.name, render: (q) => <span className="text-fg-2" title={q.name}>{q.name}</span> },
+    { key: "name", header: t.columns.name, render: (q) => <span className="text-fg-2" title={q.name}>{displayName(q.symbol, q.name, lang)}</span> },
     {
       key: "last",
       header: t.columns.last,

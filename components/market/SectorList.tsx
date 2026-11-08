@@ -9,6 +9,7 @@ import { Delta, heatStep, heatStyle } from "@/components/ui/Delta";
 import { stockPath } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { formatPrice, tpl } from "@/lib/format";
+import { displayName } from "@/lib/names-zh";
 import { getSector } from "@/lib/universe";
 import type { SectorKey, SectorSnapshot } from "@/types/api";
 
@@ -55,7 +56,9 @@ export function SectorList({ sectors, className }: { sectors: SectorSnapshot[]; 
                     >
                       <span aria-hidden className="size-2 rounded-[1px]" style={{ background: heatStyle(heatStep(q.changePercent)).background }} />
                       <span className="mono font-medium text-fg">{q.symbol}</span>
-                      <span className="truncate text-fg-2">{q.name}</span>
+                      <span className="truncate text-fg-2" title={q.name}>
+                        {displayName(q.symbol, q.name, lang)}
+                      </span>
                       <span className="num text-fg">{formatPrice(q.price, lang)}</span>
                       <Delta value={q.changePercent} className="text-right" />
                     </Link>

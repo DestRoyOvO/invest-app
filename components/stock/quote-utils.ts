@@ -202,15 +202,17 @@ export function futureDate(iso: string | null | undefined, now = Date.now()): st
 
 /**
  * The live tab title, "NVDA 186.64 ▲2.78% · InvestSeek": arrows instead of colors, so the direction survives in a
- * plain-text tab strip. Prices below 1 keep four decimals, and currency pairs their own (see priceDigits).
+ * plain-text tab strip. Prices below 1 keep four decimals, and currency pairs their own (see priceDigits). `label`
+ * names the quote at the front, by default the symbol; Chinese tabs put the Chinese name before it (symbolTitle in
+ * lib/names-zh.ts), "英伟达 NVDA 186.64 ▲2.78% · InvestSeek". Numbers keep one format: zh-CN writes them the same.
  */
-export function liveTitle(symbol: string, price: number | null, changePercent: number | null): string {
-  if (price === null || !Number.isFinite(price)) return `${symbol} · InvestSeek`;
+export function liveTitle(symbol: string, price: number | null, changePercent: number | null, label: string = symbol): string {
+  if (price === null || !Number.isFinite(price)) return `${label} · InvestSeek`;
   const digits = priceDigits(symbol, null) ?? (Math.abs(price) < 1 ? 4 : 2);
   const priceText = price.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
-  if (changePercent === null || !Number.isFinite(changePercent)) return `${symbol} ${priceText} · InvestSeek`;
+  if (changePercent === null || !Number.isFinite(changePercent)) return `${label} ${priceText} · InvestSeek`;
   const arrow = changePercent > 0 ? "▲" : changePercent < 0 ? "▼" : "";
-  return `${symbol} ${priceText} ${arrow}${Math.abs(changePercent).toFixed(2)}% · InvestSeek`;
+  return `${label} ${priceText} ${arrow}${Math.abs(changePercent).toFixed(2)}% · InvestSeek`;
 }
 
 export interface PositionFigures {

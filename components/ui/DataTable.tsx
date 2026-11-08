@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 
-import { useT } from "@/components/providers/PrefsProvider";
+import { usePrefs } from "@/components/providers/PrefsProvider";
 import { cn } from "@/lib/cn";
+import { htmlLang } from "@/lib/prefs";
 
 import { useScrollRegion } from "./scroll-region";
 import { EmptyState, SkeletonRows } from "./States";
@@ -121,7 +122,7 @@ export function DataTable<Row>({
   footer,
   className,
 }: DataTableProps<Row>) {
-  const t = useT();
+  const { t, lang } = usePrefs();
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
   const region = useScrollRegion(scrollRef, caption);
@@ -131,8 +132,9 @@ export function DataTable<Row>({
   const sorted = useMemo(() => {
     const column = activeSort ? columns.find((c) => c.key === activeSort.key) : undefined;
     if (!activeSort || !column?.sortValue) return rows;
-    return sortRows(rows, column.sortValue, activeSort.direction, tieBreak);
-  }, [rows, columns, activeSort, tieBreak]);
+    // Text sorts in the app language, whatever the browser's: Chinese names by pinyin.
+    return sortRows(rows, column.sortValue, activeSort.direction, tieBreak, htmlLang(lang));
+  }, [rows, columns, activeSort, tieBreak, lang]);
 
   const onHeaderClick = (column: DataTableColumn<Row>) => {
     const next = nextSort(activeSort, column.key, column.firstSort ?? (column.align === "right" ? "desc" : "asc"));

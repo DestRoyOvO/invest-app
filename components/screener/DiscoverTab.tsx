@@ -16,6 +16,7 @@ import { TickNumber } from "@/components/ui/TickNumber";
 import { useDiscover } from "@/hooks/useApi";
 import { stockPath } from "@/lib/api-client";
 import { DASH, formatCompact, formatNumber, formatPrice, formatTime, tpl } from "@/lib/format";
+import { displayName, fullName } from "@/lib/names-zh";
 import { capParam, DISCOVER_CAPS, ratingKey, relativeVolume, type DiscoverCap } from "@/lib/screens";
 import type { DiscoverResponse, DiscoverScreen, Quote } from "@/types/api";
 
@@ -48,7 +49,7 @@ function useColumns(keys: readonly ColumnKey[], now: number): DataTableColumn<Qu
       header: t.columns.symbol,
       width: "5rem",
       render: (q) => (
-        <span className="mono font-medium text-fg" title={q.name}>
+        <span className="mono font-medium text-fg" title={fullName(q.symbol, q.name, lang) ?? undefined}>
           {q.symbol}
         </span>
       ),
@@ -59,10 +60,10 @@ function useColumns(keys: readonly ColumnKey[], now: number): DataTableColumn<Qu
       header: t.columns.name,
       render: (q) => (
         <span className="text-fg-2" title={q.name}>
-          {q.name}
+          {displayName(q.symbol, q.name, lang)}
         </span>
       ),
-      sortValue: (q) => q.name,
+      sortValue: (q) => displayName(q.symbol, q.name, lang),
       hideBelow: "sm",
     },
     last: {

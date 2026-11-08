@@ -28,6 +28,8 @@ import { useAnalysts } from "@/hooks/useEarningsApi";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { formatNumber, formatShortDate, tpl } from "@/lib/format";
+import { ratingWord } from "@/lib/i18n/yahoo-terms";
+import type { Lang } from "@/types/api";
 import type { AnalystAction, AnalystActivity } from "@/types/earnings";
 
 // Rating distribution by month, the price-target range against the price, and recent rating and target actions (ANR).
@@ -180,9 +182,10 @@ function Targets({ activity, price }: { activity: AnalystActivity; price: number
   );
 }
 
-function gradeText(action: AnalystAction, initShort: string): string {
-  const to = action.toGrade ?? "—";
-  if (action.fromGrade && action.toGrade && action.fromGrade !== action.toGrade) return `${action.fromGrade} → ${action.toGrade}`;
+/** The rating change in the reader's language: "Neutral → Buy" (中性 → 买入), "Init. Buy", or the rating alone. */
+function gradeText(action: AnalystAction, initShort: string, lang: Lang): string {
+  const to = action.toGrade ? ratingWord(action.toGrade, lang) : "—";
+  if (action.fromGrade && action.toGrade && action.fromGrade !== action.toGrade) return `${ratingWord(action.fromGrade, lang)} → ${to}`;
   if (action.action === "init") return `${initShort} ${to}`;
   return to;
 }
@@ -227,10 +230,10 @@ function Actions({ actions }: { actions: readonly AnalystAction[] }) {
       header: a.columns.rating,
       width: "8.25rem",
       render: (row) => {
-        const grade = gradeText(row, a.initShort);
+        const grade = gradeText(row, a.initShort, lang);
         const action = row.action ? (actionLabels[row.action] ?? row.action) : null;
         return (
-          <span className="text-fg-2" title={action ? `${action}: ${grade}` : grade}>
+          <span className="text-fg-2" title={action ? tpl(a.actionGrade, { action, grade }) : grade}>
             {grade}
           </span>
         );
