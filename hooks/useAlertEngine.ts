@@ -75,7 +75,7 @@ export function useAlertEngine(): void {
   const symbols = useMemo(() => [...new Set(rules.filter(isActive).map((rule) => rule.symbol))].sort(), [rules]);
   const leader = useLeaderLock(symbols.length > 0);
   const { holdings } = useHoldings();
-  const { quotes, data } = useQuoteMap(leader ? symbols : NO_SYMBOLS, { whenHidden: true });
+  const { quotes, data, error } = useQuoteMap(leader ? symbols : NO_SYMBOLS, { whenHidden: true });
 
   const [engine] = useState(() => createAlertEngine({ fetchBars }));
 
@@ -107,12 +107,14 @@ export function useAlertEngine(): void {
   }, [engine, t, lang, router]);
 
   // Check on every quote refresh, and right away when rules change (a new rule is checked against the quotes already
-  // loaded instead of waiting up to a minute for the next refresh). Writes by the engine itself are idempotent.
+  // loaded instead of waiting up to a minute for the next refresh). Writes by the engine itself are idempotent. While
+  // the latest refresh has failed, the quotes on hand are older than they look, so nothing is checked against them: the
+  // time since the last real check keeps growing, and the catch-up covers the gap once quotes are back.
   useEffect(() => {
-    if (!leader || !data) return;
+    if (!leader || !data || error) return;
     engine.setInputs(quotes, holdings);
     engine.check();
-  }, [engine, leader, data, quotes, holdings, rules]);
+  }, [engine, leader, data, error, quotes, holdings, rules]);
 
   // Write the routine check results when the tab hides or closes, and when this tab stops leading.
   useEffect(() => {

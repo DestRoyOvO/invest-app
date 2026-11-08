@@ -40,7 +40,7 @@ import { describeRule } from "./describe";
 import { formFromRule, parseNumberInput, valueAfterKindChange } from "./form";
 import { SymbolField } from "./SymbolField";
 
-/** The symbol's name, last price and day change under the symbol field. */
+/** The symbol's name, last price and day change under the symbol field; a stale quote says so. */
 function QuoteLine({ quote }: { quote: Quote }) {
   const { t, lang } = usePrefs();
   return (
@@ -48,6 +48,7 @@ function QuoteLine({ quote }: { quote: Quote }) {
       <span className="truncate text-fg-2">{quote.name}</span>
       <span className="num text-fg-2">{tpl(t.alerts.editor.context.last, { price: formatPrice(quote.price, lang) })}</span>
       <Delta value={quote.changePercent} />
+      {quote.stale ? <span className="text-warn">{t.alerts.reasons.stale}</span> : null}
     </span>
   );
 }

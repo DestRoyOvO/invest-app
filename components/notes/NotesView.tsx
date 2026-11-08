@@ -4,10 +4,9 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
-
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Panel, PanelMeta } from "@/components/ui/Panel";
-import { EmptyState, StaleBanner } from "@/components/ui/States";
+import { EmptyState, ErrorState, StaleBanner } from "@/components/ui/States";
 import { TickNumber } from "@/components/ui/TickNumber";
 import { withTrueMinus } from "@/components/ui/delta-utils";
 import { useQuoteMap } from "@/hooks/useAlerts";
@@ -73,7 +72,7 @@ export function NotesView() {
   const { symbols: watchlist } = useWatchlist();
   const [tag, setTag] = useState<string | null>(null);
   const symbols = useMemo(() => Object.keys(book), [book]);
-  const { quotes, data, error } = useQuoteMap(symbols);
+  const { quotes, data, error, stale, staleSince, retry } = useQuoteMap(symbols);
   const tags = useMemo(() => tagCounts(book), [book]);
   const activeTag = tag && tags.some((item) => item.tag === tag) ? tag : null;
   const words = t.notes;
@@ -180,7 +179,8 @@ export function NotesView() {
             </div>
           ) : null}
         </div>
-        <StaleBanner show={Boolean(error && data)} since={data?.asOf} />
+        <StaleBanner show={stale} since={staleSince} />
+        {error && !data ? <ErrorState compact error={error} onRetry={retry} className="border-b border-line" /> : null}
         <DataTable
           rows={hydrated ? rows : []}
           columns={columns}

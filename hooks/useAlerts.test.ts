@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Quote, QuotesResponse } from "@/types/api";
 
-import { mergeQuoteResponses, quoteRequestUrls } from "./useAlerts";
+import { mergeQuoteResponses, quoteFreshness, quoteRequestUrls } from "./useAlerts";
 
 describe("quoteRequestUrls", () => {
   it("dedupes, sorts and splits symbols into requests of 50", () => {
@@ -24,5 +24,27 @@ describe("mergeQuoteResponses", () => {
     const a: QuotesResponse = { asOf: "2026-11-06T20:00:10Z", quotes: [quote("AAPL")], missing: ["NOPE"] };
     const b: QuotesResponse = { asOf: "2026-11-06T20:00:05Z", quotes: [quote("MSFT")], missing: [] };
     expect(mergeQuoteResponses([a, b])).toEqual({ asOf: "2026-11-06T20:00:05Z", quotes: [quote("AAPL"), quote("MSFT")], missing: ["NOPE"] });
+  });
+});
+
+describe("quoteFreshness", () => {
+  const quote = (symbol: string, stale: boolean, fetchedAt: string | null) => ({ symbol, stale, fetchedAt }) as Quote;
+  const response = (quotes: Quote[]): QuotesResponse => ({ asOf: "2026-11-06T20:00:10Z", quotes, missing: [] });
+
+  it("is fresh while every quote is fresh and the last refresh worked", () => {
+    expect(quoteFreshness(response([quote("AAPL", false, "2026-11-06T20:00:09Z")]), false)).toEqual({ stale: false, since: null });
+    expect(quoteFreshness(undefined, true)).toEqual({ stale: false, since: null });
+  });
+
+  it("flags quotes the server served stale, as old as the oldest of them", () => {
+    const data = response([quote("AAPL", true, "2026-11-06T19:40:00Z"), quote("MSFT", true, "2026-11-06T19:20:00Z"), quote("NVDA", false, "2026-11-06T20:00:09Z")]);
+    expect(quoteFreshness(data, false)).toEqual({ stale: true, since: "2026-11-06T19:20:00Z" });
+    // Without a fetch time the age is unknown.
+    expect(quoteFreshness(response([quote("AAPL", true, null)]), false)).toEqual({ stale: true, since: null });
+  });
+
+  it("flags the previous response after a failed refresh", () => {
+    expect(quoteFreshness(response([quote("AAPL", false, "2026-11-06T20:00:09Z")]), true)).toEqual({ stale: true, since: "2026-11-06T20:00:10Z" });
+    expect(quoteFreshness(response([quote("AAPL", true, "2026-11-06T19:20:00Z")]), true)).toEqual({ stale: true, since: "2026-11-06T19:20:00Z" });
   });
 });

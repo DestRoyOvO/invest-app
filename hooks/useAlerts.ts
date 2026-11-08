@@ -47,11 +47,30 @@ async function fetchQuoteChunks(key: readonly [string, string]): Promise<QuotesR
   return mergeQuoteResponses(parts);
 }
 
+/**
+ * Whether shown quotes are older than they look, and since when: the latest refresh failed (the previous response is
+ * shown), or the server marked quotes stale (it served older cached quotes after Yahoo failed). `since` is the oldest
+ * time behind the data, or null when it is unknown.
+ */
+export function quoteFreshness(data: QuotesResponse | undefined, refreshFailed: boolean): { stale: boolean; since: string | null } {
+  if (!data) return { stale: false, since: null };
+  const staleQuotes = data.quotes.filter((quote) => quote.stale);
+  if (staleQuotes.length === 0 && !refreshFailed) return { stale: false, since: null };
+  const times = staleQuotes.map((quote) => quote.fetchedAt).filter((time): time is string => typeof time === "string" && time.length > 0);
+  if (refreshFailed) times.push(data.asOf);
+  return { stale: true, since: times.sort()[0] ?? null };
+}
+
 export interface QuoteMap {
   quotes: ReadonlyMap<string, Quote>;
   data: QuotesResponse | undefined;
   error: unknown;
   isLoading: boolean;
+  /** The request has answered or failed: a symbol without a quote is then missing, not loading. */
+  settled: boolean;
+  /** Shown quotes are older than they look (see quoteFreshness): put a StaleBanner with `staleSince` above them. */
+  stale: boolean;
+  staleSince: string | null;
   retry: () => void;
 }
 
@@ -69,7 +88,9 @@ export function useQuoteMap(symbols: readonly string[], { whenHidden = false }: 
     refreshWhenHidden: whenHidden,
   });
   const quotes = useMemo(() => (data ? new Map(data.quotes.map((q) => [q.symbol, q])) : EMPTY_MAP), [data]);
-  return { quotes, data, error, isLoading, retry: () => void mutate() };
+  const { stale, since } = useMemo(() => quoteFreshness(data, Boolean(error)), [data, error]);
+  const settled = data !== undefined || error !== undefined;
+  return { quotes, data, error, isLoading, settled, stale, staleSince: since, retry: () => void mutate() };
 }
 
 // ---------------------------------------------------------------------------

@@ -409,6 +409,16 @@ describe("ruleStatus", () => {
     expect(ruleStatus(rule({ kind: "pnl_from_cost", value: 10 }), quote(), {}, NOW)).toMatchObject({ status: "unavailable", reading: { unavailable: "no_position" } });
     expect(ruleStatus(rule({ kind: "above", value: 180 }), quote(), {}, NOW).status).toBe("met");
     expect(ruleStatus(rule({ kind: "below", value: 170 }), quote(), {}, NOW).status).toBe("watching");
-    expect(ruleStatus(rule(), null, {}, NOW).status).toBe("watching");
+  });
+
+  it("never shows a rule the engine cannot check as watching", () => {
+    // A stale quote or one without a price is skipped by the engine, so the table says why instead of "watching".
+    expect(ruleStatus(rule({ kind: "above", value: 180 }), quote({ stale: true }), {}, NOW)).toMatchObject({ status: "unavailable", reading: { unavailable: "stale" } });
+    expect(ruleStatus(rule(), quote({ price: null }), {}, NOW)).toMatchObject({ status: "unavailable", reading: { unavailable: "no_price" } });
+    // No quote once the request has answered: an unknown symbol, or a failed request.
+    expect(ruleStatus(rule(), undefined, {}, NOW)).toMatchObject({ status: "unavailable", reading: { unavailable: "no_quote" } });
+    // Still loading: nothing is known yet.
+    expect(ruleStatus(rule(), undefined, {}, NOW, false)).toEqual({ status: "watching", reading: null });
+    expect(ruleStatus(rule({}, { paused: true }), undefined, {}, NOW).status).toBe("paused");
   });
 });

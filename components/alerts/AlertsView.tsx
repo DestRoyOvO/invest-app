@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button, IconButton } from "@/components/ui/Button";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Panel, PanelMeta } from "@/components/ui/Panel";
-import { EmptyState, StaleBanner } from "@/components/ui/States";
+import { EmptyState, ErrorState, StaleBanner } from "@/components/ui/States";
 import { TickNumber } from "@/components/ui/TickNumber";
 import { useToast } from "@/components/ui/Toast";
 import { requestNotificationPermission, setAlertEditTarget, useAlertLog, useAlertRules, useNotificationPermission, useQuoteMap } from "@/hooks/useAlerts";
@@ -114,17 +114,17 @@ function RulesPanel() {
   const { holdings } = useHoldings();
   const { symbols: watchlist } = useWatchlist();
   const ruleSymbols = useMemo(() => rules.map((rule) => rule.symbol), [rules]);
-  const { quotes, data, error } = useQuoteMap(ruleSymbols);
+  const { quotes, data, error, settled, stale, staleSince, retry } = useQuoteMap(ruleSymbols);
   const words = t.alerts.page;
 
   const rows = useMemo<RuleRow[]>(
     () =>
       rules.map((rule) => {
         const quote = quotes.get(rule.symbol);
-        const { status, reading } = now ? ruleStatus(rule, quote, holdings, now) : { status: "watching" as const, reading: null };
+        const { status, reading } = now ? ruleStatus(rule, quote, holdings, now, settled) : { status: "watching" as const, reading: null };
         return { rule, quote, status, reading };
       }),
-    [rules, quotes, holdings, now],
+    [rules, quotes, holdings, now, settled],
   );
 
   const edit = (rule: AlertRule) => {
@@ -254,7 +254,8 @@ function RulesPanel() {
       }
     >
       <p className="border-b border-line px-3 py-2 text-xs text-fg-2">{t.alerts.honest}</p>
-      <StaleBanner show={Boolean(error && data)} since={data?.asOf} />
+      <StaleBanner show={stale} since={staleSince} />
+      {error && !data ? <ErrorState compact error={error} onRetry={retry} className="border-b border-line" /> : null}
       <DataTable
         rows={hydrated ? rows : []}
         columns={columns}

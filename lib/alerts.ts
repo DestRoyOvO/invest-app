@@ -829,14 +829,23 @@ export type RuleStatus = "paused" | "triggered" | "unavailable" | "met" | "watch
 
 /**
  * A rule's state for the rules table: paused, a "once" rule that fired (triggered), a rule that cannot be checked
- * (unavailable, with the reason in `reading`), a condition that holds now (met: it fires or already fired this
- * session), or watching.
+ * (unavailable, with the reason in `reading`: a stale quote, no price, no position and so on), a condition that holds
+ * now (met: it fires or already fired this session), or watching.
+ *
+ * `quotesLoaded` says whether the quote request has answered (or failed). Until then a rule without a quote is shown
+ * as watching; after that, a missing quote means the rule cannot be checked, as the engine skips it too.
  */
-export function ruleStatus(rule: AlertRule, quote: AlertQuote | null | undefined, holdings: AlertHoldings, now: Date): { status: RuleStatus; reading: AlertReading | null } {
+export function ruleStatus(
+  rule: AlertRule,
+  quote: AlertQuote | null | undefined,
+  holdings: AlertHoldings,
+  now: Date,
+  quotesLoaded = true,
+): { status: RuleStatus; reading: AlertReading | null } {
   if (rule.paused) return { status: "paused", reading: null };
   if (rule.repeat === "once" && rule.done) return { status: "triggered", reading: null };
-  if (!quote) return { status: "watching", reading: null };
+  if (!quote) return quotesLoaded ? { status: "unavailable", reading: unavailable("no_quote") } : { status: "watching", reading: null };
   const reading = readRule(rule, quote, holdings, now);
-  if (reading.unavailable === "no_position" || reading.unavailable === "no_earnings_date" || reading.unavailable === "no_average") return { status: "unavailable", reading };
+  if (reading.unavailable) return { status: "unavailable", reading };
   return { status: reading.met && reading.extreme === null ? "met" : "watching", reading };
 }
