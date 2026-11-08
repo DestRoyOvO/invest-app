@@ -14,11 +14,11 @@ import { SkeletonRows } from "@/components/ui/States";
 import { Switch } from "@/components/ui/Switch";
 import { useToast } from "@/components/ui/Toast";
 import { useAuthStatus } from "@/hooks/useApi";
-import { useAiChat, useCachedData } from "@/hooks/useAiStream";
+import { useAiChat, useCachedData, type SendOptions } from "@/hooks/useAiStream";
 import { useHoldings } from "@/hooks/useHoldings";
 import { useLocalStore } from "@/hooks/useLocalStore";
 import { useWatchlist } from "@/hooks/useWatchlist";
-import { chatRequestContext, contextRef, pageContextFromPath } from "@/lib/ai-request";
+import { chatRequestContext, contextRef, pageContextFromPath, positionFlags } from "@/lib/ai-request";
 import { aiPrefsStore, clearChatHistory, restoreChatHistory, sanitizeIntent, setIncludePositions } from "@/lib/ai-store";
 import { followUpQuestions, suggestedQuestions, type Suggestion, type SuggestionData } from "@/lib/ai-suggestions";
 import { cn } from "@/lib/cn";
@@ -52,12 +52,16 @@ export function ChatDrawer() {
   const { turns, busy } = chat;
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const logRef = useRef<HTMLDivElement>(null);
   const nearBottom = useRef(true);
+  // Set when a control that disappears with the change (a listed question, Retry, Regenerate) starts an answer.
+  const refocusLog = useRef(false);
 
   // Page-aware questions come from data the page already loaded (read from the SWR cache, never fetched here).
   const stock = useCachedData<StockDetail>(page.view === "stock" && page.symbol ? `/api/stock/${encodeURIComponent(page.symbol)}` : null);
   const overview = useCachedData<MarketOverview>("/api/market/overview");
   const hasHoldings = Object.keys(holdings).length > 0;
+  const { held, hasPositions } = positionFlags(holdings, includePositions, page.symbol);
   const quote = stock?.quote;
   const suggestionData: SuggestionData = {
     page,
@@ -66,8 +70,8 @@ export function ChatDrawer() {
     changePercent: quote?.changePercent ?? null,
     relativeVolume: quote?.volume && quote.avgVolume ? quote.volume / quote.avgVolume : null,
     nextEarningsDate: quote?.nextEarningsDate ?? null,
-    held: page.symbol ? Boolean(holdings[page.symbol]) : false,
-    hasPositions: hasHoldings && includePositions,
+    held,
+    hasPositions,
     now: new Date(),
   };
   const last = turns[turns.length - 1];
@@ -77,9 +81,9 @@ export function ChatDrawer() {
 
   const { send } = chat;
   const ask = useCallback(
-    (text: string, intent?: ChatIntentInput) => {
+    (text: string, intent?: ChatIntentInput, options?: SendOptions) => {
       nearBottom.current = true;
-      send(text, intent);
+      send(text, intent, options);
     },
     [send],
   );
@@ -91,7 +95,7 @@ export function ChatDrawer() {
     const seed = chatSeed;
     const id = window.setTimeout(() => {
       clearChatSeed();
-      ask(seed.text, sanitizeIntent(seed.intent));
+      ask(seed.text, sanitizeIntent(seed.intent), { seeded: true });
     }, 0);
     return () => window.clearTimeout(id);
   }, [chatOpen, chatSeed, aiState, busy, clearChatSeed, ask]);
@@ -105,7 +109,27 @@ export function ChatDrawer() {
   useLayoutEffect(() => {
     const element = scrollRef.current;
     if (element && nearBottom.current) element.scrollTop = element.scrollHeight;
+    // The control that started the answer is gone and focus fell to the page: keep it in the dialog, on the conversation.
+    if (refocusLog.current) {
+      refocusLog.current = false;
+      if (!document.activeElement || document.activeElement === document.body) logRef.current?.focus({ preventScroll: true });
+    }
   }, [turns]);
+
+  const askListed = (item: Suggestion) => {
+    refocusLog.current = true;
+    ask(item.text, item.intent);
+  };
+
+  const retry = () => {
+    refocusLog.current = true;
+    chat.retry();
+  };
+
+  const regenerate = () => {
+    refocusLog.current = true;
+    chat.regenerate();
+  };
 
   const onScroll = () => {
     const element = scrollRef.current;
@@ -228,22 +252,22 @@ export function ChatDrawer() {
               {turns.length === 0 ? (
                 <div className="space-y-3">
                   <p className="text-sm text-fg-2">{tpl(t.ai.chat.welcome, { ctx: welcomeTarget })}</p>
-                  <QuestionList title={t.ai.chat.suggestions} items={starters} onAsk={(item: Suggestion) => ask(item.text, item.intent)} disabled={busy} />
+                  <QuestionList title={t.ai.chat.suggestions} items={starters} onAsk={askListed} disabled={busy} />
                 </div>
               ) : null}
-              <div role="log" aria-live="polite" aria-busy={busy} aria-label={t.ai.chat.title} className="space-y-4 empty:hidden">
+              <div ref={logRef} tabIndex={-1} role="log" aria-live="polite" aria-busy={busy} aria-label={t.ai.chat.title} className="space-y-4 empty:hidden">
                 {turns.map((turn, index) => {
                   const previousQuestion = turn.role === "user" ? turns.slice(0, index).reverse().find((t2) => t2.role === "user") : undefined;
                   const moved = previousQuestion?.context && turn.context && previousQuestion.context.key !== turn.context.key;
                   return (
                     <div key={turn.id} className="space-y-4">
                       {moved && turn.context ? <ContextDivider label={tpl(t.ai.chat.nowViewing, { ctx: turn.context.label })} /> : null}
-                      <ChatTurnView turn={turn} last={index === turns.length - 1} busy={busy} onCopy={(text) => void copy(text)} onRegenerate={chat.regenerate} onRetry={chat.retry} />
+                      <ChatTurnView turn={turn} last={index === turns.length - 1} busy={busy} onCopy={(text) => void copy(text)} onRegenerate={regenerate} onRetry={retry} />
                     </div>
                   );
                 })}
               </div>
-              {answered ? <QuestionList title={t.ai.chat.followUps} items={followUps} onAsk={(item) => ask(item.text, item.intent)} disabled={busy} wrap /> : null}
+              {answered ? <QuestionList title={t.ai.chat.followUps} items={followUps} onAsk={askListed} disabled={busy} wrap /> : null}
               {turns.some((turn) => turn.role === "assistant" && !turn.failure && turn.content) ? <p className="text-xs text-fg-3">{t.ai.disclaimer}</p> : null}
             </div>
           ) : (

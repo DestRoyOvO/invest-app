@@ -50,6 +50,15 @@ export function positionsForAi(holdings: HoldingsLike, limit: number = MAX_WATCH
     .slice(0, limit);
 }
 
+/**
+ * What page-aware questions may assume about the investor's positions: only positions the chat will send count, so
+ * with "Include my positions" off there are none, and no question asks about one.
+ */
+export function positionFlags(holdings: HoldingsLike, includePositions: boolean, symbol?: string): { held: boolean; hasPositions: boolean } {
+  const sent = includePositions ? positionsForAi(holdings) : [];
+  return { held: symbol !== undefined && sent.some((position) => position.symbol === symbol), hasPositions: sent.length > 0 };
+}
+
 export interface ChatContextInput {
   page: PageContext;
   watchlist: readonly string[];

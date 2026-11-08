@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { chatRequestContext, contextRef, pageContextFromPath, positionsForAi } from "./ai-request";
+import { MESSAGES } from "@/lib/i18n/messages";
+
+import { chatRequestContext, contextRef, pageContextFromPath, positionFlags, positionsForAi } from "./ai-request";
+import { suggestedQuestions } from "./ai-suggestions";
 
 const HOLDINGS = {
   NVDA: { shares: 10, cost: 120 },
@@ -43,6 +46,18 @@ describe("chat request context", () => {
     const context = chatRequestContext({ page: { view: "watchlist" }, watchlist: [], holdings: HOLDINGS, includePositions: false, intent: { kind: "move", symbol: "NVDA" } });
     expect(context).toEqual({ view: "watchlist", symbols: [], intent: { kind: "move", symbol: "NVDA" } });
     expect(chatRequestContext({ page: { view: "stock", symbol: "NVDA" }, watchlist: [], holdings: HOLDINGS, includePositions: false })).toEqual({ view: "stock", symbol: "NVDA" });
+  });
+
+  it("lets questions assume only positions that are sent", () => {
+    expect(positionFlags(HOLDINGS, true, "NVDA")).toEqual({ held: true, hasPositions: true });
+    expect(positionFlags(HOLDINGS, true, "MSFT")).toEqual({ held: false, hasPositions: true });
+    expect(positionFlags(HOLDINGS, false, "NVDA")).toEqual({ held: false, hasPositions: false });
+    expect(positionFlags({ NVDA: { shares: 0, cost: 120 } }, true, "NVDA")).toEqual({ held: false, hasPositions: false });
+    expect(positionFlags(HOLDINGS, true)).toEqual({ held: false, hasPositions: true });
+    // With positions off, the stock page asks no question about the position the request would leave out.
+    const off = positionFlags(HOLDINGS, false, "NVDA");
+    const starters = suggestedQuestions({ page: { view: "stock", symbol: "NVDA" }, lang: "en", live: true, now: new Date("2026-11-07T16:00:00Z"), ...off }, MESSAGES.en.ai.suggest);
+    expect(starters.map((item) => item.text)).not.toContain("How big is my NVDA position, and what is my P&L?");
   });
 
   it("labels the page for the conversation", () => {
