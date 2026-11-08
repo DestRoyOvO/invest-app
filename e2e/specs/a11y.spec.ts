@@ -1,56 +1,74 @@
+import { ROUTES, SAMPLE_DATA } from "../support/routes";
 import { expect, test, type KnownViolation, type Page, type Theme } from "../support/test";
 
-// axe-core on the main pages in both themes: no serious or critical violation of the WCAG 2.0, 2.1 and 2.2 A and AA
-// rules.
+// axe-core on every page of the route sweep (e2e/support/routes.ts; the redirect aside), the open command bar and the
+// open AI chat drawer, in both themes on both projects: no serious or critical violation of the WCAG 2.0, 2.1 and 2.2
+// A and AA rules. The pages start from the sweep's sample data (a watchlist, positions and a note), so the personal
+// pages are checked with their tables rather than their empty states, and each page waits for its data first.
 //
-// Three known findings are accepted, each for its rule and its elements only (every other rule, color contrast
-// included, still checks those elements), until the feature branches that rewrite the components are merged; fixing
-// them here would only conflict with those rewrites. docs/testing.md lists them. A known finding that no longer
-// occurs is reported as an "axe-known-unused" annotation, the cue to remove it.
+// A known finding is accepted for its rule and its elements only (every other rule, color contrast included, still
+// checks those elements), with the reason and the file and branch that own the fix; docs/testing.md lists them. A known
+// finding that no longer occurs is reported as an "axe-known-unused" annotation, the cue to remove it.
 
-interface PageCase {
-  path: string;
-  ready: string;
-  known: (page: Page) => KnownViolation[];
-}
-
-const PAGES: PageCase[] = [
-  {
-    path: "/",
-    ready: "Sector heatmap",
-    known: (page) => {
-      const heatmap = page.getByRole("region", { name: "Sector heatmap" });
-      return [
-        {
-          rule: "label-content-name-mismatch",
-          within: heatmap,
-          reason: "the tiles' aria-label puts the company and price between the symbol and the change they show; wave2/overview replaces this heatmap",
-        },
-        { rule: "target-size", within: heatmap, reason: "small tiles and the 17px sector headers; wave2/overview replaces this heatmap" },
-      ];
+const KNOWN: Readonly<Record<string, (page: Page, phone: boolean) => KnownViolation[]>> = {
+  // On phones the tiles of this treemap are too small to show their change.
+  "/sector/technology": (page, phone) =>
+    phone
+      ? []
+      : [
+          {
+            rule: "label-content-name-mismatch",
+            within: page.getByRole("region", { name: "Sector heatmap" }).getByRole("option", { name: /^\S+ \d+\.\d{2}%$/ }),
+            reason:
+              'a heatmap tile whose change has no sign ("CSCO 0.00%") shows the symbol and the change in two spans without a space between them, which axe reads as "CSCO0.00%"; components/market/SectorHeatmap.tsx (int/pages)',
+          },
+        ],
+  "/stock/BTC-USD": (page) => [
+    {
+      rule: "aria-required-attr",
+      within: page.getByRole("region", { name: "Factor profile" }).locator('[role="meter"]:not([aria-valuenow])'),
+      reason:
+        "the meter of a factor without a value (beta, for a crypto pair) keeps role=meter but leaves out aria-valuenow, which that role requires; components/ui/Meter.tsx (int/ui), as used by components/stock/FactorProfilePanel.tsx (int/pages)",
     },
-  },
-  {
-    path: "/stock/AAPL",
-    ready: "AI research note",
-    known: (page) => [
-      {
-        rule: "nested-interactive",
-        within: page.locator('[role="img"]').filter({ has: page.locator("canvas") }),
-        reason: "the chart container has role=img around lightweight-charts' focusable attribution link; wave2/quote's chart hides the container and drops the link",
-      },
-    ],
-  },
-];
+  ],
+};
+
+const PAGES = ROUTES.filter((route) => route.finalPath === undefined);
 
 for (const theme of ["dark", "light"] as const satisfies readonly Theme[]) {
-  for (const { path, ready, known } of PAGES) {
-    test(`${path} has no serious accessibility violations in the ${theme} theme`, async ({ page, app, axe }) => {
+  test.describe(`${theme} theme`, () => {
+    for (const route of PAGES) {
+      test(`${route.path} has no serious accessibility violations`, async ({ page, app, axe, consoleErrors }) => {
+        for (const { pattern, reason } of route.console ?? []) consoleErrors.allow(pattern, reason);
+        await app.setPrefs({ theme });
+        await app.seedStorage(SAMPLE_DATA);
+        await app.goto(route.path);
+        await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+        await route.ready(page);
+        await app.settle();
+        await axe.check({ known: KNOWN[route.path]?.(page, app.isPhone) ?? [] });
+      });
+    }
+
+    test("the open command bar has no serious accessibility violations", async ({ page, app, axe }) => {
       await app.setPrefs({ theme });
-      await app.goto(path);
-      await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
-      await expect(page.getByRole("region", { name: ready, exact: true })).toBeVisible();
-      await axe.check({ known: known(page) });
+      await app.goto("/");
+      // "/" opens the command bar from anywhere outside a text field.
+      await page.keyboard.press("/");
+      const dialog = page.getByRole("dialog", { name: "Command bar" });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByRole("option").first()).toBeVisible();
+      await axe.check();
     });
-  }
+
+    test("the open AI chat drawer has no serious accessibility violations", async ({ page, app, axe }) => {
+      await app.setPrefs({ theme });
+      await app.goto("/");
+      await page.getByRole("button", { name: /Open research assistant$/ }).click();
+      const drawer = page.getByRole("dialog", { name: "Research assistant" });
+      await expect(drawer).toBeVisible();
+      await expect(drawer.getByRole("textbox")).toBeVisible();
+      await axe.check();
+    });
+  });
 }
