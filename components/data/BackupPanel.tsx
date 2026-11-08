@@ -45,6 +45,8 @@ type RestoreState =
   | { phase: "done"; file: string; result: RestoreResult; prefsBefore: PrefCookies | null };
 
 const KNOWN_KINDS = new Set<StoreDiff["kind"]>(["watchlist", "holdings", "notes"]);
+/** Written by hooks/useLastSymbol.ts whenever a quote page opens; not data the user would miss. */
+const LAST_SYMBOL_KEY = "investseek:last-symbol";
 
 /** Export a backup file; restore one with a preview of what changes, Merge or Replace, a confirmation and Undo. */
 export function BackupPanel() {
@@ -88,8 +90,9 @@ export function BackupPanel() {
       setState({ phase: "error", message: t.data.backup.errors[parsed.error] });
       return;
     }
-    // With nothing stored here there is nothing to lose, so moving in replaces the starter watchlist.
-    setMode(Object.keys(current).length === 0 ? "replace" : "merge");
+    // With nothing of the user's stored here (the last viewed symbol does not count) there is nothing to lose, so
+    // moving in replaces the starter watchlist instead of adding to it.
+    setMode(Object.keys(current).every((key) => key === LAST_SYMBOL_KEY) ? "replace" : "merge");
     setRestorePrefs(true);
     setState({ phase: "preview", file: picked.name, size: picked.size, backup: parsed.value.backup, confirming: false });
   };
