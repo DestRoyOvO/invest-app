@@ -59,19 +59,22 @@ export function quoteQuery(tab: QuoteTab, compare: readonly string[]): string {
   return query ? `?${query}` : "";
 }
 
-const NY_TIME = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hourCycle: "h23", hour: "numeric", minute: "numeric" });
+const NY_TIME = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hourCycle: "h23", weekday: "short", hour: "numeric", minute: "numeric" });
 
 /**
  * Session of an earnings release from its New York time: before the open, after the close or during the session.
  * Yahoo's estimated dates carry the company's usual release time (Apple 16:00, JPMorgan 08:30: the time of its last
  * report), so an estimate gets a session too, which the chip marks "est.". Exactly midnight is Yahoo's placeholder
- * for an unknown time and gets none; so do listings outside the US, where New York hours mean nothing.
+ * for an unknown time and gets none; so do listings outside the US, where New York hours mean nothing, and weekend
+ * dates, when there is no session (Berkshire reports on Saturdays). The earnings panel reads it the same way.
  */
 export function earningsTiming(iso: string, usListing = true): "pre" | "post" | "intraday" | null {
   if (!usListing) return null;
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return null;
   const parts = NY_TIME.formatToParts(date);
+  const weekday = parts.find((p) => p.type === "weekday")?.value;
+  if (weekday === "Sat" || weekday === "Sun") return null;
   const hour = Number(parts.find((p) => p.type === "hour")?.value);
   const minute = Number(parts.find((p) => p.type === "minute")?.value);
   if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;

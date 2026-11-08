@@ -71,6 +71,9 @@ describe("events", () => {
     // Midnight in New York is Yahoo's placeholder for an unknown time.
     expect(earningsTiming("2026-11-05T05:00:00.000Z")).toBeNull();
     expect(earningsTiming("2027-01-14T05:00:00.000Z")).toBeNull();
+    // No session on a weekend: Berkshire's Saturday-morning report gets none.
+    expect(earningsTiming("2027-05-01T12:00:00.000Z")).toBeNull();
+    expect(earningsTiming("2026-11-07T21:00:00.000Z")).toBeNull();
     // New York hours mean nothing for a Hong Kong listing.
     expect(earningsTiming("2026-11-18T08:00:00.000Z", false)).toBeNull();
     expect(earningsTiming("garbage")).toBeNull();
