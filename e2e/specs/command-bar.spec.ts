@@ -123,7 +123,7 @@ test.describe("desktop", () => {
     await expect(bar.options.nth(1)).toHaveAttribute("aria-selected", "true");
     await expect(bar.selected).toHaveCount(1);
     await expect(bar.input).toHaveAttribute("aria-activedescendant", (await bar.options.nth(1).getAttribute("id")) ?? "");
-    // Up from the first wraps to the last, and down from there back to the first.
+    // Up past the first wraps to the last, down past the last wraps to the first: back on the second.
     await page.keyboard.press("ArrowUp");
     await page.keyboard.press("ArrowUp");
     await expect(bar.options.last()).toHaveAttribute("aria-selected", "true");
