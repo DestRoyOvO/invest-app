@@ -2,7 +2,18 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-import { contentSecurityPolicy, createNonce, decideSiteAccess, isApiPath, isOpenPath, safeNextPath, unlockUrl, type SiteRequest } from "./site-access";
+import {
+  contentSecurityPolicy,
+  createNonce,
+  decideSiteAccess,
+  escapeMalformedSegments,
+  hasMalformedEscape,
+  isApiPath,
+  isOpenPath,
+  safeNextPath,
+  unlockUrl,
+  type SiteRequest,
+} from "./site-access";
 
 function request(overrides: Partial<SiteRequest>): SiteRequest {
   return { pathname: "/", search: "", isPrivate: true, authenticated: false, next: null, ...overrides };
@@ -97,6 +108,52 @@ describe("decideSiteAccess", () => {
     expect(decideSiteAccess(request({ pathname: "/unlock", authenticated: true, next: "/watchlist" }))).toEqual({ action: "redirect", location: "/watchlist" });
     expect(decideSiteAccess(request({ pathname: "/unlock", authenticated: true, next: "https://evil.example" }))).toEqual({ action: "redirect", location: "/" });
     expect(decideSiteAccess(request({ pathname: "/unlock", isPrivate: false }))).toEqual({ action: "redirect", location: "/" });
+  });
+});
+
+describe("paths with a malformed percent-escape", () => {
+  const MALFORMED = ["/stock/%E0%A4%A", "/stock/%ZZ", "/sector/%E0%A4%A", "/stock/100%", "/%E0%A4%A", "/api/stock/%E0%A4%A", "/api/stock/%ZZ/chart"];
+
+  it("are told apart from well-formed ones", () => {
+    for (const path of MALFORMED) expect(hasMalformedEscape(path), path).toBe(true);
+    // Escaped symbols, a Chinese segment in UTF-8 and plain paths decode.
+    for (const path of ["/", "/stock/AAPL", "/stock/%24%24%24", "/stock/%5EGSPC", "/stock/EURUSD%3DX", "/stock/BRK.B", "/sector/%E4%B8%AD", "/api/stock/AAPL/chart"]) {
+      expect(hasMalformedEscape(path), path).toBe(false);
+    }
+  });
+
+  it("are escaped segment by segment into a well-formed path of the same characters", () => {
+    expect(escapeMalformedSegments("/stock/%E0%A4%A")).toBe("/stock/%25E0%25A4%25A");
+    expect(escapeMalformedSegments("/stock/%ZZ")).toBe("/stock/%25ZZ");
+    expect(escapeMalformedSegments("/stock/100%")).toBe("/stock/100%25");
+    // A well-formed segment beside a malformed one keeps its escapes.
+    expect(escapeMalformedSegments("/sector/%E4%B8%AD/%ZZ")).toBe("/sector/%E4%B8%AD/%25ZZ");
+    expect(escapeMalformedSegments("/stock/%24%24%24")).toBe("/stock/%24%24%24");
+    for (const path of MALFORMED) {
+      expect(hasMalformedEscape(escapeMalformedSegments(path)), path).toBe(false);
+      expect(decodeURIComponent(escapeMalformedSegments(path)), path).toBe(path);
+    }
+  });
+
+  it("answer 400 on API paths and send pages to the escaped path, which answers with the not-found page", () => {
+    for (const isPrivate of [false, true]) {
+      const authenticated = isPrivate;
+      expect(decideSiteAccess(request({ isPrivate, authenticated, pathname: "/api/stock/%E0%A4%A" }))).toEqual({ action: "bad_request" });
+      expect(decideSiteAccess(request({ isPrivate, authenticated, pathname: "/stock/%E0%A4%A" }))).toEqual({ action: "redirect", location: "/stock/%25E0%25A4%25A" });
+      expect(decideSiteAccess(request({ isPrivate, authenticated, pathname: "/sector/%ZZ", search: "?tab=news" }))).toEqual({ action: "redirect", location: "/sector/%25ZZ?tab=news" });
+    }
+    // An open path of a private site is checked too.
+    expect(decideSiteAccess(request({ pathname: "/api/auth/%ZZ" }))).toEqual({ action: "bad_request" });
+  });
+
+  it("leave a private site's rules first: a visitor without a session goes to the unlock page or gets 401", () => {
+    expect(decideSiteAccess(request({ pathname: "/stock/%E0%A4%A" }))).toEqual({ action: "redirect", location: "/unlock?next=%2Fstock%2F%25E0%25A4%25A" });
+    expect(decideSiteAccess(request({ pathname: "/api/stock/%E0%A4%A" }))).toEqual({ action: "unauthorized" });
+  });
+
+  it("pass well-formed paths through", () => {
+    expect(decideSiteAccess(request({ isPrivate: false, pathname: "/stock/%24%24%24" }))).toEqual({ action: "next" });
+    expect(decideSiteAccess(request({ isPrivate: false, pathname: "/api/stock/%5EGSPC" }))).toEqual({ action: "next" });
   });
 });
 

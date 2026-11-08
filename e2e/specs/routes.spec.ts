@@ -4,7 +4,7 @@ import path from "node:path";
 import { MESSAGES } from "@/lib/i18n/messages";
 
 import { BASE_URL } from "../support/env";
-import { expectedNoise, ROUTES, SAMPLE_DATA, type RouteCase } from "../support/routes";
+import { API_ROUTES, expectedNoise, ROUTES, SAMPLE_DATA, type RouteCase } from "../support/routes";
 import { expect, test, type Page } from "../support/test";
 
 // Every page of the app, on both projects, as a returning investor sees it (a watchlist, positions and a note in the
@@ -112,6 +112,18 @@ test.describe("every page", () => {
         "same-origin responses with an error status",
       ).toEqual([]);
       expect((route.apis ?? []).filter((api) => !responses.loadedApis.has(api)), "API routes the page did not load with status 200").toEqual([]);
+    });
+  }
+});
+
+test.describe("every API path no page requests", () => {
+  for (const route of API_ROUTES) {
+    test(`${route.path} answers ${route.status} JSON`, async ({ request }) => {
+      test.skip(test.info().project.name !== "desktop", "A request without a page: one project is enough.");
+      const response = await request.get(route.path);
+      expect(response.status()).toBe(route.status);
+      expect(response.headers()["content-type"]).toMatch(/^application\/json/);
+      expect(await response.json()).toEqual({ error: { code: route.code, message: expect.any(String) } });
     });
   }
 });

@@ -2,6 +2,7 @@ import "server-only";
 
 // Decisions for proxy.ts, kept pure so the rules are unit tested apart from Next.js:
 // - which requests a private site (SITE_ACCESS=private) serves without a session, and where the rest go;
+// - what a path with a malformed percent-escape gets, which Next.js itself would answer with a bare 500;
 // - the per-request Content-Security-Policy for pages in production.
 
 export const UNLOCK_PATH = "/unlock";
@@ -55,7 +56,38 @@ export function unlockUrl(pathname: string, search: string): string {
   return next === "/" ? UNLOCK_PATH : `${UNLOCK_PATH}?next=${encodeURIComponent(next)}`;
 }
 
-export type SiteDecision = { action: "next" } | { action: "redirect"; location: string } | { action: "unauthorized" };
+/**
+ * True when a path holds a malformed percent-escape ("/stock/%E0%A4%A", "/stock/%ZZ", a lone "%"). Next.js cannot decode
+ * such a segment while it matches a dynamic route (/stock/[symbol], /api/stock/[symbol]) and ends in a plain-text 500
+ * before the page or the route handler runs, so proxy.ts answers these paths itself.
+ */
+export function hasMalformedEscape(pathname: string): boolean {
+  try {
+    decodeURIComponent(pathname);
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * The same characters as a well-formed path: each segment with a malformed escape gets its "%" escaped as "%25", so
+ * "/stock/%E0%A4%A" becomes "/stock/%25E0%25A4%25A", a symbol that cannot exist, which the quote page answers with the
+ * not-found page and 404. Well-formed segments stay as they are.
+ */
+export function escapeMalformedSegments(pathname: string): string {
+  return pathname
+    .split("/")
+    .map((segment) => (hasMalformedEscape(segment) ? segment.replaceAll("%", "%25") : segment))
+    .join("/");
+}
+
+/**
+ * next: let the request through; redirect: to the unlock page (or past it), or from a page path with a malformed
+ * percent-escape to the same path escaped; unauthorized: 401 JSON; bad_request: 400 JSON for an API path with a
+ * malformed percent-escape.
+ */
+export type SiteDecision = { action: "next" } | { action: "redirect"; location: string } | { action: "unauthorized" } | { action: "bad_request" };
 
 export interface SiteRequest {
   pathname: string;
@@ -67,15 +99,25 @@ export interface SiteRequest {
   next: string | null;
 }
 
-/** What proxy.ts does with a request: let it through, send it to the unlock page, or answer 401. */
+/**
+ * What proxy.ts does with a request: let it through, send it to the unlock page or answer 401 (a private site without a
+ * session, decided first, so a malformed path tells a signed-out visitor nothing more), or answer a path with a
+ * malformed percent-escape: 400 on an API path; on a page path a redirect to the same path escaped, which answers with
+ * the not-found page. A rewrite would keep the address, but the server would render the rewritten path where the browser
+ * hydrates its own (usePathname in the nav and the not-found view), and React would report the mismatch.
+ */
 export function decideSiteAccess({ pathname, search, isPrivate, authenticated, next }: SiteRequest): SiteDecision {
   if (pathname === UNLOCK_PATH) {
     // A public site has nothing to unlock, and a signed-in visitor already has: continue to the page they wanted.
     return isPrivate && !authenticated ? { action: "next" } : { action: "redirect", location: safeNextPath(next) };
   }
-  if (!isPrivate || authenticated || isOpenPath(pathname)) return { action: "next" };
-  if (isApiPath(pathname)) return { action: "unauthorized" };
-  return { action: "redirect", location: unlockUrl(pathname, search) };
+  if (isPrivate && !authenticated && !isOpenPath(pathname)) {
+    return isApiPath(pathname) ? { action: "unauthorized" } : { action: "redirect", location: unlockUrl(pathname, search) };
+  }
+  if (hasMalformedEscape(pathname)) {
+    return isApiPath(pathname) ? { action: "bad_request" } : { action: "redirect", location: `${escapeMalformedSegments(pathname)}${search}` };
+  }
+  return { action: "next" };
 }
 
 /** A fresh nonce for one response: 16 random bytes, base64. */

@@ -404,15 +404,15 @@ so the page shows its not-found view once `/api/stock/ZZZZ` answers 404. A symbo
 fund, index, currency, future or crypto pair asks for no earnings or analysts, so it causes no 4xx either
 (`/stock/VFIAX` in the sweep).
 
-Known app issues that no spec checks: a path segment with a malformed percent-escape (`/stock/%E0%A4%A`, `/stock/%ZZ`)
-answers a plain-text 500 wherever a dynamic route would take it (`/stock/…`, `/sector/…`, `/api/stock/…`). Next.js fails
-to decode the segment while it matches the route, before the page or the API route runs (so `normalizeSymbol` never
-sees it), and ends in a bare 500 instead of the 400 it means to send; a path that no dynamic route takes (`/%E0%A4%A`)
-gets the ordinary 404, and a malformed escape in the query string does no harm. `proxy.ts` runs before that match and
-could answer 400 itself. The two issues listed before are fixed: `priceDigits` in `lib/quote-figures.ts` gives currency
-pairs and the world board's instruments their decimals on the quote page too (four for EUR/USD, as on the world board),
-and a value that rounds to zero at the shown decimals prints without a sign, in the flat tone and without an arrow
-(`displayedSign` in `lib/format.ts`, behind `Delta` and the other direction colors).
+Known app issues that no spec checks: none. The last ones are fixed: `priceDigits` in `lib/quote-figures.ts` gives
+currency pairs and the world board's instruments their decimals on the quote page too (four for EUR/USD, as on the world
+board), and a value that rounds to zero at the shown decimals prints without a sign, in the flat tone and without an
+arrow (`displayedSign` in `lib/format.ts`, behind `Delta` and the other direction colors). A path segment with a
+malformed percent-escape (`/stock/%E0%A4%A`), which Next.js cannot decode to match a dynamic route and answered with a
+plain-text 500, is answered by `proxy.ts` (`lib/server/site-access.ts`): an API path gets 400 JSON, and a page is
+redirected to the same characters escaped (`/stock/%25E0%25A4%25A`), which answers with the not-found page and 404. A
+rewrite would keep the address, but the server would render the rewritten path where the browser hydrates its own, and
+React reports the mismatch. The route sweep checks both (`/stock/%E0%A4%A`, `/api/stock/%E0%A4%A`).
 
 Known app bugs the specs mark with `test.fixme`. Each test states the right behavior and fails today; once the bug is
 fixed it passes, and its `test.fixme` line goes.
