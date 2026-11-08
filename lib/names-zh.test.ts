@@ -89,6 +89,11 @@ describe("displayName", () => {
     expect(displayName(null, "Apple Inc.", "zh")).toBe("Apple Inc.");
   });
 
+  it("keeps a Latin name Chinese media use, but not one that only repeats the ticker", () => {
+    expect(displayName("META", "Meta Platforms, Inc.", "zh")).toBe("Meta");
+    expect(displayName("IBM", "International Business Machines Corporation", "zh")).toBe("International Business Machines Corporation");
+  });
+
   it("returns null when there is no name to show", () => {
     expect(displayName("KRMN", null, "zh")).toBeNull();
     expect(displayName("AAPL", "  ", "en")).toBeNull();
@@ -115,8 +120,9 @@ describe("symbolTitle", () => {
     expect(symbolTitle("BRK-B", "zh")).toBe("伯克希尔·哈撒韦 BRK-B");
   });
 
-  it("keeps the symbol alone in English and for symbols without a Chinese name", () => {
+  it("keeps the symbol alone in English, without a Chinese name and for a Latin name", () => {
     expect(symbolTitle("NVDA", "en")).toBe("NVDA");
     expect(symbolTitle("KRMN", "zh")).toBe("KRMN");
+    expect(symbolTitle("META", "zh")).toBe("META");
   });
 });

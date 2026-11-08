@@ -242,7 +242,8 @@ export function chineseNameOf(symbol: string): string | undefined {
  */
 export function displayName(symbol: string | null | undefined, englishName: string | null | undefined, lang: Lang): string | null {
   const chinese = lang === "zh" && symbol ? BY_SYMBOL.get(symbol) : undefined;
-  return chinese ?? (englishName?.trim() || null);
+  // A Chinese name that is the ticker itself (IBM) would only repeat the symbol column; the English name says more.
+  return (chinese !== symbol ? chinese : undefined) ?? (englishName?.trim() || null);
 }
 
 /**
@@ -257,11 +258,12 @@ export function fullName(symbol: string | null | undefined, englishName: string 
 
 /**
  * A symbol as a tab title names it: in Chinese with its Chinese name in front ("英伟达 NVDA"), since a Chinese reader
- * knows the company by that name; otherwise the symbol alone, as English tabs show it.
+ * knows the company by that name; otherwise the symbol alone, as English tabs show it. A name in Latin letters (Meta)
+ * would only echo the ticker, so it is left out.
  */
 export function symbolTitle(symbol: string, lang: Lang): string {
   const chinese = lang === "zh" ? BY_SYMBOL.get(symbol) : undefined;
-  return chinese ? `${chinese} ${symbol}` : symbol;
+  return chinese && hasCjk(chinese) ? `${chinese} ${symbol}` : symbol;
 }
 
 /** True when the text contains CJK characters (Yahoo search cannot handle those). */
