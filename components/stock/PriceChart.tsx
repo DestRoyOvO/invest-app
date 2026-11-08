@@ -230,6 +230,9 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
   const overlay0 = useChartSeries(overlayRange ? (compare[0] ?? null) : null, overlayRange ?? "1d", live);
   const overlay1 = useChartSeries(overlayRange ? (compare[1] ?? null) : null, overlayRange ?? "1d", live);
   const overlay2 = useChartSeries(overlayRange ? (compare[2] ?? null) : null, overlayRange ?? "1d", live);
+  // SWR hands out a new response object on every render; the memo below depends on the values, not the objects.
+  const [overlayData0, overlayData1, overlayData2] = [overlay0.data, overlay1.data, overlay2.data];
+  const [overlayError0, overlayError1, overlayError2] = [overlay0.error, overlay1.error, overlay2.error];
   const earnings = useEarnings(quote?.quoteType === "EQUITY" ? symbol : null);
   const { holdings } = useHoldings();
   const note = useNote(symbol);
@@ -254,16 +257,38 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
         ...compare.map((s) => ({ symbol: s, points: toPoints(s), loading: pending, missing: !pending && toPoints(s).length === 0 })),
       ];
     }
-    const queries = [overlay0, overlay1, overlay2];
+    const overlays = [
+      { data: overlayData0, error: overlayError0 },
+      { data: overlayData1, error: overlayError1 },
+      { data: overlayData2, error: overlayError2 },
+    ];
     return [
       { symbol, points: own, loading: false, missing: false },
       ...compare.map((s, i) => {
-        const query = queries[i];
-        const points = visibleBars(query.data?.bars ?? [], settings.extended).map((bar) => ({ time: chartTime(bar.t, intraday, timezone), value: bar.c }));
-        return { symbol: s, points, loading: !query.data && !query.error, missing: Boolean(query.error) || (Boolean(query.data) && points.length === 0) };
+        const { data: overlay, error } = overlays[i];
+        const points = visibleBars(overlay?.bars ?? [], settings.extended).map((bar) => ({ time: chartTime(bar.t, intraday, timezone), value: bar.c }));
+        return { symbol: s, points, loading: !overlay && !error, missing: Boolean(error) || (Boolean(overlay) && points.length === 0) };
       }),
     ];
-  }, [compareMode, bars, times, historyRange, historyQuery.data, historyQuery.error, symbol, compare, overlay0, overlay1, overlay2, settings.extended, intraday, timezone]);
+  }, [
+    compareMode,
+    bars,
+    times,
+    historyRange,
+    historyQuery.data,
+    historyQuery.error,
+    symbol,
+    compare,
+    overlayData0,
+    overlayData1,
+    overlayData2,
+    overlayError0,
+    overlayError1,
+    overlayError2,
+    settings.extended,
+    intraday,
+    timezone,
+  ]);
 
   // Dividend, split and earnings marks, each on the bar that contains it.
   const events = useMemo<ChartEventMark[]>(() => {
