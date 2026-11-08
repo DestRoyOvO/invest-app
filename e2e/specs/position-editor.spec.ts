@@ -119,7 +119,7 @@ test.describe("position editor", () => {
     expect((await storedHoldings(page)).AAPL).toEqual({ shares: left, cost: held.cost });
   });
 
-  test("refuses zero, negative, non-numeric and oversold shares, costs and prices without saving; Escape returns focus to the opener", async ({ page, app }) => {
+  test("refuses zero, negative and non-numeric shares and a zero cost without saving; Escape returns focus to the opener", async ({ page, app }) => {
     test.skip(app.isPhone, "Keyboard focus and Escape are desktop concerns; the phone test saves through the sheet.");
     const held = { shares: 10, cost: 150 };
     await app.seedStorage({ holdings: { AAPL: held } });
@@ -148,6 +148,21 @@ test.describe("position editor", () => {
     await expect(costField).toBeFocused();
     expect((await storedHoldings(page)).AAPL).toEqual(held);
 
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(opener).toBeFocused();
+    expect((await storedHoldings(page)).AAPL).toEqual(held);
+  });
+
+  test("refuses a price of zero or one that is not a number, and selling more shares than are held, without saving", async ({ page, app }) => {
+    test.skip(app.isPhone, "The same checks on phones; the phone test saves through the sheet.");
+    const held = { shares: 10, cost: 150 };
+    await app.seedStorage({ holdings: { AAPL: held } });
+    await app.goto("/stock/AAPL");
+    await quoteHeader(page, "AAPL").getByRole("button", { name: "Edit position" }).click();
+    const dialog = editor(page, "Edit position · AAPL");
+    const save = dialog.getByRole("button", { name: "Save" });
+
     // Buying shares at a price of zero.
     await dialog.getByRole("radio", { name: "Add shares" }).click();
     const paid = dialog.getByLabel("Price paid per share");
@@ -175,11 +190,6 @@ test.describe("position editor", () => {
     await expect(salePrice).toHaveAttribute("aria-invalid", "true");
     await expect(sell).not.toHaveAttribute("aria-invalid", "true");
     await expect(salePrice).toBeFocused();
-    expect((await storedHoldings(page)).AAPL).toEqual(held);
-
-    await page.keyboard.press("Escape");
-    await expect(dialog).toHaveCount(0);
-    await expect(opener).toBeFocused();
     expect((await storedHoldings(page)).AAPL).toEqual(held);
   });
 
