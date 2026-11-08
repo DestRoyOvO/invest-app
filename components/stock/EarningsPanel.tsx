@@ -316,10 +316,12 @@ function History({ history }: { history: readonly EarningsQuarter[] }) {
     {
       key: "quarter",
       header: e.columns.quarter,
+      // The report date follows the quarter, or goes under it while the table is narrower than 24rem (the right-hand
+      // column at 1280px, 360px phones): there the column gets 104 to 106px, and "3Q2025 10月30日" needs 127.
       render: (q) => (
-        <span className="text-fg" title={q.fiscalPeriod ? tpl(e.fiscal, { period: q.fiscalPeriod }) : undefined}>
+        <span className="text-fg @max-sm:block @max-sm:py-0.5" title={q.fiscalPeriod ? tpl(e.fiscal, { period: q.fiscalPeriod }) : undefined}>
           {q.period}
-          {q.reportedAt ? <span className="num ml-1.5 text-micro text-fg-3">{shortDay(q.reportedAt, lang)}</span> : null}
+          {q.reportedAt ? <span className="num ml-1.5 text-micro text-fg-3 @max-sm:ml-0 @max-sm:block">{shortDay(q.reportedAt, lang)}</span> : null}
         </span>
       ),
     },
@@ -341,7 +343,8 @@ function History({ history }: { history: readonly EarningsQuarter[] }) {
   return (
     <div>
       <h3 className="col-head px-3 pt-2.5 pb-1">{e.history}</h3>
-      <DataTable rows={rows} columns={columns} rowKey={(q) => q.periodEnd ?? q.period} caption={e.history} empty={t.calendar.surprises.none} />
+      {/* The table's own box is the query container of the quarter cells (no column hides by container size here). */}
+      <DataTable rows={rows} columns={columns} rowKey={(q) => q.periodEnd ?? q.period} caption={e.history} empty={t.calendar.surprises.none} className="@container" />
     </div>
   );
 }
