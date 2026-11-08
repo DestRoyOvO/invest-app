@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { MESSAGES, type Messages } from "@/lib/i18n/messages";
@@ -45,6 +46,7 @@ function applyThemeColor(theme: Theme, systemDark: boolean) {
 }
 
 export function PrefsProvider({ initial, children }: { initial: Prefs; children: ReactNode }) {
+  const router = useRouter();
   const [prefs, setPrefs] = useState<Prefs>(initial);
   const systemDark = useSyncExternalStore(subscribeScheme, () => window.matchMedia(DARK_SCHEME).matches, () => true);
 
@@ -71,12 +73,14 @@ export function PrefsProvider({ initial, children }: { initial: Prefs; children:
         update("lang", lang);
         // Keep the color convention on screen: without its own cookie it would follow the new language after a reload.
         update("updown", prefs.updown);
+        // The tab title comes from the server in the cookie's language: render it again in the new one.
+        router.refresh();
       },
       setTheme: (theme) => update("theme", theme),
       setUpdown: (updown) => update("updown", updown),
       setDensity: (density) => update("density", density),
     }),
-    [prefs, systemDark, update],
+    [prefs, systemDark, update, router],
   );
 
   return <PrefsContext value={value}>{children}</PrefsContext>;
