@@ -31,9 +31,11 @@ import { AI_STREAM_ERROR, AI_STREAM_TRUNCATED } from "@/types/api";
 import {
   aiTextResponse,
   AiNotConfiguredError,
+  generationLimits,
   getModel,
   incompleteCompletionCode,
   isAiConfigured,
+  isReasoningModel,
   streamChat,
   streamErrorCode,
   type LlmMessage,
@@ -45,7 +47,7 @@ const MESSAGES: LlmMessage[] = [
 ];
 
 interface Chunk {
-  choices: Array<{ delta: { content?: string | null }; finish_reason?: string | null }>;
+  choices: Array<{ delta: { content?: string | null; reasoning_content?: string | null }; finish_reason?: string | null }>;
   usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
 }
 
@@ -185,8 +187,9 @@ describe("deepseek client", () => {
     sdk.create.mockRejectedValueOnce(new sdk.APIError(429, "rate limited"));
     expect(await readAll(streamChat({ messages: MESSAGES, maxTokens: 10, temperature: 0 }))).toBe(`${AI_STREAM_ERROR}rate_limited`);
     sdk.create.mockRejectedValueOnce(new sdk.APIError(402, "Insufficient Balance"));
-    expect(await readAll(streamChat({ messages: MESSAGES, maxTokens: 10, temperature: 0 }))).toBe(`${AI_STREAM_ERROR}ai_unavailable`);
-    expect(streamErrorCode(new sdk.APIError(401, "bad key"))).toBe("ai_unavailable");
+    expect(await readAll(streamChat({ messages: MESSAGES, maxTokens: 10, temperature: 0 }))).toBe(`${AI_STREAM_ERROR}provider_rejected`);
+    expect(streamErrorCode(new sdk.APIError(401, "bad key"))).toBe("provider_rejected");
+    expect(streamErrorCode(new sdk.APIError(403, "forbidden"))).toBe("provider_rejected");
     expect(streamErrorCode(new sdk.APIError(500, "oops"))).toBe("upstream_error");
     expect(streamErrorCode(new Error("network"))).toBe("upstream_error");
   });
@@ -258,6 +261,36 @@ describe("deepseek client", () => {
     caller.abort();
     expect((await reader.read()).done).toBe(true);
     expect(console.error).not.toHaveBeenCalled();
+  });
+
+  it("recognizes reasoning models and raises their limits", () => {
+    for (const model of ["deepseek-reasoner", "deepseek-r1", "DeepSeek-R1-0528", "qwq-thinking"]) expect(isReasoningModel(model)).toBe(true);
+    for (const model of ["deepseek-chat", "deepseek-v3", "gpt-4o", "r100"]) expect(isReasoningModel(model)).toBe(false);
+    expect(generationLimits("deepseek-chat", 800)).toEqual({ maxTokens: 800, deadlineMs: 120_000, sendTemperature: true });
+    expect(generationLimits("deepseek-reasoner", 800)).toEqual({ maxTokens: 8_192, deadlineMs: 240_000, sendTemperature: false });
+    expect(generationLimits("deepseek-reasoner", 1400)).toMatchObject({ maxTokens: 8_400 });
+    expect(generationLimits("deepseek-reasoner", 4000)).toMatchObject({ maxTokens: 16_384 });
+  });
+
+  it("sends a reasoning model the raised token limit and no temperature, and never streams its reasoning", async () => {
+    vi.stubEnv("DEEPSEEK_MODEL", "deepseek-reasoner");
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    sdk.create.mockResolvedValue(completion([{ choices: [{ delta: { reasoning_content: "private thoughts" } }] }, chunk("## Bottom line")]));
+    const text = await readAll(streamChat({ messages: MESSAGES, maxTokens: 1400, temperature: 0.3 }));
+    expect(text).toBe("## Bottom line");
+    const [params] = sdk.create.mock.calls[0] as [Record<string, unknown>];
+    expect(params).toMatchObject({ model: "deepseek-reasoner", max_tokens: 8_400 });
+    expect(params).not.toHaveProperty("temperature");
+  });
+
+  it("says model_limit when a model reasons until the token limit without answering", async () => {
+    sdk.create.mockResolvedValueOnce(
+      completion([{ choices: [{ delta: { reasoning_content: "thinking" } }] }, { choices: [{ delta: {}, finish_reason: "length" }] }]),
+    );
+    expect(await readAll(streamChat({ messages: MESSAGES, maxTokens: 10, temperature: 0 }))).toBe(`${AI_STREAM_ERROR}model_limit`);
+    expect(incompleteCompletionCode(false, "length", true)).toBe("model_limit");
+    expect(incompleteCompletionCode(false, "length", false)).toBe("upstream_error");
+    expect(incompleteCompletionCode(false, "stop", true)).toBe("upstream_error");
   });
 
   it("wraps streams in a non-cacheable text response", () => {

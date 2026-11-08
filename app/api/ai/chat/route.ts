@@ -6,15 +6,18 @@ import { RATE_LIMITS } from "@/lib/server/rate-limit";
 import { guardAiRequest, openAiStream, readJsonRequest } from "@/lib/server/request-guard";
 
 // POST /api/ai/chat  ChatRequest -> text/plain stream.
-// Only the (validated, trimmed) user/assistant messages come from the client; the live context for the open view
-// is built on the server.
+// Only the (validated, trimmed) user/assistant messages come from the client; the live context for the open view (or
+// for a seeded question's subject, and the positions the investor allows) is built on the server.
 
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_TOKENS = 800;
 const TEMPERATURE = 0.3;
 
-/** Generations stop at a 120 s deadline (lib/server/deepseek.ts); allow a little longer so the error marker can be sent. */
-export const maxDuration = 130;
+/**
+ * Generations stop at a 120 s deadline (240 s for a reasoning model, lib/server/deepseek.ts); allow a little longer so
+ * the error marker can be sent.
+ */
+export const maxDuration = 250;
 
 export async function POST(request: Request): Promise<Response> {
   const denied = guardAiRequest(request, RATE_LIMITS.chat);

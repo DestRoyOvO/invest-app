@@ -2,18 +2,30 @@ import { Fragment, type ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
 
-// Minimal, safe Markdown for AI output: headings (#..###), "- " / "* " bullets, numbered items and **bold**.
-// Everything renders as React text nodes, so model output can never inject HTML.
+// Minimal, safe Markdown for AI output: headings (#..###), "- " / "* " bullets, numbered items, **bold** and
+// citation marks like [2]. Everything renders as React text nodes, so model output can never inject HTML.
+
+function citations(text: string, keyPrefix: string): ReactNode[] {
+  return text.split(/(\[\d{1,2}\])/g).map((part, i) =>
+    /^\[\d{1,2}\]$/.test(part) ? (
+      <span key={`${keyPrefix}-${i}`} className="num align-baseline text-[0.8em] text-fg-3">
+        {part}
+      </span>
+    ) : (
+      <Fragment key={`${keyPrefix}-${i}`}>{part}</Fragment>
+    ),
+  );
+}
 
 function inline(text: string): ReactNode[] {
   const parts = text.split(/(\*\*[^*]+\*\*)/g);
   return parts.map((part, i) =>
     part.startsWith("**") && part.endsWith("**") && part.length > 4 ? (
       <strong key={i} className="font-semibold text-fg">
-        {part.slice(2, -2)}
+        {citations(part.slice(2, -2), `b${i}`)}
       </strong>
     ) : (
-      <Fragment key={i}>{part}</Fragment>
+      <Fragment key={i}>{citations(part, `t${i}`)}</Fragment>
     ),
   );
 }
@@ -44,11 +56,11 @@ function parse(markdown: string): Block[] {
 export function Markdown({ text, className }: { text: string; className?: string }) {
   const blocks = parse(text);
   return (
-    <div className={cn("space-y-2.5 text-sm leading-relaxed text-fg-2", className)}>
+    <div className={cn("space-y-2.5 text-body text-fg-2", className)}>
       {blocks.map((block, i) => {
         if (block.kind === "h")
           return (
-            <h3 key={i} className="label pt-1.5 text-fg-2 first:pt-0">
+            <h3 key={i} className="pt-2 text-[0.8125rem] leading-5 font-semibold text-fg first:pt-0">
               {block.text}
             </h3>
           );
@@ -57,7 +69,7 @@ export function Markdown({ text, className }: { text: string; className?: string
             <ul key={i} className="space-y-1.5">
               {block.items.map((item, j) => (
                 <li key={j} className="flex gap-2.5">
-                  <span aria-hidden className="mt-[0.6em] size-1 shrink-0 bg-fg-3" />
+                  <span aria-hidden className="mt-[0.65em] size-1 shrink-0 bg-fg-3" />
                   <span className="min-w-0">{inline(item)}</span>
                 </li>
               ))}

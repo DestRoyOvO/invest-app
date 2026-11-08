@@ -4,7 +4,7 @@ import OpenAI, { APIError } from "openai";
 import type { ChatCompletionChunk } from "openai/resources/chat/completions";
 import type { CompletionUsage } from "openai/resources/completions";
 
-import { AI_STREAM_ERROR, AI_STREAM_TRUNCATED, type ApiErrorCode } from "@/types/api";
+import { AI_STREAM_ERROR, AI_STREAM_TRUNCATED, type AiStreamErrorCode } from "@/types/api";
 
 import { readEnv } from "./env";
 import { log } from "./log";
@@ -18,6 +18,12 @@ import { log } from "./log";
 const REQUEST_TIMEOUT_MS = 60_000;
 /** Hard cap on one whole generation, including the streamed body (the SDK timeout stops at the headers). */
 const GENERATION_DEADLINE_MS = 120_000;
+
+/** Limits for a reasoning model (see generationLimits). */
+const REASONING_TOKEN_FACTOR = 6;
+const REASONING_MIN_TOKENS = 8_192;
+const REASONING_MAX_TOKENS = 16_384;
+const REASONING_DEADLINE_MS = 240_000;
 
 export interface LlmMessage {
   role: "system" | "user" | "assistant";
@@ -49,6 +55,35 @@ export function getModel(): string {
   return readEnv().deepseekModel;
 }
 
+/** Models that reason before they answer, such as deepseek-reasoner (and R1-style or "thinking" model ids). */
+export function isReasoningModel(model: string): boolean {
+  return /reason|think|(^|[-_/.])r1($|[-_/.])/i.test(model);
+}
+
+export interface GenerationLimits {
+  maxTokens: number;
+  deadlineMs: number;
+  /** Reasoning models ignore temperature, so it is not sent to them. */
+  sendTemperature: boolean;
+}
+
+/**
+ * The limits one generation runs with. The routes size their token limits for chat models; a reasoning model spends
+ * tokens on its reasoning first (they count against max_tokens), so with those limits it would be cut off or end
+ * without an answer. For a reasoning model the token limit is raised to six times the request (8,192 to 16,384) and
+ * the deadline doubled.
+ */
+export function generationLimits(model: string, maxTokens: number): GenerationLimits {
+  if (!isReasoningModel(model)) return { maxTokens, deadlineMs: GENERATION_DEADLINE_MS, sendTemperature: true };
+  return {
+    maxTokens: Math.min(REASONING_MAX_TOKENS, Math.max(REASONING_MIN_TOKENS, maxTokens * REASONING_TOKEN_FACTOR)),
+    deadlineMs: REASONING_DEADLINE_MS,
+    sendTemperature: false,
+  };
+}
+
+let reasoningNoticeLogged = false;
+
 let cachedClient: { key: string; baseURL: string; client: OpenAI } | null = null;
 
 function getClient(): OpenAI | null {
@@ -79,18 +114,19 @@ const INTERRUPTED_FINISH_REASONS: ReadonlySet<string> = new Set(["content_filter
 /**
  * Error code for a completion that ended without a usable answer (no text at all, or cut off by the provider), or
  * null when it completed. DeepSeek reports finish reasons beyond the OpenAI set, e.g. "insufficient_system_resource".
+ * A model that reasoned until the token limit and never answered gets "model_limit", so the reader learns why.
  */
-export function incompleteCompletionCode(emittedText: boolean, finishReason: string | null): ApiErrorCode | null {
-  if (!emittedText) return "upstream_error";
+export function incompleteCompletionCode(emittedText: boolean, finishReason: string | null, reasoned = false): AiStreamErrorCode | null {
+  if (!emittedText) return reasoned && finishReason === "length" ? "model_limit" : "upstream_error";
   return finishReason !== null && INTERRUPTED_FINISH_REASONS.has(finishReason) ? "upstream_error" : null;
 }
 
 /** Maps an upstream failure to the error code appended after AI_STREAM_ERROR. */
-export function streamErrorCode(error: unknown): ApiErrorCode {
+export function streamErrorCode(error: unknown): AiStreamErrorCode {
   if (error instanceof APIError) {
     if (error.status === 429) return "rate_limited";
-    // 401 invalid key, 402 insufficient balance, 403 forbidden: the owner has to fix the configuration.
-    if (error.status === 401 || error.status === 402 || error.status === 403) return "ai_unavailable";
+    // 401 invalid key, 402 insufficient balance, 403 forbidden: the key is set, but the owner has to fix the account.
+    if (error.status === 401 || error.status === 402 || error.status === 403) return "provider_rejected";
   }
   return "upstream_error";
 }
@@ -107,9 +143,9 @@ function logUsage(model: string, usage: CompletionUsage, startedAt: number): voi
   });
 }
 
-function logFailure(model: string, error: unknown, timedOut: boolean): void {
+function logFailure(model: string, error: unknown, timedOut: boolean, deadlineMs: number = GENERATION_DEADLINE_MS): void {
   if (timedOut) {
-    log("error", "ai.deadline_exceeded", { model, deadlineMs: GENERATION_DEADLINE_MS });
+    log("error", "ai.deadline_exceeded", { model, deadlineMs });
   } else if (error instanceof APIError) {
     // 401 is a bad key and 402 an empty DeepSeek balance: the status tells the owner which one to fix.
     log("error", "ai.request_failed", { model, status: error.status ?? null, type: error.name, message: error.message.slice(0, 300) });
@@ -134,11 +170,17 @@ export function streamChat({ messages, maxTokens, temperature, signal }: StreamC
   if (!client) throw new AiNotConfiguredError();
 
   const model = getModel();
+  const limits = generationLimits(model, maxTokens);
+  if (!limits.sendTemperature && !reasoningNoticeLogged) {
+    reasoningNoticeLogged = true;
+    log("warn", "ai.reasoning_model", { model, maxTokens: limits.maxTokens, deadlineMs: limits.deadlineMs });
+  }
   const encoder = new TextEncoder();
   const upstream = new AbortController();
   const startedAt = Date.now();
   let iterator: AsyncIterator<ChatCompletionChunk> | null = null;
   let emittedText = false;
+  let reasoned = false;
   let finishReason: string | null = null;
   let timedOut = false;
   let cancelled = false;
@@ -148,7 +190,7 @@ export function streamChat({ messages, maxTokens, temperature, signal }: StreamC
   const deadline = setTimeout(() => {
     timedOut = true;
     upstream.abort();
-  }, GENERATION_DEADLINE_MS);
+  }, limits.deadlineMs);
   if (signal?.aborted) upstream.abort();
   else signal?.addEventListener("abort", onCallerAbort, { once: true });
 
@@ -168,8 +210,8 @@ export function streamChat({ messages, maxTokens, temperature, signal }: StreamC
             {
               model,
               messages,
-              max_tokens: maxTokens,
-              temperature,
+              max_tokens: limits.maxTokens,
+              ...(limits.sendTemperature ? { temperature } : {}),
               stream: true,
               stream_options: { include_usage: true },
             },
@@ -183,13 +225,13 @@ export function streamChat({ messages, maxTokens, temperature, signal }: StreamC
             settle();
             // The SDK ends the iteration quietly instead of throwing when the request is aborted mid-stream, so a
             // deadline abort has to be reported here. A caller abort or cancel leaves nobody to tell.
-            let failure: ApiErrorCode | null = null;
+            let failure: AiStreamErrorCode | null = null;
             if (timedOut) {
-              logFailure(model, null, true);
+              logFailure(model, null, true, limits.deadlineMs);
               failure = "upstream_error";
             } else if (!upstream.signal.aborted) {
-              failure = incompleteCompletionCode(emittedText, finishReason);
-              if (failure) log("error", "ai.incomplete", { model, finishReason, emittedText });
+              failure = incompleteCompletionCode(emittedText, finishReason, reasoned);
+              if (failure) log("error", "ai.incomplete", { model, finishReason, emittedText, reasoned });
             }
             if (failure) controller.enqueue(encoder.encode(`${AI_STREAM_ERROR}${failure}`));
             else if (finishReason === "length" && !upstream.signal.aborted) controller.enqueue(encoder.encode(AI_STREAM_TRUNCATED));
@@ -200,6 +242,9 @@ export function streamChat({ messages, maxTokens, temperature, signal }: StreamC
           const choice = value.choices[0];
           const reason: string | null | undefined = choice?.finish_reason;
           if (reason) finishReason = reason;
+          // DeepSeek streams a reasoning model's thinking in a non-standard field; it is never shown, only noted.
+          const thinking: unknown = (choice?.delta as unknown as Record<string, unknown> | undefined)?.reasoning_content;
+          if (typeof thinking === "string" && thinking) reasoned = true;
           const text = choice?.delta?.content;
           if (text) {
             emittedText = true;
@@ -210,7 +255,7 @@ export function streamChat({ messages, maxTokens, temperature, signal }: StreamC
       } catch (error) {
         settle();
         if (cancelled) return; // the reader went away; there is nobody to tell
-        if (!signal?.aborted) logFailure(model, error, timedOut);
+        if (!signal?.aborted) logFailure(model, error, timedOut, limits.deadlineMs);
         try {
           controller.enqueue(encoder.encode(`${AI_STREAM_ERROR}${timedOut ? "upstream_error" : streamErrorCode(error)}`));
           controller.close();

@@ -1,155 +1,189 @@
 "use client";
 
-import { Eraser, SendHorizontal, Square } from "lucide-react";
+import { Lock, Plus, SendHorizontal, Square } from "lucide-react";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { useUi } from "@/components/providers/UiProvider";
 import { aiStateOf } from "@/components/shell/AiStatus";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Drawer } from "@/components/ui/Drawer";
+import { controlClass } from "@/components/ui/Field";
+import { SkeletonRows } from "@/components/ui/States";
+import { Switch } from "@/components/ui/Switch";
+import { useToast } from "@/components/ui/Toast";
 import { useAuthStatus } from "@/hooks/useApi";
-import { AiStreamFailure, failureFromError, failureFromStreamCode, readAiStream } from "@/hooks/useAiStream";
+import { useAiChat, useCachedData, type SendOptions } from "@/hooks/useAiStream";
+import { useHoldings } from "@/hooks/useHoldings";
+import { useLocalStore } from "@/hooks/useLocalStore";
 import { useWatchlist } from "@/hooks/useWatchlist";
-import { postJson } from "@/lib/api-client";
+import { chatRequestContext, contextRef, pageContextFromPath, positionFlags } from "@/lib/ai-request";
+import { aiPrefsStore, clearChatHistory, restoreChatHistory, sanitizeIntent, setIncludePositions } from "@/lib/ai-store";
+import { followUpQuestions, suggestedQuestions, type Suggestion, type SuggestionData } from "@/lib/ai-suggestions";
 import { cn } from "@/lib/cn";
 import { tpl } from "@/lib/format";
-import type { Messages } from "@/lib/i18n/messages";
-import { normalizeSymbol } from "@/lib/symbols";
-import { getSector } from "@/lib/universe";
-import type { ChatRequest, Lang, SectorKey } from "@/types/api";
+import type { ChatIntentInput, MarketOverview, StockDetail } from "@/types/api";
 
 import { AiGate } from "./AiGate";
-import { Markdown } from "./Markdown";
+import { ChatTurnView, ContextDivider, HistoryMenu, QuestionList } from "./ChatParts";
+import { lockAi } from "./lock";
 
-interface UiMessage {
-  id: number;
-  role: "user" | "assistant";
-  content: string;
-  /** Error notices are shown but never sent back to the model. */
-  uiOnly?: boolean;
-}
-
-type ChatContext = ChatRequest["context"] & { symbols?: string[] };
-
-function contextFromPath(pathname: string, watchlist: string[]): ChatContext {
-  const stock = /^\/stock\/([^/]+)/.exec(pathname);
-  if (stock) {
-    const symbol = normalizeSymbol(decodeURIComponent(stock[1]));
-    if (symbol) return { view: "stock", symbol };
-  }
-  const sector = /^\/sector\/([^/]+)/.exec(pathname);
-  if (sector && getSector(sector[1])) return { view: "sector", sector: sector[1] as SectorKey };
-  if (pathname.startsWith("/watchlist")) return { view: "watchlist", symbols: watchlist.slice(0, 50) };
-  return { view: "market" };
-}
-
-function contextLabel(ctx: ChatContext, t: Messages, lang: Lang): string {
-  if (ctx.view === "stock" && ctx.symbol) return ctx.symbol;
-  if (ctx.view === "sector" && ctx.sector) return getSector(ctx.sector)?.label[lang] ?? ctx.sector;
-  if (ctx.view === "watchlist") return t.nav.watchlist;
-  return t.nav.market;
-}
-
-let nextId = 1;
+/** Within this many pixels of the bottom, new text keeps the log scrolled down; further up, the reader stays put. */
+const NEAR_BOTTOM_PX = 48;
 
 export function ChatDrawer() {
   const { t, lang } = usePrefs();
+  const toast = useToast();
   const { chatOpen, closeChat, chatSeed, clearChatSeed } = useUi();
   const pathname = usePathname();
   const { symbols: watchlist } = useWatchlist();
-  const { data: auth } = useAuthStatus();
+  const { holdings } = useHoldings();
+  const { data: auth, mutate: refreshAuth } = useAuthStatus();
   const aiState = aiStateOf(auth);
-  const [messages, setMessages] = useState<UiMessage[]>([]);
+  const { includePositions } = useLocalStore(aiPrefsStore);
+  const page = useMemo(() => pageContextFromPath(pathname ?? "/"), [pathname]);
+  const ref = useMemo(() => contextRef(page, lang, t.ai.chat.contexts), [page, lang, t]);
+  const buildContext = useCallback(
+    (intent?: ChatIntentInput) => chatRequestContext({ page, watchlist, holdings, includePositions, intent }),
+    [page, watchlist, holdings, includePositions],
+  );
+  const chat = useAiChat({ lang, page: ref, buildContext });
+  const { turns, busy } = chat;
   const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
-  const controllerRef = useRef<AbortController | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
-  const context = contextFromPath(pathname, watchlist);
+  const nearBottom = useRef(true);
+  // Set when a control that disappears with the change (a listed question, Retry, Regenerate) starts an answer.
+  const refocusLog = useRef(false);
 
-  useEffect(() => {
-    logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
-  }, [messages]);
+  // Page-aware questions come from data the page already loaded (read from the SWR cache, never fetched here).
+  const stock = useCachedData<StockDetail>(page.view === "stock" && page.symbol ? `/api/stock/${encodeURIComponent(page.symbol)}` : null);
+  const overview = useCachedData<MarketOverview>("/api/market/overview");
+  const hasHoldings = Object.keys(holdings).length > 0;
+  const { held, hasPositions } = positionFlags(holdings, includePositions, page.symbol);
+  const quote = stock?.quote;
+  const suggestionData: SuggestionData = {
+    page,
+    lang,
+    live: (quote?.marketState ?? overview?.marketState) === "REGULAR",
+    changePercent: quote?.changePercent ?? null,
+    relativeVolume: quote?.volume && quote.avgVolume ? quote.volume / quote.avgVolume : null,
+    nextEarningsDate: quote?.nextEarningsDate ?? null,
+    held,
+    hasPositions,
+    now: new Date(),
+  };
+  const last = turns[turns.length - 1];
+  const answered = last?.role === "assistant" && !last.failure && !last.streaming && Boolean(last.content);
+  const starters = turns.length === 0 ? suggestedQuestions(suggestionData, t.ai.suggest) : [];
+  const followUps = answered ? followUpQuestions(suggestionData, t.ai.suggest, turns.filter((turn) => turn.role === "user").map((turn) => turn.content)) : [];
 
-  useEffect(() => () => controllerRef.current?.abort(), []);
-
-  const send = useCallback(
-    async (text: string) => {
-      const content = text.trim();
-      if (!content || busy) return;
-      const userMessage: UiMessage = { id: nextId++, role: "user", content };
-      const assistantId = nextId++;
-      const history = [...messages, userMessage].filter((m) => !m.uiOnly && m.content).slice(-10);
-      setMessages((current) => [...current, userMessage, { id: assistantId, role: "assistant", content: "" }]);
-      setInput("");
-      setBusy(true);
-      const controller = new AbortController();
-      controllerRef.current = controller;
-      const setAssistant = (value: string, uiOnly = false) =>
-        setMessages((current) => current.map((m) => (m.id === assistantId ? { ...m, content: value, uiOnly } : m)));
-      try {
-        const body = { messages: history.map(({ role, content: c }) => ({ role, content: c })), lang, context };
-        const res = await postJson("/api/ai/chat", body, controller.signal);
-        const { truncated } = await readAiStream(res, (partial) => setAssistant(partial), controller.signal);
-        if (truncated && !controller.signal.aborted) {
-          setMessages((current) => [...current, { id: nextId++, role: "assistant", content: t.ai.truncated, uiOnly: true }]);
-        }
-      } catch (error) {
-        if (controller.signal.aborted) return;
-        if (error instanceof AiStreamFailure) {
-          const failure = failureFromStreamCode(error.code);
-          const notice = failure.kind === "rate_limited" ? tpl(t.ai.rateLimited, { s: 60 }) : failure.kind === "unavailable" ? t.ai.unavailable : t.ai.interrupted;
-          setMessages((current) => [...current, { id: nextId++, role: "assistant", content: notice, uiOnly: true }]);
-        } else {
-          const failure = failureFromError(error);
-          const textForFailure =
-            failure.kind === "rate_limited"
-              ? tpl(t.ai.rateLimited, { s: failure.retryAfter ?? 60 })
-              : failure.kind === "locked"
-                ? t.ai.lockedTitle
-                : t.ai.failed;
-          setAssistant(textForFailure, true);
-        }
-      } finally {
-        if (controllerRef.current === controller) controllerRef.current = null;
-        setBusy(false);
-        // A reply stopped or failed before its first token would otherwise stay on screen as a permanent "Writing" bubble.
-        setMessages((current) => current.filter((m) => m.id !== assistantId || m.content !== ""));
-      }
+  const { send } = chat;
+  const ask = useCallback(
+    (text: string, intent?: ChatIntentInput, options?: SendOptions) => {
+      nearBottom.current = true;
+      send(text, intent, options);
     },
-    [busy, messages, lang, context, t],
+    [send],
   );
 
-  // A question typed as "?question" in the command bar: send it once the drawer is open and AI is usable.
+  // A seeded question (the command bar's "?question", "Why is it moving?" buttons): send it once the drawer is open,
+  // AI is usable and no answer is streaming, with its intent so the server loads the matching data.
   useEffect(() => {
-    if (!chatOpen || !chatSeed || aiState !== "available") return;
+    if (!chatOpen || !chatSeed || aiState !== "available" || busy) return;
     const seed = chatSeed;
     const id = window.setTimeout(() => {
       clearChatSeed();
-      void send(seed.text);
+      ask(seed.text, sanitizeIntent(seed.intent), { seeded: true });
     }, 0);
     return () => window.clearTimeout(id);
-  }, [chatOpen, chatSeed, aiState, clearChatSeed, send]);
+  }, [chatOpen, chatSeed, aiState, busy, clearChatSeed, ask]);
 
-  const stop = () => {
-    controllerRef.current?.abort();
-    setBusy(false);
+  // An expired session answers 401: refresh the status so the unlock form replaces the chat.
+  const lastFailure = last?.failure?.kind;
+  useEffect(() => {
+    if (lastFailure === "locked") void refreshAuth();
+  }, [lastFailure, refreshAuth]);
+
+  useLayoutEffect(() => {
+    const element = scrollRef.current;
+    if (element && nearBottom.current) element.scrollTop = element.scrollHeight;
+    // The control that started the answer is gone and focus fell to the page: keep it in the dialog, on the conversation.
+    if (refocusLog.current) {
+      refocusLog.current = false;
+      if (!document.activeElement || document.activeElement === document.body) logRef.current?.focus({ preventScroll: true });
+    }
+  }, [turns]);
+
+  const askListed = (item: Suggestion) => {
+    refocusLog.current = true;
+    ask(item.text, item.intent);
+  };
+
+  const retry = () => {
+    refocusLog.current = true;
+    chat.retry();
+  };
+
+  const regenerate = () => {
+    refocusLog.current = true;
+    chat.regenerate();
+  };
+
+  const onScroll = () => {
+    const element = scrollRef.current;
+    if (element) nearBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < NEAR_BOTTOM_PX;
+  };
+
+  const submit = () => {
+    if (!input.trim() || busy) return;
+    ask(input);
+    setInput("");
   };
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
-    void send(input);
+    submit();
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) {
       event.preventDefault();
-      void send(input);
+      submit();
     }
   };
 
+  const copy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.show({ message: t.ai.copied });
+    } catch {
+      toast.show({ message: t.ai.copyFailed });
+    }
+  };
+
+  const clearHistory = () => {
+    const before = clearChatHistory();
+    chat.newChat();
+    toast.show({ message: t.ai.chat.historyCleared, action: { label: t.ai.chat.undo, onAction: () => restoreChatHistory(before) } });
+  };
+
+  const lock = async () => {
+    try {
+      await lockAi();
+      await refreshAuth();
+      toast.show({ message: t.ai.lockDone });
+    } catch {
+      toast.show({ message: t.ai.lockFailed });
+    }
+  };
+
+  const target = page.view === "stock" || page.view === "sector" ? ref.label : page.view === "watchlist" ? (page.portfolio ? t.ai.chat.about.portfolio : t.ai.chat.about.watchlist) : t.ai.chat.about.market;
+  // Chinese text sets Latin words such as tickers off with spaces.
+  const welcomeTarget = lang === "zh" && /^[\x20-\x7e]+$/.test(target) ? ` ${target} ` : target;
   const available = aiState === "available";
+  const canLock = available && auth?.authRequired === true && auth.authenticated;
 
   return (
     <Drawer
@@ -159,13 +193,6 @@ export function ChatDrawer() {
       footer={
         available ? (
           <form onSubmit={onSubmit} className="space-y-2 p-3">
-            <div className="flex items-center justify-between text-xs text-fg-3">
-              <span className="num truncate">{tpl(t.ai.chat.context, { ctx: contextLabel(context, t, lang) })}</span>
-              <Button size="sm" variant="ghost" onClick={() => setMessages([])} disabled={busy || messages.length === 0}>
-                <Eraser aria-hidden className="size-3.5" strokeWidth={1.75} />
-                {t.ai.chat.clear}
-              </Button>
-            </div>
             <div className="flex items-end gap-2">
               <label htmlFor="chat-input" className="sr-only">
                 {t.ai.chat.placeholder}
@@ -179,39 +206,75 @@ export function ChatDrawer() {
                 onChange={(event) => setInput(event.target.value)}
                 onKeyDown={onKeyDown}
                 placeholder={t.ai.chat.placeholder}
-                className="min-h-[2.75rem] flex-1 resize-none rounded-xs border border-input-border bg-input-bg px-2.5 py-2 text-sm text-fg placeholder:text-fg-3 focus:border-accent focus:outline-none"
+                className={cn(controlClass, "min-h-[2.75rem] flex-1 resize-none px-2.5 py-2 text-sm")}
               />
               {busy ? (
-                <IconButton label={t.ai.stop} icon={<Square className="size-3.5" strokeWidth={2} />} onClick={stop} />
+                <IconButton label={t.ai.stop} icon={<Square className="size-3.5" strokeWidth={2} />} onClick={chat.stop} />
               ) : (
                 <IconButton label={t.ai.chat.send} icon={<SendHorizontal className="size-4" strokeWidth={1.75} />} type="submit" disabled={!input.trim()} />
               )}
             </div>
+            <p className="num truncate text-xs text-fg-3">{tpl(t.ai.chat.context, { ctx: ref.label })}</p>
+            {hasHoldings ? (
+              <Switch
+                checked={includePositions}
+                onCheckedChange={setIncludePositions}
+                label={t.ai.chat.includePositions}
+                description={includePositions ? t.ai.chat.positionsOn : t.ai.chat.positionsOff}
+                className="max-sm:min-h-10"
+              />
+            ) : null}
           </form>
         ) : null
       }
     >
-      {available ? (
-        <div ref={logRef} role="log" aria-live="polite" aria-busy={busy} className="space-y-4 p-3">
-          {messages.length === 0 ? <p className="text-sm text-fg-3">{t.ai.chat.welcome}</p> : null}
-          {messages.map((message) => (
-            <div key={message.id} className={cn("flex", message.role === "user" ? "justify-end" : "justify-start")}>
-              {message.role === "user" ? (
-                <div className="max-w-[85%] rounded-xs bg-hover px-3 py-2 text-sm whitespace-pre-wrap text-fg">{message.content}</div>
-              ) : message.uiOnly ? (
-                <p role="alert" className="text-sm text-warn">
-                  {message.content}
-                </p>
-              ) : (
-                <div className="w-full">{message.content ? <Markdown text={message.content} /> : <span className="text-sm text-fg-3">{t.ai.generating}</span>}</div>
-              )}
+      <div className="flex h-full min-h-0 flex-col">
+        {available ? (
+          <div className="flex shrink-0 items-center gap-1 border-b border-line px-2 py-1.5">
+            <HistoryMenu conversations={chat.conversations} currentId={chat.conversationId} onOpen={chat.openConversation} onClear={clearHistory} />
+            <Button size="sm" variant="ghost" onClick={chat.newChat} disabled={busy || turns.length === 0} className="max-sm:h-10">
+              <Plus aria-hidden className="size-3.5" strokeWidth={1.75} />
+              {t.ai.chat.clear}
+            </Button>
+            {canLock ? (
+              <Button size="sm" variant="ghost" onClick={() => void lock()} className="ml-auto max-sm:h-10">
+                <Lock aria-hidden className="size-3.5" strokeWidth={1.75} />
+                {t.ai.lock}
+              </Button>
+            ) : null}
+          </div>
+        ) : null}
+        <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto">
+          {aiState === "unknown" ? (
+            <SkeletonRows rows={3} />
+          ) : available ? (
+            <div className="space-y-4 p-3">
+              {turns.length === 0 ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-fg-2">{tpl(t.ai.chat.welcome, { ctx: welcomeTarget })}</p>
+                  <QuestionList title={t.ai.chat.suggestions} items={starters} onAsk={askListed} disabled={busy} />
+                </div>
+              ) : null}
+              <div ref={logRef} tabIndex={-1} role="log" aria-live="polite" aria-busy={busy} aria-label={t.ai.chat.title} className="space-y-4 empty:hidden">
+                {turns.map((turn, index) => {
+                  const previousQuestion = turn.role === "user" ? turns.slice(0, index).reverse().find((t2) => t2.role === "user") : undefined;
+                  const moved = previousQuestion?.context && turn.context && previousQuestion.context.key !== turn.context.key;
+                  return (
+                    <div key={turn.id} className="space-y-4">
+                      {moved && turn.context ? <ContextDivider label={tpl(t.ai.chat.nowViewing, { ctx: turn.context.label })} /> : null}
+                      <ChatTurnView turn={turn} last={index === turns.length - 1} busy={busy} onCopy={(text) => void copy(text)} onRegenerate={regenerate} onRetry={retry} />
+                    </div>
+                  );
+                })}
+              </div>
+              {answered ? <QuestionList title={t.ai.chat.followUps} items={followUps} onAsk={askListed} disabled={busy} wrap /> : null}
+              {turns.some((turn) => turn.role === "assistant" && !turn.failure && turn.content) ? <p className="text-xs text-fg-3">{t.ai.disclaimer}</p> : null}
             </div>
-          ))}
-          {messages.some((m) => m.role === "assistant" && !m.uiOnly && m.content) ? <p className="text-xs text-fg-3">{t.ai.disclaimer}</p> : null}
+          ) : (
+            <AiGate autoFocus />
+          )}
         </div>
-      ) : (
-        <AiGate />
-      )}
+      </div>
     </Drawer>
   );
 }
