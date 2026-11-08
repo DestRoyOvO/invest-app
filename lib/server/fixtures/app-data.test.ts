@@ -131,11 +131,11 @@ describe("pages", () => {
     expect(board.warnings).toEqual([]);
   });
 
-  it("assemble a stock page with company news, and nothing for an unknown symbol", async () => {
+  it("assemble a stock page and its company news, and nothing for an unknown symbol", async () => {
     const detail = await getStockDetail("MSFT");
     expect(detail?.warnings).toEqual([]);
-    expect(detail?.news.some((item) => item.provenance === "company")).toBe(true);
     expect(await getStockDetail("ZZZZ")).toBeNull();
+    // Through the news getter rather than StockDetail.news, which wave2/quote moves to its own request.
     const news = await getCompanyNews("NVDA", "NVIDIA Corporation", detail?.profile ?? null);
     expect(news.filter((item) => item.provenance === "company").length).toBeGreaterThan(2);
   });
