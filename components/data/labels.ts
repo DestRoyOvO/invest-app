@@ -1,5 +1,6 @@
 // Display helpers shared by the data screens.
 
+import { withTrueMinus } from "@/components/ui/delta-utils";
 import { storeName, type PrefCookieName, type StoreDiff } from "@/lib/backup";
 import { DASH, tpl } from "@/lib/format";
 import { MESSAGES, type Messages } from "@/lib/i18n/messages";
@@ -50,14 +51,14 @@ export function diffSummary(t: Messages, diffs: readonly StoreDiff[]): string {
 
 const shareFormats = new Map<Lang, Intl.NumberFormat>();
 
-/** Share counts keep their fractions (fractional shares) without padding: 25, 3.5, 0.125. */
+/** Share counts keep their fractions (fractional shares) without padding: 25, 3.5, 0.125; negatives get a true minus. */
 export function formatShares(value: number, lang: Lang): string {
   let format = shareFormats.get(lang);
   if (!format) {
     format = new Intl.NumberFormat(lang === "zh" ? "zh-CN" : "en-US", { maximumFractionDigits: 6 });
     shareFormats.set(lang, format);
   }
-  return format.format(value);
+  return withTrueMinus(format.format(value));
 }
 
 /** A list of symbols for a sentence, cut after `max` with a count of the rest. */

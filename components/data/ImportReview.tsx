@@ -83,7 +83,7 @@ export function ImportDone({ outcome, onUndo }: { outcome: ImportOutcome; onUndo
     <ResultLine className="gap-y-1.5 border-t border-line px-3 py-2.5">
       <Check aria-hidden className="size-4 shrink-0 text-fg-3" strokeWidth={2} />
       <span>{tpl(t.data.review.done, { n: outcome.count })}</span>
-      <Link href="/watchlist" className="text-info underline-offset-2 hover:underline">
+      <Link href="/watchlist" className="inline-flex items-center text-info underline-offset-2 hover:underline max-sm:h-10">
         {t.data.review.view}
       </Link>
       <Button size="sm" variant="ghost" onClick={onUndo} className={TOUCH}>
@@ -127,7 +127,9 @@ export function ImportReview({ rows, onImported }: { rows: readonly ImportRow[];
   // Suggestions picked per row, keyed by line and the text written there, so an edit above does not move a choice.
   const [chosen, setChosen] = useState<ReadonlyMap<string, string>>(() => new Map());
   const [mode, setMode] = useState<RestoreMode>("merge");
-  const [confirming, setConfirming] = useState(false);
+  // The rows a Replace confirmation was opened for: editing the text or the column mapping closes it.
+  const [confirmFor, setConfirmFor] = useState<readonly ImportRow[] | null>(null);
+  const confirming = confirmFor === rows;
   const [error, setError] = useState<string | null>(null);
   const importRef = useRef<HTMLButtonElement>(null);
 
@@ -176,7 +178,7 @@ export function ImportReview({ rows, onImported }: { rows: readonly ImportRow[];
   };
 
   const commit = () => {
-    setConfirming(false);
+    setConfirmFor(null);
     setError(null);
     const env = getEnv();
     if (!env) {
@@ -194,7 +196,7 @@ export function ImportReview({ rows, onImported }: { rows: readonly ImportRow[];
   };
 
   const onImport = () => {
-    if (mode === "replace" && preview.removed.length > 0) setConfirming(true);
+    if (mode === "replace" && preview.removed.length > 0) setConfirmFor(rows);
     else commit();
   };
 
@@ -312,7 +314,7 @@ export function ImportReview({ rows, onImported }: { rows: readonly ImportRow[];
             value={mode}
             onChange={(next) => {
               setMode(next);
-              setConfirming(false);
+              setConfirmFor(null);
             }}
             options={[
               { value: "merge", label: t.data.review.merge },
@@ -331,7 +333,7 @@ export function ImportReview({ rows, onImported }: { rows: readonly ImportRow[];
             <Button
               variant="ghost"
               onClick={() => {
-                setConfirming(false);
+                setConfirmFor(null);
                 focusSoon(importRef);
               }}
               className={TOUCH}
@@ -365,7 +367,7 @@ function StatusIcon({ status, className }: { status: RowStatus; className?: stri
         ? t.data.review.errors[status.error]
         : t.data.review.status[status.kind];
   const Icon = status.kind === "ready" ? Check : status.kind === "unknown" || status.kind === "error" ? AlertCircle : status.kind === "skipped" ? MinusCircle : status.kind === "unchecked" ? HelpCircle : Loader;
-  const spin = status.kind === "checking" ? "animate-spin" : undefined;
+  const spin = status.kind === "checking" ? "motion-safe:animate-spin" : undefined;
   const tone = status.kind === "unknown" || status.kind === "error" ? "text-danger" : status.kind === "unchecked" ? "text-warn" : "text-fg-3";
   return (
     <span className={cn("inline-flex align-[-2px]", tone, className)}>

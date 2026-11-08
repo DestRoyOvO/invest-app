@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Check, Trash2 } from "lucide-react";
+import { AlertCircle, Check, Download, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
@@ -9,7 +9,6 @@ import { Field, Input } from "@/components/ui/Field";
 import { Panel } from "@/components/ui/Panel";
 import { useToast } from "@/components/ui/Toast";
 import { clearAllData, StorageWriteError, undoChanges, type StorageChange } from "@/lib/backup";
-import { cn } from "@/lib/cn";
 import { tpl } from "@/lib/format";
 
 import { exportBackupNow, getEnv } from "./browser";
@@ -65,7 +64,9 @@ export function ClearDataPanel() {
     <Panel title={t.data.clear.title}>
       <div className="space-y-3 px-3 py-3">
         <p className="text-sm text-fg-2">{t.data.clear.body}</p>
-        <Button ref={backupRef} size="sm" variant="ghost" onClick={() => toast.show({ message: tpl(t.data.backup.exported, { file: exportBackupNow() }) })} className={cn("-ml-2", TOUCH)}>
+        {/* The safety step before a destructive action: a real button, like the other exports, not a quiet link. */}
+        <Button ref={backupRef} size="sm" onClick={() => toast.show({ message: tpl(t.data.backup.exported, { file: exportBackupNow() }) })} className={TOUCH}>
+          <Download aria-hidden className="size-3.5" strokeWidth={1.75} />
           {t.data.clear.backupFirst}
         </Button>
         <Field label={tpl(t.data.clear.label, { word: t.data.clear.word })}>

@@ -54,6 +54,7 @@ describe("data labels", () => {
     expect(formatShares(25, "en")).toBe("25");
     expect(formatShares(3.5, "en")).toBe("3.5");
     expect(formatShares(1234.125, "zh")).toBe("1,234.125");
+    expect(formatShares(-5, "en")).toBe("−5");
     expect(symbolList(["A", "B"])).toBe("A, B");
     expect(symbolList(["A", "B", "C", "D"], 2)).toBe("A, B +2");
   });

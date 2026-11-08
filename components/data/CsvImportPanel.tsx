@@ -23,6 +23,8 @@ const MAPPED_FIELDS: readonly ImportField[] = ["symbol", "quantity", "avgCost", 
 const DELIMITER_KEYS = { ",": "comma", ";": "semicolon", "\t": "tab" } as const;
 
 interface LoadedFile {
+  /** Counts loads, so a new file (even one with the same name) gets a fresh preview. */
+  id: number;
   name: string;
   encoding: DecodedText["encoding"];
   table: CsvTable;
@@ -36,6 +38,7 @@ export function CsvImportPanel() {
   const [mapping, setMapping] = useState<ColumnMapping>({});
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const loads = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const chooseRef = useRef<HTMLButtonElement>(null);
   const { outcome, record, undo, clear } = useImportOutcome();
@@ -52,7 +55,7 @@ export function CsvImportPanel() {
       const { text, encoding } = decodeText(await picked.arrayBuffer());
       const table = parseCsv(text);
       const detection = detectHeader(table.rows);
-      setFile({ name: picked.name, encoding, table, detection });
+      setFile({ id: ++loads.current, name: picked.name, encoding, table, detection });
       setMapping(detection?.mapping ?? POSITIONAL_MAPPING);
     } catch {
       setFile(null);
@@ -168,8 +171,10 @@ export function CsvImportPanel() {
           }}
         />
       ) : null}
-      {rows.length > 0 ? (
+      {rows.length > 0 && file ? (
         <ImportReview
+          // A new file starts a new review: no suggestions, mode or confirmation carried over from the last one.
+          key={file.id}
           rows={rows}
           onImported={(result) => {
             record(result);
