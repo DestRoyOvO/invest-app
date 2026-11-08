@@ -436,7 +436,8 @@ const columns: DataTableColumn<Quote>[] = [
   scrolled out of a `maxHeight` box no longer stretch the page with blank space. While the table overflows the box
   (wider than `minWidth` allows, or taller than `maxHeight`), the box is a focusable region named by the caption
   (`role="region"`, `tabIndex={0}`), so keyboard users can scroll it with the arrow keys; when everything fits it adds
-  no tab stop. A caller that scrolls the table in its own wrapper turns the box off with
+  no tab stop. Its focus ring sits inside the box, or just outside it with `stickyHeader`, whose cells would cover the
+  top of an inset ring. A caller that scrolls the table in its own wrapper turns the box off with
   `className="overflow-x-visible!"`, and the box then never becomes a region. The caption names that region, so avoid
   a caption that repeats the panel title word for word where the table overflows (two "Rules" regions on a phone).
 

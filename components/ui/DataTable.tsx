@@ -216,11 +216,17 @@ export function DataTable<Row>({
 
   return (
     // relative: the scroll box is the containing block of the rows' absolutely positioned sr-only text, so rows scrolled
-    // out of a maxHeight box cannot stretch the page with blank space.
+    // out of a maxHeight box cannot stretch the page with blank space. The focus ring of the region sits inside the box,
+    // except under a sticky header: its cells (z-10) paint over the top of an inset ring, so the ring goes just outside.
     <div
       ref={scrollRef}
       {...region}
-      className={cn("relative focus-visible:outline-offset-[-2px]", maxHeight ? "overflow-auto" : "overflow-x-auto", className)}
+      className={cn(
+        "relative",
+        stickyHeader ? "focus-visible:outline-offset-0" : "focus-visible:outline-offset-[-2px]",
+        maxHeight ? "overflow-auto" : "overflow-x-auto",
+        className,
+      )}
       style={maxHeight ? { maxHeight } : undefined}
     >
       <table className="w-full table-fixed border-collapse text-data" style={minWidth ? { minWidth } : undefined}>
