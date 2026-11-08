@@ -1,9 +1,9 @@
 import "server-only";
 
-import { companyFigures, earningsSchedule } from "./company";
+import { companyFigures, earningsSchedule, lastReportedYear, trailingEps, yearResult } from "./company";
 import { between, round } from "./random";
 import { securityOf, type Security } from "./securities";
-import { DAY_MS, dayNumber, latestCompletedSession, yearOf } from "./sessions";
+import { DAY_MS, dayNumber, latestCompletedSession } from "./sessions";
 
 // fundamentalsTimeSeries() of the fixture data: income statement, cash flow and balance sheet rows per fiscal year
 // (calendar years) or quarter, consistent with the earnings modules (the same quarterly revenue and EPS). Like Yahoo,
@@ -102,25 +102,22 @@ function balanceSheetRow(security: Security, period: Period): Record<string, num
   };
 }
 
-/** Quarterly periods from the earnings history plus the calendar years they complete, oldest first. */
+/**
+ * Quarterly periods from the earnings history, the trailing four quarters, or the five latest fully reported calendar
+ * years as the sums of their quarters, oldest first: the same results as the earnings modules.
+ */
 function periodsOf(security: Security, latest: number, type: string): Period[] {
   const schedule = earningsSchedule(security, latest);
   if (!schedule) return [];
   const quarters: Period[] = schedule.history.map((report) => ({ end: report.periodEnd, revenue: report.revenueActual ?? 0, eps: report.epsActual ?? 0, months: 3 }));
   if (type === "quarterly") return quarters.slice(-6);
-  const figures = companyFigures(security);
   const lastQuarter = quarters.at(-1)?.end ?? latest;
-  const lastYear = yearOf(lastQuarter) - (new Date(lastQuarter * DAY_MS).getUTCMonth() === 11 ? 0 : 1);
   if (type === "trailing") {
     const recent = quarters.slice(-4);
-    return [{ end: lastQuarter, revenue: recent.reduce((s, q) => s + q.revenue, 0), eps: recent.reduce((s, q) => s + q.eps, 0), months: 12 }];
+    return [{ end: lastQuarter, revenue: recent.reduce((s, q) => s + q.revenue, 0), eps: trailingEps(schedule), months: 12 }];
   }
-  return [4, 3, 2, 1, 0].map((back) => ({
-    end: dayNumber(lastYear - back, 12, 31),
-    revenue: figures.revenueTtm * (1 + figures.revenueGrowth) ** -(back + 0.5),
-    eps: figures.epsTtm * (1 + figures.earningsGrowth) ** -(back + 0.5),
-    months: 12 as const,
-  }));
+  const lastYear = lastReportedYear(schedule);
+  return [4, 3, 2, 1, 0].map((back) => ({ end: dayNumber(lastYear - back, 12, 31), ...yearResult(security, lastYear - back, lastQuarter), months: 12 as const }));
 }
 
 /** fundamentalsTimeSeries(symbol, options) in fixture mode. */

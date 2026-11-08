@@ -2,12 +2,15 @@ import "server-only";
 
 import { between, pick, round } from "./random";
 import type { Security } from "./securities";
-import { addTradingDays, DAY_MS, dayNumber, localToUtc, tradingDayOnOrBefore, yearOf } from "./sessions";
+import { addTradingDays, DAY_MS, dayNumber, isTradingDay, localToUtc, nextTradingDay, previousTradingDay, tradingDayOnOrBefore, yearOf } from "./sessions";
 
 // Company figures and event schedules of the fixture data. Fundamentals are fixed per symbol (seeded by it); earnings
 // reports and dividends are scheduled relative to the latest completed session, so the calendar, My day and the week
 // ahead always have entries in the coming days. The default watchlist gets fixed near-term dates: NVDA reports two
 // sessions ahead, MSFT four, AAPL six, GOOGL eight and AMZN nine; AAPL goes ex-dividend in three sessions.
+//
+// A quarter's results depend only on the calendar quarter (quarterResult), so a reported quarter shows the same
+// figures on every day, and the trailing EPS of the quote and of quoteSummary is the sum of the same four quarters.
 
 export interface CompanyFigures {
   /** Trailing twelve-month EPS at the anchor date (negative for companies without a P/E). */
@@ -110,6 +113,65 @@ export function ratingLabel(mean: number): string {
 }
 
 // ---------------------------------------------------------------------------
+// Quarters
+// ---------------------------------------------------------------------------
+
+/** The calendar quarter end `months` months after (negative: before) a quarter end, e.g. 2026-09-30 - 3 = 2026-06-30. */
+export function shiftQuarterEnd(periodEnd: number, months: number): number {
+  const date = new Date(periodEnd * DAY_MS);
+  return dayNumber(date.getUTCFullYear(), date.getUTCMonth() + 2 + months, 0);
+}
+
+/** The latest calendar quarter end on or before a day. */
+export function quarterEndOnOrBefore(day: number): number {
+  const date = new Date(day * DAY_MS);
+  const end = dayNumber(date.getUTCFullYear(), Math.floor(date.getUTCMonth() / 3) * 3 + 4, 0);
+  return end <= day ? end : shiftQuarterEnd(end, -3);
+}
+
+/** The four calendar quarter ends of a year, oldest first. */
+export function quarterEndsOf(year: number): number[] {
+  return [3, 6, 9, 12].map((month) => dayNumber(year, month + 1, 0));
+}
+
+/** A running number per calendar quarter (seeds the quarter's surprise and wiggle). */
+function quarterIndex(periodEnd: number): number {
+  const date = new Date(periodEnd * DAY_MS);
+  return date.getUTCFullYear() * 4 + Math.floor(date.getUTCMonth() / 3);
+}
+
+/** The middle of the four quarters that end with 2025: their results add up to about the anchor-date TTM figures. */
+const FIGURES_MIDPOINT = dayNumber(2025, 8, 15);
+
+export interface QuarterResult {
+  eps: number;
+  revenue: number;
+  epsEstimate: number;
+  revenueEstimate: number;
+}
+
+/**
+ * A calendar quarter's results: a quarter of the anchor-date TTM figures, grown at the company's rates to the
+ * quarter's end, with a small seasonal wiggle, and the consensus the result beat or missed. The same quarter has the
+ * same figures whenever it is asked for.
+ */
+export function quarterResult(security: Security, periodEnd: number): QuarterResult {
+  const figures = companyFigures(security);
+  const s = security.symbol;
+  const index = quarterIndex(periodEnd);
+  const years = (periodEnd - FIGURES_MIDPOINT) / 365.25;
+  const eps = (figures.epsTtm / 4) * (1 + figures.earningsGrowth) ** years * (1 + 0.04 * Math.sin(index * 1.7 + s.length));
+  const revenue = (figures.revenueTtm / 4) * (1 + figures.revenueGrowth) ** years;
+  const surprise = between(-0.04, 0.1, s, "surprise", index);
+  return {
+    eps: round(eps, 2),
+    revenue: Math.round(revenue),
+    epsEstimate: round(eps / (1 + surprise), 2),
+    revenueEstimate: Math.round(revenue / (1 + surprise / 3)),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Earnings
 // ---------------------------------------------------------------------------
 
@@ -124,6 +186,19 @@ const NEAR_TERM: Readonly<Record<string, { earnings?: number; dividend?: number 
 
 /** Reports more than this many sessions away are listed as estimates. */
 const ESTIMATED_AFTER_SESSIONS = 30;
+
+/**
+ * The next report of other stocks is 2 to this many sessions away (about two months). Further out, the quarter
+ * before the next one would have to be reported within days of its end, before the latest session.
+ */
+const MAX_EARNINGS_OFFSET = 45;
+
+/** Reported quarters in a schedule (two years). */
+const HISTORY_QUARTERS = 8;
+
+/** A report comes at least this long after its quarter ends, and the history keeps the next report's lag up to the maximum. */
+const MIN_REPORT_LAG_DAYS = 15;
+const MAX_REPORT_LAG_DAYS = 60;
 
 export interface EarningsReport {
   /** Report date (a trading day). */
@@ -143,50 +218,83 @@ export interface EarningsSchedule {
   next: EarningsReport;
   nextEstimated: boolean;
   timing: "pre" | "post";
-  /** Reported quarters, oldest first. */
+  /** Reported quarters, oldest first: consecutive calendar quarters that end three months before the next report's. */
   history: EarningsReport[];
 }
 
-/** The latest calendar quarter end at least three weeks before a report. */
-function quarterEndBefore(day: number): number {
-  const date = new Date((day - 21) * DAY_MS);
-  const year = date.getUTCFullYear();
-  const quarter = Math.floor(date.getUTCMonth() / 3);
-  // The end of the previous quarter: day 0 of the quarter's first month.
-  return dayNumber(year, quarter * 3 + 1, 0);
-}
-
-/** The earnings calendar of a stock relative to the latest completed session; null for funds, indices and others. */
+/**
+ * The earnings calendar of a stock relative to the latest completed session; null for funds, indices and others.
+ *
+ * The next report is a fixed number of sessions ahead (at least two, so a report released before the open is still
+ * ahead while the next session trades) and covers the latest quarter that ended at least 15 days before it. The
+ * reported quarters are the eight before that one, each reported on the first session at least as many days after
+ * its quarter end as the next one (15 to 60 days), and never later than the session before the latest: even a release
+ * after that session's close lies before any moment at which `latest` is the latest completed session.
+ */
 export function earningsSchedule(security: Security, latest: number): EarningsSchedule | null {
   if (security.type !== "EQUITY") return null;
   const s = security.symbol;
   const profile = security.profile;
-  const figures = companyFigures(security);
-  const offset = NEAR_TERM[s]?.earnings ?? 1 + pick(62, s, "earnings-offset");
+  const offset = NEAR_TERM[s]?.earnings ?? 2 + pick(MAX_EARNINGS_OFFSET - 1, s, "earnings-offset");
   const timing = pick(2, s, "timing") === 0 ? "pre" : "post";
   const at = (day: number) => localToUtc(profile.timeZone, day, timing === "pre" ? 7 * 60 : 16 * 60 + 5);
-  const quarterlyEps = figures.epsTtm / 4;
-  const quarterlyRevenue = figures.revenueTtm / 4;
-  const growth = (quartersBack: number, rate: number) => (1 + rate) ** (-quartersBack / 4);
 
   const nextDay = addTradingDays(profile, latest, offset);
-  const report = (day: number, quartersBack: number, reported: boolean): EarningsReport => {
-    const epsActual = quarterlyEps * growth(quartersBack, figures.earningsGrowth) * (1 + 0.04 * Math.sin(quartersBack * 1.7 + s.length));
-    const surprise = between(-0.04, 0.1, s, "surprise", quartersBack);
-    const revenueActual = quarterlyRevenue * growth(quartersBack, figures.revenueGrowth);
+  const nextEnd = quarterEndOnOrBefore(nextDay - MIN_REPORT_LAG_DAYS);
+  const lag = Math.min(MAX_REPORT_LAG_DAYS, Math.max(MIN_REPORT_LAG_DAYS, nextDay - nextEnd));
+  const lastReportDay = previousTradingDay(profile, latest);
+  const report = (day: number, periodEnd: number, reported: boolean): EarningsReport => {
+    const result = quarterResult(security, periodEnd);
     return {
       day,
       at: at(day),
-      periodEnd: quarterEndBefore(day),
-      epsEstimate: round(epsActual / (1 + surprise), 2),
-      epsActual: reported ? round(epsActual, 2) : null,
-      revenueEstimate: Math.round(revenueActual / (1 + surprise / 3)),
-      revenueActual: reported ? Math.round(revenueActual) : null,
+      periodEnd,
+      epsEstimate: result.epsEstimate,
+      epsActual: reported ? result.eps : null,
+      revenueEstimate: result.revenueEstimate,
+      revenueActual: reported ? result.revenue : null,
     };
   };
   const history: EarningsReport[] = [];
-  for (let k = 8; k >= 1; k--) history.push(report(tradingDayOnOrBefore(profile, nextDay - 91 * k), k, true));
-  return { next: report(nextDay, 0, false), nextEstimated: offset > ESTIMATED_AFTER_SESSIONS, timing, history };
+  for (let k = HISTORY_QUARTERS; k >= 1; k--) {
+    const periodEnd = shiftQuarterEnd(nextEnd, -3 * k);
+    const due = periodEnd + lag;
+    history.push(report(Math.min(isTradingDay(profile, due) ? due : nextTradingDay(profile, due), lastReportDay), periodEnd, true));
+  }
+  return { next: report(nextDay, nextEnd, false), nextEstimated: offset > ESTIMATED_AFTER_SESSIONS, timing, history };
+}
+
+/** A calendar year's EPS and revenue: reported quarters (up to `lastReported`) at their results, later ones at the estimates. */
+export function yearResult(security: Security, year: number, lastReported: number): { eps: number; revenue: number } {
+  let eps = 0;
+  let revenue = 0;
+  for (const end of quarterEndsOf(year)) {
+    const result = quarterResult(security, end);
+    const reported = end <= lastReported;
+    eps += reported ? result.eps : result.epsEstimate;
+    revenue += reported ? result.revenue : result.revenueEstimate;
+  }
+  return { eps: round(eps, 2), revenue };
+}
+
+/** The latest calendar year whose four quarters are all reported (the fiscal years the annual statements show). */
+export function lastReportedYear(schedule: EarningsSchedule): number {
+  const last = schedule.history.at(-1)?.periodEnd ?? shiftQuarterEnd(schedule.next.periodEnd, -3);
+  return yearOf(last) - (new Date(last * DAY_MS).getUTCMonth() === 11 ? 0 : 1);
+}
+
+/** Trailing twelve-month EPS: the four latest reported quarters. The quote and every quoteSummary module use it. */
+export function trailingEps(schedule: EarningsSchedule): number {
+  return round(
+    schedule.history.slice(-4).reduce((sum, report) => sum + (report.epsActual ?? 0), 0),
+    2,
+  );
+}
+
+/** The trailing EPS of a stock at the latest completed session; null for other quote types. */
+export function trailingEpsOf(security: Security, latest: number): number | null {
+  const schedule = earningsSchedule(security, latest);
+  return schedule ? trailingEps(schedule) : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -205,7 +313,7 @@ export interface DividendSchedule {
   /** Forward annual dividend per share (four times the next payment). */
   annualRate: number;
   next: DividendPayment;
-  /** Past payments, oldest first (ex-dates every 91 days, growing about 6% a year). */
+  /** Past payments, oldest first (ex-dates every 91 days and never after the latest session, growing about 6% a year). */
   history: DividendPayment[];
 }
 
@@ -225,7 +333,8 @@ export function dividendSchedule(security: Security, latest: number): DividendSc
   const history: DividendPayment[] = [];
   const first = Math.max(profile.epoch, dayNumber(yearOf(latest) - 12, 1, 1));
   for (let k = 60; k >= 1; k--) {
-    const exDay = tradingDayOnOrBefore(profile, nextEx - 91 * k);
+    // Ninety-one days before an ex-date up to 62 sessions away can still be after the latest session.
+    const exDay = Math.min(tradingDayOnOrBefore(profile, nextEx - 91 * k), latest);
     if (exDay >= first) history.push(payment(exDay, k));
   }
   const next = payment(nextEx, 0);

@@ -1,6 +1,15 @@
 import "server-only";
 
-import { announcedDividend, companyFigures, dividendSchedule, earningsSchedule, ratingLabel, trailingDividends, type DividendPayment } from "./company";
+import {
+  announcedDividend,
+  companyFigures,
+  dividendSchedule,
+  earningsSchedule,
+  ratingLabel,
+  trailingDividends,
+  trailingEps,
+  type DividendPayment,
+} from "./company";
 import { closeBefore, dailyRows, lastDayOfPreviousYear, priceDigits, type DailyRow } from "./prices";
 import { round } from "./random";
 import type { Security } from "./securities";
@@ -179,8 +188,8 @@ export function buildQuote(security: Security, now: number): RawQuote | null {
 function addCompanyFields(quote: RawQuote, security: Security, latest: number, price: number): void {
   const figures = companyFigures(security);
   const schedule = earningsSchedule(security, latest);
-  const reported = schedule?.history.slice(-4).map((report) => report.epsActual ?? 0) ?? [];
-  const epsTtm = reported.length === 4 ? round(reported.reduce((sum, eps) => sum + eps, 0), 2) : round(figures.epsTtm, 2);
+  // The same trailing EPS as quoteSummary's summaryDetail and defaultKeyStatistics, so every P/E the app shows agrees.
+  const epsTtm = schedule ? trailingEps(schedule) : round(figures.epsTtm, 2);
   const shares = figures.sharesOutstanding;
   Object.assign(quote, {
     marketCap: Math.round(shares * price),

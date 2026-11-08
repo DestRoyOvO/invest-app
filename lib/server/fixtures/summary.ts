@@ -8,9 +8,14 @@ import {
   companyFigures,
   dividendSchedule,
   earningsSchedule,
+  lastReportedYear,
+  quarterResult,
   recommendationKey,
+  shiftQuarterEnd,
   trailingDividends,
-  type EarningsReport,
+  trailingEps,
+  trailingEpsOf,
+  yearResult,
   type EarningsSchedule,
 } from "./company";
 import { lastDayOfPreviousYear, priceDigits } from "./prices";
@@ -169,7 +174,8 @@ function summaryDetailModule(ctx: Context): Module {
   const trailing = dividends ? trailingDividends(dividends, latest) : 0;
   const fund = security.type === "ETF" || security.type === "MUTUALFUND";
   const figures = security.type === "EQUITY" ? companyFigures(security) : null;
-  const epsTtm = figures ? figures.epsTtm : null;
+  // The trailing EPS of the reported quarters, as in the quote, so both show the same P/E.
+  const epsTtm = trailingEpsOf(security, latest);
   const detail: Module = {
     maxAge: 1,
     priceHint: ctx.digits,
@@ -220,7 +226,7 @@ function summaryDetailModule(ctx: Context): Module {
   if (figures) {
     Object.assign(detail, {
       beta: round(figures.beta, 3),
-      trailingPE: figures.epsTtm > 0 ? price / figures.epsTtm : undefined,
+      trailingPE: epsTtm !== null && epsTtm > 0 ? price / epsTtm : undefined,
       forwardPE: figures.forwardEps > 0 ? price / figures.forwardEps : undefined,
       priceToSalesTrailing12Months: (figures.sharesOutstanding * price) / figures.revenueTtm,
     });
@@ -275,6 +281,7 @@ function keyStatisticsModule(ctx: Context): Module {
   const figures = companyFigures(security);
   const schedule = earningsSchedule(security, latest);
   const lastReport = schedule?.history.at(-1);
+  const epsTtm = schedule ? trailingEps(schedule) : round(figures.epsTtm, 2);
   const dividends = dividendSchedule(security, latest);
   const lastDividend = dividends?.history.filter((payment) => payment.exDay <= latest).at(-1);
   const enterprise = figures.sharesOutstanding * price + figures.totalDebt - figures.totalCash;
@@ -304,10 +311,10 @@ function keyStatisticsModule(ctx: Context): Module {
     nextFiscalYearEnd: midnight(dayNumber(yearOf(latest), 12, 31)),
     mostRecentQuarter: lastReport ? midnight(lastReport.periodEnd) : undefined,
     earningsQuarterlyGrowth: round(figures.earningsGrowth, 4),
-    netIncomeToCommon: Math.round(figures.netIncomeTtm),
-    trailingEps: round(figures.epsTtm, 2),
+    netIncomeToCommon: Math.round(epsTtm * figures.sharesOutstanding),
+    trailingEps: epsTtm,
     forwardEps: round(figures.forwardEps, 2),
-    pegRatio: figures.epsTtm > 0 && figures.earningsGrowth > 0.02 ? round(price / figures.epsTtm / (figures.earningsGrowth * 100), 2) : undefined,
+    pegRatio: epsTtm > 0 && figures.earningsGrowth > 0.02 ? round(price / epsTtm / (figures.earningsGrowth * 100), 2) : undefined,
     enterpriseToRevenue: round(enterprise / figures.revenueTtm, 3),
     enterpriseToEbitda: ebitda > 0 ? round(enterprise / ebitda, 3) : undefined,
     SandP52WeekChange: round(between(0.05, 0.2, "^GSPC", yearOf(latest)), 4),
@@ -496,15 +503,10 @@ export function quarterLabel(periodEnd: number): string {
   return `${Math.floor(date.getUTCMonth() / 3) + 1}Q${date.getUTCFullYear()}`;
 }
 
-function addMonths(periodEnd: number, months: number): number {
-  const date = new Date(periodEnd * DAY_MS);
-  return dayNumber(date.getUTCFullYear(), date.getUTCMonth() + 1 + months + 1, 0);
-}
-
 function earningsModule(ctx: Context, schedule: EarningsSchedule): Module {
   const figures = companyFigures(ctx.security);
   const recent = schedule.history.slice(-4);
-  const year = yearOf(ctx.latest);
+  const lastYear = lastReportedYear(schedule);
   return {
     maxAge: 86400,
     earningsChart: {
@@ -532,10 +534,11 @@ function earningsModule(ctx: Context, schedule: EarningsSchedule): Module {
       currentPeriodEndDate: midnight(schedule.next.periodEnd),
     },
     financialsChart: {
-      yearly: [4, 3, 2, 1].map((back) => {
-        const revenue = Math.round(figures.revenueTtm * (1 + figures.revenueGrowth) ** -back);
-        const earnings = Math.round(figures.netIncomeTtm * (1 + figures.earningsGrowth) ** -back);
-        return { date: year - back, revenue, earnings, profitMargin: round(earnings / revenue, 4) };
+      // The four latest fully reported years, as the sums of their quarters.
+      yearly: [3, 2, 1, 0].map((back) => {
+        const { eps, revenue } = yearResult(ctx.security, lastYear - back, schedule.history.at(-1)?.periodEnd ?? 0);
+        const earnings = Math.round(eps * figures.sharesOutstanding);
+        return { date: lastYear - back, revenue, earnings, profitMargin: revenue ? round(earnings / revenue, 4) : 0 };
       }),
       quarterly: recent.map((report) => {
         const revenue = report.revenueActual ?? 0;
@@ -607,24 +610,28 @@ function trendRow(ctx: Context, period: string, endDay: number, epsAvg: number, 
   };
 }
 
+/**
+ * Consensus for the next two quarters and the current and next calendar years, from the same quarter model as the
+ * reported figures: year-ago values are reported results, a year mixes reported quarters with estimates.
+ */
 function earningsTrendModule(ctx: Context, schedule: EarningsSchedule): Module {
-  const figures = companyFigures(ctx.security);
+  const security = ctx.security;
   const next = schedule.next;
-  const history: EarningsReport[] = schedule.history;
-  const yearAgo = history.at(-4);
-  const yearAgoNextQuarter = history.at(-3);
-  const following = next.epsEstimate * (1 + figures.earningsGrowth / 4);
-  const yearEnd = dayNumber(yearOf(next.periodEnd), 12, 31);
-  const reportedThisYear = history.filter((report) => yearOf(report.periodEnd) === yearOf(next.periodEnd)).reduce((sum, report) => sum + (report.epsActual ?? 0), 0);
-  const quartersLeft = 4 - history.filter((report) => yearOf(report.periodEnd) === yearOf(next.periodEnd)).length;
-  const thisYear = reportedThisYear + next.epsEstimate * Math.max(1, quartersLeft);
-  const lastYearEps = history.filter((report) => yearOf(report.periodEnd) === yearOf(next.periodEnd) - 1).reduce((sum, report) => sum + (report.epsActual ?? 0), 0);
+  const lastReported = schedule.history.at(-1)?.periodEnd ?? shiftQuarterEnd(next.periodEnd, -3);
+  const followingEnd = shiftQuarterEnd(next.periodEnd, 3);
+  const following = quarterResult(security, followingEnd);
+  const yearAgo = quarterResult(security, shiftQuarterEnd(next.periodEnd, -12));
+  const yearAgoFollowing = quarterResult(security, shiftQuarterEnd(followingEnd, -12));
+  const year = yearOf(next.periodEnd);
+  const lastYear = yearResult(security, year - 1, lastReported);
+  const thisYear = yearResult(security, year, lastReported);
+  const nextYear = yearResult(security, year + 1, lastReported);
   return {
     trend: [
-      trendRow(ctx, "0q", next.periodEnd, next.epsEstimate, next.revenueEstimate, yearAgo?.epsActual ?? next.epsEstimate * 0.9, yearAgo?.revenueActual ?? next.revenueEstimate * 0.9),
-      trendRow(ctx, "+1q", addMonths(next.periodEnd, 3), following, next.revenueEstimate * (1 + figures.revenueGrowth / 4), yearAgoNextQuarter?.epsActual ?? following * 0.9, yearAgoNextQuarter?.revenueActual ?? next.revenueEstimate * 0.9),
-      trendRow(ctx, "0y", yearEnd, thisYear, figures.revenueTtm * (1 + figures.revenueGrowth / 2), lastYearEps || thisYear * 0.9, figures.revenueTtm),
-      trendRow(ctx, "+1y", addMonths(yearEnd, 12), thisYear * (1 + figures.earningsGrowth), figures.revenueTtm * (1 + figures.revenueGrowth), thisYear, figures.revenueTtm * (1 + figures.revenueGrowth / 2)),
+      trendRow(ctx, "0q", next.periodEnd, next.epsEstimate, next.revenueEstimate, yearAgo.eps, yearAgo.revenue),
+      trendRow(ctx, "+1q", followingEnd, following.epsEstimate, following.revenueEstimate, yearAgoFollowing.eps, yearAgoFollowing.revenue),
+      trendRow(ctx, "0y", dayNumber(year, 12, 31), thisYear.eps, thisYear.revenue, lastYear.eps, lastYear.revenue),
+      trendRow(ctx, "+1y", dayNumber(year + 1, 12, 31), nextYear.eps, nextYear.revenue, thisYear.eps, thisYear.revenue),
     ],
     maxAge: 1,
     defaultMethodology: "gaap",
