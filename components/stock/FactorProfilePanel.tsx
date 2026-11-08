@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { findResearch, nearestHorizon, rawEvidence, researchTally } from "@/components/lab/evidence";
 import { formatBeta, formatIc, formatT, ordinal, pct, yearSpan } from "@/components/lab/stats-format";
+import { interpolate } from "@/components/lab/text";
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Meter } from "@/components/ui/Meter";
 import { Panel, PanelMeta } from "@/components/ui/Panel";
@@ -98,7 +99,7 @@ export function FactorProfilePanel({ symbol, className, id }: { symbol: string; 
         })}
       </ul>
       <div className="space-y-1 border-t border-line px-3 py-2 text-xs text-fg-3">
-        {!data.inUniverse ? <p className="text-fg-2">{tpl(p.notMember, { symbol: data.symbol, n })}</p> : null}
+        {!data.inUniverse ? <p className="text-fg-2">{interpolate(p.notMember, { symbol: <span className="mono text-fg">{data.symbol}</span>, n })}</p> : null}
         <p>
           {tpl(p.foot, {
             n,

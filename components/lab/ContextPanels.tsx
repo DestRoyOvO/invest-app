@@ -11,6 +11,7 @@ import { FACTOR_RESEARCH, RISK_CALIBRATION, SIGNAL_EVALUATION } from "./data";
 import { readingWeights, researchTally } from "./evidence";
 import { ScrollRegion } from "./ScrollRegion";
 import { joinList, pct, yearSpan } from "./stats-format";
+import { interpolate, listNodes } from "./text";
 
 // Context panels of the factor lab: statistical power, the hindsight in the universe, method and limitations (#method,
 // the target of the signal panel's "How it works") and how to regenerate every number.
@@ -64,8 +65,12 @@ export function HindsightPanel() {
     { key: "gapRsp", header: l.cols.gapRsp, align: "right", width: "6rem", render: (row) => ratio(gap(row.universe, row.equalWeight), true) },
     { key: "gapSpy", header: l.cols.gapSpy, align: "right", width: "6rem", render: (row) => ratio(gap(row.universe, row.market), true) },
   ];
-  const winners = joinList(
-    research.bias.exWinners.map((w) => `${w.symbol} ${pct(w.annualReturn, 0)}`),
+  const winners = listNodes(
+    research.bias.exWinners.map((w) => (
+      <span key={w.symbol} className="whitespace-nowrap">
+        <span className="mono text-fg">{w.symbol}</span> {pct(w.annualReturn, 0)}
+      </span>
+    )),
     lang,
   );
   return (
@@ -75,7 +80,7 @@ export function HindsightPanel() {
       </ScrollRegion>
       <div className="space-y-1 border-t border-line px-3 py-2 text-xs leading-5">
         <p className="text-fg-3">{l.note}</p>
-        <p className="num text-fg-2">{tpl(l.winners, { list: winners })}</p>
+        <p className="num text-fg-2">{interpolate(l.winners, { list: winners })}</p>
       </div>
     </Panel>
   );
