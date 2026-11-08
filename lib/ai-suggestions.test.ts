@@ -35,6 +35,11 @@ describe("suggested questions", () => {
     expect(suggestedQuestions(data({ page: { view: "stock", symbol: "NVDA" }, changePercent: 0.8, relativeVolume: 2.1 }), EN)[0].text).toBe("Why is NVDA up 0.80% today?");
   });
 
+  it("words a heavy-volume day neutrally when the move prints as 0.00%", () => {
+    expect(suggestedQuestions(data({ page: { view: "stock", symbol: "NVDA" }, changePercent: -0.001, relativeVolume: 2.1 }), EN)[0].text).toBe("What moved NVDA today?");
+    expect(suggestedQuestions(data({ page: { view: "stock", symbol: "NVDA" }, changePercent: -0.005, relativeVolume: 2.1 }), EN)[0].text).toBe("Why is NVDA down 0.01% today?");
+  });
+
   it("asks about P&L, concentration and reports on the watchlist when positions are sent", () => {
     expect(suggestedQuestions(data({ page: { view: "watchlist" }, hasPositions: true }), EN).map((i) => i.text)).toEqual([
       "What drove my P&L today?",
