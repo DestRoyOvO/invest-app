@@ -84,17 +84,17 @@ export function ChatDrawer() {
     [send],
   );
 
-  // A seeded question (the command bar's "?question", "Why is it moving?" buttons): send it once the drawer is open
-  // and AI is usable, with its intent so the server loads the matching data.
+  // A seeded question (the command bar's "?question", "Why is it moving?" buttons): send it once the drawer is open,
+  // AI is usable and no answer is streaming, with its intent so the server loads the matching data.
   useEffect(() => {
-    if (!chatOpen || !chatSeed || aiState !== "available") return;
+    if (!chatOpen || !chatSeed || aiState !== "available" || busy) return;
     const seed = chatSeed;
     const id = window.setTimeout(() => {
       clearChatSeed();
       ask(seed.text, sanitizeIntent(seed.intent));
     }, 0);
     return () => window.clearTimeout(id);
-  }, [chatOpen, chatSeed, aiState, clearChatSeed, ask]);
+  }, [chatOpen, chatSeed, aiState, busy, clearChatSeed, ask]);
 
   // An expired session answers 401: refresh the status so the unlock form replaces the chat.
   const lastFailure = last?.failure?.kind;
