@@ -594,6 +594,11 @@ export function writeAtomically(storage: StorageLike, writes: Readonly<Record<st
   return applied;
 }
 
+/** Sets a preference cookie the way the preferences provider does: for a year, for the whole site. Odd values are ignored. */
+export function writePrefCookie(name: PrefCookieName, value: string): void {
+  if (COOKIE_VALUE.test(value)) document.cookie = `${name}=${value}; Path=/; Max-Age=${PREF_COOKIE_MAX_AGE}; SameSite=Lax`;
+}
+
 /** Where a restore reads and writes: the browser (browserEnv) or fakes in tests. */
 export interface BackupEnv {
   storage: StorageLike;
@@ -614,9 +619,7 @@ export function browserEnv(): BackupEnv {
   return {
     storage: window.localStorage,
     readCookies: () => readPrefCookies(document.cookie),
-    writeCookie: (name, value) => {
-      if (COOKIE_VALUE.test(value)) document.cookie = `${name}=${value}; Path=/; Max-Age=${PREF_COOKIE_MAX_AGE}; SameSite=Lax`;
-    },
+    writeCookie: writePrefCookie,
     notify: (changes) => {
       for (const change of changes) {
         window.dispatchEvent(
