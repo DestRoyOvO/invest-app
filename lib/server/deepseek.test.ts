@@ -187,8 +187,9 @@ describe("deepseek client", () => {
     sdk.create.mockRejectedValueOnce(new sdk.APIError(429, "rate limited"));
     expect(await readAll(streamChat({ messages: MESSAGES, maxTokens: 10, temperature: 0 }))).toBe(`${AI_STREAM_ERROR}rate_limited`);
     sdk.create.mockRejectedValueOnce(new sdk.APIError(402, "Insufficient Balance"));
-    expect(await readAll(streamChat({ messages: MESSAGES, maxTokens: 10, temperature: 0 }))).toBe(`${AI_STREAM_ERROR}ai_unavailable`);
-    expect(streamErrorCode(new sdk.APIError(401, "bad key"))).toBe("ai_unavailable");
+    expect(await readAll(streamChat({ messages: MESSAGES, maxTokens: 10, temperature: 0 }))).toBe(`${AI_STREAM_ERROR}provider_rejected`);
+    expect(streamErrorCode(new sdk.APIError(401, "bad key"))).toBe("provider_rejected");
+    expect(streamErrorCode(new sdk.APIError(403, "forbidden"))).toBe("provider_rejected");
     expect(streamErrorCode(new sdk.APIError(500, "oops"))).toBe("upstream_error");
     expect(streamErrorCode(new Error("network"))).toBe("upstream_error");
   });

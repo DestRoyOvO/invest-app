@@ -23,6 +23,8 @@ export function failureText(failure: AiFailure, t: Messages): string {
       return t.ai.unavailable;
     case "not_configured":
       return t.ai.notConfigured;
+    case "rejected":
+      return t.ai.providerRejected;
     case "locked":
       return t.ai.lockedTitle;
     default:

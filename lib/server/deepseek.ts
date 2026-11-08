@@ -4,7 +4,7 @@ import OpenAI, { APIError } from "openai";
 import type { ChatCompletionChunk } from "openai/resources/chat/completions";
 import type { CompletionUsage } from "openai/resources/completions";
 
-import { AI_STREAM_ERROR, AI_STREAM_TRUNCATED, type AiStreamErrorCode, type ApiErrorCode } from "@/types/api";
+import { AI_STREAM_ERROR, AI_STREAM_TRUNCATED, type AiStreamErrorCode } from "@/types/api";
 
 import { readEnv } from "./env";
 import { log } from "./log";
@@ -122,11 +122,11 @@ export function incompleteCompletionCode(emittedText: boolean, finishReason: str
 }
 
 /** Maps an upstream failure to the error code appended after AI_STREAM_ERROR. */
-export function streamErrorCode(error: unknown): ApiErrorCode {
+export function streamErrorCode(error: unknown): AiStreamErrorCode {
   if (error instanceof APIError) {
     if (error.status === 429) return "rate_limited";
-    // 401 invalid key, 402 insufficient balance, 403 forbidden: the owner has to fix the configuration.
-    if (error.status === 401 || error.status === 402 || error.status === 403) return "ai_unavailable";
+    // 401 invalid key, 402 insufficient balance, 403 forbidden: the key is set, but the owner has to fix the account.
+    if (error.status === 401 || error.status === 402 || error.status === 403) return "provider_rejected";
   }
   return "upstream_error";
 }

@@ -659,10 +659,11 @@ export const AI_HEADERS = {
 export const AI_STREAM_ERROR = "[[AI_STREAM_ERROR]]";
 
 /**
- * Codes that follow AI_STREAM_ERROR: an ApiErrorCode, or "model_limit" when the model spent its whole token budget
- * before writing an answer (a reasoning model configured as DEEPSEEK_MODEL can do this).
+ * Codes that follow AI_STREAM_ERROR: an ApiErrorCode, "model_limit" when the model spent its whole token budget before
+ * writing an answer (a reasoning model configured as DEEPSEEK_MODEL can do this), or "provider_rejected" when DeepSeek
+ * refused the configured key (401 invalid key, 402 insufficient balance, 403 forbidden).
  */
-export type AiStreamErrorCode = ApiErrorCode | "model_limit";
+export type AiStreamErrorCode = ApiErrorCode | "model_limit" | "provider_rejected";
 
 /**
  * Appended as the very last chunk when the model stopped at the token limit, so the client can say that the answer

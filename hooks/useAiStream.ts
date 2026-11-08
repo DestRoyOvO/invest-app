@@ -24,7 +24,7 @@ import { AI_HEADERS, AI_STREAM_ERROR, AI_STREAM_TRUNCATED, type AnalyzeRequest, 
 export type AiStatus = "idle" | "streaming" | "done" | "error";
 
 export interface AiFailure {
-  kind: "locked" | "unavailable" | "not_configured" | "rate_limited" | "model_limit" | "interrupted" | "failed";
+  kind: "locked" | "unavailable" | "not_configured" | "rejected" | "rate_limited" | "model_limit" | "interrupted" | "failed";
   retryAfter?: number;
   /** The 429 came from the server's daily AI budget, which resets at midnight UTC. */
   daily?: boolean;
@@ -51,6 +51,8 @@ export class AiStreamFailure extends Error {
 export function failureFromStreamCode(code: string): AiFailure {
   if (code === "rate_limited") return { kind: "rate_limited" };
   if (code === "ai_unavailable") return { kind: "unavailable" };
+  // DeepSeek refused the configured key mid-request: AI is set up, but the key or the account needs attention.
+  if (code === "provider_rejected") return { kind: "rejected" };
   if (code === "model_limit") return { kind: "model_limit" };
   return { kind: "interrupted" };
 }

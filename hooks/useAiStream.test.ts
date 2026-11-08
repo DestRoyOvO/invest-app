@@ -83,6 +83,7 @@ describe("failures", () => {
     expect(failureFromError(new Error("boom"))).toEqual({ kind: "failed" });
     expect(failureFromStreamCode("model_limit")).toEqual({ kind: "model_limit" });
     expect(failureFromStreamCode("ai_unavailable")).toEqual({ kind: "unavailable" });
+    expect(failureFromStreamCode("provider_rejected")).toEqual({ kind: "rejected" });
   });
 });
 

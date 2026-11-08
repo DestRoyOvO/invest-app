@@ -22,6 +22,8 @@ describe("AI copy", () => {
     expect(failureText({ kind: "model_limit" }, EN)).toContain("deepseek-chat");
     expect(failureText({ kind: "not_configured" }, EN)).toContain("DEEPSEEK_API_KEY");
     expect(failureText({ kind: "unavailable" }, EN)).toContain("ACCESS_PASSWORD");
+    expect(failureText({ kind: "rejected" }, EN)).toBe("DeepSeek rejected the request. If you run this site, check the API key and the account balance.");
+    expect(failureText({ kind: "rejected" }, ZH)).toBe("DeepSeek 拒绝了请求。如果你是本站的运营者，请检查 API 密钥和账户余额。");
     expect(failureText({ kind: "interrupted" }, EN)).toBe(EN.ai.interrupted);
     expect(failureText({ kind: "failed" }, EN)).toBe(EN.ai.failed);
   });
