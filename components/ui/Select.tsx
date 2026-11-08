@@ -5,6 +5,7 @@ import { forwardRef, type SelectHTMLAttributes } from "react";
 
 import { cn } from "@/lib/cn";
 
+import { PHONE_TARGET } from "./Button";
 import { controlClass, useFieldControl } from "./Field";
 
 export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement>, "size"> {
@@ -15,7 +16,8 @@ export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement
 
 /**
  * Styled native select: the platform picker (best on phones and for screen readers) with the input look and a chevron.
- * Inside a Field it is labelled and described automatically.
+ * Inside a Field it is labelled and described automatically. 28px (sm) or 32px (md) on desktop, at least 40px tall
+ * below the sm breakpoint.
  */
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select({ size = "md", className, children, ...props }, ref) {
   const wiring = useFieldControl(props);
@@ -25,7 +27,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
         ref={ref}
         {...props}
         {...wiring}
-        className={cn(controlClass, "w-full min-w-0 appearance-none pr-7", size === "sm" ? "h-7 pl-2 text-xs" : "h-8 pl-2.5 text-sm")}
+        className={cn(controlClass, "w-full min-w-0 appearance-none pr-7", size === "sm" ? "h-7 pl-2 text-xs" : "h-8 pl-2.5 text-sm", PHONE_TARGET)}
       >
         {children}
       </select>

@@ -17,15 +17,29 @@ const SIZES: Record<Size, string> = {
   md: "h-8 gap-2 px-3 text-sm",
 };
 
+/**
+ * The 40px phone touch target the controls share (Button, Segmented, Select, Tabs, Input): a minimum height below the
+ * sm breakpoint, so desktop sizes stay as they are and a taller control is never shrunk.
+ */
+export const PHONE_TARGET = "max-sm:min-h-10";
+
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   /** primary: the one main action in a view; secondary: everything else; ghost: low-emphasis actions in dense rows. */
   variant?: Variant;
   size?: Size;
+  /**
+   * Grows to a 40px touch target below sm (default). Turn it off only inside a container that cannot fit 40px, such as
+   * the 32px ticker strip.
+   */
+  touchTarget?: boolean;
 }
 
-/** Text button. Disabled buttons stay readable (--fg-3 on --panel-2) instead of fading out. */
+/**
+ * Text button: 28px (sm) or 32px (md) on desktop and at least 40px tall below the sm breakpoint. Disabled buttons stay
+ * readable (--fg-3 on --panel-2) instead of fading out.
+ */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = "secondary", size = "md", className, type = "button", ...props },
+  { variant = "secondary", size = "md", touchTarget = true, className, type = "button", ...props },
   ref,
 ) {
   return (
@@ -36,6 +50,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         "inline-flex shrink-0 items-center justify-center rounded-xs font-medium whitespace-nowrap transition-colors",
         VARIANTS[variant],
         SIZES[size],
+        touchTarget && PHONE_TARGET,
         className,
       )}
       {...props}

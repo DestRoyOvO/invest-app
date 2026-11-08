@@ -68,7 +68,7 @@ export function UnlockForm({ next, maxLength }: { next: string; maxLength: numbe
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           aria-describedby={message ? messageId : undefined}
-          className="h-9 min-w-0 flex-1 rounded-xs border border-input-border bg-input-bg px-2.5 text-sm text-fg placeholder:text-fg-3 focus:border-accent focus:outline-none"
+          className="h-9 min-w-0 flex-1 rounded-xs border border-input-border bg-input-bg px-2.5 text-sm text-fg placeholder:text-fg-3 focus:border-accent focus:outline-none max-sm:h-10"
         />
         <Button type="submit" variant="primary" className="h-9" disabled={!password || busy}>
           {opening ? t.access.opening : busy ? t.access.checking : t.access.submit}
