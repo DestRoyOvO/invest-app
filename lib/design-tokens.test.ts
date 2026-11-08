@@ -3,6 +3,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { RATING_KEYS, RATING_SHADES } from "@/components/calendar/earnings-model";
+
 import {
   CONTRAST_PAIRS,
   CONVENTIONS,
@@ -17,6 +19,7 @@ import {
   parseColor,
   parseCssBlocks,
   resolveTokens,
+  type ContrastPair,
 } from "./design-tokens";
 
 const FIXTURE = `
@@ -111,10 +114,61 @@ describe("colors and contrast", () => {
   });
 });
 
+describe("colors drawn at an opacity", () => {
+  const tokens = new Map([
+    ["--ink", "#000000"],
+    ["--paper", "#ffffff"],
+    ["--wash", "rgb(0 0 0 / 0.5)"],
+  ]);
+  const gray = composite({ r: 0, g: 0, b: 0, a: 0.5 }, { r: 255, g: 255, b: 255, a: 1 });
+  const check = (pair: Omit<ContrastPair, "min" | "role">) => checkContrast(tokens, "light", "intl", [{ ...pair, min: 3, role: "test" }])[0];
+
+  it("composites a translucent foreground over its surface", () => {
+    expect(check({ fg: "ink", fgAlpha: 0.5, bg: "paper" }).ratio).toBeCloseTo(contrastRatio(gray, parseColor("#fff")!), 10);
+    expect(check({ fg: "ink", fgAlpha: 1, bg: "paper" }).ratio).toBeCloseTo(21, 5);
+    expect(check({ fg: "ink", fgAlpha: 0, bg: "paper" }).ratio).toBe(1);
+  });
+
+  it("composites a translucent background over the surface under it, and multiplies a token's own alpha", () => {
+    expect(check({ fg: "paper", bg: "ink", bgAlpha: 0.5, over: "paper" }).ratio).toBeCloseTo(contrastRatio(parseColor("#fff")!, gray), 10);
+    const quarter = composite({ r: 0, g: 0, b: 0, a: 0.25 }, { r: 255, g: 255, b: 255, a: 1 });
+    expect(check({ fg: "paper", bg: "wash", bgAlpha: 0.5, over: "paper" }).ratio).toBeCloseTo(contrastRatio(parseColor("#fff")!, quarter), 10);
+  });
+
+  it("refuses a translucent background without a surface, and an opacity outside 0 to 1", () => {
+    expect(() => check({ fg: "paper", bg: "ink", bgAlpha: 0.5 })).toThrow(/needs the surface/);
+    expect(() => check({ fg: "ink", fgAlpha: 1.2, bg: "paper" })).toThrow(/outside 0 to 1/);
+    expect(() => check({ fg: "ink", fgAlpha: Number.NaN, bg: "paper" })).toThrow(/outside 0 to 1/);
+  });
+
+  it("checks every rating shade of the earnings model as a fill on the panel, at its own opacity", () => {
+    for (const key of RATING_KEYS) {
+      const match = /^bg-fg(?:\/(\d+))?$/.exec(RATING_SHADES[key]);
+      expect(match, RATING_SHADES[key]).not.toBeNull();
+      const alpha = match![1] === undefined ? 1 : Number(match![1]) / 100;
+      const pair = CONTRAST_PAIRS.find((p) => p.fg === "fg" && p.bg === "panel" && !p.over && (p.fgAlpha ?? 1) === alpha);
+      expect(pair, `${RATING_SHADES[key]} on --panel`).toBeDefined();
+      expect(pair!.min).toBeGreaterThanOrEqual(3);
+    }
+  });
+});
+
 describe("pairName and duplicatePairs", () => {
   it("names a pair by its colors, with the surface under a translucent background", () => {
     expect(pairName({ fg: "fg-3", bg: "hover" })).toBe("fg-3 on hover");
     expect(pairName({ fg: "accent", bg: "accent-soft", over: "panel-2" })).toBe("accent on accent-soft over panel-2");
+  });
+
+  it("names an opacity the way a Tailwind class does, and an opaque one not at all", () => {
+    expect(pairName({ fg: "fg", fgAlpha: 0.6, bg: "panel" })).toBe("fg/60 on panel");
+    expect(pairName({ fg: "panel", bg: "fg", bgAlpha: 0.85, over: "panel" })).toBe("panel on fg/85 over panel");
+    expect(pairName({ fg: "fg", fgAlpha: 0.125, bg: "panel" })).toBe("fg/12.5 on panel");
+    expect(pairName({ fg: "fg", fgAlpha: 1, bg: "panel" })).toBe("fg on panel");
+    expect(duplicatePairs([
+      { fg: "fg", bg: "panel", min: 4.5, role: "Text" },
+      { fg: "fg", fgAlpha: 1, bg: "panel", min: 3, role: "The same color as a fill" },
+      { fg: "fg", fgAlpha: 0.6, bg: "panel", min: 3, role: "A lighter fill" },
+    ])).toEqual(["fg on panel"]);
   });
 
   it("reports colors listed twice whatever their roles and minimums, once each", () => {

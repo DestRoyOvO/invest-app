@@ -196,7 +196,14 @@ export function oklabDistance(a: Rgba, b: Rgba): number {
 export interface ContrastPair {
   /** Token names without the leading "--". */
   fg: string;
+  /**
+   * Opacity the foreground is drawn at, 0 to 1 (Tailwind's /85 modifier is 0.85): it is composited over the background,
+   * as the browser paints it. Omitted means opaque.
+   */
+  fgAlpha?: number;
   bg: string;
+  /** Opacity the background is drawn at over `over` (a bg-fg/85 fill on the panel). Needs `over`. */
+  bgAlpha?: number;
   /** Composite a translucent background over this token first (e.g. accent-soft over the panel). */
   over?: string;
   /** 4.5 for text, 3 for large text and non-text marks (WCAG 1.4.3 and 1.4.11). */
@@ -205,12 +212,12 @@ export interface ContrastPair {
 }
 
 const text = (fg: string, bg: string, role: string, over?: string): ContrastPair => ({ fg, bg, over, min: 4.5, role });
-const mark = (fg: string, bg: string, role: string): ContrastPair => ({ fg, bg, min: 3, role });
+const mark = (fg: string, bg: string, role: string, fgAlpha?: number): ContrastPair => ({ fg, fgAlpha, bg, min: 3, role });
 
 /** Every pairing the components rely on, checked in both themes and all three conventions. */
 export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   ...["panel", "panel-2", "hover"].flatMap((bg) => [
-    text("fg", bg, "Values and titles"),
+    text("fg", bg, bg === "panel" ? "Values and titles; the strong buy rating shade (bg-fg)" : "Values and titles"),
     text("fg-2", bg, "Secondary text"),
     text("fg-3", bg, "Labels, column heads, meta, disabled buttons"),
     text("up", bg, "Price and P&L up"),
@@ -246,11 +253,27 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   mark("fg", "line-2", "52-week position marker on its range track (heatmap card)"),
   mark("fg", "canvas", "Heatmap tile hover and keyboard ring, drawn inside a canvas halo"),
   ...[1, 2, 3, 4, 5, 6].map((n) => mark(`series-${n}`, "panel", `Chart series ${n}`)),
+  // The analyst rating shades (RATING_SHADES in components/calendar/earnings-model.ts) as fills on the panel: rating
+  // bar segments and legend swatches. The opaque strong buy shade is "fg on panel" above. No text is drawn on a shade:
+  // the legend sets each label beside its swatch.
+  mark("fg", "panel", "Rating shade, buy (bg-fg/85)", 0.85),
+  mark("fg", "panel", "Rating shade, hold (bg-fg/72)", 0.72),
+  mark("fg", "panel", "Rating shade, sell (bg-fg/60)", 0.6),
+  mark("fg", "panel", "Rating shade, strong sell (bg-fg/50)", 0.5),
 ];
 
-/** The colors a pair measures, e.g. "accent on accent-soft over panel-2". The role and the minimum are not part of it. */
-export function pairName(pair: Pick<ContrastPair, "fg" | "bg" | "over">): string {
-  return `${pair.fg} on ${pair.over ? `${pair.bg} over ${pair.over}` : pair.bg}`;
+/** A token as a Tailwind class names it: "fg", or "fg/85" when it is drawn at 85% opacity. */
+function tokenAt(token: string, alpha: number | undefined): string {
+  return alpha === undefined || alpha === 1 ? token : `${token}/${Math.round(alpha * 1000) / 10}`;
+}
+
+/**
+ * The colors a pair measures, e.g. "accent on accent-soft over panel-2" or "fg/60 on panel". The role and the minimum
+ * are not part of it.
+ */
+export function pairName(pair: Pick<ContrastPair, "fg" | "fgAlpha" | "bg" | "bgAlpha" | "over">): string {
+  const bg = tokenAt(pair.bg, pair.bgAlpha);
+  return `${tokenAt(pair.fg, pair.fgAlpha)} on ${pair.over ? `${bg} over ${pair.over}` : bg}`;
 }
 
 /**
@@ -270,17 +293,23 @@ export interface ContrastResult extends ContrastPair {
   pass: boolean;
 }
 
-/** Checks every pair in one theme and convention. Throws when a token is missing or not a parseable color. */
+/**
+ * Checks every pair in one theme and convention. A color with an opacity (fgAlpha, bgAlpha) is composited at that
+ * opacity over the surface under it in this theme. Throws when a token is missing or not a parseable color, when an
+ * opacity is outside 0 to 1, and when a translucent background has no surface (over).
+ */
 export function checkContrast(tokens: Map<string, string>, theme: ThemeName, convention: Convention, pairs = CONTRAST_PAIRS): ContrastResult[] {
-  const color = (name: string): Rgba => {
+  const color = (name: string, alpha = 1): Rgba => {
     const value = tokens.get(`--${name}`);
     const parsed = value === undefined ? null : parseColor(value);
     if (!parsed) throw new Error(`--${name} is not a color in ${theme}/${convention}: ${value}`);
-    return parsed;
+    if (!(alpha >= 0 && alpha <= 1)) throw new Error(`Opacity ${alpha} of --${name} is outside 0 to 1`);
+    return { ...parsed, a: parsed.a * alpha };
   };
   return pairs.map((pair) => {
-    const background = pair.over ? composite(color(pair.bg), color(pair.over)) : color(pair.bg);
-    const ratio = contrastRatio(color(pair.fg), background);
+    if (pair.bgAlpha !== undefined && pair.bgAlpha < 1 && !pair.over) throw new Error(`${pairName(pair)}: a translucent background needs the surface under it (over)`);
+    const background = pair.over ? composite(color(pair.bg, pair.bgAlpha), color(pair.over)) : color(pair.bg);
+    const ratio = contrastRatio(color(pair.fg, pair.fgAlpha), background);
     return { ...pair, theme, convention, ratio, pass: ratio >= pair.min };
   });
 }
