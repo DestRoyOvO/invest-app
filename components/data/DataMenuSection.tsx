@@ -2,7 +2,7 @@
 
 import { Database, Download, Upload } from "lucide-react";
 import Link from "next/link";
-import { useId } from "react";
+import { useEffect, useId } from "react";
 
 import { useT } from "@/components/providers/PrefsProvider";
 import { useToast } from "@/components/ui/Toast";
@@ -10,8 +10,13 @@ import { useLocalStore } from "@/hooks/useLocalStore";
 import { backupAgeDays, backupMetaStore } from "@/lib/backup";
 import { tpl } from "@/lib/format";
 
-import { exportBackupNow } from "./browser";
 import { lastBackupLabel } from "./labels";
+
+/**
+ * The export code (./browser and the CSV writer) loads when the menu opens, not with every page: this section is
+ * mounted in the settings menu of the whole app.
+ */
+const loadExport = () => import("./browser");
 
 const ITEM =
   "flex h-7 w-full items-center gap-2 rounded-xs px-1.5 text-left text-xs text-fg transition-colors hover:bg-hover focus-visible:outline-offset-[-2px] max-sm:h-10";
@@ -23,9 +28,18 @@ export function DataMenuSection({ onNavigate }: { onNavigate?: () => void }) {
   const headingId = useId();
   const meta = useLocalStore(backupMetaStore);
 
-  const onExport = () => {
-    const file = exportBackupNow();
-    toast.show({ message: tpl(t.data.backup.exported, { file }) });
+  // Fetched as soon as the menu shows this section, so a click on Export downloads at once.
+  useEffect(() => {
+    loadExport().catch(() => {});
+  }, []);
+
+  const onExport = async () => {
+    try {
+      const { exportBackupNow } = await loadExport();
+      toast.show({ message: tpl(t.data.backup.exported, { file: exportBackupNow() }) });
+    } catch {
+      toast.show({ message: t.data.backup.exportFailed });
+    }
     onNavigate?.();
   };
 
@@ -39,7 +53,7 @@ export function DataMenuSection({ onNavigate }: { onNavigate?: () => void }) {
       </div>
       <ul className="-mx-1.5">
         <li>
-          <button type="button" onClick={onExport} className={ITEM}>
+          <button type="button" onClick={() => void onExport()} className={ITEM}>
             <Download aria-hidden className="size-3.5 shrink-0 text-fg-3" strokeWidth={1.75} />
             {t.data.menu.export}
           </button>

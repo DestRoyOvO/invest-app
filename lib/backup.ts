@@ -15,8 +15,10 @@
 // Merge rules: the watchlist becomes the union (this browser's order first, capped at MAX_WATCHLIST); positions from
 // the file win per symbol; per symbol, the note with the newer updatedAt wins; every other store is replaced by the
 // file's copy. Replace makes this browser match the file, removing keys the file does not have.
-
-import { z } from "zod";
+//
+// The file is validated with zod (components/data/backup-schema.ts), which is loaded only when a file is checked, so
+// validateBackup is async: the settings menu on every page imports this module for the backup age, and should not
+// download a validator.
 
 import { HOLDINGS_STORAGE_KEY, sanitizeHoldings, type Holdings } from "@/hooks/useHoldings";
 import { sanitizeWatchlist, WATCHLIST_STORAGE_KEY } from "@/hooks/useWatchlist";
@@ -33,7 +35,8 @@ export const META_STORAGE_KEY = `${STORAGE_PREFIX}meta:v1`;
 /** The largest backup accepted, in characters: about what localStorage holds for one site. */
 export const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
 const MAX_KEYS = 1000;
-const MAX_TEXT_CHARS = 100_000;
+/** The longest plain-text value accepted in a backup file. */
+export const MAX_TEXT_CHARS = 100_000;
 /** Nesting limit for a backup file. Real stores nest less than ten levels; a deeper file is not ours. */
 const MAX_DEPTH = 64;
 
@@ -41,7 +44,7 @@ export const PREF_COOKIE_NAMES = ["is_lang", "is_theme", "is_updown", "is_densit
 export type PrefCookieName = (typeof PREF_COOKIE_NAMES)[number];
 export type PrefCookies = Partial<Record<PrefCookieName, string>>;
 /** Preference values are short lowercase words ("zh", "dark", "cb", "compact"), which also keeps them safe in a cookie. */
-const COOKIE_VALUE = /^[a-z]{1,16}$/;
+export const COOKIE_VALUE = /^[a-z]{1,16}$/;
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
@@ -156,24 +159,28 @@ export function backupFileName(now: Date = new Date()): string {
   return `investseek-backup-${localDate(now)}.json`;
 }
 
-const storageKey = z
-  .string()
-  .max(200)
-  .refine((key) => key.startsWith(STORAGE_PREFIX));
-const cookieValue = z.string().regex(COOKIE_VALUE).optional();
+type BackupSchema = (typeof import("@/components/data/backup-schema"))["backupFileSchema"];
+let backupSchema: Promise<BackupSchema> | null = null;
 
-const backupSchema = z.object({
-  app: z.literal(BACKUP_APP),
-  schema: z.literal(BACKUP_SCHEMA),
-  exportedAt: z.iso.datetime({ offset: true }),
-  data: z.object({
-    storage: z.record(storageKey, z.json()).default({}),
-    text: z.record(storageKey, z.string().max(MAX_TEXT_CHARS)).default({}),
-    cookies: z.object({ is_lang: cookieValue, is_theme: cookieValue, is_updown: cookieValue, is_density: cookieValue }).default({}),
-  }),
-});
+/**
+ * The zod schema of a backup file, from a module of its own: a dynamic import keeps zod out of the bundles of the
+ * pages that import this file only for the backup age or the export, and the module's static named imports let the
+ * bundler drop the parts of zod the schema does not use (a dynamic import of zod itself would bring all of it).
+ */
+function loadBackupSchema(): Promise<BackupSchema> {
+  // A failed load (offline, or a deploy replaced the chunk) is not kept, so the next file tries again.
+  backupSchema ??= import("@/components/data/backup-schema").then(
+    (module) => module.backupFileSchema,
+    (error: unknown) => {
+      backupSchema = null;
+      throw error;
+    },
+  );
+  return backupSchema;
+}
 
-export type BackupError = "too_large" | "not_json" | "not_backup" | "newer_schema" | "invalid";
+/** check_failed: the validator itself could not be loaded, which says nothing about the file. */
+export type BackupError = "too_large" | "not_json" | "not_backup" | "newer_schema" | "invalid" | "check_failed";
 
 /** The deepest nesting of arrays and objects in JSON text, skipping strings. */
 function jsonDepth(text: string): number {
@@ -200,8 +207,9 @@ function jsonDepth(text: string): number {
 /**
  * Checks that a file is an InvestSeek backup this version can read: valid JSON, the app marker, a schema no newer
  * than BACKUP_SCHEMA, keys inside STORAGE_PREFIX only, JSON values, and preference cookies that are short words.
+ * Files that fail the quick checks are refused before the schema (and zod) is loaded.
  */
-export function validateBackup(text: string): { ok: true; backup: Backup } | { ok: false; error: BackupError } {
+export async function validateBackup(text: string): Promise<{ ok: true; backup: Backup } | { ok: false; error: BackupError }> {
   if (text.length > MAX_BACKUP_BYTES) return { ok: false, error: "too_large" };
   let raw: unknown;
   try {
@@ -212,9 +220,15 @@ export function validateBackup(text: string): { ok: true; backup: Backup } | { o
   if (!isRecord(raw) || raw.app !== BACKUP_APP) return { ok: false, error: "not_backup" };
   if (typeof raw.schema === "number" && raw.schema > BACKUP_SCHEMA) return { ok: false, error: "newer_schema" };
   if (jsonDepth(text) > MAX_DEPTH) return { ok: false, error: "invalid" };
-  let parsed: ReturnType<typeof backupSchema.safeParse>;
+  let schema: BackupSchema;
   try {
-    parsed = backupSchema.safeParse(raw);
+    schema = await loadBackupSchema();
+  } catch {
+    return { ok: false, error: "check_failed" };
+  }
+  let parsed: ReturnType<BackupSchema["safeParse"]>;
+  try {
+    parsed = schema.safeParse(raw);
   } catch {
     return { ok: false, error: "invalid" };
   }
@@ -495,12 +509,12 @@ export interface ParsedBackup {
 }
 
 /** Validates a backup file and previews both restore modes against the current storage. */
-export function parseBackup(
+export async function parseBackup(
   text: string,
   current: StorageSnapshot,
   stores: StoreRegistry = registeredLocalStores(),
-): { ok: true; value: ParsedBackup } | { ok: false; error: BackupError } {
-  const result = validateBackup(text);
+): Promise<{ ok: true; value: ParsedBackup } | { ok: false; error: BackupError }> {
+  const result = await validateBackup(text);
   if (!result.ok) return result;
   const { backup } = result;
   return { ok: true, value: { backup, diff: { merge: diffRestore(current, backup, "merge", stores), replace: diffRestore(current, backup, "replace", stores) } } };

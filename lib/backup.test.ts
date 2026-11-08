@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   applyBackup,
@@ -165,7 +165,7 @@ describe("createBackup", () => {
     expect(backupFileName(new Date(2026, 10, 7, 9))).toBe("investseek-backup-2026-11-07.json");
   });
 
-  it("round-trips through the file format and a restore into an empty browser", () => {
+  it("round-trips through the file format and a restore into an empty browser", async () => {
     const original = {
       [WL]: '["MSFT","0700.HK"]',
       [HOLD]: '{"MSFT":{"shares":10,"cost":415}}',
@@ -175,7 +175,7 @@ describe("createBackup", () => {
       "investseek:last-symbol": "MSFT",
     };
     const backup = createBackup(original, { is_lang: "en" }, NOW);
-    const parsed = validateBackup(serializeBackup(backup));
+    const parsed = await validateBackup(serializeBackup(backup));
     expect(parsed).toEqual({ ok: true, backup });
 
     const target = new MemoryStorage();
@@ -189,40 +189,58 @@ describe("createBackup", () => {
 describe("validateBackup", () => {
   const valid = serializeBackup(backupOf({ [WL]: ["AAPL"] }));
 
-  it("accepts a valid file", () => {
-    expect(validateBackup(valid).ok).toBe(true);
+  it("accepts a valid file", async () => {
+    expect((await validateBackup(valid)).ok).toBe(true);
   });
 
-  it("names what is wrong with a file", () => {
-    expect(validateBackup("x".repeat(5 * 1024 * 1024 + 1))).toEqual({ ok: false, error: "too_large" });
-    expect(validateBackup("{not json")).toEqual({ ok: false, error: "not_json" });
-    expect(validateBackup("[1,2]")).toEqual({ ok: false, error: "not_backup" });
-    expect(validateBackup('{"app":"other","schema":1}')).toEqual({ ok: false, error: "not_backup" });
-    expect(validateBackup(valid.replace('"schema": 1', '"schema": 2'))).toEqual({ ok: false, error: "newer_schema" });
-    expect(validateBackup(valid.replace('"schema": 1', '"schema": 0'))).toEqual({ ok: false, error: "invalid" });
-    expect(validateBackup(valid.replace('"exportedAt": "2026-11-07T15:00:00.000Z"', '"exportedAt": "yesterday"'))).toEqual({ ok: false, error: "invalid" });
+  it("names what is wrong with a file", async () => {
+    expect(await validateBackup("x".repeat(5 * 1024 * 1024 + 1))).toEqual({ ok: false, error: "too_large" });
+    expect(await validateBackup("{not json")).toEqual({ ok: false, error: "not_json" });
+    expect(await validateBackup("[1,2]")).toEqual({ ok: false, error: "not_backup" });
+    expect(await validateBackup('{"app":"other","schema":1}')).toEqual({ ok: false, error: "not_backup" });
+    expect(await validateBackup(valid.replace('"schema": 1', '"schema": 2'))).toEqual({ ok: false, error: "newer_schema" });
+    expect(await validateBackup(valid.replace('"schema": 1', '"schema": 0'))).toEqual({ ok: false, error: "invalid" });
+    expect(await validateBackup(valid.replace('"exportedAt": "2026-11-07T15:00:00.000Z"', '"exportedAt": "yesterday"'))).toEqual({ ok: false, error: "invalid" });
   });
 
-  it("refuses keys outside the app's prefix and unsafe cookie values", () => {
-    expect(validateBackup(serializeBackup(backupOf({ "evil:key": 1 }))).ok).toBe(false);
-    expect(validateBackup(serializeBackup(backupOf({}, { cookies: { is_lang: "en; Path=/admin" } }))).ok).toBe(false);
+  it("refuses keys outside the app's prefix and unsafe cookie values", async () => {
+    expect((await validateBackup(serializeBackup(backupOf({ "evil:key": 1 })))).ok).toBe(false);
+    expect((await validateBackup(serializeBackup(backupOf({}, { cookies: { is_lang: "en; Path=/admin" } })))).ok).toBe(false);
   });
 
-  it("ignores the bookkeeping key and unknown cookies, and fills in missing sections", () => {
+  it("ignores the bookkeeping key and unknown cookies, and fills in missing sections", async () => {
     const text = JSON.stringify({ app: "investseek", schema: 1, exportedAt: NOW.toISOString(), data: { storage: { [META_STORAGE_KEY]: {} }, cookies: { session: "x", is_lang: "zh" } } });
-    expect(validateBackup(text)).toEqual({ ok: true, backup: backupOf({}, { cookies: { is_lang: "zh" } }) });
+    expect(await validateBackup(text)).toEqual({ ok: true, backup: backupOf({}, { cookies: { is_lang: "zh" } }) });
   });
 
-  it("refuses files nested deeper than any store, quickly", () => {
+  it("refuses files nested deeper than any store, quickly", async () => {
     const nested = (depth: number) =>
       `{"app":"investseek","schema":1,"exportedAt":"${NOW.toISOString()}","data":{"storage":{"investseek:x:v1":${"[".repeat(depth)}${"]".repeat(depth)}}}}`;
-    expect(validateBackup(nested(40)).ok).toBe(true);
-    expect(validateBackup(nested(100))).toEqual({ ok: false, error: "invalid" });
+    expect((await validateBackup(nested(40))).ok).toBe(true);
+    expect(await validateBackup(nested(100))).toEqual({ ok: false, error: "invalid" });
     // Brackets inside strings do not count.
-    expect(validateBackup(serializeBackup(backupOf({ "investseek:x:v1": "[".repeat(500) }))).ok).toBe(true);
+    expect((await validateBackup(serializeBackup(backupOf({ "investseek:x:v1": "[".repeat(500) })))).ok).toBe(true);
     const started = Date.now();
-    expect(validateBackup(nested(1_000_000))).toEqual({ ok: false, error: "invalid" });
+    expect(await validateBackup(nested(1_000_000))).toEqual({ ok: false, error: "invalid" });
     expect(Date.now() - started).toBeLessThan(2000);
+  });
+
+  it("reports a failed check when the validator cannot load, and loads it again for the next file", async () => {
+    vi.resetModules();
+    let loads = 0;
+    vi.doMock("@/components/data/backup-schema", async () => {
+      loads += 1;
+      if (loads === 1) throw new Error("Failed to fetch dynamically imported module");
+      return vi.importActual("@/components/data/backup-schema");
+    });
+    const fresh = await import("./backup");
+    // Files that fail the quick checks never need the validator.
+    expect(await fresh.validateBackup("{not json")).toEqual({ ok: false, error: "not_json" });
+    expect(loads).toBe(0);
+    expect(await fresh.validateBackup(valid)).toEqual({ ok: false, error: "check_failed" });
+    expect((await fresh.validateBackup(valid)).ok).toBe(true);
+    expect(loads).toBe(2);
+    vi.doUnmock("@/components/data/backup-schema");
   });
 });
 
@@ -269,8 +287,8 @@ describe("parseBackup and the restore preview", () => {
     ),
   );
 
-  it("previews a merge per store", () => {
-    const result = parseBackup(file, current, STORES);
+  it("previews a merge per store", async () => {
+    const result = await parseBackup(file, current, STORES);
     if (!result.ok) throw new Error(result.error);
     const merge = result.value.diff.merge;
     expect(merge.map((d) => d.key)).toEqual([WL, HOLD, NOTES, ALERTS, "investseek:last-symbol", "investseek:screens:v1"]);
@@ -282,8 +300,8 @@ describe("parseBackup and the restore preview", () => {
     expect(find(merge, "investseek:screens:v1")).toMatchObject({ kind: "other", added: ["s1"] });
   });
 
-  it("previews a replace, including what it removes", () => {
-    const result = parseBackup(file, current, STORES);
+  it("previews a replace, including what it removes", async () => {
+    const result = await parseBackup(file, current, STORES);
     if (!result.ok) throw new Error(result.error);
     const replace = result.value.diff.replace;
     expect(find(replace, WL)).toMatchObject({ added: ["NVDA"], removed: ["AAPL"] });
@@ -293,8 +311,8 @@ describe("parseBackup and the restore preview", () => {
     expect(replace.every((d) => hasChanges(d))).toBe(true);
   });
 
-  it("passes on file errors", () => {
-    expect(parseBackup("nope", current, STORES)).toEqual({ ok: false, error: "not_json" });
+  it("passes on file errors", async () => {
+    expect(await parseBackup("nope", current, STORES)).toEqual({ ok: false, error: "not_json" });
   });
 
   it("measures a missing watchlist against the starter list the app shows", () => {

@@ -61,6 +61,8 @@ export function BackupPanel() {
   const inputRef = useRef<HTMLInputElement>(null);
   const startRef = useRef<HTMLButtonElement>(null);
   const pickRef = useRef<HTMLButtonElement>(null);
+  // Reading and checking a file is asynchronous; only the latest pick may update the panel.
+  const pickCount = useRef(0);
   const lastBackup = lastBackupLabel(t, backupAgeDays(meta.lastBackupAt));
 
   const onExport = () => {
@@ -72,6 +74,7 @@ export function BackupPanel() {
     const picked = event.target.files?.[0];
     event.target.value = "";
     if (!picked) return;
+    const pick = ++pickCount.current;
     if (picked.size > MAX_BACKUP_BYTES) {
       setState({ phase: "error", message: t.data.backup.errors.too_large });
       return;
@@ -81,11 +84,12 @@ export function BackupPanel() {
     try {
       text = await picked.text();
     } catch {
-      setState({ phase: "error", message: t.data.backup.errors.read });
+      if (pick === pickCount.current) setState({ phase: "error", message: t.data.backup.errors.read });
       return;
     }
     const current = snapshot ?? {};
-    const parsed = parseBackup(text, current);
+    const parsed = await parseBackup(text, current);
+    if (pick !== pickCount.current) return;
     if (!parsed.ok) {
       setState({ phase: "error", message: t.data.backup.errors[parsed.error] });
       return;
