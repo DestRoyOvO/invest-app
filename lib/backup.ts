@@ -24,6 +24,10 @@
 //
 // Display preferences are restored only with values this version can show (isKnownPrefValue); the page applies them
 // through the preferences provider (components/data/prefs-sync.ts), as the settings menu does.
+//
+// The backup reminder (backupReminder) is due when this browser holds personal data (hasPersonalData) and its last
+// backup is more than BACKUP_REMINDER_DAYS days old or never happened; exporting a backup resets it. The shell shows
+// it on every page (components/shell/BackupReminder.tsx), so it reads only the personal-data keys.
 
 import { HOLDINGS_STORAGE_KEY, sanitizeHoldings, type Holdings } from "@/hooks/useHoldings";
 import { sanitizeWatchlist, WATCHLIST_STORAGE_KEY } from "@/hooks/useWatchlist";
@@ -785,6 +789,80 @@ export function backupAgeDays(lastBackupAt: string | null, now: Date = new Date(
   if (Number.isNaN(then.getTime())) return null;
   const day = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
   return Math.max(0, Math.round((day(now) - day(then)) / 86_400_000));
+}
+
+/** A backup becomes due once the last one is more than this many days old (backupAgeDays). */
+export const BACKUP_REMINDER_DAYS = 30;
+
+function isStarterList(list: readonly string[]): boolean {
+  return list.length === DEFAULT_WATCHLIST.length && DEFAULT_WATCHLIST.every((symbol) => list.includes(symbol));
+}
+
+/**
+ * The stores that hold personal data, with the test for "holds some". Alerts, saved screens and assistant chats are
+ * named by key rather than imported: lib/screens.ts would bring the screener model into every page, and importing a
+ * store's module registers that store wherever this module loads (lib/backup.test.ts checks the keys against them).
+ */
+const PERSONAL_DATA: Readonly<Record<string, (value: unknown) => boolean>> = {
+  // A list of the investor's own: symbols other than the starter list's, or some of those removed. The starter list
+  // reordered, or emptied, is nothing a backup would have to bring back.
+  [WATCHLIST_STORAGE_KEY]: (value) => {
+    const list = sanitizeWatchlist(value);
+    return list.length > 0 && !isStarterList(list);
+  },
+  [HOLDINGS_STORAGE_KEY]: (value) => Object.keys(sanitizeHoldings(value)).length > 0,
+  [NOTES_STORAGE_KEY]: (value) => Object.keys(sanitizeNotes(value)).length > 0,
+  [`${STORAGE_PREFIX}alerts:v1`]: (value) => Array.isArray(value) && value.some(isRecord),
+  [`${STORAGE_PREFIX}screens:v1`]: (value) => Array.isArray(value) && value.some(isRecord),
+  [`${STORAGE_PREFIX}ai-chats:v1`]: (value) => isRecord(value) && Array.isArray(value.conversations) && value.conversations.some(isRecord),
+};
+
+/** The keys hasPersonalData reads: the watchlist, positions, notes, alert rules, saved screens and assistant chats. */
+export const PERSONAL_DATA_KEYS: readonly string[] = Object.keys(PERSONAL_DATA);
+
+/** The raw values of the personal-data keys, as stored: what hasPersonalData needs, without reading other stores. */
+export function readPersonalData(storage: Pick<StorageLike, "getItem">): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const key of PERSONAL_DATA_KEYS) {
+    const value = storage.getItem(key);
+    if (value !== null) out[key] = value;
+  }
+  return out;
+}
+
+/**
+ * True when this browser holds personal data, the investor's own work that only a backup file brings back: a
+ * position, a note, an alert rule, a saved screen, an assistant conversation, or a watchlist other than the starter
+ * list (see PERSONAL_DATA). Browsing history, view settings, display settings, AI notes and the alert history are not
+ * personal data: they come back by themselves or with use.
+ */
+export function hasPersonalData(snapshot: StorageSnapshot): boolean {
+  return PERSONAL_DATA_KEYS.some((key) => {
+    const raw = snapshot[key];
+    if (raw === undefined) return false;
+    const parsed = parseJson(raw);
+    return parsed.ok && PERSONAL_DATA[key](parsed.value);
+  });
+}
+
+export interface BackupReminder {
+  /** Whole days since the last backup (backupAgeDays); null when this browser never made one. */
+  days: number | null;
+}
+
+/** The age half of the rule: the last backup is more than BACKUP_REMINDER_DAYS days old, or there was none. */
+export function backupDue(lastBackupAt: string | null, now: Date = new Date()): BackupReminder | null {
+  const days = backupAgeDays(lastBackupAt, now);
+  return days === null || days > BACKUP_REMINDER_DAYS ? { days } : null;
+}
+
+/**
+ * The backup reminder: due when this browser holds personal data and its last backup is more than
+ * BACKUP_REMINDER_DAYS days old or never happened; null when nothing is due. Exporting a backup (recordBackup) resets
+ * it; restoring one does not, because the bookkeeping is this browser's own.
+ */
+export function backupReminder(snapshot: StorageSnapshot, lastBackupAt: string | null, now: Date = new Date()): BackupReminder | null {
+  return hasPersonalData(snapshot) ? backupDue(lastBackupAt, now) : null;
 }
 
 /** The store name inside a key: "investseek:alert-log:v1" gives "alert-log". */
