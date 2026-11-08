@@ -108,7 +108,7 @@ test.describe("chart ranges", () => {
 
 test.describe("comparisons", () => {
   test("adds up to three symbols, refuses a fourth, removes one and keeps the list across a reload", async ({ page, app, request }) => {
-    test.skip(app.isPhone, "The comparison bar works the same on phones; this follows keyboard focus as well.");
+    test.skip(app.isPhone, "Keyboard focus and the pointer resting off the canvas; the phone test covers the bar's own phone layout.");
     await app.goto("/stock/AAPL");
     const chart = chartPanel(page);
     // SPY and the sector's ETF (XLK) are offered as chips, any other symbol through the search.
@@ -144,6 +144,31 @@ test.describe("comparisons", () => {
     await expect(chart.getByRole("button", { name: "Remove SPY from the chart" })).toBeVisible();
     await expect(chart.getByRole("button", { name: "Remove MSFT from the chart" })).toBeVisible();
     await expectReturns(chart, request, ["AAPL", "SPY", "MSFT"]);
+
+    // A link that names four symbols opens with the first three and a full bar; the fourth is drawn nowhere.
+    await app.goto("/stock/AAPL?compare=SPY,XLK,MSFT,QQQ");
+    await expect(chart.getByRole("button", { name: /^Remove \S+ from the chart$/ })).toHaveCount(3);
+    for (const symbol of ["SPY", "XLK", "MSFT"]) await expect(chart.getByRole("button", { name: `Remove ${symbol} from the chart` })).toBeVisible();
+    await expect(chart.getByText("Up to 3 symbols", { exact: true })).toBeVisible();
+    await expect(chart.getByRole("button", { name: "Add symbol" })).toHaveCount(0);
+    await expect(chart).not.toContainText("QQQ");
+  });
+
+  test("on a phone the comparison search keeps its suggestions on screen and adds the one tapped", async ({ page, app }) => {
+    test.skip(!app.isPhone, "The phone layout of the comparison bar; the desktop test covers the limit, removal and reload.");
+    await app.goto("/stock/AAPL");
+    const chart = chartPanel(page);
+    await chart.getByRole("button", { name: "Add symbol" }).click();
+    const search = chart.getByRole("combobox", { name: "Add a symbol to compare" });
+    await expect(search).toBeFocused();
+    await search.fill("MSFT");
+    // The suggestions open under the field, across the width of the screen.
+    const suggestions = chart.getByRole("listbox");
+    await expect(suggestions).toBeInViewport({ ratio: 1 });
+    await suggestions.getByRole("option", { name: /^MSFT/ }).tap();
+    await expect(page).toHaveURL(/\/stock\/AAPL\?compare=MSFT$/);
+    await expect(chart.getByRole("button", { name: "Remove MSFT from the chart" })).toBeVisible();
+    await expect(search).toHaveCount(0);
   });
 });
 
