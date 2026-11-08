@@ -16,6 +16,7 @@ import {
   clockTime,
   compact,
   dataRows,
+  escapeRegExp,
   eventDay,
   expectNoErrorStates,
   fixed,
@@ -154,7 +155,7 @@ test.describe("quote tabs", () => {
     const quarter = known(earnings.history.at(-1), "reported quarter");
     const reported = dataRows(tableWithColumn(panel(page, "Earnings"), "Surprise")).first();
     await expect(reported.getByRole("cell")).toHaveText([
-      new RegExp(`^${quarter.period}(?!\\d)`),
+      new RegExp(`^${escapeRegExp(quarter.period)}(?!\\d)`),
       fixed(known(quarter.epsActual, "reported EPS")),
       fixed(known(quarter.epsEstimate, "EPS estimate")),
       ratio(known(quarter.surprise, "surprise")),
@@ -169,8 +170,8 @@ test.describe("quote tabs", () => {
     await expect(dataRows(tableWithColumn(panel(page, "Analysts"), "Firm")).first().getByRole("cell")).toHaveText([
       shortDate(action.date, NEW_YORK),
       action.firm,
-      new RegExp(`${known(action.toGrade, "grade")}$`),
-      new RegExp(`(?:^|→ )${target >= 100 ? fixed(target, 0) : price(target)}$`),
+      new RegExp(`${escapeRegExp(known(action.toGrade, "grade"))}$`),
+      new RegExp(`(?:^|→ )${escapeRegExp(target >= 100 ? fixed(target, 0) : price(target))}$`),
     ]);
 
     // Dividends: the next ex-date and amount, and when it is paid.

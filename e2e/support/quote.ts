@@ -14,7 +14,8 @@ import { expect } from "./test";
 const MINUS = "−";
 export const NEW_YORK = "America/New_York";
 
-function escapeRegExp(text: string): string {
+/** The text as a regular expression source that matches it literally. */
+export function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 

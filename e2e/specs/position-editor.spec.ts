@@ -1,4 +1,4 @@
-import { change, fixed, inOrder, known, money, panel, price, quoteHeader, ratio, stockDetail, storedHoldings } from "../support/quote";
+import { change, escapeRegExp, fixed, inOrder, known, money, panel, price, quoteHeader, ratio, stockDetail, storedHoldings } from "../support/quote";
 import { expect, test, type Page } from "../support/test";
 
 // The position editor (shares and average cost per symbol, kept in this browser under investseek:holdings:v1), opened
@@ -13,7 +13,7 @@ function editor(page: Page, title: string) {
 
 /** The value of a term in the editor's preview ("Shares after", "Realized P&L"): the definition that follows it. */
 function preview(page: Page, title: string, term: string) {
-  const name = new RegExp(`^${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
+  const name = new RegExp(`^${escapeRegExp(term)}$`);
   return editor(page, title).getByRole("term").filter({ hasText: name }).locator("xpath=following-sibling::*[1]");
 }
 
@@ -97,14 +97,17 @@ test.describe("position editor", () => {
     await expect(header).toContainText(inOrder([`${left} sh @ ${price(held.cost)}`, `value ${fixed(left * last)}`]));
     expect((await storedHoldings(page)).AAPL).toEqual({ shares: left, cost: held.cost });
 
-    // Removing it leaves an Undo in the toast, which puts the position back as it was.
+    // Removing it leaves an Undo in the toast, which puts the position back as it was. The pointer rests on the toast,
+    // which holds its eight-second countdown while the removal is checked.
     await opener.click();
     await dialog.getByRole("button", { name: "Remove position" }).click();
     await expect(dialog).toHaveCount(0);
+    const removed = toast(page, "Removed AAPL position");
+    await removed.hover();
     await expect(header.getByRole("button", { name: "Add position" })).toBeVisible();
     await expect(header).not.toContainText("Your position");
     expect((await storedHoldings(page)).AAPL).toBeUndefined();
-    await toast(page, "Removed AAPL position").getByRole("button", { name: "Undo" }).click();
+    await removed.getByRole("button", { name: "Undo" }).click();
     await expect(header.getByRole("button", { name: "Edit position" })).toBeVisible();
     await expect(header).toContainText(inOrder([`${left} sh @ ${price(held.cost)}`, `value ${fixed(left * last)}`, `today ${change(left * known(quote.change, "change"))}`]));
     expect((await storedHoldings(page)).AAPL).toEqual({ shares: left, cost: held.cost });
