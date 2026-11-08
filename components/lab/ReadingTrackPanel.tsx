@@ -76,7 +76,13 @@ export function ReadingTrackPanel() {
   const totalDates = horizon.ic.dates;
   const domain = symmetricDomain(horizon.labels.map((label) => label.ci.selection));
   const labelColumns: DataTableColumn<LabelOutcome>[] = [
-    { key: "reading", header: l.labelCols.reading, width: "6rem", render: (row) => <span className="text-fg">{t.signal.codes[row.code]}</span> },
+    // The name stands out, except on a concentrated row, which is grey throughout (rowClassName below).
+    {
+      key: "reading",
+      header: l.labelCols.reading,
+      width: "6rem",
+      render: (row) => <span className={isConcentrated(row, totalDates) ? undefined : "text-fg"}>{t.signal.codes[row.code]}</span>,
+    },
     { key: "n", header: l.labelCols.n, align: "right", width: "4.75rem", render: (row) => <span className="num">{formatInteger(row.n, lang)}</span> },
     {
       key: "episodes",
@@ -94,9 +100,9 @@ export function ReadingTrackPanel() {
       render: (row) => {
         const tone = selectionTone(row, totalDates);
         const interval = row.ci.selection;
-        const concentrated = isConcentrated(row, totalDates);
         // A concentrated row is grey throughout: its value inherits the row's --fg-3 like every other cell, and its
-        // whisker is grey too (no accent dot even when the interval excludes zero).
+        // whisker is neutral, so an interval that excludes zero shows no accent dot.
+        const concentrated = isConcentrated(row, totalDates);
         const ink = tone === "up" ? "text-up" : tone === "down" ? "text-down" : concentrated ? undefined : "text-fg";
         return (
           <div className="py-1">
