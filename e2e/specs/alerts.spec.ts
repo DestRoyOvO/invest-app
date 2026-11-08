@@ -1,5 +1,6 @@
 import { ALERT_LOG_STORAGE_KEY, ALERTS_STORAGE_KEY, createRule, type AlertEvent, type AlertKind, type AlertRule } from "@/lib/alerts";
 
+import { AT_DEFAULT_NOW } from "../support/env";
 import {
   dailyBars,
   dataRows,
@@ -373,11 +374,15 @@ test.describe("while away", () => {
     const sessions = bars.map((bar) => ({ session: new Date(bar.t).toISOString().slice(0, 10), high: bar.h, low: bar.l }));
     const checked = sessions[sessions.length - 5];
     const since = sessions.slice(-4);
-    const highest = Math.max(...since.map((bar) => bar.high));
-    test.skip(highest <= quote.price, "No session since the last check traded above today's price.");
-    // A level the price is below now, but which a session since the check reached.
-    const level = Math.round(((quote.price + highest) / 2) * 100) / 100;
+    // A level above today's price that several of those sessions reached and at least one did not: halfway between the
+    // third and the fourth highest high. The report names the first session that reached it and counts the others that
+    // did, and only those.
+    const highs = since.map((bar) => bar.high).sort((a, b) => b - a);
+    const level = Math.round(((highs[2] + highs[3]) / 2) * 100) / 100;
     const hits = since.filter((bar) => bar.high >= level);
+    const scenario = level > quote.price && hits.length >= 2 && hits.length < since.length;
+    test.skip(!scenario && !AT_DEFAULT_NOW, "At this E2E_NOW the sessions since the check give no level that some but not all of them reached above today's price.");
+    expect(scenario, "At the default E2E_NOW three of the four sessions since the check traded above such a level.").toBe(true);
     const rule: AlertRule = {
       ...createRule({ symbol: "AAPL", kind: "above", value: level, repeat: "once" }, new Date(`${checked.session}T21:00:00Z`)),
       lastCheckedAt: `${checked.session}T21:00:00.000Z`,
@@ -390,7 +395,7 @@ test.describe("while away", () => {
 
     await app.goto("/alerts");
     const more = hits.length - 1;
-    const text = `AAPL traded above ${price(level)} on ${writtenDate(hits[0].session, { short: true })} (high ${price(hits[0].high)})${more === 0 ? "" : more === 1 ? ", and on 1 more session" : `, and on ${more} more sessions`}`;
+    const text = `AAPL traded above ${price(level)} on ${writtenDate(hits[0].session, { short: true })} (high ${price(hits[0].high)}), and on ${more} more ${more === 1 ? "session" : "sessions"}`;
     const history = dataRows(historyTable(page));
     await expect(history).toHaveCount(1);
     await expect(history).toContainText(text);
