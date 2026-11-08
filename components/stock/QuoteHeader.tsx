@@ -82,7 +82,7 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, 
 
   const nextEarnings = futureDate(quote.nextEarningsDate);
   const estimated = quote.earningsDateEstimated === true;
-  const timing = nextEarnings ? earningsTiming(nextEarnings, estimated, isUsListing(symbol)) : null;
+  const timing = nextEarnings ? earningsTiming(nextEarnings, isUsListing(symbol)) : null;
   const showExDividend = upcomingExDividend(quote.exDividendDate);
 
   const why = () => openChat({ text: tpl(a.whyMovingPrompt, { symbol }), intent: { kind: "move", symbol } });
@@ -106,8 +106,12 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, 
             <TickNumber value={quote.price} className="text-display font-medium text-fg">
               {formatPrice(quote.price, lang)}
             </TickNumber>
-            <Delta value={quote.change} kind="change" lang={lang} className="text-base" />
-            <Delta value={quote.changePercent} arrow className="text-base" />
+            <TickNumber value={quote.change}>
+              <Delta value={quote.change} kind="change" lang={lang} className="text-base" />
+            </TickNumber>
+            <TickNumber value={quote.changePercent}>
+              <Delta value={quote.changePercent} arrow className="text-base" />
+            </TickNumber>
             <span className="flex items-center gap-1.5 text-xs text-fg-3">
               <StateDot state={state} />
               {stateLabel}
@@ -199,7 +203,11 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, 
             ·
           </span>
           <span className="text-fg-3">
-            {t.stock.position.total} <Delta value={figures.pnl} kind="change" lang={lang} /> (<Delta value={figures.pnlPct} kind="ratio" digits={1} />)
+            {t.stock.position.total}{" "}
+            <TickNumber value={figures.pnl}>
+              <Delta value={figures.pnl} kind="change" lang={lang} />
+            </TickNumber>{" "}
+            (<Delta value={figures.pnlPct} kind="ratio" digits={1} />)
           </span>
           {portfolioWeight !== null ? (
             <>

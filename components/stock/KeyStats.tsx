@@ -9,12 +9,10 @@ import { Panel } from "@/components/ui/Panel";
 import { formatCompact, formatDate, formatMultiple, formatNumber, formatPercent, formatPrice, formatRatio, tpl } from "@/lib/format";
 import type { KeyStats as KeyStatsData, Quote } from "@/types/api";
 
-function Row({ label, title, children }: { label: string; title?: string; children: ReactNode }) {
+function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-1">
-      <dt className="truncate text-xs text-fg-3" title={title}>
-        {label}
-      </dt>
+      <dt className="truncate text-xs text-fg-3">{label}</dt>
       <dd className="num shrink-0 text-right text-data text-fg">{children}</dd>
     </div>
   );
