@@ -489,7 +489,7 @@ export async function tileLines(page: Page, label: string): Promise<string[]> {
 }
 
 /**
- * The toast that says `message` (its Undo and Close buttons are inside it). Toasts have no role of their own (they sit
+ * The toast that says `message` (its Undo and Dismiss buttons are inside it). Toasts have no role of their own (they sit
  * in a polite live region without one), so they are found by the data-toast attribute components/ui/Toast.tsx sets.
  */
 export function toast(page: Page, message: string | RegExp): Locator {

@@ -185,7 +185,11 @@ test.describe("the chat footer", () => {
     await openFromTopBar(page);
     await ask(page, "Which sectors moved the most?");
     await copyButtons(page).click();
-    await expect(page.locator("[data-toast]").filter({ hasText: "Copied as Markdown." })).toBeVisible();
+    const copied = page.locator("[data-toast]").filter({ hasText: "Copied as Markdown." });
+    await expect(copied).toBeVisible();
+    // Its button is Dismiss, told apart from the drawer's Close, and the message says what it dismisses.
+    await expect(drawer(page).getByRole("button", { name: "Close", exact: true })).toHaveCount(1);
+    await expect(copied.getByRole("button", { name: "Dismiss", exact: true })).toHaveAccessibleDescription("Copied as Markdown.");
     // A follow-up typed at once: the box and Send must take a tap or a click.
     const box = drawer(page).getByRole("textbox", { name: "Ask about this page…" });
     await box.fill("And which lagged?");

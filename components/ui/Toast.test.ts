@@ -2,6 +2,8 @@ import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
+import { MESSAGES } from "@/lib/i18n/messages";
+
 import { dockedRegionClass, stackClass, ToastCard, toastCardClass, ToastOutlet, ToastProvider, ToastStacks } from "./Toast";
 
 // Server-rendered markup of the toasts: the live region the provider keeps, a toast card, and the outlet a dialog
@@ -30,23 +32,23 @@ describe("ToastProvider", () => {
 
 describe("ToastCard", () => {
   const toast = { id: "t1", message: "Removed MSFT", action: { label: "Undo", onAction: noop } };
-  const card = (docked: boolean) => html(createElement(ToastCard, { toast, docked, closeLabel: "Close", onDismiss: noop }));
+  const card = (docked: boolean) => html(createElement(ToastCard, { toast, docked, dismissLabel: "Dismiss", onDismiss: noop }));
 
-  it("names its buttons by their action and describes them by the message, so Close says what it closes", () => {
+  it("names its buttons by their action and describes them by the message, so Dismiss says what it closes", () => {
     const markup = card(false);
     const messageId = /<div id="([^"]+)" class="min-w-0 flex-1">Removed MSFT<\/div>/.exec(markup)?.[1];
     expect(messageId).toBeTruthy();
     const buttons = [...markup.matchAll(/<button([^>]*)>([\s\S]*?)<\/button>/g)].map(([, attributes, content]) => ({ attributes, content }));
     expect(buttons).toHaveLength(2);
     expect(buttons[0].content).toBe("Undo");
-    expect(buttons[1].attributes).toContain('aria-label="Close"');
+    expect(buttons[1].attributes).toContain('aria-label="Dismiss"');
     for (const button of buttons) expect(button.attributes).toContain(`aria-describedby="${messageId}"`);
   });
 
   it("has no action button without an action", () => {
-    const markup = html(createElement(ToastCard, { toast: { id: "t2", message: "Copied as Markdown." }, docked: true, closeLabel: "Close", onDismiss: noop }));
+    const markup = html(createElement(ToastCard, { toast: { id: "t2", message: "Copied as Markdown." }, docked: true, dismissLabel: "Dismiss", onDismiss: noop }));
     expect([...markup.matchAll(/<button/g)]).toHaveLength(1);
-    expect(markup).toContain('aria-label="Close"');
+    expect(markup).toContain('aria-label="Dismiss"');
   });
 
   it("is a card of its own width at the screen's edge and spans the strip in a dialog's outlet", () => {
@@ -61,7 +63,7 @@ describe("ToastCard", () => {
     expect(card(true)).toContain("data-toast");
   });
 
-  it("keeps 40px phone targets for its action and Close", () => {
+  it("keeps 40px phone targets for its action and Dismiss", () => {
     const markup = card(true);
     const classes = [...markup.matchAll(/<button[^>]*class="([^"]*)"/g)].map((match) => tokens(match[1]));
     expect(classes[0]).toContain("max-sm:h-10");
@@ -92,7 +94,7 @@ describe("ToastStacks", () => {
   const saved = { id: "b", message: "Alert saved: AAPL" };
   const copied = { id: "c", message: "Copied as Markdown." };
   const stacks = (props: { docked: boolean; active: boolean; carried?: (typeof saved)[]; fresh?: (typeof saved)[] }) =>
-    html(createElement(ToastStacks, { carried: [], fresh: [], closeLabel: "Close", onDismiss: noop, ...props }));
+    html(createElement(ToastStacks, { carried: [], fresh: [], dismissLabel: "Dismiss", onDismiss: noop, ...props }));
   /**
    * The toast messages outside the polite live region and inside it, and how many live regions there are. The live
    * region is the last element (it runs to the end of the markup), so everything before it is outside it.
@@ -133,6 +135,15 @@ describe("ToastStacks", () => {
   it("space the live region 8px from a carried stack only when both have toasts", () => {
     expect(stacks({ docked: true, active: true, carried: [saved], fresh: [copied] })).toContain(`aria-live="polite" class="${stackClass(true, true)}"`);
     expect(stacks({ docked: true, active: true, carried: [saved] })).toContain(`aria-live="polite" class="${stackClass(true)}"`);
+  });
+});
+
+describe("the Dismiss button of a toast", () => {
+  it("is named apart from the Close of the dialog a toast can sit in, in both languages", () => {
+    for (const t of [MESSAGES.en, MESSAGES.zh]) {
+      expect(t.common.dismiss).toBeTruthy();
+      expect(t.common.dismiss).not.toBe(t.common.close);
+    }
   });
 });
 

@@ -84,15 +84,16 @@ type ShownToast = ToastOptions & { id: string };
 interface ToastCardProps {
   toast: ShownToast;
   docked: boolean;
-  closeLabel: string;
+  /** The name of the button that closes the toast: Dismiss, not Close, so it differs from a dialog's own Close. */
+  dismissLabel: string;
   onDismiss: (id: string) => void;
 }
 
 /**
- * One toast: the message, its action and Close. The buttons are described by the message, so "Undo" and "Close" say
- * what they act on, also inside a dialog that has a Close button of its own.
+ * One toast: the message, its action and Dismiss. The buttons are described by the message, so "Undo" and "Dismiss"
+ * say what they act on.
  */
-export function ToastCard({ toast, docked, closeLabel, onDismiss }: ToastCardProps) {
+export function ToastCard({ toast, docked, dismissLabel, onDismiss }: ToastCardProps) {
   const messageId = useId();
   return (
     <div data-toast className={toastCardClass(docked)}>
@@ -112,7 +113,7 @@ export function ToastCard({ toast, docked, closeLabel, onDismiss }: ToastCardPro
           {toast.action.label}
         </button>
       ) : null}
-      <IconButton size="sm" label={closeLabel} aria-describedby={messageId} icon={<X className="size-3.5" strokeWidth={1.75} />} onClick={() => onDismiss(toast.id)} />
+      <IconButton size="sm" label={dismissLabel} aria-describedby={messageId} icon={<X className="size-3.5" strokeWidth={1.75} />} onClick={() => onDismiss(toast.id)} />
     </div>
   );
 }
@@ -127,7 +128,7 @@ interface ToastStacksProps {
   /** Toasts first shown here. */
   fresh: readonly ShownToast[];
   liveRef?: Ref<HTMLDivElement>;
-  closeLabel: string;
+  dismissLabel: string;
   onDismiss: (id: string) => void;
 }
 
@@ -137,9 +138,9 @@ interface ToastStacksProps {
  * its live region, empty: a toast that lands there later goes into a region that already exists, which is what gets
  * it announced.
  */
-export function ToastStacks({ docked, active, carried, fresh, liveRef, closeLabel, onDismiss }: ToastStacksProps) {
+export function ToastStacks({ docked, active, carried, fresh, liveRef, dismissLabel, onDismiss }: ToastStacksProps) {
   const cards = (list: readonly ShownToast[]) =>
-    list.map((toast) => <ToastCard key={toast.id} toast={toast} docked={docked} closeLabel={closeLabel} onDismiss={onDismiss} />);
+    list.map((toast) => <ToastCard key={toast.id} toast={toast} docked={docked} dismissLabel={dismissLabel} onDismiss={onDismiss} />);
   return (
     <>
       {active && carried.length > 0 ? <div className={stackClass(docked)}>{cards(carried)}</div> : null}
@@ -279,7 +280,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const region = { onPointerEnter, onPointerLeave, onFocus, onBlur };
   const moved = toasts.filter((toast) => carried.has(toast));
   const fresh = toasts.filter((toast) => !carried.has(toast));
-  const stacks = { carried: moved, fresh, closeLabel: t.common.close, onDismiss: dismiss };
+  const stacks = { carried: moved, fresh, dismissLabel: t.common.dismiss, onDismiss: dismiss };
 
   return (
     <ToastContext value={api}>
