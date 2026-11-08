@@ -6,7 +6,8 @@
 // Endpoints
 //   GET /api/stock/[symbol]/earnings      -> EarningsDetail   (404 not_found for funds, indices and unknown symbols)
 //   GET /api/stock/[symbol]/analysts      -> AnalystActivity  (404 not_found without analyst coverage)
-//   GET /api/stock/[symbol]/implied-move  -> ImpliedMove      (404 not_found without listed options or a report within 30 days)
+//   GET /api/stock/[symbol]/implied-move  -> ImpliedMoveResponse (the move, or why there is none; 404 not_found only for
+//                                            symbols Yahoo does not know)
 //
 // Fields marked optional were added after the first version of this contract; the server always sends them.
 
@@ -172,3 +173,22 @@ export interface ImpliedMove {
   basis: "mid" | "last" | "mixed";
   currency: string | null;
 }
+
+/**
+ * Why a symbol Yahoo knows has no implied move. no_options: no listed options; no_report: no upcoming report on file
+ * (funds, or a company that has just reported); report_far: the next report is more than 30 days away; no_expiry: no
+ * listed expiry settles after the report; no_quotes: the at-the-money options have no usable bid, ask or last trade, or
+ * price an implausible move.
+ */
+export type ImpliedMoveReason = "no_options" | "no_report" | "report_far" | "no_expiry" | "no_quotes";
+
+/** No implied move for a known symbol: a normal answer (200), with the reason the UI shows instead of a number. */
+export interface ImpliedMoveUnavailable {
+  symbol: string;
+  asOf: string;
+  available: false;
+  reason: ImpliedMoveReason;
+}
+
+/** GET /api/stock/[symbol]/implied-move. */
+export type ImpliedMoveResponse = (ImpliedMove & { available: true }) | ImpliedMoveUnavailable;

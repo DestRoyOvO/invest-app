@@ -92,6 +92,13 @@ export const calendarMessages = defineMessages(
     },
     loadingMove: "Loading implied move",
     loadingSurprises: "Loading past reports",
+    noMove: {
+      no_options: "No implied move: no listed options",
+      no_report: "No implied move: no upcoming report on file",
+      report_far: "No implied move: the report is more than 30 days away",
+      no_expiry: "No implied move: no option expiry after the report",
+      no_quotes: "No implied move: option quotes are not usable right now",
+    },
   },
   {
     title: "财经日历",
@@ -182,5 +189,12 @@ export const calendarMessages = defineMessages(
     },
     loadingMove: "正在加载隐含波动",
     loadingSurprises: "正在加载历史财报",
+    noMove: {
+      no_options: "无隐含波动：没有上市期权",
+      no_report: "无隐含波动：暂无即将发布的财报日期",
+      report_far: "无隐含波动：财报在 30 天之后",
+      no_expiry: "无隐含波动：财报后没有期权到期日",
+      no_quotes: "无隐含波动：期权报价暂不可用",
+    },
   },
 );

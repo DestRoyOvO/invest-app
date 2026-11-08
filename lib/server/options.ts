@@ -1,11 +1,12 @@
 import "server-only";
 
 import { eventDayKey, nyDayKey, nyMinuteOfDay, weekdayOf } from "@/lib/events";
-import type { EarningsTiming, ImpliedMove } from "@/types/earnings";
+import { reportedPrice } from "@/lib/quote-figures";
+import type { EarningsTiming, ImpliedMove, ImpliedMoveReason, ImpliedMoveResponse } from "@/types/earnings";
 
 import { cached, HOUR, isFresh, MINUTE, peek, put } from "./cache";
 import { earningsTiming } from "./calendar";
-import { callOptions, mapQuote, num, str, toIso, upstream, yf } from "./yahoo";
+import { callOptions, getQuote, hasFreshQuote, mapQuote, num, str, toIso, upstream, yf } from "./yahoo";
 
 // The move the options market prices into the next report: the at-the-money call plus put of the first expiry that
 // settles after the report, over the underlying price (an approximate straddle, labelled as such in the UI).
@@ -51,6 +52,8 @@ export interface OptionChain {
 
 /** What the call without a date tells about a symbol. */
 export interface OptionsHead {
+  /** The answer carried the symbol's quote: Yahoo knows the symbol, whether or not it lists options. */
+  quoted: boolean;
   /** Listed expiries (ISO), ascending; empty for symbols without listed options. */
   expiries: string[];
   /** Next report from the embedded quote. */
@@ -59,7 +62,7 @@ export interface OptionsHead {
   currency: string | null;
 }
 
-const NO_OPTIONS: OptionsHead = { expiries: [], report: null, price: null, currency: null };
+const NO_OPTIONS: OptionsHead = { quoted: false, expiries: [], report: null, price: null, currency: null };
 
 function obj(value: unknown): Raw {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Raw) : {};
@@ -130,7 +133,8 @@ export function atmStraddle(
 function contracts(value: unknown): OptionContract[] {
   return list(value)
     .filter((c) => c.contractSize === undefined || c.contractSize === "REGULAR")
-    .map((c) => ({ strike: num(c.strike) ?? 0, bid: num(c.bid), ask: num(c.ask), last: num(c.lastPrice) }))
+    // A bid, ask or last trade of 0 is no quote at all (lib/quote-figures.ts).
+    .map((c) => ({ strike: num(c.strike) ?? 0, bid: reportedPrice(num(c.bid)), ask: reportedPrice(num(c.ask)), last: reportedPrice(num(c.lastPrice)) }))
     .filter((c) => c.strike > 0);
 }
 
@@ -147,7 +151,7 @@ export function mapOptionsPayload(raw: unknown): { head: OptionsHead; chain: Opt
   const first = list(payload.options)[0];
   const expiry = first ? toIso(first.expirationDate) : null;
   const chain = first && expiry ? { expiry, calls: contracts(first.calls), puts: contracts(first.puts), price, currency } : null;
-  return { head: { expiries, report, price, currency }, chain };
+  return { head: { quoted: quote !== null, expiries, report, price, currency }, chain };
 }
 
 export interface ExpiryTarget {
@@ -156,14 +160,18 @@ export interface ExpiryTarget {
   timing: EarningsTiming | null;
 }
 
-/** The expiry to price for the next report; null without options, without a report, or for a report over 30 days out. */
-export function targetExpiry(symbol: string, head: OptionsHead, now: number): ExpiryTarget | null {
-  if (!head.report || head.expiries.length === 0) return null;
-  const at = Date.parse(head.report.at);
-  if (!Number.isFinite(at) || at < now - DAY_MS || at > now + MAX_REPORT_DAYS * DAY_MS) return null;
+/**
+ * The expiry to price for the next report, or why there is none: no listed options, no upcoming report (none on file, or
+ * one more than a day past), a report more than 30 days out, or no listed expiry after it.
+ */
+export function targetExpiry(symbol: string, head: OptionsHead, now: number): ExpiryTarget | ImpliedMoveReason {
+  if (head.expiries.length === 0) return "no_options";
+  const at = head.report ? Date.parse(head.report.at) : Number.NaN;
+  if (!head.report || !Number.isFinite(at) || at < now - DAY_MS) return "no_report";
+  if (at > now + MAX_REPORT_DAYS * DAY_MS) return "report_far";
   const timing = earningsTiming(head.report.at, head.report.estimated, symbol);
   const expiry = pickExpiry(head.expiries, head.report.at, timing);
-  return expiry ? { expiry, report: head.report, timing } : null;
+  return expiry ? { expiry, report: head.report, timing } : "no_expiry";
 }
 
 /** The implied move from a chain; null when the straddle has no usable prices or an implausible size. */
@@ -213,20 +221,30 @@ async function fetchOptions(symbol: string, expiry?: string): Promise<unknown> {
 
 /**
  * Uncached Yahoo calls behind getImpliedMove(symbol), for charging the public route: none while the head and the target
- * chain are cached (or the symbol has no options or no report soon), one for a missing chain, and two (the head and,
- * when the nearest expiry does not qualify, the target chain) while the head is unknown.
+ * chain are cached (or the symbol has no options or no report soon), one for a missing chain or for the quote that
+ * tells an unknown symbol from one without options, and two (the head and, when the nearest expiry does not qualify,
+ * the target chain or that quote) while the head is unknown.
  */
 export function uncachedImpliedMoveCalls(symbol: string, now = Date.now()): number {
   if (!isFresh(headKey(symbol))) return 2;
   const head = peek<OptionsHead>(headKey(symbol));
   if (head === undefined) return 1;
+  if (head.quoted === false) return hasFreshQuote(symbol) ? 0 : 1;
   const target = targetExpiry(symbol, head, now);
-  if (!target) return 0;
+  if (typeof target === "string") return 0;
   return isFresh(chainKey(symbol, target.expiry)) ? 0 : 1;
 }
 
-/** Implied move into the next report; null for symbols without listed options or without a report within 30 days. */
-export async function getImpliedMove(symbol: string): Promise<ImpliedMove | null> {
+function unavailable(symbol: string, reason: ImpliedMoveReason, now: number): ImpliedMoveResponse {
+  return { symbol, asOf: new Date(now).toISOString(), available: false, reason };
+}
+
+/**
+ * Implied move into the next report, or why there is none (see targetExpiry; no_quotes when the chain gives no usable
+ * straddle). Null only for a symbol Yahoo does not know: an options answer without the symbol's quote is checked
+ * against the quote itself, so a known symbol without listed options still gets its reason.
+ */
+export async function getImpliedMove(symbol: string): Promise<ImpliedMoveResponse | null> {
   const now = Date.now();
   const options = { ttlMs: optionsTtlMs(now), staleMs: STALE_MS };
   const head = await cached(headKey(symbol), options, async () => {
@@ -235,11 +253,13 @@ export async function getImpliedMove(symbol: string): Promise<ImpliedMove | null
     if (parsed.chain) put(chainKey(symbol, parsed.chain.expiry), parsed.chain, options);
     return parsed.head;
   });
+  if (head.quoted === false && (await getQuote(symbol)) === null) return null;
   const target = targetExpiry(symbol, head, now);
-  if (!target) return null;
+  if (typeof target === "string") return unavailable(symbol, target, now);
   const chain = await cached(chainKey(symbol, target.expiry), options, async () => {
     const parsed = mapOptionsPayload(await fetchOptions(symbol, target.expiry));
     return parsed?.chain && parsed.chain.expiry.slice(0, 10) === target.expiry.slice(0, 10) ? parsed.chain : null;
   });
-  return chain ? impliedMoveFrom(symbol, target, chain, head, now) : null;
+  const move = chain ? impliedMoveFrom(symbol, target, chain, head, now) : null;
+  return move ? { ...move, available: true } : unavailable(symbol, "no_quotes", now);
 }

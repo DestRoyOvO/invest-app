@@ -15,8 +15,10 @@ function decodeParam(value: string): string {
 }
 
 /**
- * GET /api/stock/[symbol]/implied-move -> ImpliedMove: the approximate ATM straddle through the first expiry after the
- * next report. 404 not_found when the symbol has no listed options or no report within 30 days.
+ * GET /api/stock/[symbol]/implied-move -> ImpliedMoveResponse: the approximate ATM straddle through the first expiry
+ * after the next report, or { available: false, reason } when there is none (no listed options, no report within 30
+ * days, no usable quotes): a normal answer the calendar and the earnings panel show, not an error the browser logs.
+ * 404 not_found only for a symbol Yahoo does not know.
  */
 export async function GET(request: Request, ctx: { params: Promise<{ symbol: string }> }): Promise<Response> {
   const limited = limitPublicRequest(request);
@@ -32,7 +34,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ symbol: str
 
   try {
     const data = await getImpliedMove(symbol);
-    if (!data) return jsonError(404, "not_found", `No implied move for ${symbol}.`);
+    if (!data) return jsonError(404, "not_found", `Unknown symbol ${symbol}.`);
     return jsonOk(data, { cacheSeconds: CACHE_SECONDS });
   } catch (error) {
     return upstreamError("api/stock/implied-move", error);

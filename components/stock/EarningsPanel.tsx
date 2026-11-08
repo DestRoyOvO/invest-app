@@ -33,7 +33,7 @@ import { useEarnings, useImpliedMove } from "@/hooks/useEarningsApi";
 import { ApiError } from "@/lib/api-client";
 import { formatCompact, formatDate, formatNumber, formatRatio, tpl } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/messages";
-import type { EarningsDetail, EarningsQuarter, ImpliedMove } from "@/types/earnings";
+import type { EarningsDetail, EarningsQuarter, ImpliedMoveResponse } from "@/types/earnings";
 
 import { earningsTiming, isUsListing } from "./quote-utils";
 
@@ -115,11 +115,17 @@ function CurrencyNote({ note, trading }: { note: NonNullable<FigureCurrencies["n
   );
 }
 
-function EarningsBody({ detail, implied, now, currencies }: { detail: EarningsDetail; implied: ImpliedMove | null; now: number; currencies: FigureCurrencies }) {
+/**
+ * The panel's body. `implied` is the implied-move answer for a report within 30 days: the move, or why there is none
+ * (shown in place of the number), or null when it was not requested or has not arrived.
+ */
+function EarningsBody({ detail, implied, now, currencies }: { detail: EarningsDetail; implied: ImpliedMoveResponse | null; now: number; currencies: FigureCurrencies }) {
   const { t, lang } = usePrefs();
   const e = t.earnings;
   const days = daysUntil(detail.nextDate, now);
-  const note = detail.nextDate && withinDays(detail.nextDate, now, NOTE_DAYS) ? intoReportNote(detail, implied, now, e, lang, currencies) : [];
+  const move = implied?.available ? implied : null;
+  const gap = implied && !implied.available ? implied.reason : null;
+  const note = detail.nextDate && withinDays(detail.nextDate, now, NOTE_DAYS) ? intoReportNote(detail, move, now, e, lang, currencies) : [];
   return (
     <div className="grid @3xl:grid-cols-2">
       <div className="min-w-0 @3xl:border-r @3xl:border-line">
@@ -152,12 +158,20 @@ function EarningsBody({ detail, implied, now, currencies }: { detail: EarningsDe
 
         <Consensus detail={detail} currencies={currencies} />
         <EstimateTrend detail={detail} />
-        {implied ? (
+        {move ? (
           <div className="flex items-start justify-between gap-3 border-t border-line px-3 py-2.5">
             <h3 className="col-head pt-0.5">{e.implied}</h3>
-            <p className="text-right" title={tpl(e.impliedTitle, { pct: formatRatio(implied.move, { digits: 1 }), date: shortDay(implied.expiry, lang) })}>
-              <span className="num block text-data text-fg">{tpl(e.impliedValue, { pct: formatRatio(implied.move, { digits: 1 }), date: shortDay(implied.expiry, lang) })}</span>
+            <p className="text-right" title={tpl(e.impliedTitle, { pct: formatRatio(move.move, { digits: 1 }), date: shortDay(move.expiry, lang) })}>
+              <span className="num block text-data text-fg">{tpl(e.impliedValue, { pct: formatRatio(move.move, { digits: 1 }), date: shortDay(move.expiry, lang) })}</span>
               <span className="block text-micro text-fg-3">{e.impliedNote}</span>
+            </p>
+          </div>
+        ) : gap ? (
+          <div className="flex items-start justify-between gap-3 border-t border-line px-3 py-2.5">
+            <h3 className="col-head pt-0.5">{e.implied}</h3>
+            <p className="text-right">
+              <span className="num block text-data text-fg-3">—</span>
+              <span className="block text-micro text-fg-3">{e.impliedGap[gap]}</span>
             </p>
           </div>
         ) : null}
