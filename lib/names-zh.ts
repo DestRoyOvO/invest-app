@@ -266,9 +266,13 @@ export function symbolTitle(symbol: string, lang: Lang): string {
   return chinese && hasCjk(chinese) ? `${chinese} ${symbol}` : symbol;
 }
 
-/** True when the text contains CJK characters (Yahoo search cannot handle those). */
+/**
+ * True when the text contains CJK ideographs (Yahoo search cannot handle those): U+3400-U+9FFF (Extension A and the
+ * unified block) and U+F900-U+FAFF (compatibility ideographs). Keep the ranges escaped: typed as a character, U+F900
+ * turns into U+8C48 under Unicode normalization, and the class then takes in Hangul, emoji and private-use text.
+ */
 export function hasCjk(text: string): boolean {
-  return /[㐀-鿿豈-﫿]/.test(text);
+  return /[\u3400-\u9fff\uf900-\ufaff]/.test(text);
 }
 
 /**
