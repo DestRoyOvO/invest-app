@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { hideClass, queriesContainer, type Breakpoint, type ContainerBreakpoint } from "./table-hide";
 
 const VIEWPORT: Breakpoint[] = ["sm", "md", "lg", "xl"];
-const CONTAINER: ContainerBreakpoint[] = ["3xs", "2xs", "xs", "sm", "md", "lg", "xl", "2xl"];
+const CONTAINER: ContainerBreakpoint[] = ["3xs", "2xs", "xs", "sm", "md", "lg", "xl", "2xl", "3xl"];
 
 describe("hideClass", () => {
   it("hides cells and cols below a viewport breakpoint", () => {

@@ -149,7 +149,9 @@ function useColumns(keys: readonly ColumnKey[], now: number): DataTableColumn<Qu
       },
       sortValue: (q) => q.analystRating,
       firstSort: "asc",
-      hideBelow: "lg",
+      // By the table's width: the movers and ideas tables are 713px wide at 1280px (the left column at xl), where the
+      // 120px rating left the names 13 and 29px. From 48rem up (819px at 1440, 958px in the single column at 1024) it shows.
+      hideBelowContainer: "3xl",
     },
     star: {
       key: "star",
