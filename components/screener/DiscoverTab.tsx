@@ -31,7 +31,6 @@ type IdeaScreen = (typeof IDEA_SCREENS)[number];
 type ColumnKey = "symbol" | "name" | "last" | "chg" | "relVol" | "cap" | "pe" | "earnings" | "rating" | "star";
 
 const TABLE_HEIGHT = "min(65vh, 600px)";
-/** Panel tabs are 36px; phones get 40px touch targets. */
 
 const missing = <span className="text-fg-3">{DASH}</span>;
 

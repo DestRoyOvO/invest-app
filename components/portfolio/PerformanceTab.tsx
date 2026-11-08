@@ -12,7 +12,6 @@ import { LineChart } from "./LineChart";
 import { PORT_BENCHMARKS, type PortBenchmark } from "./port-view";
 
 const RANGES: readonly PerformanceRange[] = ["3m", "6m", "1y"];
-/** Segmented options are 28px; phones get 40px touch targets. */
 const HOLDINGS_COLOR = "var(--series-1)";
 const BENCHMARK_COLOR = "var(--series-6)";
 
