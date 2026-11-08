@@ -22,6 +22,7 @@ import { useWatchlist } from "@/hooks/useWatchlist";
 import { cn } from "@/lib/cn";
 import { tpl } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/messages";
+import { plural } from "@/lib/i18n/plural";
 import { MAX_WATCHLIST, sectorOfSymbol } from "@/lib/universe";
 import type { AnalyzeRequest, Quote } from "@/types/api";
 
@@ -151,7 +152,7 @@ export function WatchlistView() {
           code="WL"
           actions={
             <>
-              <PanelMeta>{view.sort ? tpl(t.watchlist.sortedBy, { column: columnLabel(view.sort.key, t) }) : tpl(t.watchlist.count, { n: watchlist.length })}</PanelMeta>
+              <PanelMeta>{view.sort ? tpl(t.watchlist.sortedBy, { column: columnLabel(view.sort.key, t) }) : plural(t.watchlist.count, watchlist.length)}</PanelMeta>
               <button
                 type="button"
                 aria-pressed={view.sort === null}

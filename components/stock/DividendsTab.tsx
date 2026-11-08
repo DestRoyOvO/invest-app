@@ -9,6 +9,7 @@ import type { Position } from "@/hooks/useHoldings";
 import { useDividends } from "@/hooks/useQuoteApi";
 import { cn } from "@/lib/cn";
 import { formatDate, formatNumber, formatPrice, formatRatio, tpl } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 import type { DividendPayment } from "@/types/research";
 
 import { dividendIncome, perShareDigits } from "./research-utils";
@@ -90,7 +91,10 @@ export function DividendsTab({ symbol, position }: { symbol: string; position?: 
             <StatTile
               label={d.yourIncome}
               value={money(income.income)}
-              sub={tpl(forward ? d.holderNote : d.holderNoteTrailing, { shares: formatNumber(position.shares, Number.isInteger(position.shares) ? 0 : 2, lang), cost: money(position.cost) })}
+              sub={plural(forward ? d.holderNote : d.holderNoteTrailing, position.shares, {
+                shares: formatNumber(position.shares, Number.isInteger(position.shares) ? 0 : 2, lang),
+                cost: money(position.cost),
+              })}
             />
             <StatTile label={d.yieldOnCost} value={formatRatio(income.yieldOnCost, { digits: 2 })} />
           </div>
@@ -104,7 +108,7 @@ export function DividendsTab({ symbol, position }: { symbol: string; position?: 
             {years.map((year) => {
               const height = most > 0 ? (year.total / most) * 100 : 0;
               return (
-                <li key={year.year} className="flex h-full min-w-0 flex-1 flex-col items-center gap-1" title={tpl(d.payments, { n: year.payments })}>
+                <li key={year.year} className="flex h-full min-w-0 flex-1 flex-col items-center gap-1" title={plural(d.payments, year.payments)}>
                   <span aria-hidden className="num text-[0.6875rem] whitespace-nowrap text-fg-2 max-sm:hidden">
                     {perShare(year.total)}
                   </span>

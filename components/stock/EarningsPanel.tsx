@@ -31,6 +31,7 @@ import { useEarnings, useImpliedMove } from "@/hooks/useEarningsApi";
 import { ApiError } from "@/lib/api-client";
 import { formatCompact, formatDate, formatNumber, formatRatio, tpl } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/messages";
+import { plural } from "@/lib/i18n/plural";
 import type { EarningsDetail, EarningsQuarter, ImpliedMoveResponse } from "@/types/earnings";
 
 import { earningsTiming, isUsListing, requestsCoverage, showsCoverage } from "./quote-utils";
@@ -231,14 +232,14 @@ function Consensus({ detail, currencies }: { detail: EarningsDetail; currencies:
           <StatTile
             label={labelIn(e.eps, currencies.eps)}
             value={eps(consensus.epsAvg)}
-            sub={subLines([rangeText(consensus.epsLow, consensus.epsHigh, eps, e.range), consensus.analysts ? tpl(e.analystCount, { n: consensus.analysts }) : null])}
+            sub={subLines([rangeText(consensus.epsLow, consensus.epsHigh, eps, e.range), consensus.analysts ? plural(e.analystCount, consensus.analysts) : null])}
           />
           <StatTile
             label={labelIn(e.revenue, currencies.revenue)}
             value={consensus.revenueAvg !== null ? revenue(consensus.revenueAvg) : "—"}
             sub={subLines([
               rangeText(consensus.revenueLow, consensus.revenueHigh, revenue, e.range),
-              consensus.revenueAnalysts ? tpl(e.analystCount, { n: consensus.revenueAnalysts }) : null,
+              consensus.revenueAnalysts ? plural(e.analystCount, consensus.revenueAnalysts) : null,
             ])}
           />
         </div>

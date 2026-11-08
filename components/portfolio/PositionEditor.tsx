@@ -16,6 +16,7 @@ import { clearPosition, setPosition, type Position } from "@/hooks/useHoldings";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { formatPrice, tpl } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/messages";
+import { plural } from "@/lib/i18n/plural";
 import { normalizeSymbol } from "@/lib/symbols";
 
 import { applyChange, previewAt, type EditorMode, type FieldError } from "./editor-math";
@@ -24,7 +25,7 @@ import { SymbolCombobox } from "./SymbolCombobox";
 
 function errorText(error: FieldError | undefined, t: Messages, held: number | undefined, lang: "en" | "zh"): string | undefined {
   if (!error) return undefined;
-  if (error === "tooMany") return tpl(t.portfolio.tooMany, { n: held === undefined ? "" : formatShares(held, lang) });
+  if (error === "tooMany") return plural(t.portfolio.tooMany, held ?? 0, { n: held === undefined ? "" : formatShares(held, lang) });
   return error === "shares" ? t.portfolio.sharesError : error === "cost" ? t.portfolio.costError : t.portfolio.priceError;
 }
 

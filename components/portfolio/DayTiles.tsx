@@ -5,6 +5,7 @@ import { Delta } from "@/components/ui/Delta";
 import { StatTile } from "@/components/ui/StatTile";
 import { TickNumber } from "@/components/ui/TickNumber";
 import { formatNumber, tpl } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 
 import { dayLabel, extendedLabel, formatSessionDate, type DayFigures } from "./day-figures";
 import { SignedMoney } from "./money";
@@ -23,7 +24,7 @@ export function DayTiles({ figures, costBasis = false }: { figures: DayFigures; 
       <StatTile
         label={tpl(t.watchlist.value, { currency: figures.currency })}
         value={<TickNumber value={figures.value}>{money(figures.value)}</TickNumber>}
-        sub={tpl(t.watchlist.positionsCount, { n: figures.positions })}
+        sub={plural(t.watchlist.positionsCount, figures.positions)}
       />
       <StatTile
         label={dayLabel(figures, t)}

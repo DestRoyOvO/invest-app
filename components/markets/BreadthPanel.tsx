@@ -13,6 +13,7 @@ import { ErrorState, Skeleton, SkeletonRows, StaleBanner } from "@/components/ui
 import { useOverview } from "@/hooks/useApi";
 import { cn } from "@/lib/cn";
 import { formatRatio, formatTime, tpl } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 import { getSector, SECTORS, UNIVERSE_STOCKS } from "@/lib/universe";
 import type { BreadthTally, MarketBreadth, SectorBreadth, SectorSnapshot } from "@/types/api";
 
@@ -63,7 +64,7 @@ function Distribution({ sectors }: { sectors: SectorSnapshot[] }) {
       <ul className="mt-2 grid h-24 grid-cols-9 items-end gap-1">
         {bins.map((bin) => (
           <li key={bin.step} className="flex h-full flex-col items-center justify-end gap-1">
-            <span className="sr-only">{tpl(t.markets.breadth.distributionLabel, { n: bin.count, band: t.markets.breadth.bands[BAND_KEYS[bin.step]] })}</span>
+            <span className="sr-only">{plural(t.markets.breadth.distributionLabel, bin.count, { band: t.markets.breadth.bands[BAND_KEYS[bin.step]] })}</span>
             <span aria-hidden className="num text-micro text-fg-2">
               {bin.count}
             </span>

@@ -93,7 +93,7 @@ export const marketsMessages = defineMessages(
       above50Col: "> 50D",
       above200Col: "> 200D",
       distribution: "Today's moves",
-      distributionLabel: "{n} stocks moved {band}",
+      distributionLabel: { one: "{n} stock moved {band}", other: "{n} stocks moved {band}" },
       bands: {
         downStrong: "down 3.5% or more",
         down3: "down 1.75 to 3.5%",

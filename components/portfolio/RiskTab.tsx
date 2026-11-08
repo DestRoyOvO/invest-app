@@ -5,6 +5,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { withTrueMinus } from "@/components/ui/Delta";
 import { stockPath } from "@/lib/api-client";
 import { formatRatio, formatSigned, tpl } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 import { displayName } from "@/lib/names-zh";
 import { largestRiskGap, type PositionRisk, type RiskReport } from "@/lib/portfolio-analytics";
 import type { Quote } from "@/types/api";
@@ -99,7 +100,7 @@ export function RiskTab({ report, quotes, positions }: RiskTabProps) {
         rowHref={(p) => stockPath(p.symbol)}
       />
       <div className="space-y-1 border-t border-line px-3 py-2 text-xs text-fg-3">
-        {report.symbols.length < positions ? <p>{tpl(r.weightNote, { n: report.symbols.length })}</p> : null}
+        {report.symbols.length < positions ? <p>{plural(r.weightNote, report.symbols.length)}</p> : null}
         <p>{r.note}</p>
       </div>
     </div>

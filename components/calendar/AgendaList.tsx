@@ -13,6 +13,7 @@ import { stockPath } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import type { AgendaDay, AgendaItem } from "@/lib/events";
 import { formatRatio, tpl } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 import { MACRO_SOURCES } from "@/lib/macro-calendar";
 import { displayName } from "@/lib/names-zh";
 
@@ -208,7 +209,8 @@ export function PositionText({ item }: { item: AgendaItem }) {
   const c = t.calendar;
   if (item.event.kind === "dividend" && item.dividendCash !== null) {
     const amount = formatMoney(item.dividendCash, item.currency, lang, true);
-    const label = tpl(c.cashLabel, { amount, shares: item.shares ?? 0 });
+    const shares = item.shares ?? 0;
+    const label = plural(c.cashLabel, shares, { amount, shares });
     return (
       <span title={label}>
         <span className="sr-only">{label}</span>

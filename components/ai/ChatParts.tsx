@@ -9,7 +9,8 @@ import type { ChatTurn } from "@/hooks/useAiStream";
 import type { Conversation } from "@/lib/ai-store";
 import type { Suggestion } from "@/lib/ai-suggestions";
 import { cn } from "@/lib/cn";
-import { formatRelativeTime, tpl } from "@/lib/format";
+import { formatRelativeTime } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 
 import { failureText } from "./copy";
 import { Markdown } from "./Markdown";
@@ -174,7 +175,7 @@ export function HistoryMenu({ conversations, currentId, onOpen, onClear }: Histo
                       >
                         <span className="block truncate text-sm text-fg">{conversation.title}</span>
                         <span className="num block text-xs text-fg-3">
-                          {formatRelativeTime(conversation.updatedAt, lang)} · {tpl(t.ai.chat.messageCount, { n: conversation.messages.length })}
+                          {formatRelativeTime(conversation.updatedAt, lang)} · {plural(t.ai.chat.messageCount, conversation.messages.length)}
                           {current ? ` · ${t.ai.chat.current}` : ""}
                         </span>
                       </button>

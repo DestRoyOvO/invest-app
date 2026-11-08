@@ -21,7 +21,7 @@ const en = {
     varSub: "1 day in 20 lost at least this",
     maxDrawdown: "Max drawdown 1y",
     effective: "Effective positions",
-    effectiveSub: "of {n} positions",
+    effectiveSub: { one: "of {n} position", other: "of {n} positions" },
   },
   basis: "Based on the last 12 months of daily prices and today's positions. Describes past behaviour, not a forecast.",
   betaNote: "Beta is the 1-year daily beta against SPY. Yahoo's beta uses 5 years of monthly returns, so the two differ.",
@@ -69,7 +69,10 @@ const en = {
     beta: "Beta",
     volatility: "Volatility",
     sentence: "{symbol}: {weight} of value, {risk} of risk",
-    weightNote: "Weights here are shares of the {n} analyzed positions' value.",
+    weightNote: {
+      one: "Weights here are shares of the {n} analyzed position's value.",
+      other: "Weights here are shares of the {n} analyzed positions' value.",
+    },
     note: "Share of risk is each position's part of the variance of the holdings' daily returns over the same sessions (Euler allocation). Below 0 means the position lowered the total.",
   },
   correlation: {
@@ -84,7 +87,8 @@ const en = {
   },
   coverage: {
     title: "Holdings analyzed",
-    count: "{n} of {m} positions",
+    /** Counted by {m}, the positions held. */
+    count: { one: "{n} of {m} position", other: "{n} of {m} positions" },
     excluded: "Not analyzed",
     beyond: "beyond the 24 largest",
     otherCurrency: "in {currency}, not converted",
