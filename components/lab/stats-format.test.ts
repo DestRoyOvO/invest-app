@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatBeta, formatCorrelation, formatIc, formatP, formatT, joinList, ordinal, pct, signedFixed, yearSpan } from "./stats-format";
+import { formatBeta, formatCorrelation, formatIc, formatP, formatT, formatWeight, joinList, joinValues, ordinal, pct, signedFixed, yearSpan } from "./stats-format";
 
 const MINUS = "−";
 
@@ -90,5 +90,18 @@ describe("joinList", () => {
     expect(joinList(["Low volatility", "Low beta", "Composite"], "en")).toBe("Low volatility, Low beta, and Composite");
     expect(joinList(["低波动", "低贝塔", "等权组合"], "zh")).toBe("低波动、低贝塔和等权组合");
     expect(joinList(["Low beta"], "en")).toBe("Low beta");
+  });
+
+  it("joins a series of values without a conjunction", () => {
+    expect(joinValues(["18%", "22%", "25%", "31%"], "en")).toBe("18%, 22%, 25%, 31%");
+    expect(joinValues(["18%", "22%", "25%", "31%"], "zh")).toBe("18%、22%、25%、31%");
+  });
+});
+
+describe("formatWeight", () => {
+  it("prints blend weights as written in a formula", () => {
+    expect(formatWeight(0.5)).toBe("0.5");
+    expect(formatWeight(1 - 0.35)).toBe("0.65");
+    expect(formatWeight(1)).toBe("1");
   });
 });

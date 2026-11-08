@@ -34,7 +34,7 @@ export const labMessages = defineMessages(
     },
     risk: {
       title: "Risk calibration",
-      lead: "The forecast is fixed in advance, not tuned: daily volatility = √(0.5 × 20-day variance + 0.5 × 1-year variance) of daily log returns. The ranges move the last close by ±1 and ±2 forecast standard deviations over {days} sessions.",
+      lead: "The forecast is fixed in advance, not tuned: daily volatility = √({wShort} × {short}-day variance + {wLong} × {long}-day variance) of daily log returns. The ranges move the last close by ±1 and ±2 forecast standard deviations over {days} sessions.",
       bands: "Range coverage, {days} sessions",
       cols: { period: "Period", within1: "Inside ±1σ", within2: "Inside ±2σ" },
       shortOnly: "20-day volatility alone",
@@ -49,6 +49,7 @@ export const labMessages = defineMessages(
       quintileLegend: "Drop: fell {threshold} or more from a peak within the month. Loss: the month ended down {threshold} or more.",
       calmest: "Q1 calmest",
       wildest: "Q5 most volatile",
+      q: "Q{q}",
       bySubperiod: "Months with a fall of {threshold} or more from a peak, by subperiod",
       breakpoints: "Quintile boundaries (annualized 63-day volatility): median over dates {median}; on {date}, {latest}.",
       measure: "Quintiles of the annualized volatility of the last 63 daily returns across the universe on each date, stock-months on a {days}-session grid.",
@@ -86,6 +87,7 @@ export const labMessages = defineMessages(
     robust: {
       title: "Spreads and robustness",
       horizon: "Horizon",
+      horizonName: "Horizon for spreads and robustness",
       caption: "Quintile spreads and robustness ICs at {days} sessions",
       cols: {
         factor: "Factor",
@@ -98,7 +100,7 @@ export const labMessages = defineMessages(
         turnover: "Turnover",
       },
       legend:
-        "Q5 − Q1: highest minus lowest quintile of same-day excess returns per holding period. Turnover: share of the top quintile replaced at each rebalance. Robustness ICs use the same dates: ranks demeaned within sectors (sector-neutral), returns net of trailing beta × SPY (beta-adj.), and the universe without its 10 biggest winners.",
+        "Q5 − Q1: highest minus lowest quintile of same-day excess returns per holding period. Turnover: share of the top quintile replaced at each rebalance. Robustness ICs use the same dates: ranks demeaned within sectors (sector-neutral), returns net of trailing beta × SPY (beta-adj.), and the universe without its {winners} biggest winners.",
       flips: "{factors}: against the literature on raw returns, small and positive net of beta × SPY. The raw pattern is market exposure in a rising decade, not stock selection.",
     },
     power: {
@@ -120,7 +122,10 @@ export const labMessages = defineMessages(
       lead: "The technical reading recomputed for every session from data up to that session, {n} stocks, signals {from} to {to}, bought at the next open and held {horizons} sessions, before costs.",
       summaryCaption: "Rank IC of the reading by horizon",
       cols: { horizon: "Horizon", ic: "Rank IC", nw: "NW t", nw2: "t, lag 2h", phases: "t over grids", verdict: "Verdict" },
+      horizonName: "Horizon for outcomes after each reading",
       sessions: "{days} sessions",
+      horizonIc: "{days} sessions {ic} (t {t})",
+      interval: "[{lo}, {hi}]",
       phaseRange: "{lo} to {hi}",
       verdict: { predictive: "Predictive", inverse: "Inverse", none: "No reliable relationship" },
       fragile: "fragile",
@@ -161,6 +166,7 @@ export const labMessages = defineMessages(
       readingTitle: "The technical reading",
       reading:
         "Momentum (5, 20 and 60-day returns scaled by volatility), trend (price against its 20, 50 and 100-day averages), RSI(14) and volume confirmation, each scored 0 to 100 and combined with fixed weights: {weights}. The volatility regime is computed for risk and has no weight. Readings: Very strong at {strongBullish} and above, Strong at {bullish}, Weak at {bearish} and below, Very weak at {strongBearish} and below. Valuation and quality appear as context and are not part of the reading. The weights were set by hand and never fitted to returns.",
+      weight: "{name} {share}",
       evaluationTitle: "Testing the reading",
       evaluation:
         "Each session's reading is recomputed from data up to that session. Rank IC: the Spearman correlation of the reading with the next h sessions' return across stocks on each date, averaged over all dates and tested with a Newey-West t (lag h, because the returns overlap); |t| of 2 or more counts as reliable. Grids of every h-th date, one per starting day, show how much a single grid could mislead. Intervals come from a moving-block bootstrap over dates ({block}-session blocks, {reps} draws). The holdout decade was tested once, with the rule fixed in advance.",
@@ -168,7 +174,7 @@ export const labMessages = defineMessages(
       factors:
         "Seven factors fixed before the results: 12-1 momentum, short-term reversal, 52-week high, low volatility, low beta, the technical reading and their composite. Mean rank IC on non-overlapping dates at {horizons} sessions, with Holm and Benjamini-Hochberg adjustment over all {tests} tests.",
       riskTitle: "Risk forecast",
-      risk: "Daily volatility = √(0.5 × var20 + 0.5 × var252) of daily log returns, the simplest mix of short and long memory (HAR models, Corsi 2009), fixed in advance. Ranges: the last close times e^(±kσ√h) for k = 1 and 2 over h = {days} sessions. Beta: 252 daily returns against SPY. Quintiles: 63-day volatility across the universe on each date.",
+      risk: "Daily volatility = √({wShort} × var{short} + {wLong} × var{long}) of daily log returns, the simplest mix of short and long memory (HAR models, Corsi 2009), fixed in advance. Ranges: the last close times e^(±kσ√h) for k = 1 and 2 over h = {days} sessions. Beta: 252 daily returns against SPY. Quintiles: 63-day volatility across the universe on each date.",
       limitsTitle: "Limitations",
       limits: {
         hindsight:
@@ -250,7 +256,7 @@ export const labMessages = defineMessages(
     },
     risk: {
       title: "风险校准",
-      lead: "预测方法事先固定、没有调参：日波动率 = √(0.5 × 20 日方差 + 0.5 × 1 年方差)，基于日对数收益。预期区间是把最近收盘价上下移动 1 个和 2 个预测标准差（{days} 个交易日）。",
+      lead: "预测方法事先固定、没有调参：日波动率 = √({wShort} × {short} 日方差 + {wLong} × {long} 日方差)，基于日对数收益。预期区间是把最近收盘价上下移动 1 个和 2 个预测标准差（{days} 个交易日）。",
       bands: "{days} 日区间覆盖率",
       cols: { period: "区间", within1: "落在 ±1σ 内", within2: "落在 ±2σ 内" },
       shortOnly: "仅用 20 日波动率",
@@ -265,6 +271,7 @@ export const labMessages = defineMessages(
       quintileLegend: "回撤：当月内曾从高点下跌 {threshold} 或更多。亏损：整月下跌 {threshold} 或更多。",
       calmest: "Q1 最平稳",
       wildest: "Q5 波动最大",
+      q: "Q{q}",
       bySubperiod: "各子区间中一个月内从高点下跌 {threshold} 或更多的月份占比",
       breakpoints: "五分位分界（年化 63 日波动率）：各日期的中位数为 {median}；{date} 为 {latest}。",
       measure: "每个日期按股票池内最近 63 个日收益的年化波动率分为五档，股票月按 {days} 个交易日取样。",
@@ -302,6 +309,7 @@ export const labMessages = defineMessages(
     robust: {
       title: "分位价差与稳健性",
       horizon: "期限",
+      horizonName: "期限（分位价差与稳健性）",
       caption: "{days} 日的五分位价差与稳健性 IC",
       cols: {
         factor: "因子",
@@ -314,7 +322,7 @@ export const labMessages = defineMessages(
         turnover: "换手",
       },
       legend:
-        "Q5 − Q1：每个持有期内最高与最低五分位的当日超额收益之差。换手：每次调仓时最高五分位被替换的比例。稳健性 IC 使用同样的日期：行业内去均值的排名（行业中性）、扣除过去贝塔 × SPY 收益后的收益（贝塔调整），以及剔除 10 只事后最大赢家后的股票池。",
+        "Q5 − Q1：每个持有期内最高与最低五分位的当日超额收益之差。换手：每次调仓时最高五分位被替换的比例。稳健性 IC 使用同样的日期：行业内去均值的排名（行业中性）、扣除过去贝塔 × SPY 收益后的收益（贝塔调整），以及剔除 {winners} 只事后最大赢家后的股票池。",
       flips: "{factors}：按原始收益与文献方向相反，扣除贝塔 × SPY 后变为小幅正值。原始规律来自上涨十年里的市场暴露，而不是选股能力。",
     },
     power: {
@@ -336,7 +344,10 @@ export const labMessages = defineMessages(
       lead: "技术读数按每个交易日当时可得的数据重新计算，覆盖 {n} 只股票，信号区间 {from} 至 {to}，次日开盘买入，分别持有 {horizons} 个交易日，未计成本。",
       summaryCaption: "各期限读数的秩 IC",
       cols: { horizon: "期限", ic: "秩 IC", nw: "NW t 值", nw2: "t 值（2h 滞后）", phases: "各网格 t 值", verdict: "结论" },
+      horizonName: "期限（各读数之后的表现）",
       sessions: "{days} 日",
+      horizonIc: "{days} 日 {ic}（t 值 {t}）",
+      interval: "[{lo}, {hi}]",
       phaseRange: "{lo} 至 {hi}",
       verdict: { predictive: "有预测力", inverse: "反向关系", none: "无可靠关系" },
       fragile: "不稳定",
@@ -377,6 +388,7 @@ export const labMessages = defineMessages(
       readingTitle: "技术读数",
       reading:
         "动量（按波动率缩放的 5、20、60 日收益）、趋势（价格相对 20、50、100 日均线）、RSI（14）和量能确认，各自打分 0 至 100，按固定权重合成：{weights}。波动状态只用于风险，权重为零。读数分档：{strongBullish} 及以上为强势，{bullish} 及以上为偏强，{bearish} 及以下为偏弱，{strongBearish} 及以下为弱势。估值和质量只作为背景信息，不计入读数。权重由人工设定，从未按收益拟合。",
+      weight: "{name} {share}",
       evaluationTitle: "如何检验读数",
       evaluation:
         "每个交易日的读数都只用当时可得的数据重新计算。秩 IC：每个日期上读数与其后 h 个交易日收益的截面 Spearman 相关，对全部日期取平均，并用 Newey-West t 值检验（滞后 h，因为收益区间重叠）；|t| 达到 2 及以上才算可靠。每隔 h 天取一个日期、按不同起始日构成的网格，显示单一网格可能造成多大误导。区间来自按日期分块的 bootstrap（{block} 日一块，{reps} 次抽样）。留出的十年只检验了一次，规则事先确定。",
@@ -384,7 +396,7 @@ export const labMessages = defineMessages(
       factors:
         "七个因子在看到结果前确定：12-1 动量、短期反转、52 周高点、低波动、低贝塔、技术读数及其组合。在 {horizons} 日期限上用非重叠日期计算平均秩 IC，并对全部 {tests} 项检验做 Holm 和 Benjamini-Hochberg 校正。",
       riskTitle: "风险预测",
-      risk: "日波动率 = √(0.5 × 20 日方差 + 0.5 × 252 日方差)，基于日对数收益，是短期与长期记忆最简单的混合（HAR 模型，Corsi 2009），事先固定。区间：最近收盘价乘以 e^(±kσ√h)，k = 1 和 2，h = {days} 个交易日。贝塔：相对 SPY 的 252 个日收益。五分位：每个日期股票池内的 63 日波动率。",
+      risk: "日波动率 = √({wShort} × {short} 日方差 + {wLong} × {long} 日方差)，基于日对数收益，是短期与长期记忆最简单的混合（HAR 模型，Corsi 2009），事先固定。区间：最近收盘价乘以 e^(±kσ√h)，k = 1 和 2，h = {days} 个交易日。贝塔：相对 SPY 的 252 个日收益。五分位：每个日期股票池内的 63 日波动率。",
       limitsTitle: "局限",
       limits: {
         hindsight: "后见之明的股票池：今天最大的 {n} 只股票。退市和缩水的公司不在其中，这会抬高收益，并偏向那些跌了又涨回来的股票。使用历史指数成分可以解决，但雅虎不提供。",

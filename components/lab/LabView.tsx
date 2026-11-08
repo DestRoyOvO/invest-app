@@ -4,7 +4,7 @@ import { useId, type ReactNode } from "react";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { PanelCode } from "@/components/ui/Panel";
-import { tpl } from "@/lib/format";
+import { DASH, tpl } from "@/lib/format";
 
 import { HindsightPanel, MethodPanel, PowerPanel, RerunPanel } from "./ContextPanels";
 import { FACTOR_RESEARCH, RISK_CALIBRATION } from "./data";
@@ -52,7 +52,7 @@ function LabHeader() {
         </div>
         <p className="mt-1.5 max-w-3xl text-sm leading-6 text-fg-2">{tpl(l.intro, { n: research.universe })}</p>
         <p className="num mt-1 text-xs text-fg-3">
-          {tpl(l.provenance, { model: research.model, n: research.universe, from: research.window.from, to: research.window.to, hash: research.dataHash })}
+          {tpl(l.provenance, { model: research.model, n: research.universe, from: research.from, to: research.to, hash: research.dataHash })}
         </p>
       </div>
       <h2 className="sr-only">{f.title}</h2>
@@ -97,9 +97,9 @@ function LabHeader() {
         />
         <Finding
           label={tpl(f.power.label, { days: power?.days ?? 21 })}
-          value={power?.minimumDetectableIc?.toFixed(3) ?? "—"}
+          value={power?.minimumDetectableIc?.toFixed(3) ?? DASH}
           title={f.power.title}
-          body={tpl(f.power.body, { n: research.universe, mde: power?.minimumDetectableIc?.toFixed(3) ?? "—", days: power?.days ?? 21 })}
+          body={tpl(f.power.body, { n: research.universe, mde: power?.minimumDetectableIc?.toFixed(3) ?? DASH, days: power?.days ?? 21 })}
         />
       </ul>
     </section>

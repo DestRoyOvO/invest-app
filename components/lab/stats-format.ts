@@ -86,3 +86,13 @@ export function formatCorrelation(value: number | null | undefined): string {
 export function joinList(items: readonly string[], lang: Lang): string {
   return new Intl.ListFormat(lang === "zh" ? "zh-CN" : "en-US", { style: "long", type: "conjunction" }).format(items);
 }
+
+/** Joins a series of values without a conjunction: "18%, 22%, 25%" in English, "18%、22%、25%" in Chinese. */
+export function joinValues(items: readonly string[], lang: Lang): string {
+  return new Intl.ListFormat(lang === "zh" ? "zh-CN" : "en-US", { style: "narrow", type: "conjunction" }).format(items);
+}
+
+/** A blend weight as written in a formula: up to two decimals, no trailing zeros ("0.5", "0.35"). */
+export function formatWeight(value: number): string {
+  return String(Math.round(value * 100) / 100);
+}

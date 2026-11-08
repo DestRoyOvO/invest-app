@@ -9,11 +9,13 @@ import type { QuintileRow } from "@/lib/evaluation";
 import { DASH, formatInteger, tpl } from "@/lib/format";
 
 import { RISK_CALIBRATION } from "./data";
-import { formatCorrelation, formatT, pct, yearSpan } from "./stats-format";
-import { keepSigma } from "./text";
+import { formatCorrelation, formatT, formatWeight, joinValues, pct, yearSpan } from "./stats-format";
+import { keepSymbols } from "./text";
 
 // Risk calibration (#risk): how often the forecast ranges held, how persistent volatility and beta are, and how bad a
-// normal month was by volatility quintile, overall and by subperiod.
+// normal month was by volatility quintile, overall and by subperiod. This panel sits in the narrow right column (about
+// 360px at a 1280px window), so label columns get the room they need and wrap; number columns are as narrow as their
+// heads allow.
 
 interface CoverageRow {
   key: string;
@@ -42,7 +44,8 @@ export function RiskCalibrationPanel() {
   const c = RISK_CALIBRATION;
   const threshold = pct(Math.abs(c.quintiles.threshold), 0);
   const persistence = c.persistence;
-  const quintileName = (q: number) => (q === 1 ? l.calmest : q === c.quintiles.overall.length ? l.wildest : `Q${q}`);
+  const quintileName = (q: number) => (q === 1 ? l.calmest : q === c.quintiles.overall.length ? l.wildest : tpl(l.q, { q }));
+  const estimator = c.estimator;
   const maxDrawdown = Math.max(...c.quintiles.overall.map((row) => row.drawdown ?? 0), 0.0001);
 
   const coverage: CoverageRow[] = [
@@ -52,19 +55,26 @@ export function RiskCalibrationPanel() {
     { key: "normal", label: l.normal, n: null, ...NORMAL },
   ];
   const coverageColumns: DataTableColumn<CoverageRow>[] = [
-    { key: "period", header: l.cols.period, render: (row) => row.label },
-    { key: "within1", header: keepSigma(l.cols.within1), align: "right", width: "6.5rem", render: (row) => <span className="num">{pct(row.within1, 1)}</span> },
-    { key: "within2", header: keepSigma(l.cols.within2), align: "right", width: "6.5rem", render: (row) => <span className="num">{pct(row.within2, 1)}</span> },
+    { key: "period", header: l.cols.period, className: "whitespace-normal!", render: (row) => <div className="py-1">{row.label}</div> },
+    { key: "within1", header: keepSymbols(l.cols.within1), align: "right", width: "6rem", render: (row) => <span className="num">{pct(row.within1, 1)}</span> },
+    { key: "within2", header: keepSymbols(l.cols.within2), align: "right", width: "6rem", render: (row) => <span className="num">{pct(row.within2, 1)}</span> },
   ];
 
   const quintileColumns: DataTableColumn<QuintileRow>[] = [
-    { key: "q", header: l.quintileCols.q, className: "whitespace-normal!", render: (row) => quintileName(row.quintile) },
+    // Wraps only between words (break-keep keeps "波动最大" whole); a tighter right padding lets the longest word fit
+    // the narrowest column, about 74px at a 1280px window.
+    {
+      key: "q",
+      header: l.quintileCols.q,
+      className: "whitespace-normal! pr-2!",
+      render: (row) => <div className="py-1 break-keep">{quintileName(row.quintile)}</div>,
+    },
     { key: "median", header: l.quintileCols.median, align: "right", width: "6rem", render: (row) => <span className="num">{pct(row.medianVolatility, 0)}</span> },
     {
       key: "drawdown",
       header: tpl(l.quintileCols.drawdown, { threshold }),
       align: "right",
-      width: "7.5rem",
+      width: "6.5rem",
       render: (row) => (
         <span className="inline-flex items-center justify-end gap-2">
           <DrawdownBar value={row.drawdown} max={maxDrawdown} />
@@ -75,14 +85,14 @@ export function RiskCalibrationPanel() {
     { key: "loss", header: tpl(l.quintileCols.loss, { threshold }), align: "right", width: "5.5rem", render: (row) => <span className="num">{pct(row.loss, 1)}</span> },
   ];
 
+  // The period column is sized for "2016-2020"; the quintile columns share the rest.
   const subperiodColumns: DataTableColumn<SubperiodRow>[] = [
-    { key: "period", header: l.cols.period, render: (row) => yearSpan(row.from, row.to) },
+    { key: "period", header: l.cols.period, width: "5.75rem", render: (row) => <span className="num">{yearSpan(row.from, row.to)}</span> },
     ...c.quintiles.overall.map(
       (q): DataTableColumn<SubperiodRow> => ({
         key: `q${q.quintile}`,
-        header: `Q${q.quintile}`,
+        header: tpl(l.q, { q: q.quintile }),
         align: "right",
-        width: "3.5rem",
         render: (row) => <span className="num">{pct(row.rows.find((r) => r.quintile === q.quintile)?.drawdown, 0)}</span>,
       }),
     ),
@@ -90,8 +100,16 @@ export function RiskCalibrationPanel() {
 
   const latest = c.quintiles.breakpoints.latest;
   return (
-    <Panel title={l.title} code="RISK" id="risk">
-      <p className="max-w-prose px-3 pt-3 text-xs leading-5 text-fg-2">{tpl(l.lead, { days: c.bands.horizon })}</p>
+    <Panel title={l.title} id="risk">
+      <p className="max-w-prose px-3 pt-3 text-xs leading-5 text-fg-2">
+        {tpl(l.lead, {
+          days: c.bands.horizon,
+          wShort: formatWeight(estimator.shortWeight),
+          wLong: formatWeight(1 - estimator.shortWeight),
+          short: estimator.shortWindow,
+          long: estimator.longWindow,
+        })}
+      </p>
 
       <h3 className="col-head px-3 pt-3 pb-1">{tpl(l.bands, { days: c.bands.horizon })}</h3>
       <DataTable
@@ -134,9 +152,17 @@ export function RiskCalibrationPanel() {
       <div className="space-y-1 border-t border-line px-3 py-2 text-xs text-fg-3">
         <p className="num">
           {tpl(l.breakpoints, {
-            median: c.quintiles.breakpoints.median.map((v) => pct(v, 0)).join(", "),
+            median: joinValues(
+              c.quintiles.breakpoints.median.map((v) => pct(v, 0)),
+              lang,
+            ),
             date: latest?.date ?? DASH,
-            latest: latest ? latest.values.map((v) => pct(v, 0)).join(", ") : DASH,
+            latest: latest
+              ? joinValues(
+                  latest.values.map((v) => pct(v, 0)),
+                  lang,
+                )
+              : DASH,
           })}
         </p>
         <p>{tpl(l.quintileLegend, { threshold })}</p>

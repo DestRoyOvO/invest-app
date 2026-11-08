@@ -12,21 +12,20 @@ import { evaluationVerdict, type HoldoutTest, type HorizonOutcome, type Interval
 import { DASH, formatInteger, tpl } from "@/lib/format";
 
 import { EVALUATION_DAYS, SIGNAL_EVALUATION } from "./data";
-import { isConcentrated, selectionTone, symmetricDomain } from "./evidence";
+import { COMMON_READING_DATE_SHARE, EPISODE_SHARE_LIMIT, isConcentrated, selectionTone, symmetricDomain } from "./evidence";
 import { HorizonPicker } from "./FactorTestsPanel";
 import { ScrollRegion } from "./ScrollRegion";
 import { formatIc, formatP, formatT, joinList, pct, yearSpan } from "./stats-format";
+import { keepSymbols } from "./text";
 
 // The corrected track record of the technical reading: rank IC by horizon with its robustness checks, subperiods, the
 // outcome after each reading split into timing and selection, and the holdout decade.
 
-function intervalText(interval: Interval | null, digits: number): string {
-  return interval ? `[${pct(interval[0], digits, true)}, ${pct(interval[1], digits, true)}]` : DASH;
-}
-
 export function ReadingTrackPanel() {
   const { t, lang } = usePrefs();
   const l = t.lab.track;
+  const intervalText = (interval: Interval | null, digits: number, sign = true) =>
+    interval ? tpl(l.interval, { lo: pct(interval[0], digits, sign), hi: pct(interval[1], digits, sign) }) : DASH;
   const evaluation = SIGNAL_EVALUATION;
   const [horizonKey, setHorizonKey] = useState(String(EVALUATION_DAYS));
   const horizon = evaluation.horizons.find((h) => h.days === Number(horizonKey)) ?? evaluation.horizons[0];
@@ -35,11 +34,11 @@ export function ReadingTrackPanel() {
   const summaryColumns: DataTableColumn<HorizonOutcome>[] = [
     { key: "horizon", header: l.cols.horizon, width: "7rem", render: (h) => tpl(l.sessions, { days: h.days }) },
     { key: "ic", header: l.cols.ic, align: "right", width: "5.5rem", render: (h) => <span className="num text-fg">{formatIc(h.ic.mean)}</span> },
-    { key: "nw", header: l.cols.nw, align: "right", width: "5rem", render: (h) => <span className="num">{formatT(h.ic.t)}</span> },
-    { key: "nw2", header: l.cols.nw2, align: "right", width: "6.5rem", render: (h) => <span className="num text-fg-3">{formatT(h.ic.t2)}</span> },
+    { key: "nw", header: keepSymbols(l.cols.nw), align: "right", width: "5rem", render: (h) => <span className="num">{formatT(h.ic.t)}</span> },
+    { key: "nw2", header: keepSymbols(l.cols.nw2), align: "right", width: "6.5rem", render: (h) => <span className="num text-fg-3">{formatT(h.ic.t2)}</span> },
     {
       key: "phases",
-      header: l.cols.phases,
+      header: keepSymbols(l.cols.phases),
       align: "right",
       width: "8.5rem",
       render: (h) => <span className="num text-fg-3">{h.ic.phaseT ? tpl(l.phaseRange, { lo: formatT(h.ic.phaseT[0]), hi: formatT(h.ic.phaseT[1]) }) : DASH}</span>,
@@ -77,13 +76,14 @@ export function ReadingTrackPanel() {
   const totalDates = horizon.ic.dates;
   const domain = symmetricDomain(horizon.labels.map((label) => label.ci.selection));
   const labelColumns: DataTableColumn<LabelOutcome>[] = [
-    { key: "reading", header: l.labelCols.reading, width: "6.5rem", render: (row) => <span className="text-fg">{t.signal.codes[row.code]}</span> },
+    { key: "reading", header: l.labelCols.reading, width: "6rem", render: (row) => <span className="text-fg">{t.signal.codes[row.code]}</span> },
     { key: "n", header: l.labelCols.n, align: "right", width: "4.75rem", render: (row) => <span className="num">{formatInteger(row.n, lang)}</span> },
     {
       key: "episodes",
       header: l.labelCols.episodes,
       align: "right",
-      width: "5.5rem",
+      // Fits "41（13%）" with the Chinese full-width parentheses.
+      width: "6rem",
       render: (row) => <span className="num">{tpl(t.signal.track.episodeCell, { n: formatInteger(row.episodes, lang), share: pct(row.largestEpisodeShare, 0) })}</span>,
     },
     {
@@ -94,10 +94,12 @@ export function ReadingTrackPanel() {
       render: (row) => {
         const tone = selectionTone(row, totalDates);
         const interval = row.ci.selection;
+        // A concentrated row is grey throughout: its value inherits the row's --fg-3 like every other cell.
+        const ink = tone === "up" ? "text-up" : tone === "down" ? "text-down" : isConcentrated(row, totalDates) ? undefined : "text-fg";
         return (
           <div className="py-1">
             <div className="flex items-center justify-end gap-2">
-              <span className={cn("num", tone === "up" ? "text-up" : tone === "down" ? "text-down" : "text-fg")}>{pct(row.selection, 2, true)}</span>
+              <span className={cn("num", ink)}>{pct(row.selection, 2, true)}</span>
               <Whisker
                 estimate={row.selection}
                 low={interval?.[0]}
@@ -139,7 +141,7 @@ export function ReadingTrackPanel() {
       render: (row) => (
         <div className="py-1">
           <div className="num">{pct(row.hitRate, 0)}</div>
-          <div className="num text-micro text-fg-3">{row.ci.hitRate ? `[${pct(row.ci.hitRate[0], 0)}, ${pct(row.ci.hitRate[1], 0)}]` : DASH}</div>
+          <div className="num text-micro text-fg-3">{intervalText(row.ci.hitRate, 0, false)}</div>
         </div>
       ),
     },
@@ -150,18 +152,18 @@ export function ReadingTrackPanel() {
   const holdoutColumns: DataTableColumn<HoldoutTest>[] = [
     { key: "signal", header: l.holdoutCols.signal, width: "12rem", render: (row) => <span className={row.key === "composite" ? "text-fg" : undefined}>{l.holdoutNames[row.key]}</span> },
     { key: "ic", header: l.holdoutCols.ic, align: "right", width: "5.5rem", render: (row) => <span className="num">{formatIc(row.mean)}</span> },
-    { key: "t", header: l.holdoutCols.t, align: "right", width: "5rem", render: (row) => <span className="num">{formatT(row.t)}</span> },
-    { key: "p", header: l.holdoutCols.p, align: "right", width: "6.5rem", render: (row) => <span className="num">{formatP(row.p)}</span> },
-    { key: "holm", header: l.holdoutCols.holm, align: "right", width: "5.5rem", render: (row) => <span className="num text-fg-3">{formatP(row.holmP)}</span> },
+    { key: "t", header: keepSymbols(l.holdoutCols.t), align: "right", width: "5rem", render: (row) => <span className="num">{formatT(row.t)}</span> },
+    { key: "p", header: keepSymbols(l.holdoutCols.p), align: "right", width: "6.5rem", render: (row) => <span className="num">{formatP(row.p)}</span> },
+    { key: "holm", header: keepSymbols(l.holdoutCols.holm), align: "right", width: "5.5rem", render: (row) => <span className="num text-fg-3">{formatP(row.holmP)}</span> },
     { key: "pass", header: l.holdoutCols.pass, align: "right", width: "5rem", render: (row) => (row.pass ? l.yes : l.no) },
   ];
   const holdoutHorizons = joinList(
-    holdout.horizons.map((h) => `${tpl(l.sessions, { days: h.days })} ${formatIc(h.mean)} (t ${formatT(h.t)})`),
+    holdout.horizons.map((h) => tpl(l.horizonIc, { days: h.days, ic: formatIc(h.mean), t: formatT(h.t) })),
     lang,
   );
 
   return (
-    <Panel title={l.title} code="SIG" id="track">
+    <Panel title={l.title} id="track">
       <p className="max-w-prose px-3 pt-3 pb-2 text-xs leading-5 text-fg-2">
         {tpl(l.lead, {
           n: evaluation.universe,
@@ -185,7 +187,7 @@ export function ReadingTrackPanel() {
         />
       </ScrollRegion>
 
-      <h3 className="col-head border-t border-line px-3 pt-3 pb-1">{l.subperiods}</h3>
+      <h3 className="col-head border-t border-line px-3 pt-3 pb-1">{keepSymbols(l.subperiods)}</h3>
       <ScrollRegion label={l.subperiods}>
         <DataTable
           rows={evaluation.horizons}
@@ -201,6 +203,7 @@ export function ReadingTrackPanel() {
       <h3 className="col-head border-t border-line px-3 pt-3">{l.readings}</h3>
       <HorizonPicker
         label={l.cols.horizon}
+        name={l.horizonName}
         value={horizonKey}
         onChange={setHorizonKey}
         options={evaluation.horizons.map((h) => ({ value: String(h.days), label: tpl(t.signal.backtest.hold, { n: h.days }) }))}
@@ -218,7 +221,7 @@ export function ReadingTrackPanel() {
       </ScrollRegion>
       <div className="space-y-1 px-3 py-2 text-xs text-fg-3">
         <p>{tpl(l.labelsLegend, { base: pct(horizon.base.mean, 2, true), hit: pct(horizon.base.hitRate, 0) })}</p>
-        <p>{t.signal.track.colors}</p>
+        <p>{tpl(t.signal.track.colors, { limit: pct(EPISODE_SHARE_LIMIT, 0), share: pct(COMMON_READING_DATE_SHARE, 0) })}</p>
       </div>
 
       <h3 className="col-head border-t border-line px-3 pt-3 pb-1">{tpl(l.holdout, { from: holdout.from, to: holdout.to })}</h3>

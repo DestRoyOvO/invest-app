@@ -10,7 +10,7 @@ import { TECHNICAL_FACTORS } from "@/lib/signal";
 import { FACTOR_RESEARCH, RISK_CALIBRATION, SIGNAL_EVALUATION } from "./data";
 import { readingWeights, researchTally } from "./evidence";
 import { ScrollRegion } from "./ScrollRegion";
-import { joinList, pct, yearSpan } from "./stats-format";
+import { formatWeight, joinList, pct, yearSpan } from "./stats-format";
 import { interpolate, listNodes } from "./text";
 
 // Context panels of the factor lab: statistical power, the hindsight in the universe, method and limitations (#method,
@@ -75,8 +75,9 @@ export function HindsightPanel() {
   );
   return (
     <Panel title={l.title}>
+      {/* 36rem leaves the period column room for its longest label ("留出样本 2014-2024"). */}
       <ScrollRegion label={l.caption}>
-        <DataTable rows={rows} columns={columns} rowKey={(row) => row.key} caption={l.caption} minWidth="34rem" rowClassName={() => "text-fg-2"} className="overflow-x-visible!" />
+        <DataTable rows={rows} columns={columns} rowKey={(row) => row.key} caption={l.caption} minWidth="36rem" rowClassName={() => "text-fg-2"} className="overflow-x-visible!" />
       </ScrollRegion>
       <div className="space-y-1 border-t border-line px-3 py-2 text-xs leading-5">
         <p className="text-fg-3">{l.note}</p>
@@ -93,9 +94,10 @@ export function MethodPanel() {
   const research = FACTOR_RESEARCH;
   const thresholds = evaluation.model.thresholds;
   const weights = joinList(
-    readingWeights(evaluation.model.weights, TECHNICAL_FACTORS).map((w) => `${t.signal.factors[w.key]} ${pct(w.share, 0)}`),
+    readingWeights(evaluation.model.weights, TECHNICAL_FACTORS).map((w) => tpl(l.weight, { name: t.signal.factors[w.key], share: pct(w.share, 0) })),
     lang,
   );
+  const estimator = RISK_CALIBRATION.estimator;
   const sections: Array<{ key: string; title: string; body: string }> = [
     {
       key: "reading",
@@ -124,7 +126,17 @@ export function MethodPanel() {
         tests: researchTally(research).tests,
       }),
     },
-    { key: "risk", title: l.riskTitle, body: tpl(l.risk, { days: RISK_CALIBRATION.bands.horizon }) },
+    {
+      key: "risk",
+      title: l.riskTitle,
+      body: tpl(l.risk, {
+        days: RISK_CALIBRATION.bands.horizon,
+        wShort: formatWeight(estimator.shortWeight),
+        wLong: formatWeight(1 - estimator.shortWeight),
+        short: estimator.shortWindow,
+        long: estimator.longWindow,
+      }),
+    },
   ];
   const limits = [tpl(l.limits.hindsight, { n: research.universe }), l.limits.power, l.limits.regime, l.limits.data, l.limits.use];
   return (

@@ -3,18 +3,26 @@ import { Fragment, type ReactNode } from "react";
 import type { Lang } from "@/types/api";
 
 /**
- * Text for an uppercase role (.col-head, .panel-title) that keeps the Greek small sigma lowercase: CSS uppercase would
- * turn "±1σ" into "±1Σ", which reads as a sum.
+ * Statistical symbols that CSS uppercase must not change: the small sigma ("±1Σ" reads as a sum), and t, p and h as
+ * letters of their own ("NW t", "One-sided p", "lag 2h"; "T, LAG 2H" reads like hours). Letters inside words are left
+ * alone, so "Stock-days" or "don't" never match.
  */
-export function keepSigma(text: string): ReactNode {
-  if (!text.includes("σ")) return text;
-  const parts = text.split("σ");
-  return parts.map((part, i) => (
-    <Fragment key={i}>
-      {part}
-      {i < parts.length - 1 ? <span className="normal-case">{"σ"}</span> : null}
-    </Fragment>
-  ));
+const KEEP_CASE = /(σ|(?<![A-Za-z0-9'’])[tp](?![A-Za-z'’])|(?<=\d)h(?![A-Za-z]))/;
+
+/** Text for an uppercase role (.col-head, .panel-title) with its statistical symbols kept lowercase (see KEEP_CASE). */
+export function keepSymbols(text: string): ReactNode {
+  const parts = text.split(KEEP_CASE);
+  if (parts.length === 1) return text;
+  // split() with a capturing group puts the matched symbols at the odd indexes.
+  return parts.map((part, i) =>
+    i % 2 === 1 ? (
+      <span key={i} className="normal-case">
+        {part}
+      </span>
+    ) : (
+      <Fragment key={i}>{part}</Fragment>
+    ),
+  );
 }
 
 /** tpl() for React nodes: replaces {name} placeholders with nodes, e.g. a ticker in mono inside a sentence. */
