@@ -241,11 +241,27 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   mark("accent", "canvas", "Focus ring on the canvas"),
   mark("spark", "panel", "Sparkline stroke"),
   mark("fg-3", "line-2", "Meter fill on its track"),
+  mark("accent", "line-2", "Current marker on a track"),
   mark("info", "line-2", "Share-of-risk bar on its track"),
   mark("fg", "line-2", "52-week position marker on its range track (heatmap card)"),
   mark("fg", "canvas", "Heatmap tile hover and keyboard ring, drawn inside a canvas halo"),
   ...[1, 2, 3, 4, 5, 6].map((n) => mark(`series-${n}`, "panel", `Chart series ${n}`)),
 ];
+
+/** The colors a pair measures, e.g. "accent on accent-soft over panel-2". The role and the minimum are not part of it. */
+export function pairName(pair: Pick<ContrastPair, "fg" | "bg" | "over">): string {
+  return `${pair.fg} on ${pair.over ? `${pair.bg} over ${pair.over}` : pair.bg}`;
+}
+
+/**
+ * Pairs that measure the same colors more than once (a merge that kept two roles for one pair). Merge the roles into
+ * one entry instead: a second copy adds checks without adding coverage.
+ */
+export function duplicatePairs(pairs: readonly ContrastPair[] = CONTRAST_PAIRS): string[] {
+  const counts = new Map<string, number>();
+  for (const pair of pairs) counts.set(pairName(pair), (counts.get(pairName(pair)) ?? 0) + 1);
+  return [...counts].filter(([, count]) => count > 1).map(([name]) => name);
+}
 
 export interface ContrastResult extends ContrastPair {
   theme: ThemeName;

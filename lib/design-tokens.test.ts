@@ -10,8 +10,10 @@ import {
   checkContrast,
   composite,
   contrastRatio,
+  duplicatePairs,
   extractTokenSources,
   oklabDistance,
+  pairName,
   parseColor,
   parseCssBlocks,
   resolveTokens,
@@ -109,6 +111,26 @@ describe("colors and contrast", () => {
   });
 });
 
+describe("pairName and duplicatePairs", () => {
+  it("names a pair by its colors, with the surface under a translucent background", () => {
+    expect(pairName({ fg: "fg-3", bg: "hover" })).toBe("fg-3 on hover");
+    expect(pairName({ fg: "accent", bg: "accent-soft", over: "panel-2" })).toBe("accent on accent-soft over panel-2");
+  });
+
+  it("reports colors listed twice whatever their roles and minimums, once each", () => {
+    const pairs = [
+      { fg: "warn", bg: "hover", min: 4.5, role: "Caveats on a hovered row" },
+      { fg: "warn", bg: "hover", min: 4.5, role: "Earnings within 7 days on a hovered row" },
+      { fg: "warn", bg: "hover", min: 3, role: "A third copy" },
+      { fg: "accent", bg: "accent-soft", over: "panel", min: 4.5, role: "Active icon button" },
+      { fg: "accent", bg: "accent-soft", over: "hover", min: 4.5, role: "Badge on a hovered row" },
+      { fg: "fg", bg: "line-2", min: 3, role: "Marker" },
+    ];
+    expect(duplicatePairs(pairs)).toEqual(["warn on hover"]);
+    expect(duplicatePairs(pairs.slice(3))).toEqual([]);
+  });
+});
+
 describe("app/globals.css", () => {
   const sources = extractTokenSources(readFileSync(join(process.cwd(), "app", "globals.css"), "utf8"));
 
@@ -118,6 +140,14 @@ describe("app/globals.css", () => {
     );
     expect(failures.map((f) => `${f.theme}/${f.convention} ${f.fg} on ${f.bg}: ${f.ratio.toFixed(2)}`)).toEqual([]);
     expect(CONTRAST_PAIRS.length).toBeGreaterThan(40);
+  });
+
+  it("lists every pair once", () => {
+    expect(duplicatePairs()).toEqual([]);
+  });
+
+  it("checks the accent marker on a track (signal gauge, whisker dot)", () => {
+    expect(CONTRAST_PAIRS.map(pairName)).toContain("accent on line-2");
   });
 
   it("swaps up and down for the red-up convention, heatmap included", () => {
