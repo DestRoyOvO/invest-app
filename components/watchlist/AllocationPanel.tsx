@@ -1,12 +1,12 @@
 "use client";
 
-import { holdingGroupLabel, REST_COLOR, SLICE_COLORS } from "@/components/portfolio/labels";
+import { allocationLegend, holdingGroupLabel } from "@/components/portfolio/labels";
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Panel, PanelMeta } from "@/components/ui/Panel";
 import { SkeletonRows } from "@/components/ui/States";
 import { formatNumber, formatRatio, tpl } from "@/lib/format";
 import { topWeight, type Portfolio } from "@/lib/portfolio";
-import { foldSlices, groupExposure, sectorExposure, type ExposureSlice } from "@/lib/portfolio-analytics";
+import { groupExposure, sectorExposure, type ExposureSlice } from "@/lib/portfolio-analytics";
 import { holdingGroup, holdingGroupId, type HoldingGroup } from "@/lib/sectors";
 import type { Quote } from "@/types/api";
 import type { ProfilesResponse } from "@/types/portfolio";
@@ -21,8 +21,6 @@ interface AllocationPanelProps {
   className?: string;
 }
 
-/** Most slices shown before the rest folds into one. */
-const MAX_SLICES = 6;
 
 /**
  * Allocation by sector or asset class: by position value when positions exist, otherwise by number of watchlist
@@ -44,11 +42,7 @@ export function AllocationPanel({ portfolio, quotes, watchlist, profiles, loadin
         () => 1,
         (symbol) => symbol,
       );
-  const { shown, rest } = foldSlices(slices, MAX_SLICES);
-  const legend = [
-    ...shown.map((s, i) => ({ id: s.id, label: holdingGroupLabel(s.key, t, lang), weight: s.weight, value: s.value, color: SLICE_COLORS[i % SLICE_COLORS.length] })),
-    ...(rest ? [{ id: "rest", label: t.watchlist.other, weight: rest.weight, value: rest.value, color: REST_COLOR }] : []),
-  ];
+  const legend = allocationLegend(slices).map((entry) => ({ ...entry, label: entry.key === null ? t.watchlist.other : holdingGroupLabel(entry.key, t, lang) }));
   const top3 = byValue && portfolio.rows.length > 3 ? topWeight(portfolio.rows, 3) : null;
 
   return (

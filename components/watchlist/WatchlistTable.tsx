@@ -210,18 +210,19 @@ export function WatchlistTable({ symbols, quotes, holdings, sparklines, sort, on
   const symbolColumn: DataTableColumn<WatchRow> = {
     key: "symbol",
     header: t.columns.symbol,
-    width: "6rem",
+    // Room for a 6-character ticker and the POS tag ("7203.T POS"); a longer ticker squeezes the tag, never itself.
+    width: "7.25rem",
     sortValue: (row) => row.symbol,
     render: (row) => {
       const posLabel = row.position ? tpl(t.watchlist.posLabel, { shares: formatShares(row.position.shares, lang) }) : "";
       return (
         <span className="block min-w-0 py-1">
           <span className="flex min-w-0 items-center gap-1.5">
-            <span data-wl-symbol={row.symbol} className="mono truncate font-medium text-fg">
+            <span data-wl-symbol={row.symbol} className="mono shrink-0 font-medium text-fg">
               {row.symbol}
             </span>
             {row.position ? (
-              <span title={posLabel} className={cn(TAG, "border-line-2 text-fg-2")}>
+              <span title={posLabel} className={cn(TAG, "min-w-0 overflow-hidden border-line-2 text-fg-2")}>
                 <span aria-hidden>{t.watchlist.pos}</span>
                 <span className="sr-only">, {posLabel}</span>
               </span>

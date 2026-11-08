@@ -34,8 +34,9 @@ function eventLines(event: CalendarEvent, t: Messages, lang: "en" | "zh"): [stri
 }
 
 /**
- * Earnings and ex-dividend dates of the held and watched symbols over the next 14 days: date, symbol, event, days
- * left and the position's weight, soonest first.
+ * Earnings and ex-dividend dates of the held and watched symbols over the next 14 days: date and days left, symbol and
+ * the position's weight, and the event, soonest first. The weight sits under the symbol so the event keeps room in the
+ * narrow right column of the watchlist page (about 270px at 1280px wide).
  */
 export function UpcomingPanel({ symbols, weights, className }: { symbols: readonly string[]; weights: ReadonlyMap<string, number | null>; className?: string }) {
   const { t, lang } = usePrefs();
@@ -52,12 +53,27 @@ export function UpcomingPanel({ symbols, weights, className }: { symbols: readon
       .filter((r) => r.days >= 0 && r.days <= WINDOW_DAYS);
   }, [data, requested, now]);
 
+  // Chinese dates and the weight label run longer (11月12日, 权重 13.8%).
   const columns: DataTableColumn<UpcomingRow>[] = [
     {
       key: "symbol",
       header: t.columns.symbol,
-      width: "4.75rem",
-      render: (r) => <span className="mono font-medium text-fg">{r.event.symbol}</span>,
+      width: lang === "zh" ? "5.25rem" : "4.75rem",
+      render: (r) => {
+        const weight = weights.get(r.event.symbol ?? "") ?? null;
+        const pct = formatRatio(weight);
+        return (
+          <span className="block py-1">
+            <span className="mono block truncate font-medium text-fg">{r.event.symbol}</span>
+            {weight !== null ? (
+              <span className="num block truncate text-micro text-fg-3">
+                <span aria-hidden>{tpl(t.watchlist.weightShort, { pct })}</span>
+                <span className="sr-only">{`${t.portfolio.weight} ${pct}`}</span>
+              </span>
+            ) : null}
+          </span>
+        );
+      },
     },
     {
       key: "event",
@@ -76,7 +92,7 @@ export function UpcomingPanel({ symbols, weights, className }: { symbols: readon
       key: "when",
       header: t.watchlist.date,
       align: "right",
-      width: "4.75rem",
+      width: lang === "zh" ? "5.25rem" : "4.5rem",
       render: (r) => (
         <span className="block py-1">
           <span className="num block text-fg-2">{formatShortDate(r.event.at, lang, "America/New_York")}</span>
@@ -86,7 +102,6 @@ export function UpcomingPanel({ symbols, weights, className }: { symbols: readon
         </span>
       ),
     },
-    { key: "weight", header: t.portfolio.weight, align: "right", width: "4.5rem", render: (r) => <span className="num text-fg-2">{formatRatio(weights.get(r.event.symbol ?? "") ?? null)}</span> },
   ];
 
   return (

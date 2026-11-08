@@ -73,15 +73,18 @@ export function EarningsBadge({ quote, now, t, lang }: { quote: Quote | undefine
   const date = formatShortDate(badge.date, lang, "America/New_York");
   const title = tpl(badge.estimated ? t.watchlist.erTitleEst : t.watchlist.erTitle, { date });
   return (
-    <span title={title} className={cn(TAG, badge.warn ? "border-warn/50 text-warn" : "border-line-2 text-fg-2")}>
+    <span title={title} className={cn(TAG, "shrink-0", badge.warn ? "border-warn/50 text-warn" : "border-line-2 text-fg-2")}>
       <span aria-hidden>{badge.days === 0 ? t.watchlist.erToday : tpl(t.watchlist.er, { n: badge.days })}</span>
       <span className="sr-only">{title}</span>
     </span>
   );
 }
 
-/** Small hairline tag after a symbol or name ("POS", "ER 3d"): 10px semibold, no letter case change. */
-export const TAG = "inline-flex h-4 shrink-0 items-center rounded-xs border px-1 text-[0.625rem] leading-none font-semibold whitespace-nowrap";
+/**
+ * Small hairline tag after a symbol or name ("POS", "ER 3d"): 11px (the type scale's micro size) semibold, no letter
+ * case change. Callers choose whether it may shrink: add shrink-0 to keep it whole.
+ */
+export const TAG = "inline-flex h-4 items-center rounded-xs border px-1 text-micro leading-none font-semibold whitespace-nowrap";
 
 /**
  * DataTable columns for quote fields. Rows can be anything that yields a quote, so the watchlist (rows with positions
