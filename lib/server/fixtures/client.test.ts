@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+import YahooFinance from "yahoo-finance2";
+
 import { isYahooAnswer } from "../yahoo";
 
 import { DISPATCHED_METHODS, fixtureClient, withMarketDataSource } from "./client";
@@ -51,6 +53,58 @@ describe("the not-found prefix behaves like a symbol Yahoo does not know", () =>
     expect(await fixtureClient.search("ZZZZ", { quotesCount: 5, newsCount: 5 })).toMatchObject({ quotes: [], news: [] });
     expect(await fixtureClient.options("ZZZZ", {})).toBeUndefined();
     expect(await fixtureClient.fundamentalsTimeSeries("ZZZZ", { period1: new Date(Date.now() - 800 * DAY), type: "annual", module: "financials" })).toEqual([]);
+  });
+});
+
+describe("the not-found answers match what yahoo-finance2 makes of Yahoo's", () => {
+  // The library itself, fed Yahoo's answers for an unknown symbol through a stub fetch (cookie, crumb, then the
+  // module's request): the fixture must fail and resolve exactly as the library does, so the app's error handling
+  // sees the same thing in both modes. The bodies are Yahoo's error envelope ({ <module>: { result, error } }).
+  const NOT_FOUND = { code: "Not Found", description: "" };
+  const answers: Array<[RegExp, number, unknown]> = [
+    [/\/v8\/finance\/chart\//, 404, { chart: { result: null, error: { ...NOT_FOUND, description: "No data found, symbol may be delisted" } } }],
+    [/\/v10\/finance\/quoteSummary\//, 404, { quoteSummary: { result: null, error: { ...NOT_FOUND, description: "Quote not found for symbol: ZZZZ" } } }],
+    [/\/v7\/finance\/quote\b/, 200, { quoteResponse: { result: [], error: null } }],
+    [/\/v7\/finance\/options\//, 200, { optionChain: { result: [], error: null } }],
+  ];
+
+  const requested: string[] = [];
+
+  async function stubFetch(input: string | URL | Request): Promise<Response> {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    requested.push(url);
+    if (url.includes("/v1/test/getcrumb")) return new Response("fixture-crumb", { status: 200 });
+    const answer = answers.find(([pattern]) => pattern.test(url));
+    if (answer) return new Response(JSON.stringify(answer[2]), { status: answer[1], headers: { "content-type": "application/json" } });
+    // The cookie handshake: any other page sets Yahoo's session cookie.
+    return new Response("<html></html>", {
+      status: 200,
+      headers: { "set-cookie": "A3=d=fixture&S=fixture; Max-Age=31557600; Domain=.yahoo.com; Path=/; Secure; HttpOnly" },
+    });
+  }
+
+  const library = () =>
+    new YahooFinance({ fetch: stubFetch as typeof fetch, versionCheck: false, suppressNotices: ["yahooSurvey", "ripHistorical"], validation: { logErrors: false, logOptionsErrors: false } });
+
+  it("for chart and quoteSummary", async () => {
+    const yahoo = library();
+    const options = { validateResult: false as const };
+    const period1 = new Date(Date.now() - 30 * DAY);
+    const fromLibrary = await rejection(yahoo.chart("ZZZZ", { period1 }, options));
+    const fromFixture = await rejection(fixtureClient.chart("ZZZZ", { period1 }));
+    expect([fromFixture.name, fromFixture.message]).toEqual([fromLibrary.name, fromLibrary.message]);
+    const summaryFromLibrary = await rejection(yahoo.quoteSummary("ZZZZ", { modules: ["price"] }, options));
+    const summaryFromFixture = await rejection(fixtureClient.quoteSummary("ZZZZ", { modules: ["price"] }));
+    expect([summaryFromFixture.name, summaryFromFixture.message]).toEqual([summaryFromLibrary.name, summaryFromLibrary.message]);
+    expect(requested.some((url) => url.includes("/v8/finance/chart/ZZZZ")) && requested.some((url) => url.includes("/v10/finance/quoteSummary/ZZZZ"))).toBe(true);
+  });
+
+  it("for quote and options", async () => {
+    const yahoo = library();
+    const options = { validateResult: false as const };
+    expect(await fixtureClient.quote(["ZZZZ"], { return: "array" })).toEqual(await yahoo.quote(["ZZZZ"], { return: "array" }, options));
+    expect(await fixtureClient.quote("ZZZZ")).toEqual(await yahoo.quote("ZZZZ", {}, options));
+    expect(await fixtureClient.options("ZZZZ", {})).toEqual(await yahoo.options("ZZZZ", {}, options));
   });
 });
 
