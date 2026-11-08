@@ -8,8 +8,9 @@ import { DAY_MS, isTradingDay, latestCompletedSession, sessionClose, weekdayOf }
 
 // options() of the fixture data: weekly and monthly expiries priced with Black-Scholes from the security's volatility,
 // with extra variance for an expiry that settles after the next earnings report (so the implied move into a report
-// looks like one). Stocks and funds have options; other quote types answer with no expiries, and an unknown symbol
-// resolves to undefined, as the library does for Yahoo's empty answer.
+// looks like one). US stocks and funds have options; other quote types and listings outside the US (Yahoo lists no
+// options for them) answer with no expiries, and an unknown symbol resolves to undefined, as the library does for
+// Yahoo's empty answer.
 
 const RATE = 0.04;
 const WEEKLY_EXPIRIES = 6;
@@ -84,7 +85,7 @@ export function buildOptions(symbol: string, query: FixtureOptionsQuery | undefi
   const quote = buildQuote(security, now);
   if (!quote) return undefined;
   const base = { underlyingSymbol: security.symbol, hasMiniOptions: false, quote };
-  if (security.type !== "EQUITY" && security.type !== "ETF") return { ...base, expirationDates: [], strikes: [], options: [] };
+  if ((security.type !== "EQUITY" && security.type !== "ETF") || security.market !== "us_market") return { ...base, expirationDates: [], strikes: [], options: [] };
 
   const latest = latestCompletedSession(security.profile, now);
   const spot = quote.regularMarketPrice as number;

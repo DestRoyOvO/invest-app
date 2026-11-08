@@ -332,6 +332,14 @@ describe("quote page research", () => {
     }
   });
 
+  it("list options for US listings only", async () => {
+    const expiries = async (symbol: string) => ((await fixtureClient.options(symbol, {})) as { expirationDates: unknown[] }).expirationDates.length;
+    expect(await expiries("AAPL")).toBeGreaterThan(6);
+    expect(await expiries("BABA")).toBeGreaterThan(6);
+    // Yahoo lists no options for Hong Kong listings.
+    expect(await expiries("0700.HK")).toBe(0);
+  });
+
   it("price the move the options imply into a report within 30 days", async () => {
     const [move, quote] = await Promise.all([getImpliedMove("NVDA"), quoteOf("NVDA")]);
     expect(move).not.toBeNull();
