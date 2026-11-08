@@ -10,6 +10,7 @@ import {
   positionFigures,
   quoteQuery,
   resolveTab,
+  showsCoverage,
   tabsFor,
   upcomingExDividend,
 } from "./quote-utils";
@@ -29,6 +30,20 @@ describe("tabs", () => {
     expect(resolveTab("financials", tabsFor("ETF"))).toBe("overview");
     expect(resolveTab("nonsense", tabsFor("EQUITY"))).toBe("overview");
     expect(resolveTab(null, tabsFor("EQUITY"))).toBe("overview");
+  });
+
+  it("shows the earnings and analyst panels for stocks only, and for the app's own funds and indices not even while loading", () => {
+    // Known up front: the app's broad and sector ETFs, indices, currencies, futures and crypto pairs.
+    for (const symbol of ["SPY", "QQQ", "XLK", "^GSPC", "EURUSD=X", "CL=F", "BTC-USD"]) expect(showsCoverage(symbol, undefined)).toBe(false);
+    // Other symbols keep the panels while the quote loads (no layout jump for stocks), then follow the quote type.
+    expect(showsCoverage("AAPL", undefined)).toBe(true);
+    expect(showsCoverage("AAPL", "EQUITY")).toBe(true);
+    expect(showsCoverage("VTI", undefined)).toBe(true);
+    expect(showsCoverage("VTI", "ETF")).toBe(false);
+    expect(showsCoverage("VFIAX", "MUTUALFUND")).toBe(false);
+    expect(showsCoverage("^N225", "INDEX")).toBe(false);
+    // Yahoo without a type: treated as a stock, like tabsFor.
+    expect(showsCoverage("XYZ", null)).toBe(true);
   });
 
   it("builds the query string with readable commas", () => {

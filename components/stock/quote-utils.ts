@@ -1,6 +1,7 @@
 // Pure helpers behind the quote page (StockView, QuoteHeader), kept free of React so they can be tested: which tabs
 // apply, the compare list from the URL, event chips, the live tab title and the position line.
 
+import { isNonEquity, knownNonEquity } from "@/components/calendar/earnings-model";
 import { normalizeSymbol } from "@/lib/symbols";
 
 import { MAX_COMPARE } from "./chart-utils";
@@ -21,6 +22,16 @@ export function tabsFor(quoteType: string | null | undefined): QuoteTab[] {
   if (quoteType === null || quoteType === "EQUITY") return [...QUOTE_TABS];
   if (FUND_TYPES.has(quoteType)) return ["overview", "dividends"];
   return ["overview"];
+}
+
+/**
+ * Whether the overview shows the earnings and analyst panels. Funds, indices, currencies and crypto report no earnings
+ * and have no analyst coverage (their tabs drop Earnings and Analysts too). The app's own funds and index symbols are
+ * known before the quote arrives, so their page never shows the panels; any other symbol keeps them (loading, in
+ * parallel with the quote) until its quote type says otherwise, so a stock's page does not jump when the quote lands.
+ */
+export function showsCoverage(symbol: string, quoteType: string | null | undefined): boolean {
+  return !knownNonEquity(symbol) && !isNonEquity(quoteType);
 }
 
 /** The tab named in ?tab=, or the overview when it is missing, unknown or does not apply. */
