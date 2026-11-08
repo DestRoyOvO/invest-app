@@ -20,7 +20,7 @@ import { getEnv } from "./browser";
 import { useSymbolChecks } from "./hooks";
 import { formatShares, symbolList } from "./labels";
 import { ResultLine } from "./ResultLine";
-import { focusSoon, TOUCH } from "./styles";
+import { focusSoon } from "./styles";
 
 export interface ImportOutcome {
   changes: StorageChange[];
@@ -87,7 +87,7 @@ export function ImportDone({ outcome, onUndo }: { outcome: ImportOutcome; onUndo
       <Link href="/watchlist" className="inline-flex items-center text-info underline-offset-2 hover:underline max-sm:h-10">
         {t.data.review.view}
       </Link>
-      <Button size="sm" variant="ghost" onClick={onUndo} className={TOUCH}>
+      <Button size="sm" variant="ghost" onClick={onUndo}>
         {t.data.undo}
       </Button>
     </ResultLine>
@@ -260,7 +260,7 @@ export function ImportReview({ rows, onImported }: { rows: readonly ImportRow[];
         {failed ? (
           <span className="flex flex-wrap items-center gap-2 text-warn">
             {t.data.review.checkFailed}
-            <Button size="sm" onClick={retry} className={TOUCH}>
+            <Button size="sm" onClick={retry}>
               {t.data.review.retry}
             </Button>
           </span>
@@ -330,7 +330,7 @@ export function ImportReview({ rows, onImported }: { rows: readonly ImportRow[];
         {confirming ? (
           <div className="flex flex-wrap items-center gap-2">
             <p className="w-full text-sm text-fg">{tpl(t.data.review.confirmReplace, { symbols: symbolList(preview.removed) })}</p>
-            <Button onClick={commit} className={TOUCH} autoFocus>
+            <Button onClick={commit} autoFocus>
               {t.data.review.replaceNow}
             </Button>
             <Button
@@ -339,13 +339,12 @@ export function ImportReview({ rows, onImported }: { rows: readonly ImportRow[];
                 setConfirmFor(null);
                 focusSoon(importRef);
               }}
-              className={TOUCH}
             >
               {t.data.cancel}
             </Button>
           </div>
         ) : (
-          <Button ref={importRef} onClick={onImport} disabled={count === 0 || checking} className={TOUCH}>
+          <Button ref={importRef} onClick={onImport} disabled={count === 0 || checking}>
             {checking ? t.data.review.status.checking : count === 1 ? t.data.review.importOne : tpl(t.data.review.importMany, { n: count })}
           </Button>
         )}

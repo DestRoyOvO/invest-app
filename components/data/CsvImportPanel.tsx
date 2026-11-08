@@ -15,7 +15,7 @@ import { tpl } from "@/lib/format";
 
 import { downloadCsv } from "./browser";
 import { ImportDone, ImportReview, useImportOutcome } from "./ImportReview";
-import { focusSoon, TOUCH } from "./styles";
+import { focusSoon } from "./styles";
 
 /** Larger files are not positions exports. */
 const MAX_CSV_BYTES = 2 * 1024 * 1024;
@@ -123,11 +123,11 @@ export function CsvImportPanel() {
       >
         <p className="max-w-prose text-sm text-fg-2">{t.data.csv.intro}</p>
         <div className="flex flex-wrap items-center gap-2">
-          <Button ref={chooseRef} onClick={() => inputRef.current?.click()} className={TOUCH}>
+          <Button ref={chooseRef} onClick={() => inputRef.current?.click()}>
             <FileUp aria-hidden className="size-4" strokeWidth={1.75} />
             {file ? t.data.csv.another : t.data.csv.choose}
           </Button>
-          <Button variant="ghost" onClick={() => downloadCsv("investseek-positions-template.csv", POSITIONS_TEMPLATE_ROWS)} className={TOUCH}>
+          <Button variant="ghost" onClick={() => downloadCsv("investseek-positions-template.csv", POSITIONS_TEMPLATE_ROWS)}>
             {t.data.csv.template}
           </Button>
           <span className="text-xs text-fg-3 max-sm:hidden">{t.data.csv.drop}</span>

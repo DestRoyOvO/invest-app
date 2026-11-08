@@ -15,7 +15,6 @@ import { tpl } from "@/lib/format";
 
 import { downloadCsv } from "./browser";
 import { fetchQuoteInfo, type SymbolInfo } from "./symbol-check";
-import { TOUCH } from "./styles";
 
 type Busy = "positions" | "watchlist" | null;
 
@@ -85,7 +84,6 @@ export function ExportCsvPanel() {
               aria-busy={busy === item.key || undefined}
               aria-label={tpl(t.data.exportCsv.download, { name: item.name })}
               onClick={() => void item.run()}
-              className={TOUCH}
             >
               <Download aria-hidden className="size-3.5" strokeWidth={1.75} />
               {t.data.exportCsv.format}
