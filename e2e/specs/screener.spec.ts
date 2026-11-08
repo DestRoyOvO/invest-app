@@ -386,7 +386,9 @@ test.describe("screener", () => {
       region.getByRole("button", { name: tpl(S.actions.exportHint, { n: matches.length }) }).click(),
     ]);
     expect(download.suggestedFilename()).toBe(`investseek-screener-stocks-${newYorkDay(Date.parse(snapshot.asOf))}.csv`);
-    const [header, ...lines] = parseCsv(readFileSync(await download.path(), "utf8"));
+    const csv = readFileSync(await download.path(), "utf8");
+    expect(csv.startsWith("\uFEFF"), "the file starts with a byte order mark, so Excel reads it as UTF-8").toBe(true);
+    const [header, ...lines] = parseCsv(csv);
     expect(header.slice(0, 7)).toEqual(["Symbol", "Name", "Sector", "Price", "Change %", "Market cap (USD)", "P/E (TTM)"]);
     expect(lines.map((line) => line[0])).toEqual(await table.getByRole("link").allTextContents());
     expect(lines.map((line) => line[0])).toEqual(order);

@@ -571,8 +571,12 @@ export function parseCompact(text: string): number | null {
   return Number(match[1].replace(/,/g, "")) * COMPACT[match[2]];
 }
 
-/** RFC 4180 CSV: quoted fields with doubled quotes, CRLF or LF line ends; the trailing line end adds no row. */
-export function parseCsv(text: string): string[][] {
+/**
+ * RFC 4180 CSV: quoted fields with doubled quotes, CRLF or LF line ends; the trailing line end adds no row. A leading
+ * byte order mark (the app writes one so Excel reads Chinese names) is not part of the first field.
+ */
+export function parseCsv(csv: string): string[][] {
+  const text = csv.startsWith("\uFEFF") ? csv.slice(1) : csv;
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
