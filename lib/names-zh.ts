@@ -1,7 +1,13 @@
-// Chinese names for common symbols, matched locally by the command bar and the add-symbol form. Yahoo's search only
-// understands Latin text (a query such as "苹果" fails), so Chinese input is resolved here instead of upstream.
-// Covers the stock universe, the market board, the sector and broad ETFs, and widely followed US-listed Chinese
-// companies, Hong Kong stocks and indices. The first name is the display name; the rest are aliases.
+// Chinese names for common symbols. In Chinese the app shows them in place of Yahoo's English names (displayName),
+// and the command bar and the symbol fields match them locally: Yahoo's search only understands Latin text (a query
+// such as "苹果" fails), so Chinese input is resolved here instead of upstream.
+// Covers the stock universe, the ETF universe (broad, sector and related funds), the market and world boards, and
+// widely followed US-listed Chinese companies, Hong Kong stocks and indices. The first name is the display name; the
+// rest are aliases for search. Only names established in Chinese financial media belong here: a symbol without a
+// well-known Chinese name keeps its English one (lib/names-zh.test.ts lists those). Some companies are known in
+// Chinese by a Latin name (Meta, T-Mobile); those entries keep it.
+
+import type { Lang } from "@/types/api";
 
 export interface ChineseName {
   symbol: string;
@@ -34,9 +40,10 @@ export const CHINESE_NAMES: readonly ChineseName[] = [
   { symbol: "TSLA", names: ["特斯拉"] },
   { symbol: "HD", names: ["家得宝"] },
   { symbol: "MCD", names: ["麦当劳"] },
-  { symbol: "BKNG", names: ["缤客", "Booking"] },
+  // Chinese media call the holding company Booking; 缤客 is the Chinese brand of its Booking.com site.
+  { symbol: "BKNG", names: ["Booking", "Booking Holdings", "缤客"] },
   { symbol: "LOW", names: ["劳氏"] },
-  { symbol: "TJX", names: ["TJX"] },
+  { symbol: "TJX", names: ["TJX 公司", "TJX"] },
   { symbol: "NKE", names: ["耐克"] },
   { symbol: "SBUX", names: ["星巴克"] },
   // Universe: consumer staples
@@ -45,7 +52,7 @@ export const CHINESE_NAMES: readonly ChineseName[] = [
   { symbol: "PG", names: ["宝洁"] },
   { symbol: "KO", names: ["可口可乐"] },
   { symbol: "PEP", names: ["百事"] },
-  { symbol: "PM", names: ["菲利普莫里斯"] },
+  { symbol: "PM", names: ["菲利普·莫里斯", "菲利普莫里斯"] },
   { symbol: "MDLZ", names: ["亿滋"] },
   // Universe: health care
   { symbol: "LLY", names: ["礼来"] },
@@ -58,7 +65,7 @@ export const CHINESE_NAMES: readonly ChineseName[] = [
   { symbol: "AMGN", names: ["安进"] },
   { symbol: "PFE", names: ["辉瑞"] },
   // Universe: financials
-  { symbol: "BRK-B", names: ["伯克希尔哈撒韦", "伯克希尔", "巴菲特"] },
+  { symbol: "BRK-B", names: ["伯克希尔·哈撒韦", "伯克希尔哈撒韦", "伯克希尔", "巴菲特"] },
   { symbol: "JPM", names: ["摩根大通", "小摩"] },
   { symbol: "V", names: ["维萨", "Visa"] },
   { symbol: "MA", names: ["万事达"] },
@@ -75,7 +82,7 @@ export const CHINESE_NAMES: readonly ChineseName[] = [
   { symbol: "HON", names: ["霍尼韦尔"] },
   { symbol: "BA", names: ["波音"] },
   { symbol: "DE", names: ["迪尔", "约翰迪尔"] },
-  { symbol: "LMT", names: ["洛克希德马丁", "洛马"] },
+  { symbol: "LMT", names: ["洛克希德·马丁", "洛克希德马丁", "洛马"] },
   // Universe: energy
   { symbol: "XOM", names: ["埃克森美孚"] },
   { symbol: "CVX", names: ["雪佛龙"] },
@@ -93,8 +100,8 @@ export const CHINESE_NAMES: readonly ChineseName[] = [
   { symbol: "SO", names: ["南方电力", "南方公司"] },
   { symbol: "DUK", names: ["杜克能源"] },
   { symbol: "CEG", names: ["星座能源"] },
-  // Universe: real estate
-  { symbol: "PLD", names: ["安博", "普洛斯"] },
+  // Universe: real estate. Prologis is 安博 in Chinese; 普洛斯 is GLP, a different company.
+  { symbol: "PLD", names: ["安博"] },
   { symbol: "AMT", names: ["美国电塔"] },
   { symbol: "EQIX", names: ["易昆尼克斯", "Equinix"] },
   { symbol: "SPG", names: ["西蒙地产"] },
@@ -145,30 +152,51 @@ export const CHINESE_NAMES: readonly ChineseName[] = [
   { symbol: "2318.HK", names: ["中国平安"] },
   { symbol: "0005.HK", names: ["汇丰控股", "汇丰"] },
 
-  // Indices, rates, currencies, commodities, crypto
-  { symbol: "^GSPC", names: ["标普500", "标普 500", "标普"] },
-  { symbol: "^NDX", names: ["纳斯达克100", "纳指100", "纳指"] },
-  { symbol: "^IXIC", names: ["纳斯达克综合指数", "纳斯达克"] },
-  { symbol: "^DJI", names: ["道琼斯", "道指"] },
-  { symbol: "^RUT", names: ["罗素2000", "罗素"] },
+  // Indices and the 10-year yield (the market and world boards)
+  { symbol: "^GSPC", names: ["标普500指数", "标普500", "标普"] },
+  { symbol: "^NDX", names: ["纳斯达克100指数", "纳斯达克100", "纳指100"] },
+  // 纳指 on its own means the Composite in Chinese market reports.
+  { symbol: "^IXIC", names: ["纳斯达克综合指数", "纳斯达克", "纳指"] },
+  { symbol: "^DJI", names: ["道琼斯工业平均指数", "道琼斯", "道指"] },
+  { symbol: "^RUT", names: ["罗素2000指数", "罗素2000", "罗素"] },
   { symbol: "^VIX", names: ["波动率指数", "恐慌指数"] },
   { symbol: "^TNX", names: ["美债10年收益率", "十年期美债"] },
+  { symbol: "^GSPTSE", names: ["多伦多综合指数", "多伦多综合"] },
+  { symbol: "^STOXX50E", names: ["欧洲斯托克50指数", "欧洲斯托克50"] },
+  { symbol: "^FTSE", names: ["富时100指数", "富时100"] },
+  { symbol: "^GDAXI", names: ["德国DAX指数", "DAX"] },
+  { symbol: "^FCHI", names: ["法国CAC40指数", "CAC40"] },
+  { symbol: "^N225", names: ["日经225指数", "日经225", "日经"] },
   { symbol: "^HSI", names: ["恒生指数", "恒指"] },
   { symbol: "000001.SS", names: ["上证指数", "上证综指"] },
-  { symbol: "000300.SS", names: ["沪深300"] },
-  { symbol: "^N225", names: ["日经225", "日经"] },
+  { symbol: "000300.SS", names: ["沪深300指数", "沪深300"] },
+  { symbol: "399001.SZ", names: ["深证成指", "深证成份指数"] },
+  { symbol: "^KS11", names: ["韩国综合指数", "KOSPI"] },
+  { symbol: "^TWII", names: ["台湾加权指数", "台湾加权"] },
+  { symbol: "^AXJO", names: ["澳大利亚标普200指数", "澳洲标普200"] },
+  { symbol: "^BSESN", names: ["孟买敏感30指数", "印度Sensex", "Sensex"] },
+  // Currencies, commodities and crypto
   { symbol: "DX-Y.NYB", names: ["美元指数"] },
+  { symbol: "EURUSD=X", names: ["欧元/美元"] },
+  { symbol: "USDJPY=X", names: ["美元/日元"] },
+  { symbol: "GBPUSD=X", names: ["英镑/美元"] },
+  { symbol: "CNY=X", names: ["美元/人民币", "人民币汇率"] },
+  { symbol: "HKD=X", names: ["美元/港元", "港元汇率"] },
   { symbol: "GC=F", names: ["黄金", "金价"] },
   { symbol: "SI=F", names: ["白银"] },
-  { symbol: "CL=F", names: ["原油", "WTI 原油"] },
+  { symbol: "HG=F", names: ["铜"] },
+  { symbol: "CL=F", names: ["WTI 原油", "原油"] },
+  { symbol: "NG=F", names: ["天然气"] },
   { symbol: "BTC-USD", names: ["比特币"] },
   { symbol: "ETH-USD", names: ["以太坊"] },
 
-  // ETFs
+  // ETFs: broad market and the breadth reference
   { symbol: "SPY", names: ["标普500 ETF"] },
   { symbol: "QQQ", names: ["纳指100 ETF"] },
   { symbol: "DIA", names: ["道指 ETF"] },
   { symbol: "IWM", names: ["罗素2000 ETF"] },
+  { symbol: "RSP", names: ["标普500等权重 ETF"] },
+  // ETFs: SPDR sector funds
   { symbol: "XLK", names: ["科技板块 ETF"] },
   { symbol: "XLC", names: ["通信服务板块 ETF"] },
   { symbol: "XLY", names: ["可选消费板块 ETF"] },
@@ -180,7 +208,19 @@ export const CHINESE_NAMES: readonly ChineseName[] = [
   { symbol: "XLB", names: ["原材料板块 ETF"] },
   { symbol: "XLU", names: ["公用事业板块 ETF"] },
   { symbol: "XLRE", names: ["房地产板块 ETF"] },
+  // ETFs: the related funds on the sector pages, named for what they track (Vanguard keeps its Latin name)
   { symbol: "SMH", names: ["半导体 ETF"] },
+  { symbol: "IGV", names: ["科技软件 ETF"] },
+  { symbol: "VOX", names: ["Vanguard 通信服务 ETF"] },
+  { symbol: "VCR", names: ["Vanguard 可选消费 ETF"] },
+  { symbol: "VDC", names: ["Vanguard 必需消费 ETF"] },
+  { symbol: "IBB", names: ["生物科技 ETF"] },
+  { symbol: "KBE", names: ["标普银行 ETF"] },
+  { symbol: "ITA", names: ["航空航天与国防 ETF"] },
+  { symbol: "XOP", names: ["油气开采 ETF"] },
+  { symbol: "GDX", names: ["黄金矿业 ETF"] },
+  { symbol: "VNQ", names: ["Vanguard 房地产 ETF"] },
+  // ETFs: other widely followed funds
   { symbol: "KWEB", names: ["中概互联网 ETF", "中概股 ETF"] },
   { symbol: "FXI", names: ["中国大盘 ETF"] },
   { symbol: "GLD", names: ["黄金 ETF"] },
@@ -194,9 +234,20 @@ export function chineseNameOf(symbol: string): string | undefined {
   return BY_SYMBOL.get(symbol);
 }
 
+/**
+ * The name to show for a company, fund, index or other instrument: in Chinese its Chinese name when one is known,
+ * otherwise the English name from the data (Yahoo's). Null when there is no name at all. Keep the English name
+ * reachable beside a Chinese one (a title attribute or a second line), and keep English names in data the app sends on
+ * (the AI context, CSV files).
+ */
+export function displayName(symbol: string | null | undefined, englishName: string | null | undefined, lang: Lang): string | null {
+  const chinese = lang === "zh" && symbol ? BY_SYMBOL.get(symbol) : undefined;
+  return chinese ?? (englishName?.trim() || null);
+}
+
 /** True when the text contains CJK characters (Yahoo search cannot handle those). */
 export function hasCjk(text: string): boolean {
-  return /[㐀-鿿豈-﫿]/.test(text);
+  return /[㐀-鿿豈-﫿]/.test(text);
 }
 
 /**
