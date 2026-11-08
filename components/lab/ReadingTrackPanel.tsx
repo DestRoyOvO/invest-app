@@ -76,7 +76,13 @@ export function ReadingTrackPanel() {
   const totalDates = horizon.ic.dates;
   const domain = symmetricDomain(horizon.labels.map((label) => label.ci.selection));
   const labelColumns: DataTableColumn<LabelOutcome>[] = [
-    { key: "reading", header: l.labelCols.reading, width: "6rem", render: (row) => <span className="text-fg">{t.signal.codes[row.code]}</span> },
+    // The name stands out, except on a concentrated row, which is grey throughout (rowClassName below).
+    {
+      key: "reading",
+      header: l.labelCols.reading,
+      width: "6rem",
+      render: (row) => <span className={isConcentrated(row, totalDates) ? undefined : "text-fg"}>{t.signal.codes[row.code]}</span>,
+    },
     { key: "n", header: l.labelCols.n, align: "right", width: "4.75rem", render: (row) => <span className="num">{formatInteger(row.n, lang)}</span> },
     {
       key: "episodes",
@@ -94,8 +100,10 @@ export function ReadingTrackPanel() {
       render: (row) => {
         const tone = selectionTone(row, totalDates);
         const interval = row.ci.selection;
-        // A concentrated row is grey throughout: its value inherits the row's --fg-3 like every other cell.
-        const ink = tone === "up" ? "text-up" : tone === "down" ? "text-down" : isConcentrated(row, totalDates) ? undefined : "text-fg";
+        // A concentrated row is grey throughout: its value inherits the row's --fg-3 like every other cell, and its
+        // whisker is neutral, so an interval that excludes zero shows no accent dot.
+        const concentrated = isConcentrated(row, totalDates);
+        const ink = tone === "up" ? "text-up" : tone === "down" ? "text-down" : concentrated ? undefined : "text-fg";
         return (
           <div className="py-1">
             <div className="flex items-center justify-end gap-2">
@@ -107,6 +115,7 @@ export function ReadingTrackPanel() {
                 base={0}
                 min={domain[0]}
                 max={domain[1]}
+                neutral={concentrated}
                 label={tpl(t.signal.track.whisker, {
                   reading: t.signal.codes[row.code],
                   value: pct(row.selection, 2, true),
