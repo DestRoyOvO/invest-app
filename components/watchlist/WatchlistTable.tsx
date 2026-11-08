@@ -16,6 +16,7 @@ import { useNow } from "@/hooks/usePortfolio";
 import { stockPath } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { tpl } from "@/lib/format";
+import { displayName } from "@/lib/names-zh";
 import type { Quote, Sparklines } from "@/types/api";
 
 import { formatShares } from "./format";
@@ -229,7 +230,9 @@ export function WatchlistTable({ symbols, quotes, holdings, sparklines, sort, on
             ) : null}
           </span>
           <span className="flex min-w-0 items-center gap-1.5 sm:hidden">
-            <span className="truncate text-micro text-fg-3">{row.quote?.name ?? ""}</span>
+            <span className="truncate text-micro text-fg-3" title={row.quote?.name}>
+              {displayName(row.symbol, row.quote?.name, lang) ?? ""}
+            </span>
             <EarningsBadge quote={row.quote} now={now} t={t} lang={lang} />
           </span>
         </span>

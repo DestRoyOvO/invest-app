@@ -246,6 +246,16 @@ export function displayName(symbol: string | null | undefined, englishName: stri
 }
 
 /**
+ * Both names where they differ, "苹果 · Apple Inc.", for a tooltip on a symbol whose name column is out of sight; the
+ * one name otherwise.
+ */
+export function fullName(symbol: string | null | undefined, englishName: string | null | undefined, lang: Lang): string | null {
+  const shown = displayName(symbol, englishName, lang);
+  const english = englishName?.trim() || null;
+  return shown && english && shown !== english ? `${shown} · ${english}` : shown;
+}
+
+/**
  * A symbol as a tab title names it: in Chinese with its Chinese name in front ("英伟达 NVDA"), since a Chinese reader
  * knows the company by that name; otherwise the symbol alone, as English tabs show it.
  */

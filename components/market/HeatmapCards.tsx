@@ -3,7 +3,7 @@
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Delta } from "@/components/ui/Delta";
 import { formatCompact, formatPrice, tpl } from "@/lib/format";
-import { chineseNameOf } from "@/lib/names-zh";
+import { displayName } from "@/lib/names-zh";
 import { getSector } from "@/lib/universe";
 import { relativeVolume } from "@/lib/volume";
 import type { OverviewQuote, SectorKey, SectorSnapshot } from "@/types/api";
@@ -13,14 +13,16 @@ import { rangePosition } from "./metrics";
 /** Hover and focus card of a heatmap tile: the quote, its size and trading, and where it sits in its 52-week range. */
 export function StockCard({ quote, sector }: { quote: OverviewQuote; sector: SectorKey }) {
   const { t, lang } = usePrefs();
-  const name = (lang === "zh" ? chineseNameOf(quote.symbol) : undefined) ?? quote.name;
+  const name = displayName(quote.symbol, quote.name, lang);
   const position = rangePosition(quote);
   const rel = relativeVolume(quote.volume, quote.avgVolume);
   return (
     <div className="space-y-2.5">
       <div className="flex min-w-0 items-baseline gap-2">
         <span className="mono text-base font-semibold text-fg">{quote.symbol}</span>
-        <span className="min-w-0 truncate text-xs text-fg-2">{name}</span>
+        <span className="min-w-0 truncate text-xs text-fg-2" title={quote.name}>
+          {name}
+        </span>
         <span className="ml-auto shrink-0 text-micro text-fg-3">{getSector(sector)?.short[lang]}</span>
       </div>
       <div className="flex flex-wrap items-baseline gap-x-2">

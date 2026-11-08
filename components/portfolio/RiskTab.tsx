@@ -5,6 +5,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { withTrueMinus } from "@/components/ui/Delta";
 import { stockPath } from "@/lib/api-client";
 import { formatRatio, tpl } from "@/lib/format";
+import { displayName } from "@/lib/names-zh";
 import { largestRiskGap, type PositionRisk, type RiskReport } from "@/lib/portfolio-analytics";
 import type { Quote } from "@/types/api";
 
@@ -30,7 +31,7 @@ interface RiskTabProps {
 
 /** Each analyzed position's weight, share of risk, beta and volatility over the same sessions. */
 export function RiskTab({ report, quotes, positions }: RiskTabProps) {
-  const { t } = usePrefs();
+  const { t, lang } = usePrefs();
   const r = t.port.risk;
   const gap = largestRiskGap(report.positions);
   const pct = (v: number | null, digits = 1) => withTrueMinus(formatRatio(v, { digits }));
@@ -38,7 +39,16 @@ export function RiskTab({ report, quotes, positions }: RiskTabProps) {
 
   const columns: DataTableColumn<PositionRisk>[] = [
     { key: "symbol", header: t.columns.symbol, width: "5.5rem", sortValue: (p) => p.symbol, render: (p) => <span className="mono font-medium text-fg">{p.symbol}</span> },
-    { key: "name", header: t.columns.name, hideBelow: "lg", render: (p) => <span className="truncate text-fg-2">{quotes.get(p.symbol)?.name ?? ""}</span> },
+    {
+      key: "name",
+      header: t.columns.name,
+      hideBelow: "lg",
+      render: (p) => (
+        <span className="truncate text-fg-2" title={quotes.get(p.symbol)?.name}>
+          {displayName(p.symbol, quotes.get(p.symbol)?.name, lang) ?? ""}
+        </span>
+      ),
+    },
     { key: "weight", header: r.weight, align: "right", width: "5.5rem", sortValue: (p) => p.weight, render: (p) => <span className="num text-fg">{pct(p.weight)}</span> },
     { key: "risk", header: r.shareOfRisk, align: "right", width: "8.25rem", sortValue: (p) => p.riskShare, render: (p) => <span className="num text-fg">{pct(p.riskShare)}</span> },
     {

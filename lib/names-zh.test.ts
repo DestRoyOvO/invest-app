@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { CHINESE_NAMES, chineseNameOf, displayName, hasCjk, searchChineseNames, symbolTitle } from "./names-zh";
+import { CHINESE_NAMES, chineseNameOf, displayName, fullName, hasCjk, searchChineseNames, symbolTitle } from "./names-zh";
 import { ETF_UNIVERSE } from "./screens";
 import { normalizeSymbol } from "./symbols";
 import { BREADTH_REFERENCES, MARKET_BOARD, UNIVERSE_STOCKS, WORLD_BOARD } from "./universe";
@@ -93,6 +93,19 @@ describe("displayName", () => {
     expect(displayName("KRMN", null, "zh")).toBeNull();
     expect(displayName("AAPL", "  ", "en")).toBeNull();
     expect(displayName(undefined, undefined, "en")).toBeNull();
+  });
+});
+
+describe("fullName", () => {
+  it("gives both names where they differ", () => {
+    expect(fullName("AAPL", "Apple Inc.", "zh")).toBe("苹果 · Apple Inc.");
+    expect(fullName("^GSPC", null, "zh")).toBe("标普500指数");
+  });
+
+  it("gives the one name otherwise", () => {
+    expect(fullName("AAPL", "Apple Inc.", "en")).toBe("Apple Inc.");
+    expect(fullName("KRMN", "Karman Holdings Inc.", "zh")).toBe("Karman Holdings Inc.");
+    expect(fullName("KRMN", null, "en")).toBeNull();
   });
 });
 

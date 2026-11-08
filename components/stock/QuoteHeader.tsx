@@ -13,6 +13,7 @@ import { TickNumber } from "@/components/ui/TickNumber";
 import type { Position } from "@/hooks/useHoldings";
 import { eventDayKey } from "@/lib/events";
 import { formatCompact, formatNumber, formatRatio, formatTime, tpl } from "@/lib/format";
+import { displayName } from "@/lib/names-zh";
 import type { Lang, StockDetail } from "@/types/api";
 
 import {
@@ -101,6 +102,10 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, 
   // A currency pair keeps its pips (EURUSD=X 1.1143); Yahoo's zeros for what an index or a pair does not report show
   // as dashes (^TNX has no open or day range, ^VIX and EURUSD=X no volume).
   const digits = priceDigits(symbol, quote.quoteType);
+  // In Chinese a known company reads by its Chinese name, with the English legal name after it in a quieter line.
+  const englishName = profile.longName ?? quote.name;
+  const name = displayName(symbol, englishName, lang);
+  const englishAside = name !== englishName.trim() ? englishName : null;
 
   const why = () => openChat({ text: tpl(a.whyMovingPrompt, { symbol }), intent: { kind: "move", symbol } });
 
@@ -110,7 +115,12 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, 
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
             <h1 className="mono text-xl font-semibold tracking-tight text-fg">{symbol}</h1>
-            <span className="min-w-0 truncate text-sm text-fg-2">{profile.longName ?? quote.name}</span>
+            <span className="min-w-0 truncate text-sm text-fg-2">{name}</span>
+            {englishAside ? (
+              <span lang="en" className="min-w-0 truncate text-xs text-fg-3">
+                {englishAside}
+              </span>
+            ) : null}
             {quote.exchange ? <Badge>{quote.exchange}</Badge> : null}
             {quote.currency && quote.currency !== "USD" ? <Badge tone="info">{quote.currency}</Badge> : null}
             {quote.stale ? (

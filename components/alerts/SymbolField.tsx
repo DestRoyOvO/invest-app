@@ -2,15 +2,18 @@
 
 import { useId, useState, type KeyboardEvent } from "react";
 
+import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Input } from "@/components/ui/Field";
 import { useSymbolSearch } from "@/hooks/useApi";
 import { useDebounced } from "@/hooks/useLocalValue";
 import { cn } from "@/lib/cn";
-import { hasCjk, searchChineseNames } from "@/lib/names-zh";
+import { displayName, hasCjk, searchChineseNames } from "@/lib/names-zh";
 
 interface Suggestion {
   symbol: string;
   name: string;
+  /** Yahoo's English name, as a tooltip when the name shown is Chinese. */
+  english: string | null;
   exchange: string | null;
 }
 
@@ -26,6 +29,7 @@ interface SymbolFieldProps {
  * search Chinese). Arrow keys move through the list, Enter picks, Escape closes only the list. Use inside a Field.
  */
 export function SymbolField({ value, onChange, placeholder, autoFocus = false }: SymbolFieldProps) {
+  const { lang } = usePrefs();
   const listId = useId();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -35,8 +39,13 @@ export function SymbolField({ value, onChange, placeholder, autoFocus = false }:
   const suggestions: Suggestion[] = !open || !value.trim()
     ? []
     : cjk
-      ? searchChineseNames(query, 6).map((match) => ({ symbol: match.symbol, name: match.name, exchange: null }))
-      : (data?.results ?? []).slice(0, 6).map((result) => ({ symbol: result.symbol, name: result.name, exchange: result.exchange }));
+      ? searchChineseNames(query, 6).map((match) => ({ symbol: match.symbol, name: match.name, english: null, exchange: null }))
+      : (data?.results ?? []).slice(0, 6).map((result) => ({
+          symbol: result.symbol,
+          name: displayName(result.symbol, result.name, lang) ?? result.name,
+          english: result.name,
+          exchange: result.exchange,
+        }));
   // Hide the list once the field holds exactly the one suggested ticker.
   const visible = suggestions.length === 1 && suggestions[0].symbol === value.trim().toUpperCase() ? [] : suggestions;
 
@@ -104,7 +113,9 @@ export function SymbolField({ value, onChange, placeholder, autoFocus = false }:
             className={cn("flex cursor-pointer items-center gap-3 px-2.5 py-1.5 text-sm max-sm:py-2.5", index === active ? "bg-hover text-fg" : "text-fg-2 hover:bg-hover")}
           >
             <span className="mono w-20 shrink-0 font-medium text-fg">{suggestion.symbol}</span>
-            <span className="min-w-0 flex-1 truncate">{suggestion.name}</span>
+            <span className="min-w-0 flex-1 truncate" title={suggestion.english ?? undefined}>
+              {suggestion.name}
+            </span>
             {suggestion.exchange ? <span className="mono shrink-0 text-xs text-fg-3">{suggestion.exchange}</span> : null}
           </li>
         ))}

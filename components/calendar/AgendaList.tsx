@@ -14,6 +14,7 @@ import { cn } from "@/lib/cn";
 import type { AgendaDay, AgendaItem } from "@/lib/events";
 import { formatRatio, tpl } from "@/lib/format";
 import { MACRO_SOURCES } from "@/lib/macro-calendar";
+import { displayName } from "@/lib/names-zh";
 
 import { dayHeading, formatDividend, formatMoney, localLabel, macroDetail, markGlyph, marksLabel, relativeLabel, timeLabel } from "./agenda-format";
 import { hasUsOptions, lastSurprises, shortDay, signedPercent, withinDays } from "./earnings-model";
@@ -188,7 +189,7 @@ function EventText({ item }: { item: AgendaItem }) {
   return (
     <>
       <span className="min-w-0 truncate text-fg-2" title={event.name ?? undefined}>
-        {event.name ?? event.symbol}
+        {displayName(event.symbol, event.name, lang) ?? event.symbol}
         <span className="text-fg-3"> ·</span>
       </span>
       <span className="-ml-0.5 max-w-full shrink-0 truncate text-fg-3">{kindText}</span>

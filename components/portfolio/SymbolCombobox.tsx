@@ -2,15 +2,18 @@
 
 import { forwardRef, useEffect, useId, useMemo, useRef, useState, type InputHTMLAttributes, type KeyboardEvent } from "react";
 
+import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Input } from "@/components/ui/Field";
 import { useSymbolSearch } from "@/hooks/useApi";
 import { useDebounced } from "@/hooks/useLocalValue";
 import { cn } from "@/lib/cn";
-import { hasCjk, searchChineseNames } from "@/lib/names-zh";
+import { displayName, hasCjk, searchChineseNames } from "@/lib/names-zh";
 
 interface Suggestion {
   symbol: string;
   name: string;
+  /** Yahoo's English name, as a tooltip when the name shown is Chinese. */
+  english: string | null;
   exchange: string | null;
 }
 
@@ -37,6 +40,7 @@ export const SymbolCombobox = forwardRef<HTMLInputElement, SymbolComboboxProps>(
   { value, onValueChange, onPick, className, inputClassName, inline = false, onKeyDown, onFocus, onBlur, ...props },
   ref,
 ) {
+  const { lang } = usePrefs();
   const listId = useId();
   const [focused, setFocused] = useState(false);
   // Closing on blur waits a moment (so a click on an option lands); focus coming back cancels it.
@@ -53,11 +57,11 @@ export const SymbolCombobox = forwardRef<HTMLInputElement, SymbolComboboxProps>(
 
   const suggestions = useMemo<Suggestion[]>(() => {
     if (!focused || !typed) return [];
-    if (hasCjk(typed)) return searchChineseNames(typed, 6).map((m) => ({ symbol: m.symbol, name: m.name, exchange: null }));
+    if (hasCjk(typed)) return searchChineseNames(typed, 6).map((m) => ({ symbol: m.symbol, name: m.name, english: null, exchange: null }));
     // Results of an older query are never shown for the new text.
     if (query !== typed) return [];
-    return (data?.results ?? []).slice(0, 6).map((r) => ({ symbol: r.symbol, name: r.name, exchange: r.exchange }));
-  }, [focused, typed, query, data]);
+    return (data?.results ?? []).slice(0, 6).map((r) => ({ symbol: r.symbol, name: displayName(r.symbol, r.name, lang) ?? r.name, english: r.name, exchange: r.exchange }));
+  }, [focused, typed, query, data, lang]);
   const open = suggestions.length > 0;
   const activeIndex = active < suggestions.length ? active : -1;
 
@@ -141,7 +145,9 @@ export const SymbolCombobox = forwardRef<HTMLInputElement, SymbolComboboxProps>(
               className={cn("flex cursor-pointer items-center gap-3 px-2.5 py-1.5 text-sm max-sm:min-h-10", i === activeIndex ? "bg-hover text-fg" : "text-fg-2 hover:bg-hover")}
             >
               <span className="mono w-20 shrink-0 font-medium text-fg">{s.symbol}</span>
-              <span className="min-w-0 flex-1 truncate">{s.name}</span>
+              <span className="min-w-0 flex-1 truncate" title={s.english ?? undefined}>
+                {s.name}
+              </span>
               {s.exchange ? <span className="mono shrink-0 text-xs text-fg-3">{s.exchange}</span> : null}
             </li>
           ))}

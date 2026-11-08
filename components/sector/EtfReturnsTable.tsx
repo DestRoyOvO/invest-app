@@ -9,6 +9,7 @@ import { ErrorState } from "@/components/ui/States";
 import { TickNumber } from "@/components/ui/TickNumber";
 import { stockPath } from "@/lib/api-client";
 import { formatPrice } from "@/lib/format";
+import { displayName } from "@/lib/names-zh";
 import type { HistoryResponse, Quote } from "@/types/api";
 
 import { EMPTY_RETURNS, trailingReturns, type TrailingReturns } from "./etf-returns";
@@ -76,7 +77,7 @@ export function EtfReturnsTable({ quotes, history, historyError, onRetryHistory 
             </TickNumber>
           </span>
           <span className="block truncate text-micro text-fg-3" title={row.quote.name}>
-            {row.quote.name}
+            {displayName(row.quote.symbol, row.quote.name, lang)}
           </span>
         </span>
       ),
