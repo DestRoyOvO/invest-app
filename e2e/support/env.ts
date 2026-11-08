@@ -1,4 +1,4 @@
-// Settings of the end-to-end suite, in one place: ports, the app's environment and the test-only credentials.
+// Settings of the end-to-end suite, in one place: ports, the clock, the app's environment and how its server starts.
 //
 // The password and the session secret below are obvious test values. They exist only for the server the suite starts
 // (a production build on 127.0.0.1 with MARKET_DATA_SOURCE=fixtures and the mock model); never use them anywhere else.
@@ -20,6 +20,35 @@ export const TEST_SESSION_SECRET = "e2e-test-session-secret-0123456789abcdef";
 export const STORAGE_STATE = path.join(__dirname, "..", ".auth", "state.json");
 
 /**
+ * The instant the server's clock starts at, and the browser's with it (E2E_NOW): Saturday 2026-11-07 10:00 in New
+ * York, a closed market after Friday's session, with every scheduled event of the fixture data ahead. Any ISO
+ * date-time works; E2E_NOW=real runs on the real clock, where the data changes as sessions close.
+ */
+export const DEFAULT_NOW = "2026-11-07T15:00:00.000Z";
+export const E2E_NOW = process.env.E2E_NOW?.trim() || DEFAULT_NOW;
+/** The pinned start as epoch ms, or null on the real clock. */
+export const PINNED_NOW: number | null = E2E_NOW === "real" ? null : Date.parse(E2E_NOW);
+if (PINNED_NOW !== null && Number.isNaN(PINNED_NOW)) throw new Error(`E2E_NOW must be an ISO date-time or "real", got ${JSON.stringify(E2E_NOW)}`);
+
+/**
+ * How the app server starts: `next start` on the production build with two preloads, no network access beyond this
+ * machine (e2e/support/no-network.mjs) and the clock pinned at E2E_NOW (e2e/support/clock.mjs). Arguments for node,
+ * run from the repository root.
+ */
+export const APP_SERVER_ARGS = [
+  "--import",
+  "./e2e/support/no-network.mjs",
+  "--import",
+  "./e2e/support/clock.mjs",
+  "node_modules/next/dist/bin/next",
+  "start",
+  "-H",
+  HOST,
+  "-p",
+  String(APP_PORT),
+];
+
+/**
  * The app's environment. Every setting is given, blank meaning "default", so a developer's .env.local (which Next
  * loads too, without overriding variables that are already set) cannot change what the suite tests.
  */
@@ -36,4 +65,6 @@ export const APP_ENV: Record<string, string> = {
   SITE_URL: "",
   LOG_LEVEL: "warn",
   NEXT_TELEMETRY_DISABLED: "1",
+  // Read by the clock preload, not by the app.
+  E2E_NOW,
 };

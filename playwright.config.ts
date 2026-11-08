@@ -1,9 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
 
-import { APP_ENV, APP_PORT, BASE_URL, HOST, LLM_PORT, LLM_URL, STORAGE_STATE } from "./e2e/support/env";
+import { APP_ENV, APP_SERVER_ARGS, BASE_URL, HOST, LLM_PORT, LLM_URL, STORAGE_STATE } from "./e2e/support/env";
 
-// End-to-end tests against the production build, with synthetic market data (MARKET_DATA_SOURCE=fixtures) and the
-// mock model (e2e/mock-llm.mjs): no request ever reaches Yahoo or DeepSeek. docs/testing.md explains the setup.
+// End-to-end tests against the production build, with synthetic market data (MARKET_DATA_SOURCE=fixtures), the mock
+// model (e2e/mock-llm.mjs), no network access for the app beyond this machine and its clock pinned at E2E_NOW (see
+// e2e/support/env.ts): no request ever reaches Yahoo or DeepSeek, and a run sees the same data on any day.
+// docs/testing.md explains the setup.
 //
 // Locally an app already running on E2E_PORT (3100) is reused, so `npm run build && npm start -- -H 127.0.0.1 -p 3100`
 // with the environment of e2e/support/env.ts in one terminal and `npm run e2e` in another skips the build. In CI the
@@ -53,7 +55,7 @@ export default defineConfig({
       timeout: 30_000,
     },
     {
-      command: `npm run build && npm start -- -H ${HOST} -p ${APP_PORT}`,
+      command: `npm run build && node ${APP_SERVER_ARGS.join(" ")}`,
       url: `${BASE_URL}/api/health`,
       env: APP_ENV,
       reuseExistingServer: !CI,

@@ -30,6 +30,15 @@ interface QuoteOptions {
   fields?: readonly string[];
 }
 
+/**
+ * The instant every fixture answer is computed for: the process clock. The end-to-end server shifts that clock to a
+ * fixed starting instant (E2E_NOW, see e2e/support/clock.mjs), so the app's own date logic and the generator agree on
+ * one pinned time and a run sees the same data on any day.
+ */
+export function fixtureNow(): number {
+  return Date.now();
+}
+
 function pickFields(quote: RawQuote, fields: readonly string[] | undefined): RawQuote {
   if (!fields?.length) return quote;
   const kept: RawQuote = { symbol: quote.symbol, quoteType: quote.quoteType, language: quote.language, region: quote.region, triggerable: quote.triggerable };
@@ -40,7 +49,7 @@ function pickFields(quote: RawQuote, fields: readonly string[] | undefined): Raw
 /** The fixture generator behind each dispatched method, with the library's signatures and defaults. */
 export const fixtureClient = {
   async quote(query: string | readonly string[], options?: QuoteOptions): Promise<unknown> {
-    const now = Date.now();
+    const now = fixtureNow();
     const symbols = (typeof query === "string" ? query.split(",") : [...query]).map((s) => s.trim()).filter(Boolean);
     // Symbols Yahoo does not know are left out, so a single unknown symbol resolves to undefined.
     const quotes = symbols.flatMap((symbol) => {
@@ -60,26 +69,26 @@ export const fixtureClient = {
     }
   },
   async chart(symbol: string, options: FixtureChartOptions): Promise<unknown> {
-    return buildChart(symbol, options, Date.now());
+    return buildChart(symbol, options, fixtureNow());
   },
   async quoteSummary(symbol: string, options?: FixtureSummaryOptions): Promise<unknown> {
-    return buildSummary(symbol, options, Date.now());
+    return buildSummary(symbol, options, fixtureNow());
   },
   async search(query: string, options?: FixtureSearchOptions): Promise<unknown> {
-    return buildSearch(query, options, Date.now());
+    return buildSearch(query, options, fixtureNow());
   },
   async screener(scrIdOrOptions?: string | FixtureScreenerOptions, overrides?: FixtureScreenerOptions): Promise<unknown> {
-    return buildScreener(scrIdOrOptions, overrides, Date.now());
+    return buildScreener(scrIdOrOptions, overrides, fixtureNow());
   },
   async trendingSymbols(region: string, options?: { count?: number }): Promise<unknown> {
     void region;
-    return buildTrending(options, Date.now());
+    return buildTrending(options, fixtureNow());
   },
   async options(symbol: string, query?: FixtureOptionsQuery): Promise<unknown> {
-    return buildOptions(symbol, query, Date.now());
+    return buildOptions(symbol, query, fixtureNow());
   },
   async fundamentalsTimeSeries(symbol: string, options: FixtureFundamentalsOptions): Promise<unknown> {
-    return buildFundamentals(symbol, options, Date.now());
+    return buildFundamentals(symbol, options, fixtureNow());
   },
 } satisfies Record<DispatchedMethod, (...args: never[]) => Promise<unknown>>;
 

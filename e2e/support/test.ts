@@ -1,9 +1,11 @@
 import AxeBuilder from "@axe-core/playwright";
-import { test as base, expect, type BrowserContext, type Locator, type Page } from "@playwright/test";
+import { test as base, expect, type APIRequestContext, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
-import { BASE_URL } from "./env";
+import { BASE_URL, PINNED_NOW } from "./env";
 
 // The suite's `test`: Playwright's, plus
+// - the browser clock set to the server's pinned clock (E2E_NOW), so pages compute "today" and "in 3 days" for the
+//   same moment the data was made for;
 // - consoleErrors (automatic): fails a test on any console error or uncaught page error (CSP violations and failed
 //   requests show up as console errors), unless the test allows that message explicitly;
 // - axe: runs axe-core and fails on serious or critical WCAG 2.x A/AA violations, with readable details;
@@ -60,6 +62,14 @@ const PENDING_PAGE_PREFETCH = new RegExp(`status of 404 \\(Not Found\\) \\(https
 const QUIET_MS = 500;
 const SETTLE_TIMEOUT_MS = 10_000;
 
+/** The server's clock now: its /api/health time (pinned at E2E_NOW and running since the server started). */
+async function serverNow(request: APIRequestContext): Promise<number> {
+  const response = await request.get("/api/health");
+  const time = Date.parse(((await response.json()) as { time?: string }).time ?? "");
+  if (Number.isNaN(time)) throw new Error("/api/health reported no time.");
+  return time;
+}
+
 /**
  * Counts the app's data requests in flight (fetches to /api/). Route prefetches are left out: Playwright's own
  * "networkidle" waits for them too, and a prefetch of a missing page can stay open.
@@ -102,6 +112,12 @@ async function setPrefs(context: BrowserContext, prefs: { theme?: Theme; lang?: 
 }
 
 export const test = base.extend<{ consoleErrors: ConsoleErrors; axe: Axe; app: App }>({
+  context: async ({ context, request }, provide) => {
+    // The clock runs on from the server's current time, like the server's own (Playwright's clock flows in real time).
+    if (PINNED_NOW !== null) await context.clock.install({ time: await serverNow(request) });
+    await provide(context);
+  },
+
   consoleErrors: [
     async ({ page }, provide, testInfo) => {
       const seen: string[] = [];
