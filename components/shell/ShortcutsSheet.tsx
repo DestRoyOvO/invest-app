@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useSyncExternalStore, type ReactNode } from "react";
+import { Fragment, useId, useSyncExternalStore, type ReactNode } from "react";
 
 import { useT } from "@/components/providers/PrefsProvider";
 import { useUi } from "@/components/providers/UiProvider";
@@ -82,13 +82,17 @@ export function ShortcutList({ query = "", pageKeys = true, onNavigate }: { quer
   });
 
   const page = active.filter((hotkey) => hit(q, hotkey.description, hotkey.key));
+  // Each list is named by its heading, so "This page" and the others can be told apart without reading around them.
+  const id = useId();
 
   return (
     <div className="@container space-y-4">
       {globals.length > 0 ? (
         <section>
-          <h3 className="col-head pb-1">{s.global}</h3>
-          <ul className="divide-y divide-line">
+          <h3 id={`${id}-global`} className="col-head pb-1">
+            {s.global}
+          </h3>
+          <ul aria-labelledby={`${id}-global`} className="divide-y divide-line">
             {globals.map((row, i) => (
               <Row key={i} keys={row.keys}>
                 {row.text}
@@ -100,10 +104,10 @@ export function ShortcutList({ query = "", pageKeys = true, onNavigate }: { quer
 
       {go.length > 0 ? (
         <section>
-          <h3 className="col-head pb-1">
+          <h3 id={`${id}-go`} className="col-head pb-1">
             {s.goTo} <span className="normal-case">· {s.goHint}</span>
           </h3>
-          <ul className="grid grid-cols-1 gap-x-6 @md:grid-cols-2">
+          <ul aria-labelledby={`${id}-go`} className="grid grid-cols-1 gap-x-6 @md:grid-cols-2">
             {go.map((fn) => (
               <Row key={fn.labelKey} keys={<Keys keys={shortcutKeys(fn.shortcut)} />} className="border-b border-line">
                 <span className="flex min-w-0 items-center gap-2">
@@ -118,9 +122,11 @@ export function ShortcutList({ query = "", pageKeys = true, onNavigate }: { quer
 
       {pageKeys ? (
         <section>
-          <h3 className="col-head pb-1">{s.page}</h3>
+          <h3 id={`${id}-page`} className="col-head pb-1">
+            {s.page}
+          </h3>
           {page.length > 0 ? (
-            <ul className="divide-y divide-line">
+            <ul aria-labelledby={`${id}-page`} className="divide-y divide-line">
               {page.map((hotkey) => (
                 <Row key={`${hotkey.alt ? "alt+" : ""}${hotkey.key}`} keys={<Keys keys={hotkeyKeys(hotkey)} />}>
                   {hotkey.description}
