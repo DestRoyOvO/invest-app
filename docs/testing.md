@@ -17,7 +17,7 @@ The live Yahoo contract is covered separately by the canary (`scripts/smoke-yaho
 - [End-to-end tests](#end-to-end-tests)
 - [Accessibility](#accessibility)
 - [CI](#ci)
-- [After merging the wave 2 branches](#after-merging-the-wave-2-branches)
+- [Current state](#current-state)
 
 ## Unit tests
 
@@ -42,7 +42,7 @@ The fixture generator has its own tests in `lib/server/fixtures`:
 | `company.test.ts` | Sweeps every session of two years: earnings schedules report consecutive quarters, each at least 15 days after it ended, the last before now and the next after it; past dividends lie before the latest session; the quote and quoteSummary show the same trailing EPS and P/E before the open, during the session and after the close. |
 | `sessions.test.ts` | NYSE holidays against the published calendars, special closures, session times across daylight saving time, the latest completed session, the market state. |
 | `prices.test.ts` | A bar never changes once its session closed, OHLC consistency, long histories within 20 times the anchor price, first trading days of later listings, ^VIX and yields in range, funds that move with their index, intraday bars that match their daily bar, extended-hours trades that match the chart. |
-| `app-data.test.ts` | The data through the app's own mappers and pages: quotes, summaries, bars, search, news, overview, screens, calendar, signal, screener, AI context. `fetch` and `node:https` are stubbed and the file fails if any getter reached for the network. |
+| `app-data.test.ts` | The data through the app's own getters and mappers, with content checks rather than presence: quotes, summaries, bars, search, news (market, sector, company, stock), the overview and the shell's board, screens and every discover screen, the stock and ETF screeners, factor profiles, the calendar, the signal, the earnings detail (its quarters sum to the quote's trailing EPS), analyst activity, the implied move, financial statements, dividends, ownership, the 1d, 5d, ytd, 5y and max chart ranges, the Treasury curve through `getYieldCurve()`'s default fetch (its 10-year agrees with ^TNX), the world board, aligned history, profiles and every kind of AI context. `fetch` and `node:https` are stubbed and the file fails if any getter reached for the network. |
 | `treasury.test.ts` | The Treasury CSV columns, its agreement with ^TNX and ^IRX, and `treasuryFetch` choosing the fixture or the network by data source. |
 
 ## Fixture mode
@@ -60,10 +60,12 @@ server after changing `MARKET_DATA_SOURCE`.
 What the mode guarantees:
 
 - **No network access for market data.** News stories link to `https://example.com/fixtures/news/<id>`, and the article
-  reader answers those with canned text (every other link counts as unavailable). The Treasury curve has a fetch-compatible
-  stand-in (`fixtureTreasuryFetch`, picked by `treasuryFetch`), see [below](#after-merging-the-wave-2-branches). The unit
-  tests stub the network while they run the app's getters, and the end-to-end server runs with outbound connections
-  refused.
+  reader answers those with canned text (every other link counts as unavailable). The Treasury curve comes from a
+  fetch-compatible stand-in: `getYieldCurve` (`lib/server/rates.ts`) downloads through `treasuryFetch`
+  (`lib/server/fixtures/treasury.ts`) unless a `fetchImpl` is passed, and `treasuryFetch` answers from the fixture CSV
+  while `MARKET_DATA_SOURCE=fixtures` (the same curve model as ^IRX, ^FVX, ^TNX and ^TYX, newest row first, in Treasury's
+  columns) and with the global `fetch` otherwise, per call. The unit tests stub the network while they run the app's
+  getters, and the end-to-end server runs with outbound connections refused; a refusal fails the run.
 - **Library shapes.** Results look like yahoo-finance2's after its validation: Date objects, raw numbers and Yahoo's units
   (`regularMarketChangePercent` in percent in quotes, fractions in quoteSummary, epoch seconds in screener rows). The
   contract test enforces it.
@@ -153,8 +155,8 @@ npx playwright test e2e/specs/ai.spec.ts --project=desktop   # one file, one pro
   `e2e/support/no-network.mjs` (outbound connections to anything but this machine are refused and logged as
   `[no-network]`) and `e2e/support/clock.mjs` (the process clock starts at `E2E_NOW` and runs on). Its environment sets
   fixture data, `DEEPSEEK_API_KEY=test` pointing at the mock, test-only `ACCESS_PASSWORD` and `SESSION_SECRET`, a high
-  `AI_DAILY_LIMIT`, `TRUST_PROXY=1`, `LOG_LEVEL=warn` and `GIT_SHA` (the checked-out commit). Every setting is given, so a
-  local `.env.local` cannot change what is tested.
+  `AI_DAILY_LIMIT`, `TRUST_PROXY=1`, `LOG_LEVEL=warn`, `GIT_SHA` (the checked-out commit) and `E2E_NO_NETWORK_LOG`
+  (see below). Every setting is given, so a local `.env.local` cannot change what is tested.
 
 Playwright refuses to run when something already listens on either port. To keep the servers between runs:
 
@@ -164,10 +166,16 @@ E2E_REUSE=1 npm run e2e            # terminal 2, as often as needed
 ```
 
 The global setup checks the app before any test runs: `/api/health` must report fixture data, a configured AI, the
-checked-out commit and a clock that started at `E2E_NOW` (and has run for less than six hours), and the sign-in must set
-the production cookie `__Host-is_session`. A server of another branch, in Yahoo mode, a development server or one started
-without the preloads fails there with the reason. Uncommitted changes are not detected: restart `e2e:serve` after
-editing.
+checked-out commit and a clock that started at `E2E_NOW` (and has run for less than six hours), the server must keep a
+no-network log, and the sign-in must set the production cookie `__Host-is_session`. A server of another branch, in Yahoo
+mode, a development server or one started without the preloads fails there with the reason. Uncommitted changes are not
+detected: restart `e2e:serve` after editing.
+
+**No network, enforced.** Besides writing `[no-network]` lines to the server output, the preload appends each refused
+connection to `E2E_NO_NETWORK_LOG`, a temporary file per app port (`<tmp>/investseek-e2e-no-network-<port>.log`, the same
+for a server Playwright starts and one from `e2e:serve`). The global setup notes the file's length, and the teardown it
+returns, which runs after the last test while the servers are still up, fails the run when refusals were added
+meanwhile and lists them ("The app server tried to reach the network ..."). A reused server's earlier runs do not count.
 
 **The clock.** `E2E_NOW` defaults to Saturday 2026-11-07 10:00 in New York (`2026-11-07T15:00:00Z`): the market is closed
 after Friday's session, Friday's after-hours trade shows, and every scheduled event lies ahead. Any ISO date-time
@@ -192,15 +200,58 @@ works without HTTPS. A stored state is reused while the server accepts it, which
 test.use({ storageState: { cookies: [], origins: [] } });
 ```
 
+The specs:
+
+| Spec | Covers |
+|---|---|
+| `smoke.spec.ts` | The harness itself (fixture data source, shared clock, the "Fixture data" status bar), the overview heatmap (one tile per universe stock on the desktop, the sector list on phones), the AAPL quote with its chart and after-hours trade, the not-found view of an unknown symbol. |
+| `routes.spec.ts` | Every page route (below). |
+| `a11y.spec.ts` | axe on every page of the route sweep, the command bar and the chat drawer ([Accessibility](#accessibility)). |
+| `ai.spec.ts` | Every AI scenario of the mock model, Stop, Regenerate, and the signed-out note panel and API. |
+
+### The route sweep
+
+`e2e/specs/routes.spec.ts` opens every page of the app on both projects, from the cases of `e2e/support/routes.ts`:
+the overview, world markets, a sector (`/sector/technology`), the screener and discover, the watchlist, the portfolio and
+its exposure, risk and correlation tabs, the calendar, alerts, notes, the AAPL quote with each of its tabs (financials,
+earnings, analysts, dividends, ownership), a fund (`/stock/SPY` and its dividends), an index (`/stock/%5EGSPC`), a crypto
+pair (`BTC-USD`), a currency pair (`EURUSD=X`), a future (`GC=F`), a Hong Kong listing (`0700.HK`), the factor lab, the
+data page, help, `/unlock` (a public site redirects it home) and two not-found pages (`/stock/ZZZZ`, `/no-such-page`).
+A listing test fails when a `page.tsx` under `app/` matches no case, so a new page needs one.
+
+Each test starts from `SAMPLE_DATA` in the browser (a watchlist with a fund and a crypto pair, four positions with a
+fund and a stock outside the heatmap universe, and a thesis note) and checks:
+
+- the document status (200; 404 for `/no-such-page`) and, for `/unlock`, where the redirect ends;
+- no console error and no uncaught page error (the suite's collector), and no same-origin response with a status of
+  400 or more;
+- the page's main panel with its data: one web-first assertion on a region named by its panel title and something in it
+  that only data can fill (a price, a table row, a chart summary);
+- once the page has settled, no error state on screen: no visible `role="alert"` (ErrorState, the error boundary, a
+  failed AI note; Next.js's empty route announcer aside) and no stale-data banner;
+- the API routes the case names answered 200: every panel route of the AAPL quote page and its tabs (`chart`, `signal`,
+  `factors`, `news`, `earnings`, `analysts`, `implied-move`, `financials`, `dividends`, `ownership`), the fund's chart and
+  dividends, the world board, the Treasury curve, the screener, discover, sector news, history, profiles and the
+  calendar.
+
+Expected noise is allowed per case, as narrowly as possible: `/no-such-page` logs its own 404, and `/stock/ZZZZ` gets 404
+from the stock API and each panel route. A case can also accept a known app bug in the document status
+(`knownStatus`): the test passes with a `known-app-bug` annotation, and once the bug is fixed it notes
+`known-status-unused`, the cue to delete the allowance.
+
 Write specs in `e2e/specs/*.spec.ts` with the suite's `test` from `e2e/support/test.ts`:
 
 - `consoleErrors` runs in every test and fails it on a console error or an uncaught page error (CSP violations and failed
   requests show up there). Expected noise is allowed per test, as narrowly as possible and with a reason:
   `consoleErrors.allow(/status of 404 \(Not Found\) \(http:\/\/[^/]+\/api\/stock\/ZZZZ[/?)]/, "The stock API answers 404 for an unknown symbol.")`.
 - `axe.check({ known })` runs axe-core and fails on serious or critical violations (see below).
-- `app.goto(path)` opens a page and waits until no data request is in flight for half a second and fonts are loaded;
-  `app.setPrefs({ theme, lang })` stores display preferences the way the app does (cookies read on the server);
-  `app.isPhone` tells the projects apart.
+- `app.goto(path)` opens a page, waits until no data request is in flight for half a second and fonts are loaded, and
+  resolves to the document response; `app.setPrefs({ theme, lang })` stores display preferences the way the app does
+  (cookies read on the server); `app.seedStorage({ watchlist, holdings, notes })` puts data in localStorage under the
+  stores' own keys before the test's first page load (later loads keep what the page changed); `app.isPhone` tells the
+  projects apart.
+- `ROUTES`, `routeCase(path)` and `SAMPLE_DATA` (`e2e/support/routes.ts`) give a page and the check that it has loaded
+  its data.
 
 Prefer roles and accessible names (`getByRole("region", { name: "Sector heatmap" })`) over CSS classes: panels are
 regions named by their title, so specs survive layout changes.
@@ -210,21 +261,27 @@ regions named by their title, so specs survive layout changes.
 `axe.check()` scans with the tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`, `wcag22a` and `wcag22aa` and fails on
 violations of impact serious or critical, listing each rule, its help link and the selectors of the failing elements. The
 full result is attached to the test report. WCAG 2.2 is included on purpose: its target-size rule (2.5.8, 24 by 24 CSS
-pixels) is the minimum [docs/design-system.md](design-system.md) sets for controls. `e2e/specs/a11y.spec.ts` checks `/`
-and `/stock/AAPL` in the dark and light themes on both projects.
+pixels) is the minimum [docs/design-system.md](design-system.md) sets for controls.
+
+`e2e/specs/a11y.spec.ts` runs axe on every page of the route sweep except the redirect (31 pages, from the same sample
+data and after the same check that the page has loaded its data), on the open command bar (empty, then with symbol
+matches for "apple") and on the open AI chat drawer, in the dark and light themes on both projects: 132 tests.
 
 A known finding is accepted for one rule on the elements inside a locator (`known: [{ rule, within, reason }]`); every
 other rule, color contrast included, still checks those elements. A known finding that no longer occurs adds an
-`axe-known-unused` annotation to the test, the cue to delete it. These are accepted until the branches that rewrite the
-components are merged:
+`axe-known-unused` annotation to the test, the cue to delete it. Accepted now, until the branches that own the fixes are
+merged:
 
-| Page | Rule | Elements | Fixed by |
+| Page | Rule | Elements | Owner of the fix |
 |---|---|---|---|
-| `/` | label-content-name-mismatch (serious) | heatmap tiles: the aria-label puts the company and price between the symbol and the change the tile shows | wave2/overview (new heatmap) |
-| `/` | target-size (serious) | small heatmap tiles (`a[href$="QCOM"]`, `a[href$="NKE"]`) and sector headers (17px tall) | wave2/overview |
-| `/stock/AAPL` | nested-interactive (serious) | the chart container `[role="img"]` around lightweight-charts' focusable attribution link | wave2/quote (container hidden from assistive technology, no attribution link) |
+| `/sector/technology` (desktop) | label-content-name-mismatch (serious) | a heatmap tile whose change has no sign (`CSCO 0.00%` on the pinned day): the symbol and the change are two spans with no space between them, which axe reads as "CSCO0.00%" (a signed change separates them). A space between the spans fixes it. | `components/market/SectorHeatmap.tsx`, int/pages |
+| `/stock/BTC-USD` | aria-required-attr (critical) | the factor profile meter of a factor without a value (beta of a crypto pair): `Meter` keeps `role="meter"` and drops `aria-valuenow`, which the role requires | `components/ui/Meter.tsx` (int/ui), used by `components/stock/FactorProfilePanel.tsx` (int/pages) |
 
-Color contrast passes in both themes, heatmap tiles included; `npx tsx scripts/check-contrast.ts` covers the token pairs.
+The tile finding depends on the data: with another `E2E_NOW`, a tile of `/` or of another day's sector page whose price
+did not move can show it too. The three findings accepted before wave 2 (heatmap tile names and sizes on `/`, the chart
+container around a focusable link on `/stock/AAPL`) were fixed by wave2/overview and wave2/quote and are gone.
+
+Color contrast passes in both themes on every page checked; `npx tsx scripts/check-contrast.ts` covers the token pairs.
 
 ## CI
 
@@ -236,23 +293,23 @@ Color contrast passes in both themes, heatmap tiles included; `npx tsx scripts/c
   CI the suite uses the bundled Chromium, two workers and one retry. On failure the HTML report and the traces are
   uploaded as the `playwright-report` artifact.
 
-## After merging the wave 2 branches
+## Current state
 
-- Remove the merged pages from `PENDING_PAGES` in `e2e/support/test.ts` (navigation prefetches of `/markets`,
-  `/screener`, `/portfolio` and `/calendar` answer 404 until those pages exist).
-- Delete the known findings in `e2e/specs/a11y.spec.ts` once wave2/overview and wave2/quote are in (their
-  `axe-known-unused` annotations say when), and rerun axe.
-- The overview heatmap of wave2/overview renders tiles as `role="option"` named `"<symbol> <change>"` (a list on
-  phones): adjust the heatmap assertion in `e2e/specs/smoke.spec.ts`.
-- Wire the Treasury curve of wave2/overview to the fixture CSV: in `lib/server/rates.ts`, import `treasuryFetch` from
-  `./fixtures/treasury` and make it `getYieldCurve`'s default (`const fetchImpl = options.fetchImpl ?? treasuryFetch;`).
-  It answers from the fixture CSV while `MARKET_DATA_SOURCE=fixtures` and with the global `fetch` otherwise, per call. The
-  fixture curve is the same model behind ^IRX, ^FVX, ^TNX and ^TYX, newest row first, in Treasury's columns. Until this
-  is done, the end-to-end server's network guard makes the Rates panel fail (a `[no-network]` line names
-  home.treasury.gov), and the unit test below fails on its network stub.
-- Run the fixture tests (`npx vitest run lib/server/fixtures`) and the suite: the generator already covers the calls the
-  branches add (earnings and analyst modules, options chains, fundamentals time series, ownership modules, intraday and
-  monthly charts with dividend and split events). Extend `lib/server/fixtures/app-data.test.ts` with their getters
-  (`getEarningsDetail`, `getAnalystActivity`, `getImpliedMove`, `getFinancials`, `getDividends`, `getOwnership`, the
-  1d, 5d, ytd and max chart ranges, and `getYieldCurve()` without a `fetchImpl`) so their mappers stay covered and the
-  network stub proves they stay offline.
+All wave 2 branches are merged and the suite covers them: the pages the navigation links to exist (no prefetch
+allowance is left), the Treasury curve is served from the fixture CSV by default, the getters wave 2 added are covered
+in `lib/server/fixtures/app-data.test.ts` behind its network stub, every page route is swept on both projects, and axe
+runs on every page of the sweep in both themes.
+
+What is still accepted, and what removes it:
+
+| Where | What | Owner | When it is fixed |
+|---|---|---|---|
+| `/stock/ZZZZ` | The document answers 200, not 404 (a soft 404): `app/(terminal)/stock/[symbol]/page.tsx` renders `StockView`, which shows the not-found view only after `/api/stock/ZZZZ` answers 404. | int/pages | The sweep notes `known-status-unused`: delete the case's `knownStatus`. |
+| `/sector/technology` | label-content-name-mismatch on a tile with an unsigned change (table above). | int/pages | The a11y test notes `axe-known-unused`: delete the entry in `KNOWN`. |
+| `/stock/BTC-USD` | aria-required-attr on a meter without a value (table above). | int/ui | As above. |
+
+When the pending work of the other integration branches lands, nothing here should need to change: the specs do not look
+at the Earnings and Analysts panels of funds and indices (int/pages hides them), the only company name they check, Apple
+Inc., is the same short and long (int/pages prefers long names), a panel is the first region of its name (int/ui's
+DataTable may add a labelled scroll region around an overflowing table), and the command bar opens with "/" rather than
+through the phone's command field (int/shell turns it into an icon button).
