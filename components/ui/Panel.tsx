@@ -16,8 +16,9 @@ interface PanelProps {
 }
 
 /**
- * Flat terminal panel: a 36px header on --panel-2 with the panel title (and optional function code), then the body at
- * natural height. Stack panels in a `flex flex-col gap-px` column inside a `grid gap-px bg-line p-px` page grid so the
+ * Flat terminal panel: a header on --panel-2 with the panel title (and optional function code), then the body at
+ * natural height. The header is at least 36px: on phones it grows to fit a 40px control, which would otherwise cover
+ * its hairline. Stack panels in a `flex flex-col gap-px` column inside a `grid gap-px bg-line p-px` page grid so the
  * 1px gaps draw the rules (see docs/design-system.md, layout).
  */
 export function Panel({ title, code, actions, children, className, bodyClassName, footer, id }: PanelProps) {
@@ -25,7 +26,7 @@ export function Panel({ title, code, actions, children, className, bodyClassName
   return (
     <section id={id} aria-labelledby={title ? headingId : undefined} className={cn("flex min-w-0 flex-col bg-panel", className)}>
       {title !== undefined && (
-        <header className="flex h-9 shrink-0 items-center justify-between gap-3 border-b border-line bg-panel-2 px-3">
+        <header className="flex min-h-9 shrink-0 items-center justify-between gap-3 border-b border-line bg-panel-2 px-3">
           <div className="flex min-w-0 items-center gap-2">
             {code ? <PanelCode code={code} /> : null}
             <h2 id={headingId} className="panel-title truncate">
