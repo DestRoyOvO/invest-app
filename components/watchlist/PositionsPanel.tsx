@@ -261,7 +261,7 @@ export function PositionsPanel({ portfolio, quotes, loading, className }: Positi
         <EmptyState
           actions={
             <>
-              <Button size="sm" onClick={() => openPositionEditor("")} className="max-sm:h-10">
+              <Button size="sm" onClick={() => openPositionEditor("")}>
                 {p.addPosition}
               </Button>
               <Link href="/data#paste" className={LINK_BUTTON}>

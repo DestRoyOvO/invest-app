@@ -7,7 +7,7 @@ import { usePrefs } from "@/components/providers/PrefsProvider";
 import { useUi } from "@/components/providers/UiProvider";
 import { aiStateOf, type AiState } from "@/components/shell/AiStatus";
 import { Button } from "@/components/ui/Button";
-import { controlClass } from "@/components/ui/Field";
+import { Input } from "@/components/ui/Field";
 import { useAuthStatus } from "@/hooks/useApi";
 import { ApiError, postJson } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
@@ -65,7 +65,7 @@ export function AiGate({ compact = false, autoFocus = false }: { compact?: boole
         <label className="sr-only" htmlFor={inputId}>
           {t.ai.password}
         </label>
-        <input
+        <Input
           id={inputId}
           type="password"
           autoComplete="current-password"
@@ -73,9 +73,9 @@ export function AiGate({ compact = false, autoFocus = false }: { compact?: boole
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           placeholder={t.ai.password}
-          className={cn(controlClass, "h-8 min-w-0 flex-1 px-2.5 text-sm max-sm:h-10")}
+          className="flex-1"
         />
-        <Button type="submit" variant="primary" disabled={!password || busy} className="max-sm:h-10">
+        <Button type="submit" variant="primary" disabled={!password || busy}>
           {busy ? t.ai.unlocking : t.ai.unlock}
         </Button>
       </div>
@@ -98,7 +98,6 @@ export function UnlockPrompt({ className }: { className?: string }) {
       <p className="min-w-0 flex-1 text-sm text-fg-2">{t.ai.lockedPanel}</p>
       <Button
         size="sm"
-        className="max-sm:h-10"
         onClick={() => {
           closeNews();
           openChat();

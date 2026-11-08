@@ -77,7 +77,7 @@ export function MyDayPanel({ className }: { className?: string }) {
       <EmptyState
         actions={
           <>
-            <Button size="sm" onClick={openCommand} className="max-sm:h-10">
+            <Button size="sm" onClick={openCommand}>
               {m.addTickers}
             </Button>
             <Link href="/data#paste" className={LINK_BUTTON}>

@@ -76,7 +76,7 @@ export function ChatTurnView({ turn, last, busy, onCopy, onRegenerate, onRetry }
           {failureText(turn.failure, t)}
         </p>
         {last && turn.failure.kind !== "locked" ? (
-          <Button size="sm" onClick={onRetry} disabled={busy} className="max-sm:h-10" aria-label={t.ai.chat.retryQuestion}>
+          <Button size="sm" onClick={onRetry} disabled={busy} aria-label={t.ai.chat.retryQuestion}>
             <RotateCcw aria-hidden className="size-3.5" strokeWidth={1.75} />
             {t.ai.retry}
           </Button>
@@ -146,7 +146,7 @@ export function HistoryMenu({ conversations, currentId, onOpen, onClear }: Histo
 
   return (
     <div ref={wrapperRef} className="relative">
-      <Button ref={buttonRef} size="sm" variant="ghost" aria-expanded={open} aria-controls={open ? menuId : undefined} onClick={() => setOpen((value) => !value)} className="max-sm:h-10">
+      <Button ref={buttonRef} size="sm" variant="ghost" aria-expanded={open} aria-controls={open ? menuId : undefined} onClick={() => setOpen((value) => !value)}>
         <History aria-hidden className="size-3.5" strokeWidth={1.75} />
         {t.ai.chat.history}
         {conversations.length > 0 ? <span className="num text-fg-3">{conversations.length}</span> : null}
@@ -186,7 +186,6 @@ export function HistoryMenu({ conversations, currentId, onOpen, onClear }: Histo
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="max-sm:h-10"
                   onClick={() => {
                     onClear();
                     close();

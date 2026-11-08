@@ -183,7 +183,7 @@ export function OwnershipTab({ symbol }: { symbol: string }) {
         footer={
           trades.length > COLLAPSED_TRADES ? (
             <div className="border-t border-line px-1.5 py-1">
-              <Button size="sm" variant="ghost" aria-expanded={allTrades} onClick={() => setAllTrades((v) => !v)} className="max-sm:h-10">
+              <Button size="sm" variant="ghost" aria-expanded={allTrades} onClick={() => setAllTrades((v) => !v)}>
                 {allTrades ? t.common.less : tpl(o.showAll, { n: trades.length })}
               </Button>
             </div>

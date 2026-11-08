@@ -130,7 +130,7 @@ export function FinancialsPanel({ symbol, quoteCurrency, className }: { symbol: 
     >
       <StaleBanner show={Boolean(error && data)} since={data?.asOf} />
       <div className="border-b border-line px-3 py-2 sm:hidden">
-        <Segmented label={r.period} hideLabel value={period} onChange={setPeriod} options={periodOptions} className="[&_[role=radio]]:h-10" />
+        <Segmented label={r.period} hideLabel value={period} onChange={setPeriod} options={periodOptions} />
       </div>
       {currency ? (
         <p className={cn("border-b border-line px-3 py-1.5 text-xs", quoteCurrency && currency !== quoteCurrency ? "text-info" : "text-fg-3")}>

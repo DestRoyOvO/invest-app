@@ -332,7 +332,7 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
                 />
               </span>
               <span className="lg:hidden">
-                <Button size="sm" onClick={() => setSheetOpen(true)} aria-haspopup="dialog" className="max-sm:h-10">
+                <Button size="sm" onClick={() => setSheetOpen(true)} aria-haspopup="dialog">
                   <SlidersHorizontal aria-hidden className="size-3.5" strokeWidth={1.75} />
                   {activeCount > 0 ? tpl(t.screener.filters.buttonCount, { n: activeCount }) : t.screener.filters.button}
                 </Button>
@@ -351,7 +351,7 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
                 { value: "stocks", label: tpl(t.screener.universe.stocks, { n: universeSymbols("stocks").length }) },
                 { value: "etfs", label: tpl(t.screener.universe.etfs, { n: universeSymbols("etfs").length }) },
               ]}
-              className="w-full sm:w-44 [&_[role=radio]]:max-sm:h-10"
+              className="w-full sm:w-44"
             />
             <ul ref={presetsRef} aria-label={t.screener.presets.label} className="no-scrollbar flex w-full min-w-0 gap-1.5 overflow-x-auto sm:w-auto sm:flex-1 sm:flex-wrap sm:overflow-visible">
               {presetsFor(screen.universe).map((p) => {
@@ -392,7 +392,7 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
                   </button>
                 );
               })}
-              <Button variant="ghost" size="sm" onClick={() => clearFilters(firstPreset)} className="max-sm:h-10">
+              <Button variant="ghost" size="sm" onClick={() => clearFilters(firstPreset)}>
                 {t.screener.filters.clear}
               </Button>
             </div>
@@ -405,7 +405,6 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
                 value={screen.columns}
                 onChange={setColumns}
                 options={COLUMN_SET_KEYS.map((key) => ({ value: key, label: t.screener.columnSets[key] }))}
-                className="[&_[role=tab]]:max-sm:h-10"
               />
             </div>
             {tableNotes ? (
@@ -439,10 +438,10 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
               <span className="num text-xs text-fg" aria-live="polite">
                 {tpl(t.screener.selection.selected, { n: selectedVisible.length })}
               </span>
-              <Button variant="primary" size="sm" onClick={addSelected} className="max-sm:h-10">
+              <Button variant="primary" size="sm" onClick={addSelected}>
                 {t.screener.selection.add}
               </Button>
-              <Button variant="ghost" size="sm" onClick={clearSelection} className="max-sm:h-10">
+              <Button variant="ghost" size="sm" onClick={clearSelection}>
                 {t.screener.selection.clear}
               </Button>
             </div>
@@ -478,7 +477,7 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
                   <EmptyState
                     actions={
                       activeCount > 0 ? (
-                        <Button size="sm" onClick={() => clearFilters(firstPreset)} className="max-sm:h-10">
+                        <Button size="sm" onClick={() => clearFilters(firstPreset)}>
                           {t.screener.filters.clear}
                         </Button>
                       ) : undefined
@@ -500,10 +499,10 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
         side="auto"
         footer={
           <div className="flex items-center justify-between gap-2 px-3 py-2">
-            <Button variant="ghost" onClick={() => clearFilters(() => showResultsRef.current)} disabled={activeCount === 0} className="max-sm:h-10">
+            <Button variant="ghost" onClick={() => clearFilters(() => showResultsRef.current)} disabled={activeCount === 0}>
               {t.screener.filters.clear}
             </Button>
-            <Button ref={showResultsRef} variant="primary" onClick={() => setSheetOpen(false)} className="max-sm:h-10">
+            <Button ref={showResultsRef} variant="primary" onClick={() => setSheetOpen(false)}>
               {tpl(t.screener.filters.showResults, { n: snapshot ? matches.length : universeSize })}
             </Button>
           </div>

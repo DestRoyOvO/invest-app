@@ -48,7 +48,6 @@ export function AddSymbolForm({ onAdd, inputId = "watchlist-add" }: { onAdd: (sy
           placeholder={t.watchlist.addPlaceholder}
           aria-invalid={message ? true : undefined}
           aria-describedby={message ? `${inputId}-error` : undefined}
-          inputClassName="max-sm:h-10"
         />
         {message ? (
           <p id={`${inputId}-error`} role="alert" className="mt-1 text-xs text-danger">
@@ -56,7 +55,7 @@ export function AddSymbolForm({ onAdd, inputId = "watchlist-add" }: { onAdd: (sy
           </p>
         ) : null}
       </div>
-      <Button type="submit" variant="primary" disabled={!value.trim()} className="max-sm:h-10">
+      <Button type="submit" variant="primary" disabled={!value.trim()}>
         <Plus aria-hidden className="size-4" strokeWidth={1.75} />
         {t.common.add}
       </Button>

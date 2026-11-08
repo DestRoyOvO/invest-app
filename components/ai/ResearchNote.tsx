@@ -104,7 +104,7 @@ export function ResearchNoteBody({ request, ready = true, className, gate = "for
       <div className={cn("flex flex-col items-start gap-2.5 px-3 py-3", className)}>
         <p className="text-sm text-fg-2">{t.ai.idle}</p>
         {outline.length > 0 ? <p className="text-xs text-fg-3">{tpl(t.ai.covers, { sections: outline.join(" · ") })}</p> : null}
-        <Button size="sm" onClick={() => void start(false)} disabled={disabled} className="max-sm:h-10">
+        <Button size="sm" onClick={() => void start(false)} disabled={disabled}>
           <AiChip tone="current" />
           {t.ai.generate}
         </Button>
@@ -142,7 +142,7 @@ export function ResearchNoteBody({ request, ready = true, className, gate = "for
             <p role="alert" className="min-w-0 flex-1 text-sm text-warn">
               {failureText(failure, t)}
             </p>
-            <Button size="sm" onClick={() => void start(false)} disabled={disabled} className="max-sm:h-10">
+            <Button size="sm" onClick={() => void start(false)} disabled={disabled}>
               <RotateCcw aria-hidden className="size-3.5" strokeWidth={1.75} />
               {t.ai.retry}
             </Button>
@@ -155,19 +155,19 @@ export function ResearchNoteBody({ request, ready = true, className, gate = "for
       {text || streaming ? (
         <div className="flex flex-wrap items-center gap-2 border-t border-line px-3 py-2">
           {streaming ? (
-            <Button size="sm" onClick={stop} className="max-sm:h-10">
+            <Button size="sm" onClick={stop}>
               <Square aria-hidden className="size-3" strokeWidth={2} />
               {t.ai.stop}
             </Button>
           ) : (
-            <Button size="sm" onClick={() => void start(true)} disabled={disabled} className="max-sm:h-10">
+            <Button size="sm" onClick={() => void start(true)} disabled={disabled}>
               <RefreshCw aria-hidden className="size-3.5" strokeWidth={1.75} />
               {t.ai.regenerate}
             </Button>
           )}
           {text && !streaming ? <IconButton size="sm" label={t.ai.copy} icon={<Copy className="size-3.5" strokeWidth={1.75} />} onClick={() => void copy()} /> : null}
           {symbol && text && !streaming ? (
-            <Button size="sm" variant="ghost" onClick={save} disabled={savedText === text} className="max-sm:h-10">
+            <Button size="sm" variant="ghost" onClick={save} disabled={savedText === text}>
               <NotebookPen aria-hidden className="size-3.5" strokeWidth={1.75} />
               {savedText === text ? t.ai.saved : t.ai.saveToNotes}
             </Button>

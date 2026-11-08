@@ -154,7 +154,6 @@ function EditorDrawer({ initial, onClose }: { initial: string; onClose: () => vo
               }}
               onPick={choose}
               placeholder={t.portfolio.symbolPlaceholder}
-              inputClassName="max-sm:h-10"
               inline
             />
           </Field>
@@ -174,17 +173,15 @@ function EditorDrawer({ initial, onClose }: { initial: string; onClose: () => vo
                     { value: "add", label: t.portfolio.modeAdd },
                     { value: "reduce", label: t.portfolio.modeReduce },
                   ]}
-                  // 32px options on desktop, 40px touch targets on phones.
-                  className="[&_[role=radio]]:max-sm:h-10"
                 />
               </div>
             ) : null}
             <div className="grid grid-cols-2 gap-3">
               <Field label={labels[0]} error={sharesError}>
-                <Input ref={sharesRef} data-autofocus={picking ? undefined : true} inputMode="decimal" value={shares} onChange={(e) => setShares(e.target.value)} className="num max-sm:h-10" />
+                <Input ref={sharesRef} data-autofocus={picking ? undefined : true} inputMode="decimal" value={shares} onChange={(e) => setShares(e.target.value)} className="num" />
               </Field>
               <Field label={labels[1]} error={priceError}>
-                <Input ref={priceRef} inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} className="num max-sm:h-10" />
+                <Input ref={priceRef} inputMode="decimal" value={price} onChange={(e) => setPrice(e.target.value)} className="num" />
               </Field>
             </div>
 
@@ -231,14 +228,14 @@ function EditorDrawer({ initial, onClose }: { initial: string; onClose: () => vo
         ) : null}
 
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="submit" variant="primary" className="max-sm:h-10">
+          <Button type="submit" variant="primary">
             {result.closes ? t.portfolio.closePosition : t.portfolio.save}
           </Button>
-          <Button onClick={onClose} className="max-sm:h-10">
+          <Button onClick={onClose}>
             {t.common.cancel}
           </Button>
           {current ? (
-            <Button variant="ghost" onClick={remove} className="ml-auto max-sm:h-10">
+            <Button variant="ghost" onClick={remove} className="ml-auto">
               {t.portfolio.clear}
             </Button>
           ) : null}

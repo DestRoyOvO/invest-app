@@ -170,20 +170,19 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, 
             onClick={onToggleWatchlist}
             aria-pressed={inWatchlist}
             title={tpl(a.withKey, { label: inWatchlist ? t.stock.inWatchlist : t.stock.addToWatchlist, key: "A" })}
-            className="max-sm:h-10"
           >
             <Star aria-hidden className={inWatchlist ? "size-3.5 text-accent" : "size-3.5"} strokeWidth={1.75} fill={inWatchlist ? "currentColor" : "none"} />
             {inWatchlist ? t.stock.inWatchlist : t.stock.addToWatchlist}
           </Button>
-          <Button size="sm" onClick={() => openPositionEditor(symbol)} title={tpl(a.withKey, { label: position ? a.editPosition : a.addPosition, key: "P" })} className="max-sm:h-10">
+          <Button size="sm" onClick={() => openPositionEditor(symbol)} title={tpl(a.withKey, { label: position ? a.editPosition : a.addPosition, key: "P" })}>
             {position ? <PencilLine aria-hidden className="size-3.5" strokeWidth={1.75} /> : <Plus aria-hidden className="size-3.5" strokeWidth={1.75} />}
             {position ? a.editPosition : a.addPosition}
           </Button>
-          <Button size="sm" onClick={() => openAlertEditor(symbol)} title={tpl(a.withKey, { label: a.setAlert, key: "!" })} className="max-sm:h-10">
+          <Button size="sm" onClick={() => openAlertEditor(symbol)} title={tpl(a.withKey, { label: a.setAlert, key: "!" })}>
             <Bell aria-hidden className="size-3.5" strokeWidth={1.75} />
             {a.setAlert}
           </Button>
-          <Button size="sm" onClick={why} title={tpl(a.withKey, { label: a.whyMoving, key: "W" })} className="max-sm:h-10">
+          <Button size="sm" onClick={why} title={tpl(a.withKey, { label: a.whyMoving, key: "W" })}>
             <AiChip tone="current" />
             {a.whyMoving}
           </Button>

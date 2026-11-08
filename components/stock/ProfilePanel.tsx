@@ -59,7 +59,7 @@ export function ProfilePanel({ profile, className }: { profile: StockProfile; cl
           <p lang="en" className={expanded ? "text-sm leading-relaxed text-fg-2" : "line-clamp-5 text-sm leading-relaxed text-fg-2"}>
             {profile.summary}
           </p>
-          <Button size="sm" variant="ghost" className="mt-1 -ml-2 max-sm:h-10" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
+          <Button size="sm" variant="ghost" className="mt-1 -ml-2" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
             {expanded ? t.common.less : t.common.more}
           </Button>
         </div>

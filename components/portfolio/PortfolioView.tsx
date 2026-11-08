@@ -94,7 +94,7 @@ export function PortfolioView() {
           <EmptyState
             actions={
               <>
-                <Button size="sm" variant="primary" onClick={() => openPositionEditor("")} className="max-sm:h-10">
+                <Button size="sm" variant="primary" onClick={() => openPositionEditor("")}>
                   {t.portfolio.addPosition}
                 </Button>
                 <Link href="/data#paste" className={LINK_BUTTON}>
@@ -196,7 +196,7 @@ export function PortfolioView() {
           <div role="status" className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line bg-panel-2 px-3 py-1.5 text-xs text-warn">
             <AlertTriangle aria-hidden className="size-3.5 shrink-0" strokeWidth={1.75} />
             <span>{t.port.historyDegraded}</span>
-            <Button size="sm" onClick={() => void history.mutate()} className="max-sm:h-10">
+            <Button size="sm" onClick={() => void history.mutate()}>
               {t.common.retry}
             </Button>
           </div>

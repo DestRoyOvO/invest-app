@@ -72,7 +72,7 @@ function BoundInput({ metric, value, label, placeholder, onCommit, resetToken }:
         value={text}
         onChange={(event) => change(event.target.value)}
         onBlur={() => setInvalid(parseNumberInput(text).kind === "invalid")}
-        className="num max-sm:h-10 max-sm:text-sm"
+        className="num max-sm:text-sm"
       />
       {invalid ? (
         <p id={errorId} className="text-xs text-danger">

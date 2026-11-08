@@ -26,9 +26,8 @@ import type { SectorKey } from "@/types/api";
 
 import { RangeField } from "./RangeField";
 
-// The small controls of a desktop rail, grown to 40px touch targets in the phone sheet.
-const PHONE_SEGMENTED = "[&_[role=radio]]:max-sm:h-10";
-const PHONE_SELECT = "w-full [&>select]:max-sm:h-10 [&>select]:max-sm:text-sm";
+// The rail's small selects keep their 40px phone target (built into Select) and take 14px text in the phone sheet.
+const PHONE_SELECT = "w-full [&>select]:max-sm:text-sm";
 
 type RangeGroupKey = "size" | "performance" | "risk" | "analysts" | "factors";
 
@@ -148,7 +147,6 @@ export function FilterRail({ screen, onFiltersChange, sectorCounts, resetToken }
           value={filters.ma50 ?? "any"}
           options={trendOptions}
           onChange={(value) => update({ ma50: toTrend(value) })}
-          className={PHONE_SEGMENTED}
         />
         <Segmented
           label={t.screener.filters.ma200}
@@ -156,7 +154,6 @@ export function FilterRail({ screen, onFiltersChange, sectorCounts, resetToken }
           value={filters.ma200 ?? "any"}
           options={trendOptions}
           onChange={(value) => update({ ma200: toTrend(value) })}
-          className={PHONE_SEGMENTED}
         />
       </Section>
 

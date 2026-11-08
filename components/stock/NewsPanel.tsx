@@ -35,7 +35,7 @@ export function NewsPanel({ symbol, ready = true, className }: { symbol: string;
       )}
       {items.length > COLLAPSED ? (
         <div className="border-t border-line px-1.5 py-1">
-          <Button size="sm" variant="ghost" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)} className="max-sm:h-10">
+          <Button size="sm" variant="ghost" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}>
             {expanded ? t.common.less : tpl(t.stock.newsMore, { n: items.length })}
           </Button>
         </div>

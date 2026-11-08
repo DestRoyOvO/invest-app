@@ -83,7 +83,7 @@ export function EarningsPanel({ symbol, className }: { symbol: string; className
       footer={
         data ? (
           <div className="border-t border-line px-2 py-1.5">
-            <Button size="sm" className="max-sm:h-10" variant="ghost" onClick={() => openChat({ text: tpl(e.askText, { symbol }), intent: { kind: "earnings", symbol } })}>
+            <Button size="sm" variant="ghost" onClick={() => openChat({ text: tpl(e.askText, { symbol }), intent: { kind: "earnings", symbol } })}>
               <AiChip tone="current" />
               {e.ask}
             </Button>

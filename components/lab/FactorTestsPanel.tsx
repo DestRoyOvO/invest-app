@@ -73,7 +73,7 @@ export function HorizonPicker({
       <span aria-hidden className="col-head">
         {label}
       </span>
-      <Segmented label={name} hideLabel size="sm" value={value} options={options} onChange={onChange} className="w-48 max-sm:[&_[role=radio]]:h-10" />
+      <Segmented label={name} hideLabel size="sm" value={value} options={options} onChange={onChange} className="w-48" />
     </div>
   );
 }

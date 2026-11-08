@@ -81,7 +81,7 @@ export function MoversPanel({ movers, loading, className }: { movers: MarketOver
         { value: "us", label: t.markets.movers.us },
         { value: "universe", label: tpl(t.markets.movers.universe, { n: universeCount }) },
       ]}
-      className={phone ? "[&_[role=radio]]:h-10" : "w-44"}
+      className={phone ? undefined : "w-44"}
     />
   );
 
@@ -97,7 +97,7 @@ export function MoversPanel({ movers, loading, className }: { movers: MarketOver
           { value: "losers", label: t.market.losers },
           { value: "mostActive", label: t.market.mostActive },
         ]}
-        className="border-b border-line px-1 max-sm:[&_[role=tab]]:h-10"
+        className="border-b border-line px-1"
       />
       <StaleBanner show={scope === "us" && Boolean(discover.error && usData)} since={usData?.asOf} />
       {failed ? (
