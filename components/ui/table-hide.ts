@@ -7,9 +7,10 @@ export type Breakpoint = "sm" | "md" | "lg" | "xl";
 
 /**
  * Container sizes of Tailwind's `@` variants: 3xs 16rem, 2xs 18rem, xs 20rem, sm 24rem, md 28rem, lg 32rem, xl 36rem,
- * 2xl 42rem. The 22rem right-hand column at xl is a box of about 22 to 25.5rem (356px at 1280, 410px at 1440).
+ * 2xl 42rem, 3xl 48rem. The 22rem right-hand column at xl is a box of about 22 to 25.5rem (356px at 1280, 410px at
+ * 1440); the wide left-hand column at xl is about 44.5 to 51rem (713px at 1280, 819px at 1440).
  */
-export type ContainerBreakpoint = "3xs" | "2xs" | "xs" | "sm" | "md" | "lg" | "xl" | "2xl";
+export type ContainerBreakpoint = "3xs" | "2xs" | "xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "3xl";
 
 const VIEWPORT_CELL: Record<Breakpoint, string> = {
   sm: "hidden sm:table-cell",
@@ -32,6 +33,7 @@ const CONTAINER_CELL: Record<ContainerBreakpoint, string> = {
   lg: "hidden @lg:table-cell",
   xl: "hidden @xl:table-cell",
   "2xl": "hidden @2xl:table-cell",
+  "3xl": "hidden @3xl:table-cell",
 };
 const CONTAINER_COL: Record<ContainerBreakpoint, string> = {
   "3xs": "hidden @3xs:table-column",
@@ -42,6 +44,7 @@ const CONTAINER_COL: Record<ContainerBreakpoint, string> = {
   lg: "hidden @lg:table-column",
   xl: "hidden @xl:table-column",
   "2xl": "hidden @2xl:table-column",
+  "3xl": "hidden @3xl:table-column",
 };
 
 export interface ColumnHiding {

@@ -239,7 +239,7 @@ export function chineseNameOf(symbol: string): string | undefined {
  * The name to show for a company, fund, index or other instrument: in Chinese its Chinese name when one is known,
  * otherwise the English name from the data (Yahoo's). Null when there is no name at all. Keep the English name
  * reachable beside a Chinese one (a title attribute or a second line), and keep English names in data the app sends on
- * (the AI context, CSV files).
+ * (the AI context, the data page's CSV files). The screener's CSV is a copy of its table, so it shows this name.
  */
 export function displayName(symbol: string | null | undefined, englishName: string | null | undefined, lang: Lang): string | null {
   const chinese = lang === "zh" && symbol ? BY_SYMBOL.get(symbol) : undefined;

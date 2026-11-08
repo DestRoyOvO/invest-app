@@ -28,6 +28,15 @@ const nameKey = (name: string) => name.toLowerCase().replace(/\s+/g, "");
 /** The company behind a symbol: its first listing for one listed twice, the symbol itself otherwise. */
 const companyOf = (symbol: string) => SAME_COMPANY.find((listings) => listings.includes(symbol))?.[0] ?? symbol;
 
+/** Board labels compare as names do, without the suffix 指数: "标普 500" is a short form of 标普500指数. */
+const boardKey = (name: string) => nameKey(name).replace(/指数$/, "");
+
+/** The Latin words of a name, lower-cased. */
+const latinWords = (name: string): string[] => name.toLowerCase().match(/[a-z]+/g) ?? [];
+
+/** Every instrument on the market board (ticker strip, overview) and the world board (/markets). */
+const BOARD = [...MARKET_BOARD, ...WORLD_BOARD];
+
 describe("Chinese names", () => {
   it("lists valid, unique symbols", () => {
     const symbols = CHINESE_NAMES.map((entry) => entry.symbol);
@@ -52,6 +61,33 @@ describe("Chinese names", () => {
     const shared = [...owners].filter(([, companies]) => companies.size > 1).map(([name, companies]) => `${name}: ${[...companies].join(", ")}`);
     expect(shared).toEqual([]);
     for (const listings of SAME_COMPANY) expect(new Set(listings.map(chineseNameOf)).size, listings.join(", ")).toBe(1);
+  });
+
+  // The boards show a short label and the quote page and its tab the name of this table, so both must be one name: a
+  // label may drop spaces and the suffix 指数 (标普 500) or be an alias that shortens the name (澳洲标普 200 for
+  // 澳大利亚标普200指数), but it adds no word of another name (印度 Sensex, an alias readers search for, is not a
+  // short form of 孟买敏感30指数).
+  it("labels every board instrument with a short form of its Chinese name", () => {
+    for (const item of BOARD) {
+      const names = CHINESE_NAMES.find((entry) => entry.symbol === item.symbol)?.names ?? [];
+      const context = `${item.symbol} ${item.label.zh}`;
+      expect(names.map(boardKey), context).toContain(boardKey(item.label.zh));
+      expect(
+        latinWords(item.label.zh).filter((word) => !latinWords(names[0] ?? "").includes(word)),
+        context,
+      ).toEqual([]);
+    }
+    for (const item of MARKET_BOARD) {
+      const world = WORLD_BOARD.find((entry) => entry.symbol === item.symbol);
+      if (world) expect(world.label.zh, item.symbol).toBe(item.label.zh);
+    }
+  });
+
+  it("finds a board instrument by its label, and still by the aliases", () => {
+    for (const item of BOARD) expect(searchChineseNames(item.label.zh)[0]?.symbol, item.label.zh).toBe(item.symbol);
+    expect(searchChineseNames("澳大利亚标普200")[0]).toEqual({ symbol: "^AXJO", name: "澳大利亚标普200指数" });
+    expect(searchChineseNames("印度 Sensex")[0]).toEqual({ symbol: "^BSESN", name: "孟买敏感30指数" });
+    expect(searchChineseNames("sensex")[0]?.symbol).toBe("^BSESN");
   });
 
   it("names a Hong Kong listing as the company, and finds the US listing first", () => {
