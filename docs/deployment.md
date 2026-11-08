@@ -33,8 +33,8 @@ container can be rebuilt at any time; the only file to back up is `.env.local`.
 ## Docker
 
 Requirements: Docker Engine with Compose v2.24 or newer. The image is built from source on your machine. The build
-downloads the IBM Plex fonts from Google Fonts (through `next/font`), so it needs network access; running the image
-does not.
+downloads the IBM Plex fonts from Google Fonts (through `next/font`), so it needs network access; the running image
+serves the fonts itself and only needs outbound HTTPS to Yahoo, the Treasury, DeepSeek and the allowlisted news sites.
 
 ```bash
 git clone https://github.com/DestRoyOvO/invest-app.git
