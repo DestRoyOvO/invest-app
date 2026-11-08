@@ -7,7 +7,7 @@ import { HOLDINGS_STORAGE_KEY } from "@/hooks/useHoldings";
 import { WATCHLIST_STORAGE_KEY } from "@/hooks/useWatchlist";
 import { NOTES_STORAGE_KEY, type NotesBook } from "@/lib/notes";
 
-import { BASE_URL, PINNED_NOW } from "./env";
+import { AT_DEFAULT_NOW, BASE_URL, PINNED_NOW } from "./env";
 
 // The suite's `test`: Playwright's, plus
 // - its own client address per test (X-Forwarded-For; the server trusts it), so per-client limits such as the 20 AI
@@ -38,6 +38,11 @@ export interface KnownViolation {
   within: Locator;
   /** Why it is accepted for now and what removes it. */
   reason: string;
+  /**
+   * The finding shows only with some data (a tile whose price did not move, say), so at another E2E_NOW it can be
+   * absent while the bug remains: its absence is reported as "axe-known-unused" only at the default E2E_NOW.
+   */
+  dataDependent?: boolean;
 }
 
 export interface A11yOptions {
@@ -255,7 +260,8 @@ export const test = base.extend<{ consoleErrors: ConsoleErrors; axe: Axe; app: A
           .filter((violation) => violation.nodes.length > 0);
 
         const used = new Set(targets.filter((_, i) => covered[i]).map(({ rule }) => rule));
-        for (const finding of known.filter((entry) => !used.has(entry.rule))) {
+        const unused = known.filter((entry) => !used.has(entry.rule) && (!entry.dataDependent || AT_DEFAULT_NOW));
+        for (const finding of unused) {
           testInfo.annotations.push({ type: "axe-known-unused", description: `${finding.rule} no longer occurs on ${page.url()}: remove it (${finding.reason})` });
         }
         if (blocking.length > 0) throw new Error(axeReport(page.url(), blocking));

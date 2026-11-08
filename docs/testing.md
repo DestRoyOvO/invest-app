@@ -277,16 +277,17 @@ matches for "apple") and on the open AI chat drawer, in the dark and light theme
 
 A known finding is accepted for one rule on the elements inside a locator (`known: [{ rule, within, reason }]`); every
 other rule, color contrast included, still checks those elements. A known finding that no longer occurs adds an
-`axe-known-unused` annotation to the test, the cue to delete it. Accepted now, until the branches that own the fixes are
-merged:
+`axe-known-unused` annotation to the test, the cue to delete it. A finding that only some data shows is marked
+`dataDependent`: at another `E2E_NOW` it can be absent while the bug remains, so its absence is only reported at the
+default `E2E_NOW`. Accepted now, until the branches that own the fixes are merged:
 
 | Page | Rule | Elements | Owner of the fix |
 |---|---|---|---|
 | `/sector/technology` (desktop) | label-content-name-mismatch (serious) | a heatmap tile whose change has no sign (`CSCO 0.00%` on the pinned day): the symbol and the change are two spans with no space between them, which axe reads as "CSCO0.00%" (a signed change separates them). A space between the spans fixes it. | `components/market/SectorHeatmap.tsx`, int/pages |
 | `/stock/BTC-USD` | aria-required-attr (critical) | the factor profile meter of a factor without a value (beta of a crypto pair): `Meter` keeps `role="meter"` and drops `aria-valuenow`, which the role requires | `components/ui/Meter.tsx` (int/ui), used by `components/stock/FactorProfilePanel.tsx` (int/pages) |
 
-The tile finding depends on the data: with another `E2E_NOW`, a tile of `/` or of another day's sector page whose price
-did not move can show it too. The three findings accepted before wave 2 (heatmap tile names and sizes on `/`, the chart
+The tile finding depends on the data (`dataDependent`): with another `E2E_NOW`, a tile of `/` or of another day's sector
+page whose price did not move can show it too, and the CSCO tile can be signed. The three findings accepted before wave 2 (heatmap tile names and sizes on `/`, the chart
 container around a focusable link on `/stock/AAPL`) were fixed by wave2/overview and wave2/quote and are gone.
 
 Color contrast passes in both themes on every page checked; `npx tsx scripts/check-contrast.ts` covers the token pairs.
@@ -313,7 +314,7 @@ What is still accepted, and what removes it:
 | Where | What | Owner | When it is fixed |
 |---|---|---|---|
 | `/stock/ZZZZ` | The document answers 200, not 404 (a soft 404): `app/(terminal)/stock/[symbol]/page.tsx` renders `StockView`, which shows the not-found view only after `/api/stock/ZZZZ` answers 404. | int/pages | The sweep notes `known-status-unused`: delete the case's `knownStatus`. |
-| `/sector/technology` | label-content-name-mismatch on a tile with an unsigned change (table above). | int/pages | The a11y test notes `axe-known-unused`: delete the entry in `KNOWN`. |
+| `/sector/technology` | label-content-name-mismatch on a tile with an unsigned change (table above). | int/pages | The a11y test notes `axe-known-unused` at the default `E2E_NOW`: delete the entry in `KNOWN`. |
 | `/stock/BTC-USD` | aria-required-attr on a meter without a value (table above). | int/ui | As above. |
 
 When the pending work of the other integration branches lands, nothing here should need to change: the specs do not look

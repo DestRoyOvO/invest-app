@@ -1,6 +1,6 @@
 import { getSector, SECTORS, UNIVERSE_STOCKS } from "@/lib/universe";
 
-import { DEFAULT_NOW, E2E_NOW, PINNED_NOW } from "../support/env";
+import { AT_DEFAULT_NOW, PINNED_NOW } from "../support/env";
 import { expectedNoise, routeCase } from "../support/routes";
 import { expect, test } from "../support/test";
 
@@ -71,7 +71,7 @@ test.describe("quote page", () => {
   });
 
   test("shows Friday's after-hours trade on the pinned Saturday", async ({ page, app }) => {
-    test.skip(E2E_NOW !== DEFAULT_NOW, "Written for the default E2E_NOW, a Saturday; at other times the extended session differs.");
+    test.skip(!AT_DEFAULT_NOW, "Written for the default E2E_NOW, a Saturday; at other times the extended session differs.");
     await app.goto("/stock/AAPL");
     const header = page.getByRole("region", { name: "AAPL", exact: true });
     await expect(header.getByText("After hours", { exact: true })).toBeVisible();

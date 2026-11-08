@@ -38,6 +38,8 @@ export const E2E_NOW = process.env.E2E_NOW?.trim() || DEFAULT_NOW;
 /** The pinned start as epoch ms, or null on the real clock. */
 export const PINNED_NOW: number | null = E2E_NOW === "real" ? null : Date.parse(E2E_NOW);
 if (PINNED_NOW !== null && Number.isNaN(PINNED_NOW)) throw new Error(`E2E_NOW must be an ISO date-time or "real", got ${JSON.stringify(E2E_NOW)}`);
+/** True when the clock starts at DEFAULT_NOW (however E2E_NOW spells it), the instant the data-dependent specs were written for. */
+export const AT_DEFAULT_NOW = PINNED_NOW === Date.parse(DEFAULT_NOW);
 
 /**
  * Reuse servers already listening on the two ports (E2E_REUSE=1, for example from `npm run e2e:serve`) instead of

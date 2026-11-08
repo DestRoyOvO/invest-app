@@ -8,7 +8,8 @@ import { expect, test, type KnownViolation, type Page, type Theme } from "../sup
 //
 // A known finding is accepted for its rule and its elements only (every other rule, color contrast included, still
 // checks those elements), with the reason and the file and branch that own the fix; docs/testing.md lists them. A known
-// finding that no longer occurs is reported as an "axe-known-unused" annotation, the cue to remove it.
+// finding that no longer occurs is reported as an "axe-known-unused" annotation, the cue to remove it; for a finding
+// that depends on the day's data (dataDependent), only at the default E2E_NOW, where it was seen.
 
 const KNOWN: Readonly<Record<string, (page: Page, phone: boolean) => KnownViolation[]>> = {
   // On phones the tiles of this treemap are too small to show their change.
@@ -21,6 +22,9 @@ const KNOWN: Readonly<Record<string, (page: Page, phone: boolean) => KnownViolat
             within: page.getByRole("region", { name: "Sector heatmap" }).getByRole("option", { name: /^\S+ \d+\.\d{2}%$/ }),
             reason:
               'a heatmap tile whose change has no sign ("CSCO 0.00%") shows the symbol and the change in two spans without a space between them, which axe reads as "CSCO0.00%"; components/market/SectorHeatmap.tsx (int/pages)',
+            // Only a tile whose price did not move shows it: CSCO on the default instant's Friday, other tiles (or none)
+            // on other days, while the bug stays.
+            dataDependent: true,
           },
         ],
   "/stock/BTC-USD": (page) => [
