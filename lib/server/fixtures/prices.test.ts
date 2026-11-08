@@ -1,0 +1,148 @@
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+
+import { buildChart } from "./chart";
+import { aggregateRows, ANCHOR_DAY, dailyRows, intradayRows } from "./prices";
+import { buildQuote } from "./quote";
+import { securityOf, type Security } from "./securities";
+import { latestCompletedSession, parseDayKey, PROFILES } from "./sessions";
+
+const security = (symbol: string): Security => {
+  const found = securityOf(symbol);
+  if (!found) throw new Error(symbol);
+  return found;
+};
+
+const DAY = 86_400_000;
+const SATURDAY = Date.parse("2026-11-07T15:00:00Z");
+const WEEK_LATER = SATURDAY + 7 * DAY;
+
+describe("daily bars", () => {
+  it("are the same on every call and for every window that contains the day", () => {
+    const aapl = security("AAPL");
+    const day = parseDayKey("2026-10-15");
+    const narrow = dailyRows(aapl, day, day)[0];
+    const wide = dailyRows(aapl, day - 400, day + 10).find((row) => row.day === day);
+    const decade = dailyRows(aapl, parseDayKey("2016-01-01"), day).find((row) => row.day === day);
+    expect(narrow).toEqual(wide);
+    expect(narrow).toEqual(decade);
+  });
+
+  it("keep a past session's bar when the clock moves on", () => {
+    const nvda = security("NVDA");
+    const thisWeek = latestCompletedSession(PROFILES.us, SATURDAY);
+    const nextWeek = latestCompletedSession(PROFILES.us, WEEK_LATER);
+    expect(nextWeek).toBeGreaterThan(thisWeek);
+    const before = dailyRows(nvda, thisWeek - 30, thisWeek);
+    const after = dailyRows(nvda, thisWeek - 30, nextWeek).filter((row) => row.day <= thisWeek);
+    expect(after).toEqual(before);
+  });
+
+  it("anchor each walk at its table price on 2026-01-02", () => {
+    for (const symbol of ["AAPL", "SPY", "EURUSD=X", "BTC-USD"]) {
+      const s = security(symbol);
+      const [row] = dailyRows(s, ANCHOR_DAY, ANCHOR_DAY);
+      expect(row.c / s.anchorPrice).toBeCloseTo(1, 3);
+    }
+  });
+
+  it("are internally consistent and exist only on trading days", () => {
+    for (const symbol of ["AAPL", "^VIX", "^TNX", "GC=F", "BTC-USD", "0700.HK"]) {
+      const s = security(symbol);
+      const rows = dailyRows(s, parseDayKey("2025-01-01"), parseDayKey("2026-11-06"));
+      expect(rows.length).toBeGreaterThan(400);
+      for (const row of rows) {
+        expect(row.l).toBeLessThanOrEqual(Math.min(row.o, row.c));
+        expect(row.h).toBeGreaterThanOrEqual(Math.max(row.o, row.c));
+        expect(row.l).toBeGreaterThan(0);
+      }
+    }
+    const us = dailyRows(security("AAPL"), parseDayKey("2026-11-20"), parseDayKey("2026-11-30"));
+    expect(us.map((row) => new Date(row.day * DAY).toISOString().slice(0, 10))).not.toContain("2026-11-26");
+  });
+
+  it("keep ^VIX around its level and Treasury yields at a few percent", () => {
+    const vix = dailyRows(security("^VIX"), parseDayKey("2016-01-01"), parseDayKey("2026-11-06")).map((row) => row.c);
+    expect(Math.min(...vix)).toBeGreaterThan(8);
+    expect(Math.max(...vix)).toBeLessThan(70);
+    const mean = vix.reduce((sum, v) => sum + v, 0) / vix.length;
+    expect(mean).toBeGreaterThan(14);
+    expect(mean).toBeLessThan(21);
+    for (const symbol of ["^IRX", "^FVX", "^TNX", "^TYX"]) {
+      const yields = dailyRows(security(symbol), parseDayKey("2024-01-01"), parseDayKey("2026-11-06")).map((row) => row.c);
+      expect(Math.min(...yields), symbol).toBeGreaterThan(1);
+      expect(Math.max(...yields), symbol).toBeLessThan(8);
+    }
+  });
+
+  it("move a fund exactly like the index it tracks", () => {
+    const from = parseDayKey("2026-09-01");
+    const to = parseDayKey("2026-11-06");
+    const spy = dailyRows(security("SPY"), from, to);
+    const index = dailyRows(security("^GSPC"), from, to);
+    for (let i = 1; i < spy.length; i++) {
+      expect(spy[i].c / spy[i - 1].c).toBeCloseTo(index[i].c / index[i - 1].c, 3);
+    }
+  });
+});
+
+describe("weekly, monthly and intraday bars", () => {
+  it("aggregate the daily bars of their period", () => {
+    const aapl = security("AAPL");
+    const daily = dailyRows(aapl, parseDayKey("2026-10-01"), parseDayKey("2026-10-31"));
+    const [october] = aggregateRows(aapl, daily, "1mo");
+    expect(october.o).toBe(daily[0].o);
+    expect(october.c).toBe(daily[daily.length - 1].c);
+    expect(october.h).toBe(Math.max(...daily.map((row) => row.h)));
+    expect(october.l).toBe(Math.min(...daily.map((row) => row.l)));
+    expect(new Date(october.t).toISOString()).toBe("2026-10-01T04:00:00.000Z");
+    const weeks = aggregateRows(aapl, daily, "1wk");
+    expect(new Date(weeks[1].t).toISOString()).toBe("2026-10-05T04:00:00.000Z");
+  });
+
+  it("stay inside their daily bar and match its open, high, low and close", () => {
+    for (const symbol of ["AAPL", "BTC-USD", "^GSPC"]) {
+      const s = security(symbol);
+      const [previous, bar] = dailyRows(s, parseDayKey("2026-11-05"), parseDayKey("2026-11-06")).slice(-2);
+      for (const step of [5, 15]) {
+        const rows = intradayRows(s, bar, previous.c, step, false);
+        expect(rows[0].o, `${symbol} ${step}m open`).toBe(bar.o);
+        expect(rows[rows.length - 1].c, `${symbol} ${step}m close`).toBe(bar.c);
+        expect(Math.max(...rows.map((row) => row.h))).toBe(bar.h);
+        expect(Math.min(...rows.map((row) => row.l))).toBe(bar.l);
+      }
+    }
+  });
+
+  it("serve the latest sessions for the quote page's intraday ranges", () => {
+    const oneDay = buildChart("AAPL", { period1: new Date(SATURDAY - 7 * DAY), interval: "5m", includePrePost: true }, SATURDAY);
+    const quotes = oneDay.quotes as Array<{ date: Date }>;
+    // Five sessions of pre-market (66), regular (78) and after-hours (48) five-minute bars.
+    expect(quotes.length).toBe(5 * (66 + 78 + 48));
+    expect(quotes[quotes.length - 1].date.toISOString()).toBe("2026-11-07T00:55:00.000Z");
+    const meta = oneDay.meta as Record<string, unknown>;
+    expect(meta.tradingPeriods).toMatchObject({ regular: expect.any(Array), pre: expect.any(Array), post: expect.any(Array) });
+  });
+
+  it("agree with the quote on the latest close", () => {
+    const quote = buildQuote(security("MSFT"), SATURDAY);
+    const chart = buildChart("MSFT", { period1: new Date(SATURDAY - 35 * DAY), interval: "1d" }, SATURDAY);
+    const last = (chart.quotes as Array<{ close: number }>).at(-1);
+    expect(last?.close).toBe(quote?.regularMarketPrice);
+  });
+});
+
+describe("quotes", () => {
+  it("are identical at any moment between two closes", () => {
+    const morning = buildQuote(security("AAPL"), Date.parse("2026-11-07T09:00:00Z"));
+    const evening = buildQuote(security("AAPL"), Date.parse("2026-11-08T23:00:00Z"));
+    expect(evening).toEqual(morning);
+  });
+
+  it("report the latest completed session even while the next one trades", () => {
+    const duringSession = buildQuote(security("AAPL"), Date.parse("2026-11-09T16:00:00Z"));
+    expect(duringSession?.marketState).toBe("REGULAR");
+    expect((duringSession?.regularMarketTime as Date).toISOString()).toBe("2026-11-06T21:00:00.000Z");
+  });
+});
