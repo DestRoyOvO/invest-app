@@ -77,6 +77,12 @@ export function money(value: number): string {
   return withSign(fixed(Math.abs(value)), Math.sign(Number(value.toFixed(2))));
 }
 
+/** A large amount in compact notation with a true minus: "970.28B", "−89.27B". */
+export function compact(value: number): string {
+  const text = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 2 }).format(value);
+  return text.startsWith("-") ? `${MINUS}${text.slice(1)}` : text;
+}
+
 /** A cash amount per share: two decimals from 0.10 up, up to four below. */
 export function perShare(value: number): string {
   return Math.abs(value) >= 0.1 ? fixed(value) : new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(value);

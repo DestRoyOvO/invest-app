@@ -14,6 +14,7 @@ import {
   chartSummaryPattern,
   chartSummaryText,
   clockTime,
+  compact,
   dataRows,
   eventDay,
   expectNoErrorStates,
@@ -140,6 +141,11 @@ test.describe("quote tabs", () => {
       ...years.map((year) => fixed(known(year.dilutedEps, `EPS of ${year.end}`))),
       /%$/,
     ]);
+    // Capital spending: the cash spent each year and its change from the year before, without a sign when the change
+    // rounds to zero (AAPL's fixture spending moves by -0.05%, "0.0%").
+    const spent = years.map((year) => known(year.capitalExpenditure, `capital spending of ${year.end}`));
+    const spentChange = Math.abs(spent[spent.length - 1]) / Math.abs(spent[spent.length - 2]) - 1;
+    await expect(statements.getByRole("row", { name: /^Capital spending / }).getByRole("cell")).toHaveText(["Capital spending", ...spent.map(compact), ratio(spentChange)]);
 
     // Earnings: the latest reported quarter heads the table, with its EPS, the estimate and the surprise.
     await tabs.getByRole("link", { name: "Earnings" }).click();
