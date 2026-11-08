@@ -2,8 +2,16 @@
 
 import { storeName, type PrefCookieName, type StoreDiff } from "@/lib/backup";
 import { DASH, tpl } from "@/lib/format";
-import type { Messages } from "@/lib/i18n/messages";
+import { MESSAGES, type Messages } from "@/lib/i18n/messages";
 import type { Lang } from "@/types/api";
+
+/**
+ * The messages of a language a restore switches to ("en" or "zh"), or `fallback` for anything else: a toast built
+ * right after a restore would otherwise speak the language the page is leaving.
+ */
+export function messagesFor(lang: string | null | undefined, fallback: Messages): Messages {
+  return lang === "en" || lang === "zh" ? MESSAGES[lang] : fallback;
+}
 
 /** The friendly name of a stored key ("Watchlist"), or null for keys this app version does not know. */
 export function storeLabel(t: Messages, key: string): string | null {

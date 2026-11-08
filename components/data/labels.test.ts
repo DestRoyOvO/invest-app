@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { StoreDiff } from "@/lib/backup";
 import { MESSAGES } from "@/lib/i18n/messages";
 
-import { diffSummary, formatShares, lastBackupLabel, prefNameLabel, prefValueLabel, storeLabel, symbolList } from "./labels";
+import { diffSummary, formatShares, lastBackupLabel, messagesFor, prefNameLabel, prefValueLabel, storeLabel, symbolList } from "./labels";
 
 const en = MESSAGES.en;
 const zh = MESSAGES.zh;
@@ -36,6 +36,13 @@ describe("data labels", () => {
     expect(prefValueLabel(en, "neon")).toBe("neon");
     expect(prefValueLabel(en, "constructor")).toBe("constructor");
     expect(prefValueLabel(en, null)).toBe("—");
+  });
+
+  it("picks the messages of a restored language", () => {
+    expect(messagesFor("zh", en)).toBe(zh);
+    expect(messagesFor("en", zh)).toBe(en);
+    expect(messagesFor("fr", zh)).toBe(zh);
+    expect(messagesFor(undefined, en)).toBe(en);
   });
 
   it("sums store diffs", () => {

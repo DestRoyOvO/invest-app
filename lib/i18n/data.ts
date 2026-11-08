@@ -26,7 +26,8 @@ export const dataMessages = defineMessages(
       mode: "How to restore",
       merge: "Merge",
       replace: "Replace",
-      mergeHint: "Adds what is new and keeps what is only here. Positions and other settings from the file win; for notes, the newer copy wins.",
+      mergeHint:
+        "Adds the file's watchlist symbols, positions and notes to what is here. Positions from the file win; for notes, the newer copy wins. Alerts, saved screens and other data in the file replace the copies here.",
       replaceHint: "Makes this browser match the file. Anything that is not in the file is removed.",
       caption: "What the restore changes",
       columns: { data: "Data", added: "Added", changed: "Changed", removed: "Removed", details: "Details" },
@@ -222,7 +223,7 @@ export const dataMessages = defineMessages(
       mode: "恢复方式",
       merge: "合并",
       replace: "替换",
-      mergeHint: "添加文件中的新内容，保留只在本浏览器中的内容。持仓和其他设置以文件为准，笔记保留较新的一份。",
+      mergeHint: "把文件中的自选、持仓和笔记加入本浏览器。持仓以文件为准，笔记保留较新的一份。文件中的提醒、已存筛选等其他数据会替换本浏览器中的版本。",
       replaceHint: "让本浏览器与文件一致，文件中没有的内容会被移除。",
       caption: "恢复将做的更改",
       columns: { data: "数据", added: "新增", changed: "修改", removed: "移除", details: "明细" },

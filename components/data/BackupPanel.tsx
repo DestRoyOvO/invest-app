@@ -35,7 +35,7 @@ import { formatDate, formatTime, tpl } from "@/lib/format";
 
 import { exportBackupNow, getEnv } from "./browser";
 import { usePrefsSync, useStorageSnapshot } from "./hooks";
-import { diffSummary, lastBackupLabel, prefNameLabel, prefValueLabel, storeLabel, symbolList } from "./labels";
+import { diffSummary, lastBackupLabel, messagesFor, prefNameLabel, prefValueLabel, storeLabel, symbolList } from "./labels";
 import { ResultLine } from "./ResultLine";
 import { focusSoon, TOUCH } from "./styles";
 
@@ -113,7 +113,8 @@ export function BackupPanel() {
     if (prefsBefore) prefsSync.apply(prefsBefore);
     // The toast's Undo can come after another file was picked; only this restore's result line goes away.
     setState((current) => (current.phase === "done" && current.result === result ? { phase: "idle" } : current));
-    toast.show({ message: t.data.backup.undone });
+    // Undo puts the language back too, so its toast speaks the language it returns to.
+    toast.show({ message: messagesFor(prefsBefore?.is_lang, t).data.backup.undone });
   };
 
   const restore = () => {
@@ -129,7 +130,9 @@ export function BackupPanel() {
       const result = applyBackup(state.backup, mode, env, { prefs: restorePrefs });
       if (result.cookies.length > 0) prefsSync.apply(Object.fromEntries(result.cookies.map((change) => [change.name, change.newValue])));
       setState({ phase: "done", file: state.file, result, prefsBefore });
-      toast.show({ message: tpl(t.data.backup.restored, { summary: diffSummary(t, result.diffs) }), action: { label: t.data.undo, onAction: () => undo(result, prefsBefore) } });
+      // Built now, before the page renders again in the language the restore may have switched to.
+      const m = messagesFor(result.cookies.find((change) => change.name === "is_lang")?.newValue, t);
+      toast.show({ message: tpl(m.data.backup.restored, { summary: diffSummary(m, result.diffs) }), action: { label: m.data.undo, onAction: () => undo(result, prefsBefore) } });
     } catch (cause) {
       setState({ phase: "error", message: cause instanceof StorageWriteError ? t.data.backup.errors[cause.reason] : t.data.backup.errors.invalid });
       // The confirm button is gone; the error is announced and the file button is the way on.
