@@ -1,3 +1,4 @@
+import { BASE_URL } from "./env";
 import { expect, type Page, type StoredData } from "./test";
 
 // Every page of the app with representative parameters, shared by the route sweep (e2e/specs/routes.spec.ts) and the
@@ -39,7 +40,10 @@ export interface Allowance {
 export interface RouteCase {
   /** Path and query to open. */
   path: string;
-  /** Status of the document (default 200). */
+  /**
+   * Status of the document (default 200). With 400 or more, the document's own console line and response are expected
+   * noise (expectedNoise), so the case needs no allowance for them.
+   */
   status?: number;
   /** The path the page ends on when it redirects. */
   finalPath?: string;
@@ -269,8 +273,6 @@ export const ROUTES: readonly RouteCase[] = [
     ready: async (page) => {
       await expect(page.getByRole("heading", { level: 1, name: /^ERR 404/ })).toBeVisible();
     },
-    console: [{ pattern: /status of 404 \(Not Found\) \(http:\/\/[^/]+\/no-such-page\)$/, reason: "The document of an unknown path answers 404." }],
-    responses: [{ pattern: /^404 GET http:\/\/[^/]+\/no-such-page$/, reason: "The document of an unknown path answers 404." }],
   },
 ];
 
@@ -279,4 +281,22 @@ export function routeCase(path: string): RouteCase {
   const found = ROUTES.find((route) => route.path === path);
   if (!found) throw new Error(`No route case for ${path} in e2e/support/routes.ts`);
   return found;
+}
+
+/**
+ * The noise a case expects: its own allowances and, when its document should answer an error status (a not-found
+ * page's 404), the console line and the response that document causes, for its URL alone. They follow `status`, the
+ * status the page should answer, not the one it answers today: a case with a knownStatus (/stock/ZZZZ answers 200 for
+ * now) keeps passing once the owner of the bug fixes it, and only notes that its knownStatus can go.
+ */
+export function expectedNoise(route: RouteCase): { console: Allowance[]; responses: Allowance[] } {
+  const status = route.status ?? 200;
+  const own = { console: [...(route.console ?? [])], responses: [...(route.responses ?? [])] };
+  if (status >= 400) {
+    const url = escapeRegExp(new URL(route.path, BASE_URL).href);
+    const reason = `The ${route.path} document answers ${status}.`;
+    own.console.push({ pattern: new RegExp(`status of ${status} \\([^)]*\\) \\(${url}\\)$`), reason });
+    own.responses.push({ pattern: new RegExp(`^${status} GET ${url}$`), reason });
+  }
+  return own;
 }

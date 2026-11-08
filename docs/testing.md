@@ -235,10 +235,13 @@ fund and a stock outside the heatmap universe, and a thesis note) and checks:
   dividends, the world board, the Treasury curve, the screener, discover, sector news, history, profiles and the
   calendar.
 
-Expected noise is allowed per case, as narrowly as possible: `/no-such-page` logs its own 404, and `/stock/ZZZZ` gets 404
-from the stock API and each panel route. A case can also accept a known app bug in the document status
-(`knownStatus`): the test passes with a `known-app-bug` annotation, and once the bug is fixed it notes
-`known-status-unused`, the cue to delete the allowance.
+Expected noise is allowed per case, as narrowly as possible (`expectedNoise`): `/stock/ZZZZ` gets 404 from the stock API
+and each panel route, and a case whose document should answer an error status (`status: 404` for `/no-such-page` and
+`/stock/ZZZZ`) allows that document's own console line and response, for its URL alone. A case can also accept a known
+app bug in the document status (`knownStatus`): the test passes with a `known-app-bug` annotation, and once the bug is
+fixed it notes `known-status-unused`, the cue to delete the allowance. The document's allowances follow the status the
+case expects, not the one it gets today, so the fix itself fails nothing (the smoke test of `/stock/ZZZZ` and its
+accessibility checks use the same allowances).
 
 Write specs in `e2e/specs/*.spec.ts` with the suite's `test` from `e2e/support/test.ts`:
 
@@ -252,7 +255,7 @@ Write specs in `e2e/specs/*.spec.ts` with the suite's `test` from `e2e/support/t
   stores' own keys before the test's first page load (later loads keep what the page changed); `app.isPhone` tells the
   projects apart.
 - `ROUTES`, `routeCase(path)` and `SAMPLE_DATA` (`e2e/support/routes.ts`) give a page and the check that it has loaded
-  its data.
+  its data; `expectedNoise(route)` gives the console lines and responses that page may cause.
 
 Prefer roles and accessible names (`getByRole("region", { name: "Sector heatmap" })`) over CSS classes: panels are
 regions named by their title, so specs survive layout changes.

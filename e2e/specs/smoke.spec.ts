@@ -1,6 +1,7 @@
 import { getSector, SECTORS, UNIVERSE_STOCKS } from "@/lib/universe";
 
 import { DEFAULT_NOW, E2E_NOW, PINNED_NOW } from "../support/env";
+import { expectedNoise, routeCase } from "../support/routes";
 import { expect, test } from "../support/test";
 
 // Smoke tests of the harness: the production build serves fixture data on the pinned clock, the shell says so, and
@@ -77,8 +78,9 @@ test.describe("quote page", () => {
   });
 
   test("shows the not-found page for an unknown symbol", async ({ page, app, consoleErrors }) => {
-    // Only the stock API's own answers: a 404 for anything else (a missing script, say) still fails the test.
-    consoleErrors.allow(/status of 404 \(Not Found\) \(http:\/\/[^/]+\/api\/stock\/ZZZZ[/?)]/, "The stock API answers 404 for a symbol the data source does not know.");
+    // The sweep's allowances for this page: the 404s of the stock API and of the document itself (once the page answers
+    // 404, see e2e/support/routes.ts). A 404 for anything else (a missing script, say) still fails the test.
+    for (const { pattern, reason } of expectedNoise(routeCase("/stock/ZZZZ")).console) consoleErrors.allow(pattern, reason);
     await app.goto("/stock/ZZZZ");
     await expect(page.getByRole("heading", { name: "No match for ZZZZ" })).toBeVisible();
   });

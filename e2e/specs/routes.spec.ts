@@ -2,14 +2,15 @@ import { readdirSync } from "node:fs";
 import path from "node:path";
 
 import { BASE_URL } from "../support/env";
-import { ROUTES, SAMPLE_DATA, type RouteCase } from "../support/routes";
+import { expectedNoise, ROUTES, SAMPLE_DATA, type RouteCase } from "../support/routes";
 import { expect, test, type Page } from "../support/test";
 
 // Every page of the app, on both projects, as a returning investor sees it (a watchlist, positions and a note in the
 // browser, SAMPLE_DATA): the document status, no console error or uncaught page error (the suite's collector), no
 // same-origin response with an error status, the page's main panel with its data, no error or stale-data state once
 // the page has settled, and the API routes the page is known to read answering 200 (every panel route of the quote
-// page among them). Expected noise is allowed per route, as narrowly as possible (e2e/support/routes.ts).
+// page among them). Expected noise is allowed per route, as narrowly as possible (e2e/support/routes.ts,
+// expectedNoise: a not-found page's own 404 follows from the status the case expects).
 //
 // A server that tries to reach the network fails the run as a whole (e2e/support/global-setup.ts).
 
@@ -91,7 +92,8 @@ test("every page under app/ has a case in the sweep", async () => {
 test.describe("every page", () => {
   for (const route of ROUTES) {
     test(`${route.path} renders its data without errors`, async ({ page, app, consoleErrors }) => {
-      for (const { pattern, reason } of route.console ?? []) consoleErrors.allow(pattern, reason);
+      const noise = expectedNoise(route);
+      for (const { pattern, reason } of noise.console) consoleErrors.allow(pattern, reason);
       const responses = trackResponses(page);
       await app.seedStorage(SAMPLE_DATA);
 
@@ -102,9 +104,8 @@ test.describe("every page", () => {
       await route.ready(page);
       await app.settle();
       await expectNoErrorStates(page);
-      const allowed = route.responses ?? [];
       expect(
-        responses.errors.filter((entry) => !allowed.some(({ pattern }) => pattern.test(entry))),
+        responses.errors.filter((entry) => !noise.responses.some(({ pattern }) => pattern.test(entry))),
         "same-origin responses with an error status",
       ).toEqual([]);
       expect((route.apis ?? []).filter((api) => !responses.loadedApis.has(api)), "API routes the page did not load with status 200").toEqual([]);

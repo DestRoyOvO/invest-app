@@ -1,4 +1,4 @@
-import { ROUTES, SAMPLE_DATA } from "../support/routes";
+import { expectedNoise, ROUTES, SAMPLE_DATA } from "../support/routes";
 import { expect, test, type KnownViolation, type Page, type Theme } from "../support/test";
 
 // axe-core on every page of the route sweep (e2e/support/routes.ts; the redirect aside), the open command bar and the
@@ -39,7 +39,7 @@ for (const theme of ["dark", "light"] as const satisfies readonly Theme[]) {
   test.describe(`${theme} theme`, () => {
     for (const route of PAGES) {
       test(`${route.path} has no serious accessibility violations`, async ({ page, app, axe, consoleErrors }) => {
-        for (const { pattern, reason } of route.console ?? []) consoleErrors.allow(pattern, reason);
+        for (const { pattern, reason } of expectedNoise(route).console) consoleErrors.allow(pattern, reason);
         await app.setPrefs({ theme });
         await app.seedStorage(SAMPLE_DATA);
         await app.goto(route.path);
