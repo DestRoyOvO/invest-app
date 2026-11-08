@@ -6,7 +6,7 @@ import { WORLD_BOARD, WORLD_REGIONS } from "@/lib/universe";
 
 import { changeDistribution } from "./breadth";
 import { curveChartGeometry, niceStep, spreadSparkGeometry } from "./curve-chart";
-import { anyExchangeOpen, dateInZone, groupWorld, localTradeTime, overnightSummary, sessionOf } from "./world";
+import { dateInZone, groupWorld, localTradeTime, overnightSummary, sessionOf } from "./world";
 
 function row(symbol: string, overrides: Partial<WorldRow> = {}): WorldRow {
   return { symbol, price: 100, change: 1, changePercent: 1, marketState: "CLOSED", time: null, spark: [], stale: false, ...overrides };
@@ -93,13 +93,6 @@ describe("overnightSummary", () => {
   it("leaves out a region without quotes", () => {
     expect(overnightSummary([row("^N225")]).map((g) => g.region)).toEqual(["asia"]);
     expect(overnightSummary([])).toEqual([]);
-  });
-});
-
-describe("anyExchangeOpen", () => {
-  it("ignores crypto, which trades around the clock", () => {
-    expect(anyExchangeOpen([row("BTC-USD", { marketState: "REGULAR" }), row("^GSPC")])).toBe(false);
-    expect(anyExchangeOpen([row("^N225", { marketState: "REGULAR" })])).toBe(true);
   });
 });
 

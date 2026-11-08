@@ -104,7 +104,7 @@ function YieldCurveChart({ data, series }: { data: YieldCurveResponse; series: S
             </li>
           ))}
       </ul>
-      <p className="num mt-1.5 text-xs text-fg-3" aria-live="off">
+      <p className="num mt-1.5 text-xs text-fg-3">
         <span className="mono font-medium text-fg">{t.markets.rates.tenors[data.tenors[index]]}</span>
         {series
           .slice()

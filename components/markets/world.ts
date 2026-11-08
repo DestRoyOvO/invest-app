@@ -91,9 +91,3 @@ export function overnightSummary(rows: readonly WorldRow[]): OvernightGroup[] {
     ];
   });
 }
-
-/** True while an exchange-traded instrument (anything but crypto, which never closes) is in its regular session. */
-export function anyExchangeOpen(rows: readonly WorldRow[]): boolean {
-  const regions = new Map(WORLD_BOARD.map((def) => [def.symbol, def.region]));
-  return rows.some((row) => regions.get(row.symbol) !== "crypto" && sessionOf(row.marketState) === "open");
-}
