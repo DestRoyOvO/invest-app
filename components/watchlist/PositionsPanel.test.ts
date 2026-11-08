@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
+import { MESSAGES } from "@/lib/i18n/messages";
 import { valuePortfolio, type PositionLike } from "@/lib/portfolio";
 
 import { PositionsPanel } from "./PositionsPanel";
@@ -20,7 +21,9 @@ function addButtons(positions: PositionLike[], loading = false) {
   const markup = renderToStaticMarkup(createElement(PositionsPanel, { portfolio: valuePortfolio(positions, () => undefined), quotes: new Map(), loading }));
   const [header, body] = markup.split("</header>");
   const buttons = (part: string) =>
-    [...part.matchAll(/<button[^>]*class="([^"]*)"[^>]*>([\s\S]*?)<\/button>/g)].filter((match) => match[2].includes("Add position")).map((match) => match[1].split(" "));
+    [...part.matchAll(/<button[^>]*class="([^"]*)"[^>]*>([\s\S]*?)<\/button>/g)]
+      .filter((match) => match[2].includes(MESSAGES.en.portfolio.addPosition))
+      .map((match) => match[1].split(" "));
   return { header: buttons(header), body: buttons(body) };
 }
 
