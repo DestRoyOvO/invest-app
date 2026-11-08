@@ -78,6 +78,10 @@ test("My day values the positions at the page's quotes, beside the week ahead, t
     new RegExp(`${esc(tpl(en.watchlist.value, { currency: "USD" }))}\\s*${esc(formatNumber(value, 2, "en"))}\\s*${esc(tpl(en.watchlist.positionsCount, { n: positions.length }))}`),
   );
 
+  // The day's change is the P&L over the value at the previous close (value-weighted). The seed moved enough that the same
+  // P&L over today's value would show differently.
+  if (AT_DEFAULT_NOW) expect(signedRatio(dayPnl / (value - dayPnl)), "the day's change over the previous close and over today's value").not.toBe(signedRatio(dayPnl / value));
+
   // While the market has not traded today (the pinned Saturday), the day figure covers the last session and names it.
   const today = dayIn(now, NEW_YORK);
   const session = positions.map((p) => dayIn(Date.parse(p.quote.regularMarketTime ?? ""), NEW_YORK)).sort().at(-1) ?? "";

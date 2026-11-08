@@ -25,19 +25,21 @@ export const NEW_YORK = "America/New_York";
  * after the latest one, AAPL goes ex-dividend after three, MSFT reports after four, AAPL after six, GOOGL after eight
  * and AMZN after nine), and eight US positions, enough that My day lists only the largest movers (four rose and four fell
  * in the session before the default E2E_NOW). AAPL, AMZN and MSFT are held as well, so the week ahead mixes holdings,
- * watchlist names and macro releases.
+ * watchlist names and macro releases. Most of the money sits in the positions that rose, so the portfolio moved about
+ * 1.5% that session: enough that its change over the previous close and the same P&L over today's value differ at two
+ * decimals, which a small net move would hide.
  */
 export const SHELL_DATA = {
   watchlist: [...DEFAULT_WATCHLIST],
   holdings: {
-    AAPL: { shares: 25, cost: 180 },
-    AMZN: { shares: 20, cost: 150 },
-    META: { shares: 6, cost: 520 },
-    UNH: { shares: 15, cost: 280 },
-    MSFT: { shares: 12, cost: 410 },
-    ORCL: { shares: 18, cost: 160 },
-    HD: { shares: 7, cost: 300 },
-    SPY: { shares: 4, cost: 500 },
+    AAPL: { shares: 5, cost: 180 },
+    AMZN: { shares: 30, cost: 150 },
+    META: { shares: 12, cost: 520 },
+    UNH: { shares: 40, cost: 280 },
+    MSFT: { shares: 3, cost: 410 },
+    ORCL: { shares: 4, cost: 160 },
+    HD: { shares: 1, cost: 300 },
+    SPY: { shares: 1, cost: 500 },
   },
 } satisfies StoredData;
 
