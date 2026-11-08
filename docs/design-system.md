@@ -32,8 +32,9 @@ every token pair; `lib/design-tokens.test.ts` fails when a pair drops below its 
   纵向放不下时，滚动框成为以表格标题命名、可用 Tab 聚焦的区域，方向键即可滚动，所以表格标题要描述表格内容，不能与所在
   面板或分区的名称相同（lib/i18n/captions.test.ts 和 conventions.test.ts 检查）；Esc 只关闭最内层（先关悬停卡片，再关
   抽屉）；提示条在悬停或键盘焦点时暂停，键盘关闭后焦点移到下一条或回到原处；抽屉打开时提示条移到抽屉里自己的一栏（侧栏在
-  内容与底栏之间，底部弹层在顶部），不遮挡抽屉的输入框和按钮，仍可用 Tab 操作并被读屏播报；实时更新用礼貌型 live region；
-  尊重"减少动态效果"。
+  内容与底栏之间，底部弹层在顶部），不遮挡抽屉的输入框和按钮，仍可用 Tab 操作并被读屏播报；提示条来去时抽屉内容在屏幕上
+  保持不动（底部弹层到达高度上限后，内容滚动同样的距离），被这一栏挡住的焦点控件会滚回视野；提示条的关闭按钮叫"关闭提示"，
+  与抽屉的"关闭"区分；实时更新用礼貌型 live region；尊重"减少动态效果"。
 - **缺失值**：一律显示 `lib/format.ts` 的 `DASH`（U+2014），格式化函数遇到 null 也返回它；不用 U+2013、连字符或
   "N/A"。它只是数据占位符，文案里仍然不用破折号。
 - **非价格的正负读数**（相关系数、z 分数、因子倾向）：只按绝对值深浅着色，用一种中性色阶并标出带符号的数字，不用红绿或
@@ -531,21 +532,28 @@ toast.show({ message: tpl(t.watchlist.removed, { symbol }), action: { label: t.c
 `ToastProvider` is mounted in `components/providers/Providers.tsx`. Toasts sit above the phone tab bar or the status
 bar, in a polite live region, at most three at a time; they close after 5s (8s with an action). The countdowns pause
 while the pointer is over the toasts or keyboard focus is inside them, and resume with the time that was left (at
-least 1.5s). When a toast closes under keyboard focus (Undo, Close), focus moves to the toast that took its place, or
+least 1.5s). When a toast closes under keyboard focus (Undo, Dismiss), focus moves to the toast that took its place, or
 back to where it was before the toasts. The list and countdowns live in `createToastStore` (`toast-queue.ts`, unit
-tested). A toast's action and Close are described by its message (`aria-describedby`), so "Close" says what it closes.
+tested). A toast's action and its Dismiss button (the X) are described by its message (`aria-describedby`), so they say
+what they act on. Dismiss is not called Close (`t.common.dismiss`), so it differs from the Close of a drawer the toast
+sits in, for a screen reader's list of buttons and for voice control alike.
 
 While a Drawer is open the toasts show inside it, in the `ToastOutlet` the Drawer renders: a strip of their own in the
 dialog's layout. There they cover none of the drawer's fields or buttons, stay reachable with Tab (the drawer traps
 focus) and are announced (under `aria-modal`, assistive technology may ignore a live region outside the dialog). In a
-side panel the strip sits between the content and the footer, and the content gives up the room; in a bottom sheet it
-sits at the top (after the content in the reading and Tab order) and the sheet may grow past 85dvh while it shows
-toasts, so nothing in the drawer moves when a toast comes or goes. Hover and focus pause them, Undo and the focus
+side panel the strip sits between the content and the footer, and the content gives up the room at its bottom edge.
+In a bottom sheet it sits at the top (after the content in the reading and Tab order), and the sheet grows past 85dvh
+into the backdrop while it shows toasts, up to 2.75rem below the top of the screen. Once a sheet is at that limit, a
+toast that comes or goes moves the top edge of the content, and the drawer scrolls the content by as much, so what is
+on screen stays where it is. If the strip takes the room where the focused control sat, the content scrolls just
+enough to show it again. The outlet's `watch` does this: the provider calls it before and after every change of the
+toasts (`createContentKeeper` in `Drawer.tsx`, unit tested). Hover and focus pause the toasts, Undo and the focus
 return work as at the screen's edge. A toast is announced once, where it first shows: toasts that move as a drawer
-opens or closes sit beside the live region of their new place, not in it. The live region at the screen's edge stays
-mounted meanwhile, so a toast shown as a drawer closes (Save, Delete) lands in a live region that already existed and
-is announced. With two drawers open, the newer one hosts the toasts. Another modal layer can render a `ToastOutlet`
-the same way.
+opens or closes sit beside the live region of their new place, not in it (`ToastStacks`). The live region at the
+screen's edge stays mounted meanwhile, so a toast shown as a drawer closes (Save, Delete) lands in a live region that
+already existed and is announced. The specs check what reaches a screen reader with `watchToasts`
+(`e2e/support/notes.ts`). With two drawers open, the newer one hosts the toasts. Another modal layer can render a
+`ToastOutlet` the same way.
 
 ### Drawer
 
@@ -557,7 +565,8 @@ the same way.
 Focus moves in, Tab is trapped, Escape closes and focus returns. Mark the first field with `data-autofocus`. The title
 bar is a `div` with the `h2` that labels the dialog, not a `<header>`: inside `role="dialog"` a header would be a
 second banner landmark next to the top bar's. While open, the drawer hosts the toasts in its own strip (see Toast):
-between the content and the footer of a side panel, at the top of a sheet.
+between the content and the footer of a side panel, at the top of a sheet. Its scrolling content (`data-drawer-content`)
+stays where it is on screen as they come and go.
 
 ### States
 
