@@ -8,15 +8,17 @@
 // never interfere:
 //
 //   bearer key "rejected"        -> HTTP 401, as DeepSeek answers an invalid key
-//   E2EKEY in the conversation   -> HTTP 401 as well (for a server started with a normal key)
+//   E2EKEY                       -> HTTP 401 as well (for a server started with a normal key)
 //   E2ELEN                       -> an answer cut off with finish_reason "length" (the app's truncation notice)
 //   E2EERR                       -> a few chunks, then an error event mid-stream
 //   E2ESLOW                      -> about 300 ms per chunk, long enough to press Stop
 //   anything else                -> a short Markdown note or chat answer that names the symbol in the prompt
 //
-// A marker counts in the latest user message first (text a test types into the chat), then anywhere in the prompt (a
-// note on the reserved symbol E2ELEN, E2EERR, E2ESLOW or E2EKEY, which the fixture data knows). GET /health answers
-// 200 for readiness checks. Nothing secret is logged: no keys, no prompts.
+// A marker counts in the latest user message (text a test types into the chat) or in the system messages (the
+// context of a note or chat on the reserved symbol E2ELEN, E2EERR, E2ESLOW or E2EKEY, which the fixture data knows);
+// earlier chat turns do not count. A client that disconnects ends its stream, as with DeepSeek. GET /health answers
+// 200 for readiness checks; GET /stats counts the streams started, completed and cancelled per scenario. Nothing
+// secret is logged: no keys, no prompts.
 
 import { createServer } from "node:http";
 import { pathToFileURL } from "node:url";
@@ -35,15 +37,27 @@ function textOf(content) {
   return "";
 }
 
-/** The scenario of a request: the latest user message decides first, then the whole conversation. */
+/**
+ * The scenario of a request: the latest user message decides first, then the system messages (the page's context,
+ * where a note or chat on a reserved symbol names it). Earlier turns of a chat do not count, so a follow-up question
+ * after a failed answer gets a normal answer.
+ */
 export function scenarioOf(messages, apiKey) {
   if (apiKey === "rejected") return "rejected";
   const list = Array.isArray(messages) ? messages : [];
   const lastUser = [...list].reverse().find((message) => message?.role === "user");
   const inUser = MARKER_PATTERN.exec(textOf(lastUser?.content));
   if (inUser) return MARKERS[inUser[1]];
-  const anywhere = MARKER_PATTERN.exec(list.map((message) => textOf(message?.content)).join("\n"));
-  return anywhere ? MARKERS[anywhere[1]] : "default";
+  const context = list.filter((message) => message?.role === "system").map((message) => textOf(message?.content));
+  const inContext = MARKER_PATTERN.exec(context.join("\n"));
+  return inContext ? MARKERS[inContext[1]] : "default";
+}
+
+/** Streams per scenario since the mock started: started, completed, and cancelled by the client (GET /stats). */
+const stats = { started: {}, completed: {}, cancelled: {} };
+
+function count(kind, scenario) {
+  stats[kind][scenario] = (stats[kind][scenario] ?? 0) + 1;
 }
 
 /** What the answer is about: the note's subject, or the stock in the chat context. */
@@ -159,14 +173,19 @@ function readBody(req) {
 
 let counter = 0;
 
-async function streamAnswer(req, res, { model, messages, scenario, includeUsage }) {
+async function streamAnswer(res, { model, messages, scenario, includeUsage }) {
   const id = `chatcmpl-mock-${Date.now().toString(36)}-${(counter++).toString(36)}`;
   const created = Math.floor(Date.now() / 1000);
   const base = { id, object: "chat.completion.chunk", created, model, system_fingerprint: "fp_mock" };
+  // The response's "close" says when the client went away (the request's own "close" already fired once its body was
+  // read). Before each pause and write the stream checks it, so a stopped answer ends here too, as DeepSeek's would.
   let closed = false;
-  req.on("close", () => {
+  res.on("close", () => {
+    if (res.writableEnded) return;
     closed = true;
+    count("cancelled", scenario);
   });
+  count("started", scenario);
   res.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-cache", connection: "keep-alive" });
   const send = (payload) => {
     if (!closed) res.write(`data: ${JSON.stringify(payload)}\n\n`);
@@ -184,12 +203,15 @@ async function streamAnswer(req, res, { model, messages, scenario, includeUsage 
       return;
     }
     await sleep(delay);
+    if (closed) return;
     send({ ...base, choices: [{ index: 0, delta: { content: chunk }, logprobs: null, finish_reason: null }] });
   }
   send({ ...base, choices: [{ index: 0, delta: {}, logprobs: null, finish_reason: scenario === "length" ? "length" : "stop" }] });
   if (includeUsage) send({ ...base, choices: [], usage: usageFor(messages, text) });
-  if (!closed) res.write("data: [DONE]\n\n");
+  if (closed) return;
+  res.write("data: [DONE]\n\n");
   res.end();
+  count("completed", scenario);
 }
 
 async function handleCompletion(req, res) {
@@ -217,7 +239,7 @@ async function handleCompletion(req, res) {
     return;
   }
   if (stream) {
-    await streamAnswer(req, res, { model, messages, scenario, includeUsage: body?.stream_options?.include_usage === true });
+    await streamAnswer(res, { model, messages, scenario, includeUsage: body?.stream_options?.include_usage === true });
     return;
   }
   if (scenario === "error") {
@@ -243,6 +265,10 @@ export function startMockLlm({ host = "127.0.0.1", port = 3199 } = {}) {
     const path = (req.url ?? "/").split("?")[0];
     if (req.method === "GET" && path === "/health") {
       sendJson(res, 200, { ok: true, service: "mock-llm" });
+      return;
+    }
+    if (req.method === "GET" && path === "/stats") {
+      sendJson(res, 200, stats);
       return;
     }
     if (req.method === "POST" && (path === "/chat/completions" || path === "/v1/chat/completions")) {

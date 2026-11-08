@@ -55,6 +55,14 @@ describe("scenario selection", () => {
     expect(scenarioOf([{ role: "user", content: "XE2ELEN is not a marker" }], "test")).toBe("default");
   });
 
+  it("lets a chat follow-up after a failed answer succeed, unless the page's context names a scenario", () => {
+    const context = { role: "system", content: "Stock: AAPL (Apple Inc.); type EQUITY." };
+    const failed = [context, { role: "user", content: "E2EERR what happened?" }, { role: "assistant", content: "Partial answer" }];
+    expect(scenarioOf(failed.slice(0, 2), "test")).toBe("error");
+    expect(scenarioOf([...failed, { role: "user", content: "And the volume?" }], "test")).toBe("default");
+    expect(scenarioOf([{ role: "system", content: "Stock: E2EERR (E2E Stream Error Scenario Inc.)" }, { role: "user", content: "And the volume?" }], "test")).toBe("error");
+  });
+
   it("names the subject of a note or the stock of a chat", () => {
     expect(subjectOf(note("NVDA", "NVIDIA Corporation"))).toEqual({ subject: "NVDA (NVIDIA Corporation)", symbol: "NVDA", kind: "note" });
     expect(subjectOf([{ role: "system", content: "Stock: MSFT (Microsoft Corporation); type EQUITY." }, { role: "user", content: "What changed?" }])).toMatchObject({ symbol: "MSFT", kind: "chat" });
@@ -98,8 +106,10 @@ describe("through the app's DeepSeek client", () => {
     expect(text).toBe(`${AI_STREAM_ERROR}provider_rejected`);
   });
 
-  it("streams slowly enough to stop", async () => {
+  it("streams slowly enough to stop, and ends the stream when the client goes away", async () => {
     useMock();
+    const stats = async () => (await (await fetch(`${baseUrl}/stats`)).json()) as { started: Record<string, number>; cancelled: Record<string, number> };
+    const before = await stats();
     const controller = new AbortController();
     const started = Date.now();
     const reader = streamChat({ messages: note("E2ESLOW", "E2E Slow Stream Scenario Inc."), maxTokens: 500, temperature: 0.3, signal: controller.signal }).getReader();
@@ -108,6 +118,8 @@ describe("through the app's DeepSeek client", () => {
     expect(Date.now() - started).toBeGreaterThanOrEqual(250);
     controller.abort();
     await reader.cancel();
+    await vi.waitFor(async () => expect((await stats()).cancelled.slow ?? 0).toBe((before.cancelled.slow ?? 0) + 1), { timeout: 2000 });
+    expect((await stats()).started.slow).toBe((before.started.slow ?? 0) + 1);
   });
 
   it("answers non-streaming requests and health checks", async () => {
