@@ -25,7 +25,10 @@ const en = {
   },
   basis: "Based on the last 12 months of daily prices and today's positions. Describes past behaviour, not a forecast.",
   betaNote: "Beta is the 1-year daily beta against SPY. Yahoo's beta uses 5 years of monthly returns, so the two differ.",
-  sessionsNote: "The statistics use {n} sessions since {date}, the first day every analyzed holding has a price.",
+  sessionsNote: {
+    one: "The statistics use {n} session since {date}, the first day every analyzed holding has a price.",
+    other: "The statistics use {n} sessions since {date}, the first day every analyzed holding has a price.",
+  },
   subsetNote: "Beta, volatility, VaR and max drawdown cover {n} of {m} positions.",
   historyDegraded: "Some price histories could not be loaded, so the figures below leave those holdings out.",
   tabs: { label: "Analytics view", overview: "Overview", exposure: "Exposure", risk: "Risk", correlation: "Correlation" },
@@ -81,7 +84,10 @@ const en = {
     high: "Pairs at 0.8 or more",
     none: "No pair reaches 0.8.",
     average: "Average pairwise correlation {r}",
-    note: "Shading shows strength only; the sign is printed. Based on {n} sessions.",
+    note: {
+      one: "Shading shows strength only; the sign is printed. Based on {n} session.",
+      other: "Shading shows strength only; the sign is printed. Based on {n} sessions.",
+    },
     needTwo: "Correlation needs at least two holdings with price history.",
     cell: "{a} and {b}: {r}",
   },

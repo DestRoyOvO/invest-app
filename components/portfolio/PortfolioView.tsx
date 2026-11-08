@@ -205,7 +205,7 @@ export function PortfolioView() {
         <p className="px-3 py-2 text-xs text-fg-2">
           {t.port.basis}
           {subset ? ` ${tpl(t.port.subsetNote, { n: report.symbols.length, m: figures.positions })}` : ""}
-          {shortHistory ? ` ${tpl(t.port.sessionsNote, { n: report.sessions, date: formatDate(report.since, lang, "UTC") })}` : ""}
+          {shortHistory ? ` ${plural(t.port.sessionsNote, report.sessions, { date: formatDate(report.since, lang, "UTC") })}` : ""}
         </p>
       </div>
       <div className="flex min-w-0 flex-col gap-px">

@@ -52,7 +52,7 @@ export const marketsMessages = defineMessages(
       volume: "Volume",
       relVolume: "{x} of avg",
       range52w: "52-week range",
-      stocks: "{n} stocks",
+      stocks: { one: "{n} stock", other: "{n} stocks" },
       upDown: "{up} up, {down} down",
       openSector: "Click or press Enter for the sector page",
       allStocks: "All {sector} stocks",
