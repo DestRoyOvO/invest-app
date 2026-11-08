@@ -166,10 +166,11 @@ E2E_REUSE=1 npm run e2e            # terminal 2, as often as needed
 ```
 
 The global setup checks the app before any test runs: `/api/health` must report fixture data, a configured AI, the
-checked-out commit and a clock that started at `E2E_NOW` (and has run for less than six hours), the server must keep a
-no-network log, and the sign-in must set the production cookie `__Host-is_session`. A server of another branch, in Yahoo
-mode, a development server or one started without the preloads fails there with the reason. Uncommitted changes are not
-detected: restart `e2e:serve` after editing.
+checked-out commit and a clock that started at `E2E_NOW` (and has run for less than six hours; with `E2E_NOW=real`, a
+clock within five minutes of this machine's), the server must keep a no-network log, and the sign-in must set the
+production cookie `__Host-is_session`. A server of another branch, in Yahoo mode, on another clock, a development server
+or one started without the preloads fails there with the reason. Uncommitted changes are not detected: restart
+`e2e:serve` after editing.
 
 **No network, enforced.** Besides writing `[no-network]` lines to the server output, the preload appends each refused
 connection to `E2E_NO_NETWORK_LOG`, a temporary file per app port (`<tmp>/investseek-e2e-no-network-<port>.log`, the same

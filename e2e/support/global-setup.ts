@@ -24,6 +24,9 @@ const PRODUCTION_COOKIE = "__Host-is_session";
 /** How long a server's pinned clock may have run on before its data could differ from a fresh one's. */
 const MAX_CLOCK_RUN_MS = 6 * 60 * 60 * 1000;
 
+/** With E2E_NOW=real, how far the server's clock may be from this machine's (the same clock, read twice). */
+const REAL_CLOCK_TOLERANCE_MS = 5 * 60 * 1000;
+
 interface Health {
   dataSource?: string;
   aiConfigured?: boolean;
@@ -33,8 +36,8 @@ interface Health {
 
 /**
  * Throws unless the app answers as the fixture-mode server of this checkout: fixture data, the mock model, this
- * commit, and a clock started at E2E_NOW. A server left running from another branch, in Yahoo mode or without the
- * preloads would otherwise be tested by mistake.
+ * commit, and a clock started at E2E_NOW (or the real clock, with E2E_NOW=real). A server left running from another
+ * branch, in Yahoo mode, on another clock or without the preloads would otherwise be tested by mistake.
  */
 async function checkServer(baseURL: string): Promise<void> {
   const context = await request.newContext({ baseURL });
@@ -48,8 +51,12 @@ async function checkServer(baseURL: string): Promise<void> {
     const head = gitHead();
     if (head && health.commit !== head) problems.push(`it runs commit ${health.commit ?? "unknown"}, but ${head} is checked out`);
     const serverNow = Date.parse(health.time ?? "");
-    if (PINNED_NOW !== null && !(serverNow >= PINNED_NOW && serverNow <= PINNED_NOW + MAX_CLOCK_RUN_MS)) {
-      problems.push(`its clock reads ${health.time ?? "nothing"}, not E2E_NOW=${E2E_NOW} (or it has run for more than six hours)`);
+    if (PINNED_NOW !== null) {
+      if (!(serverNow >= PINNED_NOW && serverNow <= PINNED_NOW + MAX_CLOCK_RUN_MS)) {
+        problems.push(`its clock reads ${health.time ?? "nothing"}, not E2E_NOW=${E2E_NOW} (or it has run for more than six hours)`);
+      }
+    } else if (!(Math.abs(serverNow - Date.now()) < REAL_CLOCK_TOLERANCE_MS)) {
+      problems.push(`its clock reads ${health.time ?? "nothing"}, but E2E_NOW=real expects the real clock (start it with E2E_NOW=real)`);
     }
     if (problems.length > 0) {
       const advice = REUSE ? "Restart it with `npm run e2e:serve`, or run without E2E_REUSE so Playwright starts its own." : "";
