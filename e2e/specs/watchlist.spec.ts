@@ -1,10 +1,9 @@
 import { WATCHLIST_VIEW_KEY } from "@/components/watchlist/watchlist-view";
 import { WATCHLIST_STORAGE_KEY } from "@/hooks/useWatchlist";
-import { yahooSectorKey } from "@/lib/sectors";
-import { DEFAULT_WATCHLIST, getSector, sectorOfSymbol } from "@/lib/universe";
+import { DEFAULT_WATCHLIST } from "@/lib/universe";
 
 import { AT_DEFAULT_NOW } from "../support/env";
-import { amount, cellOf, dataRows, fetchCalendar, fetchProfiles, fetchQuotes, percent, price, readStored, rowOf, shortDate, toast, valueHoldings } from "../support/personal";
+import { amount, dataRows, expectCells, fetchCalendar, fetchProfiles, fetchQuotes, percent, price, readStored, rowOf, shortDate, toast, valueHoldings } from "../support/personal";
 import { SAMPLE_DATA } from "../support/routes";
 import { expect, test, type Page } from "../support/test";
 
@@ -89,7 +88,7 @@ test.describe("adding symbols", () => {
     await expect(dataRows(table)).toHaveText(inOrder([...start, "AMZN"]));
     const row = rowOf(table, "AMZN");
     await expect(row).toContainText(amzn.name);
-    await expect(await cellOf(table, row, "Last")).toHaveText(new RegExp(`^${escapeRegExp(price(amzn.price))}(?:\\s|$)`), { useInnerText: true });
+    await expectCells(table, row, { Last: new RegExp(`^${escapeRegExp(price(amzn.price))}(?:\\s|$)`) });
     await expectStored(page, [...start, "AMZN"]);
 
     // A symbol that is already listed (in another case, with Enter) is not added a second time.
@@ -127,7 +126,7 @@ test.describe("adding symbols", () => {
     test.skip(app.isPhone, "The add form is the same on phones.");
     test.fixme(
       true,
-      "app bug: AddSymbolForm checks only the format, so ZZZZ is saved and listed as a row of dashes under a 'Not found: ZZZZ' notice instead of being refused",
+      "app bug or product decision: AddSymbolForm checks only the format, so ZZZZ is saved and listed as a row of dashes under the 'Not found' notice instead of being refused as the brief expects",
     );
     await app.seedStorage({ watchlist: ["NVDA", "AAPL"], holdings: {} });
     await app.goto("/watchlist");
@@ -135,7 +134,8 @@ test.describe("adding symbols", () => {
     const field = panel.getByRole("combobox", { name: ADD_FIELD });
     await field.fill("ZZZZ");
     await field.press("Enter");
-    await expect(panel.getByText(/Not found:\s*ZZZZ/)).toBeVisible();
+    // Refused the way the form refuses a malformed symbol (an alert under the field, whatever its words), and not added.
+    await expect(panel.getByRole("alert")).toBeVisible();
     await expect(rowOf(panel.getByRole("table"), "ZZZZ")).toHaveCount(0);
     await expectStored(page, ["NVDA", "AAPL"]);
   });
@@ -257,24 +257,29 @@ test.describe("panels beside the list", () => {
     const weightOf = new Map(valued.rows.map((row) => [row.symbol, row.weight as number]));
     const now = await page.evaluate(() => Date.now());
 
-    // Upcoming: the earnings and ex-dividend dates of the held and watched symbols in the next 14 days, soonest first,
-    // with the weight of each held symbol.
+    // Upcoming: the earnings and ex-dividend dates of the held and watched symbols in the next 14 days, soonest first
+    // (sorted here, not taken in the API's order), with the weight of each held symbol.
     const upcoming = page.getByRole("region", { name: "Upcoming", exact: true }).first().getByRole("table");
     const events = calendar.events
       .filter((event) => event.symbol !== null && symbols.includes(event.symbol) && (event.kind === "earnings" || event.kind === "dividend"))
       .map((event) => ({ event, days: calendarDays(event.at, now) }))
-      .filter(({ days }) => days >= 0 && days <= 14);
-    expect(events.length).toBeGreaterThan(0);
-    await expect(dataRows(upcoming)).toHaveCount(events.length);
-    for (const [index, { event, days }] of events.entries()) {
-      const row = dataRows(upcoming).nth(index);
-      await expect(row.getByRole("link").first()).toHaveAccessibleName(new RegExp(`^${escapeRegExp(event.symbol as string)}(?:\\s|$)`));
-      await expect(row).toContainText(event.kind === "earnings" ? "Earnings" : "Ex-div");
-      if (event.kind === "dividend" && event.amount !== null) await expect(row).toContainText(`${price(event.amount)}/sh`);
-      await expect(row).toContainText(`${shortDate(event.at)}${days === 0 ? "Today" : `${days}d`}`);
-      const weight = weightOf.get(event.symbol as string);
-      if (weight !== undefined) await expect(row).toContainText(`Weight ${percent(weight)}`);
-    }
+      .filter(({ days }) => days >= 0 && days <= 14)
+      .sort((a, b) => Date.parse(a.event.at) - Date.parse(b.event.at) || a.event.id.localeCompare(b.event.id));
+    expect(events.length).toBeGreaterThan(1);
+    // Each row reads symbol (with the weight of a held one), event (with the amount of a dividend), then date and days left.
+    await expect(dataRows(upcoming)).toHaveText(
+      events.map(({ event, days }) => {
+        const weight = weightOf.get(event.symbol as string);
+        const parts = [
+          escapeRegExp(event.symbol as string),
+          weight === undefined ? null : `Weight ${escapeRegExp(percent(weight))}`,
+          event.kind === "earnings" ? "Earnings" : "Ex-div",
+          event.kind === "dividend" && event.amount !== null ? `${escapeRegExp(price(event.amount))}/sh` : null,
+          `${escapeRegExp(shortDate(event.at))}${days === 0 ? "Today" : `${days}d`}$`,
+        ];
+        return new RegExp(`^${parts.filter((part) => part !== null).join(".*")}`);
+      }),
+    );
 
     // The fixture data's fixed dates for the default watchlist, counted in sessions after the latest one: NVDA reports in
     // 2, MSFT 4, AAPL 6, GOOGL 8, AMZN 9; AAPL goes ex-dividend in 3 (docs/testing.md, Upcoming events).
@@ -291,13 +296,12 @@ test.describe("panels beside the list", () => {
       });
     }
 
-    // Allocation by position value: the universe sector of AAPL and MSFT, Yahoo's sector for PLTR (from its profile),
-    // funds as their own group; each slice's value and share, largest first, and the three largest positions' share.
-    const groupOf = (symbol: string) => {
-      if (quotes.get(symbol)?.quoteType === "ETF") return "ETFs and funds";
-      const key = sectorOfSymbol(symbol)?.key ?? yahooSectorKey(profiles.profiles[symbol]?.sector);
-      return (key && getSector(key)?.label.en) ?? "Unclassified";
-    };
+    // Allocation by position value: each slice's value and share, largest first, and the three largest positions' share.
+    // The groups are facts of the fixture data, not the app's mapping: AAPL and MSFT are technology stocks of the
+    // universe, PLTR is outside it and grouped by its profile's sector, Technology, and SPY is a fund.
+    expect(profiles.profiles.PLTR?.sector).toBe("Technology");
+    const groups: Readonly<Record<string, string>> = { AAPL: "Information Technology", MSFT: "Information Technology", PLTR: "Information Technology", SPY: "ETFs and funds" };
+    const groupOf = (symbol: string) => groups[symbol] ?? `(no group for ${symbol})`;
     const slices = new Map<string, number>();
     for (const row of valued.rows) slices.set(groupOf(row.symbol), (slices.get(groupOf(row.symbol)) ?? 0) + row.value);
     const ordered = [...slices].sort((a, b) => b[1] - a[1]);
