@@ -8,14 +8,15 @@ import { Sparkline } from "@/components/ui/Sparkline";
 import { Skeleton } from "@/components/ui/States";
 import { TickNumber } from "@/components/ui/TickNumber";
 import { stockPath } from "@/lib/api-client";
-import { formatNumber, formatPrice } from "@/lib/format";
+import { formatQuotePrice, priceDigits } from "@/lib/quote-figures";
 import { MARKET_BOARD } from "@/lib/universe";
 import type { BoardItem } from "@/types/api";
 
 /**
  * Index, rate, FX, commodity and crypto cells with one-month sparklines: one horizontally scrolling row on phones and
  * small tablets, five across from md (two full rows, no empty cells). Each cell is a size container, so the absolute
- * change and the "1M" tag appear only where they fit beside the percentage and the line.
+ * change and the "1M" tag appear only where they fit beside the percentage and the line. Prices and changes share the
+ * instrument's decimals (priceDigits): the 10-year yield reads 4.859 and +0.022.
  */
 export function MarketBoard({ board }: { board: BoardItem[] | undefined }) {
   const { t, lang } = usePrefs();
@@ -26,7 +27,8 @@ export function MarketBoard({ board }: { board: BoardItem[] | undefined }) {
       {MARKET_BOARD.map((def) => {
         const item = board?.find((b) => b.quote.symbol === def.symbol);
         const quote = item?.quote;
-        const price = def.kind === "yield" ? formatNumber(quote?.price, 3, lang) : formatPrice(quote?.price, lang);
+        const digits = priceDigits(def.symbol, quote?.quoteType);
+        const price = formatQuotePrice(quote?.price, digits, lang);
         return (
           <Link
             key={def.symbol}
@@ -46,7 +48,7 @@ export function MarketBoard({ board }: { board: BoardItem[] | undefined }) {
                 <div className="flex items-center justify-between gap-2 text-xs">
                   <span className="flex min-w-0 gap-2">
                     {/* The absolute change needs a wide cell; narrow ones keep the percentage and the sparkline. */}
-                    <Delta value={quote.change} kind="change" lang={lang} className="hidden @min-[12rem]:inline" />
+                    <Delta value={quote.change} kind="change" digits={digits ?? undefined} lang={lang} className="hidden @min-[12rem]:inline" />
                     <Delta value={quote.changePercent} />
                   </span>
                   <span className="flex shrink-0 items-center gap-1.5">

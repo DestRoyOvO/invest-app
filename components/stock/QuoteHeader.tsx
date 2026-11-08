@@ -89,9 +89,10 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, 
   const timing = nextEarnings ? earningsTiming(nextEarnings, isUsListing(symbol)) : null;
   const showExDividend = upcomingExDividend(quote.exDividendDate);
   const kind = instrumentKind(quote.quoteType);
-  // A currency pair keeps its pips (EURUSD=X 1.1143). Figures Yahoo does not report arrive as null from the server and
-  // show as dashes (^VIX and EURUSD=X have no volume), except where the 2Y daily bars the chart loads hold them: ^TNX
-  // quotes no open, day range or 52-week low, but its bars have them (quoteRanges).
+  // A currency pair keeps its pips (EURUSD=X 1.1143), in its price and in its change (USDJPY=X +0.770). Figures Yahoo
+  // does not report arrive as null from the server and show as dashes (^VIX and EURUSD=X have no volume), except where
+  // the 2Y daily bars the chart loads hold them: ^TNX quotes no open, day range or 52-week low, but its bars have them
+  // (quoteRanges).
   const digits = priceDigits(symbol, quote.quoteType);
   const bars = useChartSeries(rangesNeedBars(quote) ? symbol : null, "2y");
   const ranges = quoteRanges(quote, bars.data?.bars ?? null, bars.data?.timezone ?? null);
@@ -118,7 +119,7 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, 
               {formatQuotePrice(quote.price, digits, lang)}
             </TickNumber>
             <TickNumber value={quote.change}>
-              <Delta value={quote.change} kind="change" lang={lang} className="text-base" />
+              <Delta value={quote.change} kind="change" digits={digits ?? undefined} lang={lang} className="text-base" />
             </TickNumber>
             <TickNumber value={quote.changePercent}>
               <Delta value={quote.changePercent} arrow className="text-base" />
