@@ -23,15 +23,36 @@ function isNum(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+/** Sign of the raw value. For a direction color, arrow or sign next to a printed number, use displayedSign. */
 export function signOf(value: number | null | undefined): -1 | 0 | 1 {
   if (!isNum(value) || value === 0) return 0;
   return value > 0 ? 1 : -1;
 }
 
-/** Plain number with fixed decimals and grouping, e.g. 7,376.86. */
+/**
+ * Sign of a value as printed with `digits` decimals: 0 when it rounds to zero there (−0.004 at two decimals prints
+ * "0.00", never "−0.00"), for −0 and for a missing or non-finite value. Signs, direction colors and arrows next to a
+ * formatted change, percent or P&L follow it, so a move that prints as zero is flat everywhere.
+ */
+export function displayedSign(value: number | null | undefined, digits: number): -1 | 0 | 1 {
+  if (!isNum(value) || Number(Math.abs(value).toFixed(digits)) === 0) return 0;
+  return value > 0 ? 1 : -1;
+}
+
+/** Plain number with fixed decimals and grouping, e.g. 7,376.86. A negative value that rounds to zero prints "0.00". */
 export function formatNumber(value: number | null | undefined, digits = 2, lang: Lang = "en"): string {
   if (!isNum(value)) return DASH;
-  return numberFormat(lang, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value);
+  // Intl writes a negative value that rounds to zero, and −0 itself, as "-0.00".
+  const shown = displayedSign(value, digits) === 0 ? 0 : value;
+  return numberFormat(lang, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(shown);
+}
+
+/** A signed number with fixed decimals and grouping, e.g. +1.80 or -0.770; one that rounds to zero prints unsigned (0.00). */
+export function formatSigned(value: number | null | undefined, digits: number, lang: Lang = "en"): string {
+  if (!isNum(value)) return DASH;
+  const sign = displayedSign(value, digits);
+  const text = formatNumber(Math.abs(value), digits, lang);
+  return sign > 0 ? `+${text}` : sign < 0 ? `-${text}` : text;
 }
 
 /** Price with sensible precision: 2 decimals, 4 below 1, none above 100k (e.g. index levels stay at 2). */
@@ -42,22 +63,28 @@ export function formatPrice(value: number | null | undefined, lang: Lang = "en")
   return formatNumber(value, digits, lang);
 }
 
-/** Signed absolute change, e.g. +1.80 or -12.34 (4 decimals only for sub-cent moves). */
-export function formatChange(value: number | null | undefined, lang: Lang = "en"): string {
-  if (!isNum(value)) return DASH;
+/**
+ * Decimals formatChange prints a change with: 4 for a sub-cent move that still shows at four decimals, 2 otherwise (a
+ * move that rounds to zero even at four decimals is no move, and prints as 0.00 like zero itself).
+ */
+export function changeDigits(value: number | null | undefined): number {
+  if (!isNum(value)) return 2;
   const abs = Math.abs(value);
-  const formatted = formatNumber(abs, abs > 0 && abs < 0.01 ? 4 : 2, lang);
-  return value > 0 ? `+${formatted}` : value < 0 ? `-${formatted}` : formatted;
+  return abs < 0.01 && displayedSign(abs, 4) !== 0 ? 4 : 2;
 }
 
-/** Percent from percent units, e.g. 1.234 -> "+1.23%". */
+/** Signed absolute change, e.g. +1.80 or -12.34 (4 decimals only for sub-cent moves); 0.00 when it rounds to zero. */
+export function formatChange(value: number | null | undefined, lang: Lang = "en"): string {
+  return formatSigned(value, changeDigits(value), lang);
+}
+
+/** Percent from percent units, e.g. 1.234 -> "+1.23%"; a value that rounds to zero prints unsigned ("0.00%"). */
 export function formatPercent(value: number | null | undefined, options: { digits?: number; sign?: boolean } = {}): string {
   if (!isNum(value)) return DASH;
   const digits = options.digits ?? 2;
-  const sign = options.sign ?? true;
-  const fixed = Math.abs(value).toFixed(digits);
-  const prefix = sign ? (value > 0 ? "+" : value < 0 ? "-" : "") : value < 0 ? "-" : "";
-  return `${prefix}${fixed}%`;
+  const shown = displayedSign(value, digits);
+  const prefix = shown < 0 ? "-" : shown > 0 && (options.sign ?? true) ? "+" : "";
+  return `${prefix}${Math.abs(value).toFixed(digits)}%`;
 }
 
 /** Percent from a decimal ratio, e.g. 0.2534 -> "25.3%". */
@@ -78,10 +105,10 @@ export function formatCompact(value: number | null | undefined, lang: Lang = "en
   return numberFormat(lang, { notation: "compact", maximumFractionDigits: digits }).format(value);
 }
 
-/** Integer with grouping, e.g. 43,750,861. */
+/** Integer with grouping, e.g. 43,750,861. A negative value that rounds to zero prints "0". */
 export function formatInteger(value: number | null | undefined, lang: Lang = "en"): string {
   if (!isNum(value)) return DASH;
-  return numberFormat(lang, { maximumFractionDigits: 0 }).format(value);
+  return numberFormat(lang, { maximumFractionDigits: 0 }).format(displayedSign(value, 0) === 0 ? 0 : value);
 }
 
 function toDate(iso: string | number | null | undefined): Date | null {
