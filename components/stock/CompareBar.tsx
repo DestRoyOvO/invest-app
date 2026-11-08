@@ -174,7 +174,8 @@ export function CompareBar({ symbol, compare, slots, suggestions, onChange }: Co
       {full ? (
         <span className="text-micro text-fg-3">{tpl(t.chart.full, { n: MAX_COMPARE })}</span>
       ) : adding ? (
-        <form onSubmit={onSubmit} className="relative">
+        // On phones the search takes a line of its own, so its suggestions stay on screen.
+        <form onSubmit={onSubmit} className="relative max-sm:w-full">
           <label htmlFor={inputId} className="sr-only">
             {t.chart.addSymbol}
           </label>
@@ -196,10 +197,10 @@ export function CompareBar({ symbol, compare, slots, suggestions, onChange }: Co
             aria-expanded={options.length > 0}
             aria-controls={listId}
             aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}
-            className="mono h-7 w-32 rounded-xs border border-input-border bg-input-bg px-2 text-xs text-fg uppercase placeholder:normal-case placeholder:text-fg-3 focus:border-accent focus:outline-none max-sm:h-10"
+            className="mono h-7 w-32 rounded-xs border border-input-border bg-input-bg px-2 text-xs text-fg uppercase placeholder:normal-case placeholder:text-fg-3 focus:border-accent focus:outline-none max-sm:h-10 max-sm:w-full"
           />
           {options.length > 0 ? (
-            <ul id={listId} role="listbox" className="absolute top-full left-0 z-40 mt-1 w-64 rounded-xs border border-line-2 bg-panel py-1 shadow-2xl">
+            <ul id={listId} role="listbox" className="absolute top-full left-0 z-40 mt-1 w-64 rounded-xs border border-line-2 bg-panel py-1 shadow-2xl max-sm:w-full">
               {options.map((option, i) => (
                 <li
                   key={option.symbol}
