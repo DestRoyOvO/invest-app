@@ -29,6 +29,7 @@ import { useStock } from "@/hooks/useApi";
 import { useEarnings, useImpliedMove } from "@/hooks/useEarningsApi";
 import { ApiError } from "@/lib/api-client";
 import { formatCompact, formatDate, formatNumber, formatRatio, tpl } from "@/lib/format";
+import type { Messages } from "@/lib/i18n/messages";
 import type { EarningsDetail, EarningsQuarter, ImpliedMove } from "@/types/earnings";
 
 // Next report, the "Into the report" note, consensus, estimate revisions, the implied move and the reported quarters
@@ -152,7 +153,7 @@ function EarningsBody({ detail, implied, now }: { detail: EarningsDetail; implie
   );
 }
 
-function slotText(detail: EarningsDetail, t: ReturnType<typeof usePrefs>["t"]): string {
+function slotText(detail: EarningsDetail, t: Messages): string {
   if (detail.nextDateEstimated || !detail.nextDate) return t.earnings.slot.tbd;
   if (detail.nextTiming) return t.earnings.slot[detail.nextTiming];
   return agendaTimeEt(detail.nextDate, t.calendar) ?? t.earnings.slot.tbd;
