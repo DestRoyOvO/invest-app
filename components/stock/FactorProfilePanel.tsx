@@ -89,7 +89,10 @@ export function FactorProfilePanel({ symbol, className, id }: { symbol: string; 
               </div>
               <div className="min-w-0 sm:pt-1">
                 <div className="flex items-center gap-3">
-                  <Meter value={percentile} label={tpl(p.meter, { name, n })} valueText={percentileText} className="flex-1" />
+                  {/* Without a percentile (crypto has no beta against the universe) the empty track is decoration: the dash beside it says so. */}
+                  <div aria-hidden={percentile === null ? true : undefined} className="flex min-w-0 flex-1">
+                    <Meter value={percentile} label={tpl(p.meter, { name, n })} valueText={percentileText} />
+                  </div>
                   <span className="num w-24 shrink-0 text-right text-xs text-fg">{percentileText}</span>
                 </div>
                 <p className="num mt-1.5 text-xs text-fg-3">{evidenceText(key, t)}</p>
