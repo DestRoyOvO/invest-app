@@ -7,8 +7,9 @@ import { expect, test, type Page } from "../support/test";
 
 // Every page of the app, on both projects, as a returning investor sees it (a watchlist, positions and a note in the
 // browser, SAMPLE_DATA): the document status, no console error or uncaught page error (the suite's collector), no
-// same-origin response with an error status, the page's main panel with its data, and no error or stale-data state
-// once the page has settled. Expected noise is allowed per route, as narrowly as possible (e2e/support/routes.ts).
+// same-origin response with an error status, the page's main panel with its data, no error or stale-data state once
+// the page has settled, and the API routes the page is known to read answering 200 (every panel route of the quote
+// page among them). Expected noise is allowed per route, as narrowly as possible (e2e/support/routes.ts).
 //
 // A server that tries to reach the network fails the run as a whole (e2e/support/global-setup.ts).
 
@@ -39,14 +40,21 @@ function appPageRoutes(): Array<{ file: string; pattern: RegExp }> {
     });
 }
 
-/** Same-origin responses with a status of 400 or more, as "status METHOD url", from now on. */
-function trackErrorResponses(page: Page): string[] {
+/**
+ * Same-origin responses from now on: those with a status of 400 or more, as "status METHOD url", and the paths of the
+ * API routes that answered 200.
+ */
+function trackResponses(page: Page): { errors: string[]; loadedApis: Set<string> } {
   const origin = new URL(BASE_URL).origin;
-  const seen: string[] = [];
+  const errors: string[] = [];
+  const loadedApis = new Set<string>();
   page.on("response", (response) => {
-    if (response.status() >= 400 && new URL(response.url()).origin === origin) seen.push(`${response.status()} ${response.request().method()} ${response.url()}`);
+    const url = new URL(response.url());
+    if (url.origin !== origin) return;
+    if (response.status() >= 400) errors.push(`${response.status()} ${response.request().method()} ${response.url()}`);
+    else if (response.status() === 200 && url.pathname.startsWith("/api/")) loadedApis.add(url.pathname);
   });
-  return seen;
+  return { errors, loadedApis };
 }
 
 /** The document status, or the status of a known app bug on this route (noted on the test). */
@@ -84,7 +92,7 @@ test.describe("every page", () => {
   for (const route of ROUTES) {
     test(`${route.path} renders its data without errors`, async ({ page, app, consoleErrors }) => {
       for (const { pattern, reason } of route.console ?? []) consoleErrors.allow(pattern, reason);
-      const errorResponses = trackErrorResponses(page);
+      const responses = trackResponses(page);
       await app.seedStorage(SAMPLE_DATA);
 
       const response = await app.goto(route.path);
@@ -96,9 +104,10 @@ test.describe("every page", () => {
       await expectNoErrorStates(page);
       const allowed = route.responses ?? [];
       expect(
-        errorResponses.filter((entry) => !allowed.some(({ pattern }) => pattern.test(entry))),
+        responses.errors.filter((entry) => !allowed.some(({ pattern }) => pattern.test(entry))),
         "same-origin responses with an error status",
       ).toEqual([]);
+      expect((route.apis ?? []).filter((api) => !responses.loadedApis.has(api)), "API routes the page did not load with status 200").toEqual([]);
     });
   }
 });

@@ -8,13 +8,14 @@ import { expect, type Page, type StoredData } from "./test";
 // The sweep fails when a page.tsx under app/ has no case here, so a new page needs one.
 
 /**
- * What the sweep and the accessibility checks keep in the browser: a watchlist with a fund and a crypto pair, three
- * positions and a thesis note, so the personal pages (watchlist, portfolio, notes, data) show their tables and the
- * quote pages their position lines, instead of empty states.
+ * What the sweep and the accessibility checks keep in the browser: a watchlist with a fund and a crypto pair, four
+ * positions (one a fund, one a stock outside the heatmap universe, whose sector the exposure tab looks up) and a thesis
+ * note, so the personal pages (watchlist, portfolio, notes, data) show their tables and the quote pages their position
+ * lines, instead of empty states.
  */
 export const SAMPLE_DATA = {
   watchlist: ["NVDA", "AAPL", "MSFT", "SPY", "BTC-USD"],
-  holdings: { AAPL: { shares: 10, cost: 150 }, MSFT: { shares: 5, cost: 300 }, SPY: { shares: 3, cost: 400 } },
+  holdings: { AAPL: { shares: 10, cost: 150 }, MSFT: { shares: 5, cost: 300 }, SPY: { shares: 3, cost: 400 }, PLTR: { shares: 20, cost: 25 } },
   notes: {
     AAPL: {
       thesis: "Services keep growing faster than hardware.",
@@ -44,6 +45,12 @@ export interface RouteCase {
   finalPath?: string;
   /** Passes once the page's main panel shows its data. */
   ready: (page: Page) => Promise<void>;
+  /**
+   * API routes (paths, without the query) the page must have loaded with status 200, so the sweep is known to reach
+   * every data route of the page, e.g. each panel route of the quote page. Left out where pending work may change
+   * which route a page reads.
+   */
+  apis?: readonly string[];
   /** Console errors this page logs on purpose. */
   console?: Allowance[];
   /** Same-origin responses with a status of 400 or more that this page gets on purpose. */
@@ -98,20 +105,23 @@ export const ROUTES: readonly RouteCase[] = [
       const nikkei = region(page, "World markets").getByRole("row").filter({ has: page.getByRole("link", { name: "NKY Nikkei 225" }) });
       await expect(nikkei).toContainText(PRICE);
     },
+    apis: ["/api/markets/world", "/api/rates/curve"],
   },
   {
     path: "/sector/technology",
     ready: async (page) => {
       await expect(region(page, "Constituents").getByRole("row", { name: new RegExp(`^NVDA\\b.*?[\\d,]+\\.\\d{2} ${CHANGE}`) })).toBeVisible();
     },
+    apis: ["/api/quotes", "/api/news", "/api/history"],
   },
   {
     path: "/screener",
     ready: async (page) => {
       await expect(region(page, "Results").getByRole("table", { name: /^Screener results/ }).getByRole("link", { name: "NVDA", exact: true })).toBeVisible();
     },
+    apis: ["/api/screener"],
   },
-  { path: "/screener?tab=discover", ready: (page) => firstRow(page, "Market movers", /^Gainers/) },
+  { path: "/screener?tab=discover", ready: (page) => firstRow(page, "Market movers", /^Gainers/), apis: ["/api/discover"] },
 
   // Portfolio
   {
@@ -128,12 +138,15 @@ export const ROUTES: readonly RouteCase[] = [
       // The chart of today's holdings over the range needs the price history of every position.
       await expect(region(page, "Portfolio analytics").getByRole("img", { name: /^Today's holdings [+−]?\d/ })).toBeVisible();
     },
+    apis: ["/api/quotes", "/api/history"],
   },
   {
     path: "/portfolio?tab=exposure",
     ready: async (page) => {
       await expect(region(page, "Portfolio analytics").getByRole("list", { name: "Sector" }).getByRole("listitem").first()).toBeVisible();
     },
+    // PLTR is outside the heatmap universe, so its sector comes from its profile.
+    apis: ["/api/history", "/api/profiles"],
   },
   { path: "/portfolio?tab=risk", ready: (page) => firstRow(page, "Portfolio analytics", "Risk by position") },
   {
@@ -148,6 +161,7 @@ export const ROUTES: readonly RouteCase[] = [
       // The filter chips count the events once the feed is in.
       await expect(region(page, "Events calendar").getByRole("button", { name: /^Watchlist \d+ events?$/ })).toBeVisible();
     },
+    apis: ["/api/calendar"],
   },
   {
     path: "/alerts",
@@ -170,25 +184,29 @@ export const ROUTES: readonly RouteCase[] = [
       await quoteReady(page, "AAPL");
       await expect(region(page, "Key statistics")).toContainText("Market cap");
     },
+    // Every panel of the overview reads a route of its own; AAPL reports within 30 days, so the implied move is read too.
+    apis: ["", "/chart", "/signal", "/factors", "/news", "/earnings", "/analysts", "/implied-move"].map((part) => `/api/stock/AAPL${part}`),
   },
   {
     path: "/stock/AAPL?tab=financials",
     ready: async (page) => {
       await expect(region(page, "Financials").getByRole("row", { name: /^Revenue [\d.]+[KMBT] / })).toBeVisible();
     },
+    apis: ["/api/stock/AAPL/financials"],
   },
   {
     path: "/stock/AAPL?tab=earnings",
     ready: async (page) => {
       await expect(region(page, "Earnings").getByRole("table", { name: "Reported quarters" }).getByRole("row", { name: /^[1-4]Q\d{4}/ }).first()).toBeVisible();
     },
+    apis: ["/api/stock/AAPL/earnings", "/api/stock/AAPL/implied-move"],
   },
-  { path: "/stock/AAPL?tab=analysts", ready: (page) => firstRow(page, "Analysts", "Recent actions") },
-  { path: "/stock/AAPL?tab=dividends", ready: (page) => firstRow(page, "Recent payments") },
-  { path: "/stock/AAPL?tab=ownership", ready: (page) => firstRow(page, "Top institutions") },
+  { path: "/stock/AAPL?tab=analysts", ready: (page) => firstRow(page, "Analysts", "Recent actions"), apis: ["/api/stock/AAPL/analysts"] },
+  { path: "/stock/AAPL?tab=dividends", ready: (page) => firstRow(page, "Recent payments"), apis: ["/api/stock/AAPL/dividends"] },
+  { path: "/stock/AAPL?tab=ownership", ready: (page) => firstRow(page, "Top institutions"), apis: ["/api/stock/AAPL/ownership"] },
   // A fund: only the overview and dividends tabs.
-  { path: "/stock/SPY", ready: (page) => quoteReady(page, "SPY") },
-  { path: "/stock/SPY?tab=dividends", ready: (page) => firstRow(page, "Recent payments") },
+  { path: "/stock/SPY", ready: (page) => quoteReady(page, "SPY"), apis: ["/api/stock/SPY", "/api/stock/SPY/chart"] },
+  { path: "/stock/SPY?tab=dividends", ready: (page) => firstRow(page, "Recent payments"), apis: ["/api/stock/SPY/dividends"] },
   // An index, a crypto pair, a currency pair, a future and a Hong Kong listing: the overview only.
   { path: "/stock/%5EGSPC", ready: (page) => quoteReady(page, "^GSPC") },
   { path: "/stock/BTC-USD", ready: (page) => quoteReady(page, "BTC-USD") },

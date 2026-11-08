@@ -59,6 +59,13 @@ for (const theme of ["dark", "light"] as const satisfies readonly Theme[]) {
       await expect(dialog).toBeVisible();
       await expect(dialog.getByRole("option").first()).toBeVisible();
       await axe.check();
+      // A company name brings matches from the symbol search (/api/search) next to the functions.
+      const search = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/search" && response.status() === 200);
+      await dialog.getByRole("combobox", { name: "Command bar" }).fill("apple");
+      await search;
+      await expect(dialog.getByRole("option", { name: /\bAAPL\b/ }).first()).toBeVisible();
+      await app.settle();
+      await axe.check();
     });
 
     test("the open AI chat drawer has no serious accessibility violations", async ({ page, app, axe }) => {
