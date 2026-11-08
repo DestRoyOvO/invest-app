@@ -49,6 +49,8 @@ export function MoreSheet({ open, onClose, ctx }: { open: boolean; onClose: () =
                     </li>
                   );
                 })}
+                {/* Fills the last row of an odd group, so the grid's hairline color does not show through. */}
+                {items.length % 2 === 1 ? <li aria-hidden className="bg-panel" /> : null}
               </ul>
             </section>
           );
