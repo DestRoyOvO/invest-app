@@ -240,6 +240,25 @@ export function latestSessions<T extends { t: number; c: number; session?: Intra
   return { bars: kept, previousClose };
 }
 
+/**
+ * True for markets that trade around the clock (crypto, and nearly so futures and currencies): Yahoo gives them a
+ * regular period of 23 hours or more. Their "latest session date" would start at midnight, so the intraday ranges
+ * use rolling windows of 24 hours instead.
+ */
+export function tradesAroundTheClock(meta: Record<string, unknown> | undefined): boolean {
+  const period = toPeriod((meta?.currentTradingPeriod as { regular?: unknown } | undefined)?.regular);
+  return period !== null && period.end - period.start >= 23 * HOUR_MS;
+}
+
+/** The bars of the last `days` x 24 hours, and the close just before them as the change baseline. */
+export function rollingWindow<T extends { t: number; c: number }>(bars: readonly T[], days: number): { bars: T[]; previousClose: number | null } {
+  const last = bars.at(-1);
+  if (!last || days <= 0) return { bars: [], previousClose: null };
+  const from = last.t - days * DAY_MS;
+  const index = bars.findIndex((bar) => bar.t > from);
+  return { bars: bars.slice(index), previousClose: index > 0 ? bars[index - 1].c : null };
+}
+
 // ---------------------------------------------------------------------------
 // Dividend and split events
 // ---------------------------------------------------------------------------

@@ -319,6 +319,11 @@ export interface ChartData {
   interval: ChartInterval;
   /** True for the 5m and 15m intervals. */
   intraday: boolean;
+  /**
+   * True for markets that trade around the clock (crypto, futures, currencies): intraday ranges then cover rolling
+   * 24-hour windows rather than session dates, and previousClose is the price at the window's start.
+   */
+  continuous?: boolean;
   /** Oldest first. Intraday ranges keep their latest sessions (1 or 5) plus any later pre-market bars. */
   bars: Bar[];
   /** IANA time zone of the exchange, e.g. "America/New_York"; intraday times are shown in it. */

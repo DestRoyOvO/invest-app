@@ -9,9 +9,11 @@ import {
   normalizeIntradayBars,
   normalizeSplits,
   regularPeriods,
+  rollingWindow,
   sessionClassifier,
   sessionDate,
   toMs,
+  tradesAroundTheClock,
   type RawChart,
 } from "./bars";
 
@@ -201,6 +203,28 @@ describe("intraday sessions", () => {
     );
     expect(premarket.bars.map((b) => b.c)).toEqual([104, 105]);
     expect(latestSessions([], 1, EST)).toEqual({ bars: [], previousClose: null });
+  });
+});
+
+describe("round-the-clock markets", () => {
+  it("recognizes a regular period of 23 hours or more", () => {
+    const crypto = { currentTradingPeriod: { regular: { start: new Date("2026-11-07T00:00:00Z"), end: new Date("2026-11-07T23:59:00Z") } } };
+    expect(tradesAroundTheClock(crypto)).toBe(true);
+    expect(tradesAroundTheClock(nyChart().meta)).toBe(false);
+    expect(tradesAroundTheClock(undefined)).toBe(false);
+  });
+
+  it("keeps the last 24 hours with the close just before them", () => {
+    const hour = 3_600_000;
+    const start = utc("2026-11-06T00:00:00Z");
+    const bars = Array.from({ length: 30 }, (_, i) => ({ t: start + i * hour, c: 100 + i }));
+    const day = rollingWindow(bars, 1);
+    expect(day.bars).toHaveLength(24);
+    expect(day.bars[0].c).toBe(106);
+    expect(day.previousClose).toBe(105);
+    expect(rollingWindow(bars, 5).bars).toHaveLength(30);
+    expect(rollingWindow(bars, 5).previousClose).toBeNull();
+    expect(rollingWindow([], 1)).toEqual({ bars: [], previousClose: null });
   });
 });
 

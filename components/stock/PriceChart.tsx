@@ -326,7 +326,12 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
   const position = holdings[symbol];
   const hasExtended = Boolean(data?.bars.some((bar) => bar.session !== undefined && bar.session !== "regular"));
   // Intraday change is measured from each session's previous regular close; daily bars from the bar before.
-  const baselines = useMemo(() => (intraday ? sessionBaselines(bars, data?.previousClose ?? null, timezone) : null), [intraday, bars, data, timezone]);
+  // Round-the-clock markets measure every bar from the start of the rolling window.
+  const baselines = useMemo(() => {
+    if (!intraday) return null;
+    const start = data?.previousClose ?? null;
+    return data?.continuous ? bars.map(() => start) : sessionBaselines(bars, start, timezone);
+  }, [intraday, bars, data, timezone]);
   const lastBar = bars.at(-1) ?? null;
   // The last price line follows the header: the change against the previous regular close.
   const previousClose = quote?.previousClose ?? (baselines ? (baselines.at(-1) ?? null) : bars.length > 1 ? bars[bars.length - 2].c : null);

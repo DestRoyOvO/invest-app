@@ -22,6 +22,8 @@ import {
   normalizeDividends,
   normalizeIntradayBars,
   normalizeSplits,
+  rollingWindow,
+  tradesAroundTheClock,
   type DailyBar,
   type RawChart,
 } from "@/lib/bars";
@@ -584,8 +586,11 @@ async function fetchChartData(symbol: string, range: ChartRange, now = Date.now(
 
   let bars: Bar[];
   let previousClose: number | null = null;
+  const continuous = tradesAroundTheClock(meta);
   if (intraday) {
-    const latest = latestSessions(normalizeIntradayBars(raw), spec.sessions ?? 1, gmtOffset);
+    // Round-the-clock markets (crypto, futures, currencies) get rolling 24-hour windows instead of session dates.
+    const all = normalizeIntradayBars(raw);
+    const latest = continuous ? rollingWindow(all, spec.sessions ?? 1) : latestSessions(all, spec.sessions ?? 1, gmtOffset);
     bars = latest.bars;
     previousClose = latest.previousClose ?? num(meta?.previousClose);
   } else {
@@ -606,6 +611,7 @@ async function fetchChartData(symbol: string, range: ChartRange, now = Date.now(
     range,
     interval: spec.interval,
     intraday,
+    continuous,
     bars,
     timezone,
     previousClose,
