@@ -11,7 +11,7 @@ function trading(state: MarketState | null | undefined): boolean {
 
 /**
  * The 10 board instruments and the market state for the ticker strip, the status bar and the top bar: every 15 s while
- * US markets trade, every 2 min otherwise (paused in hidden tabs by SWR). About 8 KB instead of the 80 KB overview.
+ * US markets trade, every 2 min otherwise (paused in hidden tabs by SWR). About 13 KB instead of the 80 KB overview.
  */
 export function useBoard() {
   return useSWR<BoardResponse>("/api/market/board", {

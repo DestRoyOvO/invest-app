@@ -8,8 +8,9 @@ import { cached, isFresh } from "./cache";
 import { getQuotes, getSparkline, hasCachedSparkline, hasFreshQuote } from "./yahoo";
 
 // The ticker strip and the status bar need the 10 board instruments and the market state, not the whole market overview
-// (about 80 KB with every heatmap quote). This payload is about 8 KB and is assembled at most once per 10 seconds for
-// every visitor: one batched quote request (each quote cached 15 s while trading) plus the cached sparklines.
+// (about 80 KB with every heatmap quote). This payload is about 13 KB (full Quote objects, so the overview's MarketBoard
+// can use it too) and is assembled at most once per 10 seconds for every visitor: one batched quote request (each
+// quote cached 15 s while trading) plus the cached sparklines.
 
 const BOARD_KEY = "market:board";
 const BOARD_TTL_MS = 10_000;

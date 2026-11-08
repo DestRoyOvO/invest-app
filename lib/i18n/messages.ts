@@ -64,6 +64,9 @@ export const en = {
     et: "{time} ET",
     quotesDelayed: "Quotes delayed since {time} · Yahoo unavailable",
     quotesDelayedUnknown: "Quotes delayed · Yahoo unavailable",
+    // The short form for the phone ticker strip, which has no status bar.
+    delayedSince: "Delayed since {time}",
+    quotesUnavailable: "Quotes unavailable",
     shortcuts: "Shortcuts",
     goPending: "Go to…",
     marketState: {
@@ -483,6 +486,8 @@ export const zh: Messages = {
     et: "美东 {time}",
     quotesDelayed: "行情自 {time} 起延迟 · Yahoo 暂不可用",
     quotesDelayedUnknown: "行情延迟 · Yahoo 暂不可用",
+    delayedSince: "{time} 起延迟",
+    quotesUnavailable: "行情暂不可用",
     shortcuts: "快捷键",
     goPending: "前往…",
     marketState: {

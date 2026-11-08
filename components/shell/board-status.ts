@@ -1,4 +1,4 @@
-// Freshness wording for the status bar. Pure, so it is unit tested.
+// Freshness wording for the status bar and the ticker strip. Pure, so it is unit tested.
 
 import { staleSinceLabel } from "@/components/ui/stale";
 import { tpl } from "@/lib/format";
@@ -18,13 +18,25 @@ export function boardIsStale(board: BoardResponse): boolean {
   return board.warnings.includes("quotes_stale") || board.board.some((item) => item.quote.stale);
 }
 
+export interface BoardNotice {
+  /** delayed: older quotes are on screen; unavailable: no board has loaded at all. */
+  kind: "delayed" | "unavailable";
+  /** For the status bar and the live region: "Quotes delayed since 13:05 ET · Yahoo unavailable". */
+  text: string;
+  /** For the phone ticker strip, which has no status bar: "Delayed since 13:05 ET". */
+  short: string;
+}
+
 /**
- * "Quotes delayed since 13:05 ET · Yahoo unavailable" when older quotes are on screen: the server served stale quotes,
- * or the latest board request failed and the previous board is still shown. Null while quotes are live.
+ * What the shell says about the board quotes; null while they are live or the first board is still loading.
+ * Delayed: the server served stale quotes, or the latest board request failed and the previous board is still shown.
+ * Unavailable: the board request failed before any board arrived.
  */
-export function delayedNotice(t: Messages, board: BoardResponse | undefined, requestFailed: boolean, lang: Lang, now: number | null): string | null {
-  if (!board) return null;
+export function boardNotice(t: Messages, board: BoardResponse | undefined, requestFailed: boolean, lang: Lang, now: number | null): BoardNotice | null {
+  if (!board) return requestFailed ? { kind: "unavailable", text: t.shell.quotesUnavailable, short: t.shell.quotesUnavailable } : null;
   if (!boardIsStale(board) && !requestFailed) return null;
   const since = board.quotesAsOf ?? (requestFailed ? board.asOf : null);
-  return since ? tpl(t.shell.quotesDelayed, { time: etLabel(t, since, lang, now) }) : t.shell.quotesDelayedUnknown;
+  if (!since) return { kind: "delayed", text: t.shell.quotesDelayedUnknown, short: t.shell.quotesDelayedUnknown };
+  const time = etLabel(t, since, lang, now);
+  return { kind: "delayed", text: tpl(t.shell.quotesDelayed, { time }), short: tpl(t.shell.delayedSince, { time }) };
 }

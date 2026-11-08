@@ -4,7 +4,7 @@ import { MESSAGES } from "@/lib/i18n/messages";
 import type { Quote } from "@/types/api";
 import type { BoardResponse } from "@/types/shell";
 
-import { boardIsStale, delayedNotice, etLabel } from "./board-status";
+import { boardIsStale, boardNotice, etLabel } from "./board-status";
 
 const en = MESSAGES.en;
 const zh = MESSAGES.zh;
@@ -30,30 +30,39 @@ describe("etLabel", () => {
   });
 });
 
-describe("delayedNotice", () => {
-  it("stays silent while quotes are live", () => {
-    expect(delayedNotice(en, undefined, false, "en", NOW)).toBeNull();
-    expect(delayedNotice(en, board(), false, "en", NOW)).toBeNull();
+describe("boardNotice", () => {
+  it("stays silent while quotes are live or the first board is loading", () => {
+    expect(boardNotice(en, undefined, false, "en", NOW)).toBeNull();
+    expect(boardNotice(en, board(), false, "en", NOW)).toBeNull();
     expect(boardIsStale(board())).toBe(false);
   });
 
-  it("says since when quotes are delayed, from the oldest stale quote", () => {
+  it("says since when quotes are delayed, from the oldest stale quote, with a short form for phones", () => {
     const stale = board({
       board: [{ quote: quote("^GSPC", { stale: true, fetchedAt: "2026-11-09T18:05:00.000Z" }), spark: [] }],
       warnings: ["quotes_stale"],
       quotesAsOf: "2026-11-09T18:05:00.000Z",
     });
     expect(boardIsStale(stale)).toBe(true);
-    expect(delayedNotice(en, stale, false, "en", NOW)).toBe("Quotes delayed since 13:05 ET · Yahoo unavailable");
-    expect(delayedNotice(zh, stale, false, "zh", NOW)).toBe("行情自 美东 13:05 起延迟 · Yahoo 暂不可用");
+    expect(boardNotice(en, stale, false, "en", NOW)).toEqual({
+      kind: "delayed",
+      text: "Quotes delayed since 13:05 ET · Yahoo unavailable",
+      short: "Delayed since 13:05 ET",
+    });
+    expect(boardNotice(zh, stale, false, "zh", NOW)).toEqual({ kind: "delayed", text: "行情自 美东 13:05 起延迟 · Yahoo 暂不可用", short: "美东 13:05 起延迟" });
   });
 
   it("treats a failed refresh of the board itself as delayed since the last board", () => {
-    expect(delayedNotice(en, board(), true, "en", NOW)).toBe("Quotes delayed since 14:00 ET · Yahoo unavailable");
+    expect(boardNotice(en, board(), true, "en", NOW)?.text).toBe("Quotes delayed since 14:00 ET · Yahoo unavailable");
   });
 
   it("falls back to a notice without a time", () => {
     const stale = board({ board: [{ quote: quote("^GSPC", { stale: true, fetchedAt: null }), spark: [] }] });
-    expect(delayedNotice(en, stale, false, "en", NOW)).toBe("Quotes delayed · Yahoo unavailable");
+    expect(boardNotice(en, stale, false, "en", NOW)).toMatchObject({ kind: "delayed", text: "Quotes delayed · Yahoo unavailable" });
+  });
+
+  it("says quotes are unavailable when the board never loaded", () => {
+    expect(boardNotice(en, undefined, true, "en", NOW)).toEqual({ kind: "unavailable", text: "Quotes unavailable", short: "Quotes unavailable" });
+    expect(boardNotice(zh, undefined, true, "zh", NOW)?.text).toBe("行情暂不可用");
   });
 });
