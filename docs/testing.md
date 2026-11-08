@@ -121,10 +121,13 @@ the next one trades), and Yahoo quirks such as the extra trailing row of weekly 
 validate query options the way the library does, except for `fundamentalsTimeSeries`.
 
 Not realistic, so keep it out of screenshots: relations between instruments beyond the shared market and sector factors.
-Each walk runs on its own, so the dollar index does not follow the FX pairs (DXY 107 next to EUR/USD 1.31), an index
-does not follow its members (NDX and QQQ down over 52 weeks while NVDA, AMZN and MSFT are up), related indices such as
-the Shanghai Composite and the CSI 300 can move apart on the same day, and long histories (5Y, MAX) start at arbitrary
-levels. Company revenue comes from a random price-to-sales ratio, so it can be a few times off for the largest companies.
+Each walk runs on its own, so an index does not follow its members (NDX and QQQ down over 52 weeks while NVDA, AMZN and
+MSFT are up), related indices such as the Shanghai Composite and the CSI 300 can move apart on the same day, and long
+histories (5Y, MAX) start at arbitrary levels. The dollar index is the exception: ICE's formula computes it from the walks
+of its six currencies (EUR/USD, USD/JPY, GBP/USD, USD/CAD, USD/SEK and USD/CHF, `DOLLAR_INDEX` in
+`lib/server/fixtures/prices.ts`), so it falls as the euro rises (DXY 91.75 next to EUR/USD 1.3062 on the pinned Friday)
+and starts in December 2003 with them. Company revenue comes from a random price-to-sales ratio, so it can be a few times
+off for the largest companies.
 
 Run the app on fixture data:
 

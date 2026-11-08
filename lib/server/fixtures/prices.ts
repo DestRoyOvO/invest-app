@@ -2,7 +2,7 @@ import "server-only";
 
 import { yieldOn } from "./curve";
 import { gaussian, normalFrom, prng, seedOf } from "./random";
-import type { Security } from "./securities";
+import { securityOf, type Security } from "./securities";
 import {
   DAY_MS,
   dailyStamp,
@@ -10,6 +10,7 @@ import {
   isTradingDay,
   localToUtc,
   localToUtcExact,
+  nextTradingDay,
   parseDayKey,
   previousTradingDay,
   tradingDaysBetween,
@@ -164,6 +165,50 @@ function vixLog(security: Security, day: number): number {
   return memo.logs[lo];
 }
 
+/**
+ * The ICE US Dollar Index: 50.14348112 × EURUSD^-0.576 × USDJPY^0.136 × GBPUSD^-0.119 × USDCAD^0.091 × USDSEK^0.042 ×
+ * USDCHF^0.036, with Yahoo's symbols of the six currencies.
+ */
+export const DOLLAR_INDEX: { factor: number; weights: ReadonlyArray<readonly [symbol: string, weight: number]> } = {
+  factor: 50.14348112,
+  weights: [
+    ["EURUSD=X", -0.576],
+    ["USDJPY=X", 0.136],
+    ["GBPUSD=X", -0.119],
+    ["CAD=X", 0.091],
+    ["SEK=X", 0.042],
+    ["CHF=X", 0.036],
+  ],
+};
+
+/** Raw closes of `security` on each of `days` (ascending): the close of its latest trading day on or before the day. */
+function closesOn(security: Security, days: readonly number[]): number[] {
+  const own = tradingDaysBetween(security.profile, days[0], days[days.length - 1]);
+  if (own.length === 0) own.push(nextTradingDay(security.profile, Math.max(days[days.length - 1], security.profile.epoch - 1)));
+  const { previous, closes } = rawCloses(security, own);
+  let at = -1;
+  return days.map((day) => {
+    while (at + 1 < own.length && own[at + 1] <= day) at++;
+    return at < 0 ? previous : closes[at];
+  });
+}
+
+/**
+ * Raw closes of the dollar index (DOLLAR_INDEX) for consecutive trading days, and the close of the trading day before
+ * the first, from the currency walks' closes of the same days: the index follows its currencies.
+ */
+function dollarIndexCloses(security: Security, days: readonly number[]): { previous: number; closes: number[] } {
+  const wanted = [previousTradingDay(security.profile, days[0]), ...days];
+  const logs = wanted.map(() => Math.log(DOLLAR_INDEX.factor));
+  for (const [symbol, weight] of DOLLAR_INDEX.weights) {
+    const currency = securityOf(symbol);
+    if (!currency) throw new Error(`The fixture data has no ${symbol}.`);
+    closesOn(currency, wanted).forEach((close, i) => (logs[i] += weight * Math.log(close)));
+  }
+  const [previous, ...closes] = logs.map(Math.exp);
+  return { previous, closes };
+}
+
 /** Raw (unrounded) closes for consecutive trading days, and the close of the trading day before the first. */
 function rawCloses(security: Security, days: readonly number[]): { previous: number; closes: number[] } {
   const before = previousTradingDay(security.profile, days[0]);
@@ -174,6 +219,7 @@ function rawCloses(security: Security, days: readonly number[]): { previous: num
   if (security.model === "vix") {
     return { previous: Math.exp(vixLog(security, before)), closes: days.map((day) => Math.exp(vixLog(security, day))) };
   }
+  if (security.model === "dollar-index") return dollarIndexCloses(security, days);
   // Up to the anchor the walk runs on its (squashed) deviation from the anchor price, after it on compounded returns.
   const anchor = Math.log(security.anchorPrice);
   let deviation = before < ANCHOR_DAY ? backwardDeviation(security, before) : 0;

@@ -3,10 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { buildChart } from "./chart";
-import { aggregateRows, ANCHOR_DAY, dailyRows, intradayRows } from "./prices";
+import { aggregateRows, ANCHOR_DAY, dailyRows, DOLLAR_INDEX, intradayRows } from "./prices";
 import { buildQuote } from "./quote";
 import { securityOf, type Security } from "./securities";
-import { latestCompletedSession, parseDayKey, PROFILES } from "./sessions";
+import { dayKey, latestCompletedSession, parseDayKey, PROFILES } from "./sessions";
 
 const security = (symbol: string): Security => {
   const found = securityOf(symbol);
@@ -91,6 +91,28 @@ describe("daily bars", () => {
     expect(new Date(first.day * DAY).toISOString().slice(0, 10)).toBe("2020-09-30");
     expect((buildQuote(pltr, SATURDAY)?.firstTradeDateMilliseconds as Date).toISOString()).toBe("2020-09-30T13:30:00.000Z");
     expect(dailyRows(security("AAPL"), parseDayKey("2000-01-01"), parseDayKey("2000-01-10"))[0].day).toBe(parseDayKey("2000-01-03"));
+  });
+
+  it("compute the dollar index from its six currencies with the ICE formula", () => {
+    const from = parseDayKey("2025-11-03");
+    const to = parseDayKey("2026-11-06");
+    const index = dailyRows(security("DX-Y.NYB"), from, to);
+    const currencies = DOLLAR_INDEX.weights.map(([symbol, weight]) => ({ weight, closes: new Map(dailyRows(security(symbol), from, to).map((row) => [row.day, row.c])) }));
+    expect(index.length).toBeGreaterThan(240);
+    for (const row of index) {
+      const formula = currencies.reduce((value, { weight, closes }) => value * (closes.get(row.day) as number) ** weight, DOLLAR_INDEX.factor);
+      // Equal up to the rounding of the closes: the index to cents, the currencies to four (USD/JPY three) decimals.
+      expect(Math.abs(row.c / formula - 1), dayKey(row.day)).toBeLessThan(1e-4);
+    }
+    // So a dearer euro is a cheaper dollar, day by day.
+    const euro = currencies[0].closes;
+    const moves = index.slice(1).map((row, i) => [Math.log(row.c / index[i].c), Math.log((euro.get(row.day) as number) / (euro.get(index[i].day) as number))]);
+    const mean = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
+    const [mx, my] = [mean(moves.map(([x]) => x)), mean(moves.map(([, y]) => y))];
+    const correlation = mean(moves.map(([x, y]) => (x - mx) * (y - my))) / Math.sqrt(mean(moves.map(([x]) => (x - mx) ** 2)) * mean(moves.map(([, y]) => (y - my) ** 2)));
+    expect(correlation).toBeLessThan(-0.8);
+    // It starts with the currency data, in December 2003.
+    expect(dayKey(dailyRows(security("DX-Y.NYB"), parseDayKey("2000-01-01"), from)[0].day)).toBe("2003-12-01");
   });
 
   it("move a fund exactly like the index it tracks", () => {
