@@ -48,7 +48,8 @@ const SCORE = {
 } as const;
 
 /** De-duplication preference when the same story arrives through several searches. */
-const PROVENANCE_RANK: Record<NewsProvenance, number> = { company: 0, industry: 1, macro: 2, sector: 3, market: 4 };
+// A symbol's own news ranks first whatever its kind (getStockNews names it after the quote type).
+const PROVENANCE_RANK: Record<NewsProvenance, number> = { company: 0, fund: 0, index: 0, currency: 0, futures: 0, crypto: 0, industry: 1, macro: 2, sector: 3, market: 4 };
 
 // ---------------------------------------------------------------------------
 // Text helpers
