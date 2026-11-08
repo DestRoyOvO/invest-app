@@ -318,12 +318,16 @@ export function mapEarningsDetail(symbol: string, raw: Raw, now: number): Earnin
   }
 
   const epsCurrency = str(obj(trendRows[0]?.earningsEstimate).earningsCurrency) ?? str(historyRows.at(-1)?.currency);
+  const financialCurrency = str(financial.financialCurrency) ?? str(earnings.financialCurrency);
+  // Revenue estimates come in the reporting currency, which can differ from the EPS currency (an ADR such as TSM).
+  const revenueCurrency = trendRows.map((row) => str(obj(row.revenueEstimate).revenueCurrency)).find((code) => code !== null) ?? financialCurrency;
 
   return {
     symbol,
     asOf: new Date(now).toISOString(),
-    financialCurrency: str(financial.financialCurrency) ?? str(earnings.financialCurrency),
+    financialCurrency,
     epsCurrency,
+    revenueCurrency,
     nextDate,
     nextDateEstimated,
     nextTiming: nextDate === null ? null : earningsTiming(nextDate, nextDateEstimated === true, symbol),

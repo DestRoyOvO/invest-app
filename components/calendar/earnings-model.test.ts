@@ -6,6 +6,7 @@ import type { EarningsDetail, EarningsEstimate, EarningsQuarter, ImpliedMove } f
 import {
   daysUntil,
   estimateTrend,
+  figureCurrencies,
   formatTarget,
   hasUsOptions,
   intoReportNote,
@@ -177,6 +178,35 @@ describe("intoReportNote", () => {
     const note = intoReportNote(NVDA, null, NOW, earningsMessages.zh, "zh");
     expect(note[0]).toBe("10 天后（11月17日周二）盘后发布财报。");
     expect(note.at(-1)).toBe("最近 4 个季度中有 4 个季度的每股收益高于预期。");
+  });
+
+  it("names the currency of figures that are not in the trading currency", () => {
+    const tsm: EarningsDetail = { ...NVDA, symbol: "TSM", financialCurrency: "TWD", epsCurrency: "USD", revenueCurrency: "TWD", consensus: { ...NVDA.consensus!, revenueAvg: 1707801676350 } };
+    const note = intoReportNote(tsm, null, NOW, earningsMessages.en, "en", figureCurrencies("USD", tsm));
+    expect(note).toContain("Consensus EPS is 2.47 from 44 analysts, with estimates from 2.34 to 2.70.");
+    expect(note).toContain("Revenue consensus is TWD 1.71T.");
+    const baba = intoReportNote({ ...tsm, epsCurrency: "CNY", revenueCurrency: "CNY" }, null, NOW, earningsMessages.en, "en", { eps: "CNY", revenue: "CNY" });
+    expect(baba).toContain("Consensus EPS is CNY 2.47 from 44 analysts, with estimates from 2.34 to 2.70.");
+  });
+});
+
+describe("figureCurrencies", () => {
+  it("labels the figures that are not in the trading currency", () => {
+    // TSM: trades in USD, EPS per ADR in USD, revenue in TWD.
+    expect(figureCurrencies("USD", { financialCurrency: "TWD", epsCurrency: "USD", revenueCurrency: "TWD" })).toEqual({
+      eps: null,
+      revenue: "TWD",
+      note: { kind: "split", eps: "USD", revenue: "TWD" },
+    });
+    // BABA: everything in CNY.
+    expect(figureCurrencies("USD", { financialCurrency: "CNY", epsCurrency: "CNY", revenueCurrency: "CNY" })).toEqual({ eps: "CNY", revenue: "CNY", note: { kind: "all", currency: "CNY" } });
+    // 0700.HK before revenueCurrency existed: revenue falls back to the financial currency.
+    expect(figureCurrencies("HKD", { financialCurrency: "CNY", epsCurrency: "CNY" })).toEqual({ eps: "CNY", revenue: "CNY", note: { kind: "all", currency: "CNY" } });
+    expect(figureCurrencies("USD", { financialCurrency: "USD", epsCurrency: "USD", revenueCurrency: "USD" })).toEqual({ eps: null, revenue: null, note: null });
+    expect(figureCurrencies("USD", { financialCurrency: null, epsCurrency: null, revenueCurrency: null })).toEqual({ eps: null, revenue: null, note: null });
+    // Before the quote (and its trading currency) arrives, only a split between EPS and revenue is certain.
+    expect(figureCurrencies(null, { financialCurrency: "CNY", epsCurrency: "CNY" }).note).toBeNull();
+    expect(figureCurrencies(null, { financialCurrency: "TWD", epsCurrency: "USD" }).note).toEqual({ kind: "split", eps: "USD", revenue: "TWD" });
   });
 });
 

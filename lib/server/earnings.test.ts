@@ -31,7 +31,8 @@ import { resetRateLimits } from "./rate-limit";
 
 // Fixtures: real quoteSummary payloads recorded on 2026-11-07 (validateResult false, dates already converted), trimmed
 // to the fields the mapper reads. NVDA is the plain case; AAPL shows the lagging "0q" label five days after its report;
-// PLTR shows a stale calendarEvents consensus and a stale "0q" row; 0700.HK reports in CNY on a Hong Kong listing.
+// PLTR shows a stale calendarEvents consensus and a stale "0q" row; 0700.HK reports in CNY on a Hong Kong listing; TSM
+// (an ADR) gives EPS per ADR in USD and revenue in TWD.
 
 const NOW = Date.parse("2026-11-07T15:00:00Z");
 const DAY = 86_400_000;
@@ -64,11 +65,12 @@ const trend = (
   epsTrend: [current: number, d7: number, d30: number, d60: number, d90: number],
   revisions: [up7: number, up30: number, down7: number, down30: number],
   currency = "USD",
+  revenueCurrency = currency,
 ): Row => ({
   period,
   endDate: `${end}T00:00:00.000Z`,
   earningsEstimate: { avg: eps[0], low: eps[1], high: eps[2], yearAgoEps: eps[3], numberOfAnalysts: eps[4], earningsCurrency: currency },
-  revenueEstimate: { avg: revenue[0], low: revenue[1], high: revenue[2], numberOfAnalysts: revenue[3] },
+  revenueEstimate: { avg: revenue[0], low: revenue[1], high: revenue[2], numberOfAnalysts: revenue[3], revenueCurrency },
   epsTrend: { current: epsTrend[0], "7daysAgo": epsTrend[1], "30daysAgo": epsTrend[2], "60daysAgo": epsTrend[3], "90daysAgo": epsTrend[4] },
   epsRevisions: { upLast7days: revisions[0], upLast30days: revisions[1], downLast7Days: revisions[2], downLast30days: revisions[3], downLast90days: null },
 });
@@ -202,6 +204,21 @@ const TENCENT: Row = {
   },
   calendarEvents: calendar(["2026-11-18T08:10:00.000Z"], false, [7.21612, 6.61, 7.82], [210364772310, 206627133500, 213679000000]),
   financialData: { financialCurrency: "CNY" },
+};
+
+const TSM: Row = {
+  earnings: {
+    earningsChart: { quarterly: [chart("3Q2026", "3Q2026", "2026-09-30", 4.6, 4.52449, "1.67", "2026-10-15T06:08:27.000Z")] },
+    financialCurrency: "TWD",
+  },
+  earningsHistory: { history: [history("2026-09-30", 4.6, 4.52449, 0.0167, "USD")] },
+  earningsTrend: {
+    trend: [
+      trend("0q", "2026-12-31", [5.1641, 5.102, 5.28, 3.14, 8], [1707801676350, 1647305000000, 1753006000000, 26], [5.1641, 5.04936, 4.96547, 4.96788, 4.9585], [6, 6, 1, 1], "USD", "TWD"),
+    ],
+  },
+  calendarEvents: calendar(["2027-01-14T13:30:00.000Z"], true, [5.1641, 5.102, 5.28], [1707801676350, 1647305000000, 1753006000000]),
+  financialData: { financialCurrency: "TWD" },
 };
 
 const action = (date: string, firm: string, fromGrade: string, toGrade: string, act: string, targetAction: string, current: number, prior: number): Row => ({
@@ -353,8 +370,24 @@ describe("mapEarningsDetail", () => {
 
   it("keeps the financial currency and gives no session timing to a listing outside the US (0700.HK)", () => {
     const detail = mapEarningsDetail("0700.HK", TENCENT, NOW)!;
-    expect(detail).toMatchObject({ financialCurrency: "CNY", epsCurrency: "CNY", nextDate: "2026-11-18T08:10:00.000Z", nextDateEstimated: false, nextTiming: null });
+    expect(detail).toMatchObject({
+      financialCurrency: "CNY",
+      epsCurrency: "CNY",
+      revenueCurrency: "CNY",
+      nextDate: "2026-11-18T08:10:00.000Z",
+      nextDateEstimated: false,
+      nextTiming: null,
+    });
     expect(detail.consensus).toMatchObject({ epsAvg: 7.21612, analysts: 12, source: "calendar" });
+  });
+
+  it("keeps the EPS and revenue currencies apart when they differ (TSM: USD per ADR, revenue in TWD)", () => {
+    const detail = mapEarningsDetail("TSM", TSM, NOW)!;
+    expect(detail).toMatchObject({ financialCurrency: "TWD", epsCurrency: "USD", revenueCurrency: "TWD" });
+    expect(detail.consensus).toMatchObject({ epsAvg: 5.1641, revenueAvg: 1707801676350, analysts: 8, revenueAnalysts: 26 });
+    // Without a revenueCurrency on the trend rows, revenue is taken to be in the financial currency.
+    const bare = { ...TSM, earningsTrend: { trend: [{ ...trend("0q", "2026-12-31", [5.1641, 5.102, 5.28, 3.14, 8], [1, 1, 1, 26], [5, 5, 5, 5, 5], [0, 0, 0, 0]), revenueEstimate: { avg: 1 } }] } };
+    expect(mapEarningsDetail("TSM", bare, NOW)).toMatchObject({ epsCurrency: "USD", revenueCurrency: "TWD" });
   });
 
   it("treats two listed dates as an estimated window and skips dates before the last report", () => {

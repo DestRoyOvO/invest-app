@@ -83,6 +83,11 @@ export interface EarningsDetail {
   financialCurrency: string | null;
   /** Currency of the EPS figures (history and estimates), when Yahoo gives one. */
   epsCurrency?: string | null;
+  /**
+   * Currency of the revenue figures (consensus and estimates): Yahoo's revenueCurrency, else financialCurrency. It can
+   * differ from epsCurrency: TSM gives EPS per ADR in USD and revenue in TWD.
+   */
+  revenueCurrency?: string | null;
   nextDate: string | null;
   nextDateEstimated: boolean | null;
   /** Session timing of the next report; null when the date is an estimate, has no time, or the listing is not in the US. */

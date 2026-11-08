@@ -6,6 +6,7 @@ import { agendaTimeEt } from "@/components/calendar/agenda-format";
 import {
   daysUntil,
   estimateTrend,
+  figureCurrencies,
   hasUsOptions,
   intoReportNote,
   isNonEquity,
@@ -15,6 +16,7 @@ import {
   upcomingQuarter,
   weekdayDay,
   withinDays,
+  type FigureCurrencies,
 } from "@/components/calendar/earnings-model";
 import { useClock } from "@/components/calendar/use-clock";
 import { usePrefs } from "@/components/providers/PrefsProvider";
@@ -55,12 +57,11 @@ export function EarningsPanel({ symbol, className }: { symbol: string; className
   const implied = useImpliedMove(wantsImplied ? symbol : null);
 
   const trading = stock.data?.quote.currency ?? null;
-  const figures = data?.epsCurrency ?? data?.financialCurrency ?? null;
-  const currencyDiffers = Boolean(figures && trading && figures !== trading);
+  const currencies = data ? figureCurrencies(trading, data) : null;
 
   let body;
-  if (data && now !== null) {
-    body = <EarningsBody detail={data} implied={implied.data ?? null} now={now} />;
+  if (data && now !== null && currencies) {
+    body = <EarningsBody detail={data} implied={implied.data ?? null} now={now} currencies={currencies} />;
   } else if (noEarnings || (error instanceof ApiError && error.status === 404)) {
     body = <EmptyState>{e.none}</EmptyState>;
   } else if (error && !isLoading) {
@@ -75,13 +76,7 @@ export function EarningsPanel({ symbol, className }: { symbol: string; className
       title={e.title}
       className={className}
       bodyClassName="@container"
-      actions={
-        currencyDiffers && figures && trading ? (
-          <span title={tpl(e.currencyTitle, { currency: figures, trading })}>
-            <PanelMeta>{tpl(e.currency, { currency: figures })}</PanelMeta>
-          </span>
-        ) : null
-      }
+      actions={currencies?.note ? <CurrencyNote note={currencies.note} trading={trading} /> : null}
       footer={
         data ? (
           <div className="border-t border-line px-2 py-1.5">
@@ -99,11 +94,29 @@ export function EarningsPanel({ symbol, className }: { symbol: string; className
   );
 }
 
-function EarningsBody({ detail, implied, now }: { detail: EarningsDetail; implied: ImpliedMove | null; now: number }) {
+/** "Figures in CNY", or "EPS in USD, revenue in TWD" when the two differ (an ADR such as TSM). */
+function CurrencyNote({ note, trading }: { note: NonNullable<FigureCurrencies["note"]>; trading: string | null }) {
+  const { t } = usePrefs();
+  const e = t.earnings;
+  const text = note.kind === "all" ? tpl(e.currency, { currency: note.currency }) : tpl(e.currencySplit, { eps: note.eps, revenue: note.revenue });
+  const title =
+    trading === null
+      ? undefined
+      : note.kind === "all"
+        ? tpl(e.currencyTitle, { currency: note.currency, trading })
+        : tpl(e.currencySplitTitle, { eps: note.eps, revenue: note.revenue, trading });
+  return (
+    <span title={title}>
+      <PanelMeta>{text}</PanelMeta>
+    </span>
+  );
+}
+
+function EarningsBody({ detail, implied, now, currencies }: { detail: EarningsDetail; implied: ImpliedMove | null; now: number; currencies: FigureCurrencies }) {
   const { t, lang } = usePrefs();
   const e = t.earnings;
   const days = daysUntil(detail.nextDate, now);
-  const note = detail.nextDate && withinDays(detail.nextDate, now, NOTE_DAYS) ? intoReportNote(detail, implied, now, e, lang) : [];
+  const note = detail.nextDate && withinDays(detail.nextDate, now, NOTE_DAYS) ? intoReportNote(detail, implied, now, e, lang, currencies) : [];
   return (
     <div className="grid @3xl:grid-cols-2">
       <div className="min-w-0 @3xl:border-r @3xl:border-line">
@@ -134,7 +147,7 @@ function EarningsBody({ detail, implied, now }: { detail: EarningsDetail; implie
           </div>
         ) : null}
 
-        <Consensus detail={detail} />
+        <Consensus detail={detail} currencies={currencies} />
         <EstimateTrend detail={detail} />
         {implied ? (
           <div className="flex items-start justify-between gap-3 border-t border-line px-3 py-2.5">
@@ -163,12 +176,13 @@ function rangeText(low: number | null, high: number | null, format: (value: numb
   return low !== null && high !== null ? tpl(template, { low: format(low), high: format(high) }) : null;
 }
 
-function Consensus({ detail }: { detail: EarningsDetail }) {
+function Consensus({ detail, currencies }: { detail: EarningsDetail; currencies: FigureCurrencies }) {
   const { t, lang } = usePrefs();
   const e = t.earnings;
   const consensus = detail.consensus;
   const eps = (value: number) => formatNumber(value, 2, lang);
   const revenue = (value: number) => formatCompact(value, lang);
+  const labelIn = (label: string, currency: string | null) => (currency ? tpl(e.inCurrency, { label, currency }) : label);
   return (
     <div className="border-t border-line">
       <div className="flex items-center justify-between gap-3 px-3 pt-2.5">
@@ -178,12 +192,12 @@ function Consensus({ detail }: { detail: EarningsDetail }) {
       {consensus && consensus.epsAvg !== null ? (
         <div className="mt-2 grid grid-cols-2 gap-px border-t border-line bg-line">
           <StatTile
-            label={e.eps}
+            label={labelIn(e.eps, currencies.eps)}
             value={eps(consensus.epsAvg)}
             sub={[rangeText(consensus.epsLow, consensus.epsHigh, eps, e.range), consensus.analysts ? tpl(e.analystCount, { n: consensus.analysts }) : null].filter(Boolean).join(" · ") || undefined}
           />
           <StatTile
-            label={e.revenue}
+            label={labelIn(e.revenue, currencies.revenue)}
             value={consensus.revenueAvg !== null ? revenue(consensus.revenueAvg) : "—"}
             sub={
               [rangeText(consensus.revenueLow, consensus.revenueHigh, revenue, e.range), consensus.revenueAnalysts ? tpl(e.analystCount, { n: consensus.revenueAnalysts }) : null]

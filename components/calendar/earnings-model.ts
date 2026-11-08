@@ -18,6 +18,34 @@ export function isNonEquity(quoteType: string | null | undefined): boolean {
   return typeof quoteType === "string" && quoteType !== "EQUITY";
 }
 
+export interface FigureCurrencies {
+  /** EPS currency, set only when it differs from the trading currency (to name it beside EPS figures). */
+  eps: string | null;
+  /** Revenue currency, set only when it differs from the trading currency. */
+  revenue: string | null;
+  /** The panel's currency note: one currency for every figure, EPS and revenue apart, or none. */
+  note: { kind: "all"; currency: string } | { kind: "split"; eps: string; revenue: string } | null;
+}
+
+/**
+ * The currencies of the earnings figures against the trading currency. EPS and revenue can differ from it and from
+ * each other: TSM trades in USD with EPS per ADR in USD and revenue in TWD; BABA reports both in CNY.
+ */
+export function figureCurrencies(trading: string | null, detail: Pick<EarningsDetail, "financialCurrency" | "epsCurrency" | "revenueCurrency">): FigureCurrencies {
+  const revenue = detail.revenueCurrency ?? detail.financialCurrency ?? null;
+  const eps = detail.epsCurrency ?? revenue;
+  const differs = (code: string | null): code is string => code !== null && trading !== null && code !== trading;
+  const named = { eps: differs(eps) ? eps : null, revenue: differs(revenue) ? revenue : null };
+  if (eps !== null && revenue !== null && eps !== revenue) return { ...named, note: { kind: "split", eps, revenue } };
+  const one = named.eps ?? named.revenue;
+  return { ...named, note: one ? { kind: "all", currency: one } : null };
+}
+
+/** "TWD 1.71T" when the figure is not in the trading currency, else the bare figure. */
+function withCurrency(text: string, currency: string | null | undefined): string {
+  return currency ? `${currency} ${text}` : text;
+}
+
 /** Surprises within half a percent count as in line. */
 export const INLINE_BAND = 0.005;
 
@@ -148,9 +176,17 @@ export function relativeWhen(days: number, labels: NoteLabels["when"], lang: Lan
 
 /**
  * The deterministic "Into the report" note shown within 14 days of a report: when, consensus, how the estimate moved,
- * the beat record and the implied move. Facts only, one sentence each; empty without a next report date.
+ * the beat record and the implied move. Facts only, one sentence each; empty without a next report date. `currencies`
+ * names the EPS and revenue currencies where they differ from the trading currency (see figureCurrencies).
  */
-export function intoReportNote(detail: EarningsDetail, implied: ImpliedMove | null, now: number, labels: NoteLabels, lang: Lang): string[] {
+export function intoReportNote(
+  detail: EarningsDetail,
+  implied: ImpliedMove | null,
+  now: number,
+  labels: NoteLabels,
+  lang: Lang,
+  currencies?: Pick<FigureCurrencies, "eps" | "revenue">,
+): string[] {
   if (!detail.nextDate) return [];
   const days = daysUntil(detail.nextDate, now) ?? 0;
   const when = relativeWhen(days, labels.when, lang, true);
@@ -170,13 +206,13 @@ export function intoReportNote(detail: EarningsDetail, implied: ImpliedMove | nu
 
   const consensus = detail.consensus;
   if (consensus?.epsAvg !== null && consensus?.epsAvg !== undefined) {
-    const eps = formatNumber(consensus.epsAvg, 2, lang);
+    const eps = withCurrency(formatNumber(consensus.epsAvg, 2, lang), currencies?.eps);
     if (consensus.analysts && consensus.epsLow !== null && consensus.epsHigh !== null) {
       sentences.push(tpl(labels.note.consensus, { eps, n: consensus.analysts, low: formatNumber(consensus.epsLow, 2, lang), high: formatNumber(consensus.epsHigh, 2, lang) }));
     } else {
       sentences.push(tpl(labels.note.consensusPlain, { eps }));
     }
-    if (consensus.revenueAvg !== null) sentences.push(tpl(labels.note.revenue, { revenue: formatCompact(consensus.revenueAvg, lang) }));
+    if (consensus.revenueAvg !== null) sentences.push(tpl(labels.note.revenue, { revenue: withCurrency(formatCompact(consensus.revenueAvg, lang), currencies?.revenue) }));
   }
 
   const quarter = upcomingQuarter(detail);
