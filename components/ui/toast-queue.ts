@@ -154,3 +154,15 @@ export function removeOutlet<T>(outlets: readonly T[], outlet: T): readonly T[] 
 export function activeOutlet<T>(outlets: readonly T[]): T | null {
   return outlets.length > 0 ? outlets[outlets.length - 1] : null;
 }
+
+/**
+ * The toasts that move to another host without being announced again, worked out as the host changes (a drawer opens
+ * or closes): every toast on screen that a live region has already shown, besides those carried before. A toast shown
+ * in the same moment, such as the confirmation of a drawer's Save as it closes, has not been shown in a live region
+ * yet, so it stays out and gets announced in its new host. Toasts no longer on screen drop out.
+ */
+export function carryOver<T>(onScreen: readonly T[], announced: (toast: T) => boolean, carried: ReadonlySet<T>): ReadonlySet<T> {
+  const next = new Set<T>();
+  for (const toast of onScreen) if (carried.has(toast) || announced(toast)) next.add(toast);
+  return next;
+}

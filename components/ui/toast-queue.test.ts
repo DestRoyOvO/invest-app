@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { activeOutlet, addOutlet, createToastStore, pushToast, remainingTime, removeOutlet, removeToast } from "./toast-queue";
+import { activeOutlet, addOutlet, carryOver, createToastStore, pushToast, remainingTime, removeOutlet, removeToast } from "./toast-queue";
 
 describe("toast queue", () => {
   it("appends and keeps the newest ones", () => {
@@ -197,5 +197,37 @@ describe("toast outlets", () => {
     expect(removeOutlet(outlets, "b")).toBe(outlets);
     // The closing drawer is removed before or after the opening one registers: the result is the same.
     expect(removeOutlet(addOutlet(outlets, "b"), "a")).toEqual(addOutlet(removeOutlet(outlets, "a"), "b"));
+  });
+});
+
+describe("toasts carried to another host", () => {
+  const saved = { id: "saved" };
+  const triggered = { id: "triggered" };
+  const confirmation = { id: "confirmation" };
+
+  it("are the ones a live region has shown, so a drawer opening or closing does not announce them again", () => {
+    const announced = new Set([saved, triggered]);
+    expect([...carryOver([saved, triggered], (toast) => announced.has(toast), new Set())]).toEqual([saved, triggered]);
+  });
+
+  it("leave out a toast shown as the drawer closes, which its new host announces", () => {
+    const announced = new Set([saved]);
+    const carried = carryOver([saved, confirmation], (toast) => announced.has(toast), new Set());
+    expect(carried.has(saved)).toBe(true);
+    expect(carried.has(confirmation)).toBe(false);
+  });
+
+  it("stay carried through later moves and drop out once closed", () => {
+    const first = carryOver([saved, triggered], () => true, new Set());
+    // Back at the screen's edge after Cancel: still carried, though no live region shows them now.
+    const second = carryOver([saved, triggered], () => false, first);
+    expect([...second]).toEqual([saved, triggered]);
+    expect([...carryOver([triggered], () => false, second)]).toEqual([triggered]);
+  });
+
+  it("do not include the same toast shown again, which is a new entry", () => {
+    const again = { id: "saved" };
+    const carried = carryOver([again], () => false, new Set([saved]));
+    expect(carried.size).toBe(0);
   });
 });

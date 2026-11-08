@@ -541,9 +541,11 @@ focus) and are announced (under `aria-modal`, assistive technology may ignore a 
 side panel the strip sits between the content and the footer, and the content gives up the room; in a bottom sheet it
 sits at the top (after the content in the reading and Tab order) and the sheet may grow past 85dvh while it shows
 toasts, so nothing in the drawer moves when a toast comes or goes. Hover and focus pause them, Undo and the focus
-return work as at the screen's edge. The region at the screen's edge stays mounted meanwhile, so a toast shown as a
-drawer closes (Save, Delete) lands in a live region that already existed and is announced. With two drawers open, the
-newer one hosts the toasts. Another modal layer can render a `ToastOutlet` the same way.
+return work as at the screen's edge. A toast is announced once, where it first shows: toasts that move as a drawer
+opens or closes sit beside the live region of their new place, not in it. The live region at the screen's edge stays
+mounted meanwhile, so a toast shown as a drawer closes (Save, Delete) lands in a live region that already existed and
+is announced. With two drawers open, the newer one hosts the toasts. Another modal layer can render a `ToastOutlet`
+the same way.
 
 ### Drawer
 

@@ -2,7 +2,7 @@ import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import { dockedRegionClass, ToastCard, toastCardClass, ToastOutlet, ToastProvider } from "./Toast";
+import { dockedRegionClass, stackClass, ToastCard, toastCardClass, ToastOutlet, ToastProvider } from "./Toast";
 
 // Server-rendered markup of the toasts: the live region the provider keeps, a toast card, and the outlet a dialog
 // renders for them. Moving the toasts into an outlet happens in the browser (a portal); the end-to-end specs check it.
@@ -18,11 +18,13 @@ const noop = () => undefined;
 describe("ToastProvider", () => {
   it("keeps a polite live region at the screen's edge, over the page and its drawers, before any toast", () => {
     const markup = html(createElement(ToastProvider, null, createElement("main", null, "page")));
-    const match = /^<main>page<\/main><div aria-live="polite" class="([^"]*)"><\/div>$/.exec(markup);
+    const match = /^<main>page<\/main><div class="([^"]*)"><div aria-live="polite" class="([^"]*)"><\/div><\/div>$/.exec(markup);
     expect(match).not.toBeNull();
-    const region = tokens(match?.[1] ?? "");
+    const host = tokens(match?.[1] ?? "");
     // Above the tab bar on phones, bottom right from md; above the drawers (z-50), letting clicks through between toasts.
-    expect(region).toEqual(expect.arrayContaining(["fixed", "bottom-16", "md:bottom-10", "md:right-4", "z-[60]", "pointer-events-none"]));
+    expect(host).toEqual(expect.arrayContaining(["fixed", "bottom-16", "md:bottom-10", "md:right-4", "z-[60]", "pointer-events-none"]));
+    // The live stack inside it: centered cards on phones, right-aligned from md.
+    expect(tokens(match?.[2] ?? "")).toEqual(tokens(stackClass(false)));
   });
 });
 
@@ -71,7 +73,17 @@ describe("the docked region", () => {
   it("takes no room without toasts and pads the strip once one shows", () => {
     expect(tokens(dockedRegionClass(0))).not.toContain("py-2");
     expect(tokens(dockedRegionClass(1))).toContain("py-2");
-    expect(tokens(dockedRegionClass(3))).toEqual(expect.arrayContaining(["flex", "flex-col", "gap-2", "px-3", "py-2"]));
+    expect(tokens(dockedRegionClass(3))).toEqual(expect.arrayContaining(["flex", "flex-col", "px-3", "py-2"]));
+  });
+});
+
+describe("the stacks of a host", () => {
+  it("space their cards 8px apart, and the live stack 8px from the carried one above it", () => {
+    expect(tokens(stackClass(true))).toEqual(["flex", "flex-col", "gap-2"]);
+    expect(tokens(stackClass(false))).toEqual(expect.arrayContaining(["w-full", "items-center", "md:items-end", "gap-2"]));
+    expect(tokens(stackClass(true, true))).toContain("mt-2");
+    expect(tokens(stackClass(false, true))).toContain("mt-2");
+    expect(tokens(stackClass(false))).not.toContain("mt-2");
   });
 });
 
@@ -79,6 +91,6 @@ describe("ToastOutlet", () => {
   it("is an empty element the toasts move into, with or without a provider", () => {
     expect(html(createElement(ToastOutlet, { className: "shrink-0" }))).toBe('<div data-toast-outlet="true" class="shrink-0"></div>');
     const inProvider = html(createElement(ToastProvider, null, createElement(ToastOutlet)));
-    expect(inProvider.startsWith('<div data-toast-outlet="true"></div><div aria-live="polite"')).toBe(true);
+    expect(inProvider.startsWith('<div data-toast-outlet="true"></div><div class="pointer-events-none fixed')).toBe(true);
   });
 });

@@ -1,14 +1,28 @@
 "use client";
 
 import { X } from "lucide-react";
-import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type FocusEvent, type PointerEvent, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent,
+  type PointerEvent,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { createPortal } from "react-dom";
 
 import { useT } from "@/components/providers/PrefsProvider";
 import { cn } from "@/lib/cn";
 
 import { IconButton } from "./Button";
-import { activeOutlet, addOutlet, createToastStore, removeOutlet } from "./toast-queue";
+import { activeOutlet, addOutlet, carryOver, createToastStore, removeOutlet } from "./toast-queue";
 
 export interface ToastOptions {
   message: ReactNode;
@@ -35,14 +49,22 @@ const MAX_TOASTS = 3;
 
 /** The toasts at the screen's edge: bottom center on phones above the tab bar, bottom right from md above the status bar. */
 const EDGE_REGION =
-  "pointer-events-none fixed inset-x-0 bottom-16 z-[60] flex flex-col items-center gap-2 px-4 md:inset-x-auto md:right-4 md:bottom-10 md:items-end md:px-0";
+  "pointer-events-none fixed inset-x-0 bottom-16 z-[60] flex flex-col items-center px-4 md:inset-x-auto md:right-4 md:bottom-10 md:items-end md:px-0";
 
 /**
  * The toasts in an open dialog's outlet: a strip of the dialog's own layout, so they take room from its content instead
  * of covering it. Without toasts it has no height.
  */
 export function dockedRegionClass(count: number): string {
-  return cn("flex flex-col gap-2 px-3", count > 0 && "py-2");
+  return cn("flex flex-col px-3", count > 0 && "py-2");
+}
+
+/**
+ * A stack of toasts in a host: the toasts carried in from another host, then the live stack of those first shown
+ * here. Cards sit 8px apart, and the live stack keeps 8px from a carried stack above it.
+ */
+export function stackClass(docked: boolean, spaced = false): string {
+  return cn(docked ? "flex flex-col gap-2" : "flex w-full flex-col items-center gap-2 md:items-end", spaced && "mt-2");
 }
 
 /** A toast: at the screen's edge a card as wide as its text, with a shadow; in a dialog's outlet, as wide as the strip. */
@@ -94,11 +116,12 @@ export function ToastCard({ toast, docked, closeLabel, onDismiss }: ToastCardPro
 }
 
 /**
- * Hosts the toasts in a polite live region: at the screen's edge (bottom center on phones above the tab bar, bottom
- * right on wider screens), or, while a modal layer is open, in that layer's ToastOutlet. Countdowns pause while the
- * pointer is over the toasts or keyboard focus is inside them. When a toast that has keyboard focus closes, focus moves
- * to the toast that took its place, or back to where it was before the toasts. Mounted once in
- * components/providers/Providers.tsx.
+ * Hosts the toasts, announced through a polite live region: at the screen's edge (bottom center on phones above the tab
+ * bar, bottom right on wider screens), or, while a modal layer is open, in that layer's ToastOutlet. A toast is
+ * announced once, where it first shows; toasts that move with a layer opening or closing sit beside the live region of
+ * their new host, so they are not announced again. Countdowns pause while the pointer is over the toasts or keyboard
+ * focus is inside them. When a toast that has keyboard focus closes, focus moves to the toast that took its place, or
+ * back to where it was before the toasts. Mounted once in components/providers/Providers.tsx.
  */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const t = useT();
@@ -107,10 +130,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [store] = useState(() => createToastStore<ToastEntry>(setToasts, { max: MAX_TOASTS }));
   const [outlets, setOutlets] = useState<readonly HTMLElement[]>([]);
   const outlet = activeOutlet(outlets);
-  // The region at the screen's edge stays mounted while an outlet hosts the toasts: a toast shown as a dialog closes
-  // (Save, Delete) then lands in a live region that already existed, which is what gets it announced.
+  // Toasts a live region has shown (they were in a live stack in the document after a commit), and the ones carried to
+  // another host since, which stay out of its live stack. A toast shown again is a new entry and is announced again.
+  const announced = useRef(new WeakSet<ToastEntry>());
+  const [carried, setCarried] = useState<ReadonlySet<ToastEntry>>(() => new Set());
+  // The hosts (screen's edge, outlet) and their live stacks. The edge's live stack stays mounted while an outlet hosts
+  // the toasts: a toast shown as a dialog closes (Save, Delete) then lands in a live region that already existed, which
+  // is what gets it announced.
   const edgeRef = useRef<HTMLDivElement>(null);
   const dockedRef = useRef<HTMLDivElement>(null);
+  const edgeLiveRef = useRef<HTMLDivElement>(null);
+  const dockedLiveRef = useRef<HTMLDivElement>(null);
   // Where keyboard focus came from before it entered the toasts, which toast holds it, and whether it got there by
   // keyboard: enough to put focus somewhere sensible when that toast closes under it.
   const returnFocus = useRef<HTMLElement | null>(null);
@@ -130,10 +160,28 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [store],
   );
 
-  const registerOutlet = useCallback((element: HTMLElement) => {
-    setOutlets((list) => addOutlet(list, element));
-    return () => setOutlets((list) => removeOutlet(list, element));
-  }, []);
+  // The host changes: the toasts already announced move along without being announced again.
+  const carry = useCallback(() => setCarried((before) => carryOver(store.toasts(), (toast) => announced.current.has(toast), before)), [store]);
+
+  const registerOutlet = useCallback(
+    (element: HTMLElement) => {
+      carry();
+      setOutlets((list) => addOutlet(list, element));
+      return () => {
+        carry();
+        setOutlets((list) => removeOutlet(list, element));
+      };
+    },
+    [carry],
+  );
+
+  useLayoutEffect(() => {
+    // A toast counts as announced once it is in a live stack that is in the document. One rendered into the outlet of a
+    // dialog that closes in the same commit is not: it is announced at the screen's edge on the next render.
+    const live = outlet ? dockedLiveRef.current : edgeLiveRef.current;
+    if (!live?.isConnected) return;
+    for (const toast of toasts) if (!carried.has(toast)) announced.current.add(toast);
+  }, [toasts, carried, outlet]);
 
   useEffect(() => {
     // The focusout of a toast that closes under keyboard focus fires while React deletes it and never reaches onBlur,
@@ -189,20 +237,32 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const api = useMemo<ToastApi>(() => ({ show, dismiss }), [show, dismiss]);
 
-  const region = { "aria-live": "polite", onPointerEnter, onPointerLeave, onFocus, onBlur } as const;
-  const cards = (docked: boolean) => toasts.map((toast) => <ToastCard key={toast.id} toast={toast} docked={docked} closeLabel={t.common.close} onDismiss={dismiss} />);
+  const region = { onPointerEnter, onPointerLeave, onFocus, onBlur };
+  const moved = toasts.filter((toast) => carried.has(toast));
+  const fresh = toasts.filter((toast) => !carried.has(toast));
+  const cards = (list: readonly ToastEntry[], docked: boolean) =>
+    list.map((toast) => <ToastCard key={toast.id} toast={toast} docked={docked} closeLabel={t.common.close} onDismiss={dismiss} />);
+  // One host's stacks: the carried toasts (oldest, so first), then the live stack, which stays mounted while empty.
+  const stacks = (docked: boolean, active: boolean, liveRef: RefObject<HTMLDivElement | null>) => (
+    <>
+      {active && moved.length > 0 ? <div className={stackClass(docked)}>{cards(moved, docked)}</div> : null}
+      <div ref={liveRef} aria-live="polite" className={stackClass(docked, active && moved.length > 0 && fresh.length > 0)}>
+        {active ? cards(fresh, docked) : null}
+      </div>
+    </>
+  );
 
   return (
     <ToastContext value={api}>
       <ToastOutletContext value={registerOutlet}>
         {children}
         <div ref={edgeRef} {...region} className={EDGE_REGION}>
-          {outlet ? null : cards(false)}
+          {stacks(false, outlet === null, edgeLiveRef)}
         </div>
         {outlet
           ? createPortal(
               <div ref={dockedRef} {...region} className={dockedRegionClass(toasts.length)}>
-                {cards(true)}
+                {stacks(true, true, dockedLiveRef)}
               </div>,
               outlet,
             )
