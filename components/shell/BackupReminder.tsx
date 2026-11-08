@@ -23,7 +23,7 @@ function openPanel(event: MouseEvent<HTMLAnchorElement>) {
 
 /**
  * Desktop: the status bar's backup state while a backup is due (useBackupReminder), in the caveat color and linking to
- * the backup panel. It never interrupts (no toast, no dialog) and goes away with the next export.
+ * the backup panel. It never interrupts (no toast, no dialog) and goes away with the next backup.
  */
 export function BackupStatus() {
   const t = useT();

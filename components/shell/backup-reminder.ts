@@ -54,8 +54,9 @@ const serverSnapshot = () => null;
 
 /**
  * The backup reminder while one is due: this browser holds personal data and its last backup is more than 30 days old
- * or never happened (backupReminder in lib/backup.ts). Null otherwise, on the server and while hydrating. An export
- * records the backup through backupMetaStore, which clears it at once, in every tab.
+ * or never happened (backupReminder in lib/backup.ts). Null otherwise, on the server and while hydrating. An export,
+ * or a restore of a file that holds all the personal data, records the backup in backupMetaStore, which clears it at
+ * once, in every tab.
  */
 export function useBackupReminder(): BackupReminder | null {
   const snapshot = useSyncExternalStore<StorageSnapshot | null>(subscribe, readSnapshot, serverSnapshot);
