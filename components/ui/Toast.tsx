@@ -160,8 +160,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [store],
   );
 
-  // The host changes: the toasts already announced move along without being announced again.
-  const carry = useCallback(() => setCarried((before) => carryOver(store.toasts(), (toast) => announced.current.has(toast), before)), [store]);
+  // The host changes: the toasts already announced by then move along without being announced again.
+  const carry = useCallback(() => {
+    const onScreen = store.toasts();
+    const shown = new Set(onScreen.filter((toast) => announced.current.has(toast)));
+    setCarried((before) => carryOver(onScreen, (toast) => shown.has(toast), before));
+  }, [store]);
 
   const registerOutlet = useCallback(
     (element: HTMLElement) => {
