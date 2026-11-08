@@ -8,6 +8,7 @@ import { PanelCode } from "@/components/ui/Panel";
 import { Segmented } from "@/components/ui/Segmented";
 import { Tabs } from "@/components/ui/Tabs";
 import { useScreener } from "@/hooks/useApi";
+import { cn } from "@/lib/cn";
 import { formatTime, tpl } from "@/lib/format";
 import {
   capParam,
@@ -87,9 +88,9 @@ export function ScreenerView() {
   const discover = state.tab === "discover";
 
   return (
-    <div className="flex flex-col gap-px bg-line p-px">
+    <div className={cn("flex flex-col gap-px bg-line p-px", !discover && "lg:h-full")}>
       <h1 className="sr-only">{discover ? t.discover.title : t.screener.title}</h1>
-      <div className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1 bg-panel-2 px-3">
+      <div className="flex min-h-10 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 bg-panel-2 px-3">
         <PanelCode code={discover ? "MOST" : "EQS"} />
         <Tabs
           label={t.screener.tabs.label}
@@ -122,7 +123,7 @@ export function ScreenerView() {
           )}
         </div>
       </div>
-      <div role="tabpanel" aria-label={discover ? t.screener.tabs.discover : t.screener.tabs.screener}>
+      <div role="tabpanel" aria-label={discover ? t.screener.tabs.discover : t.screener.tabs.screener} className={cn(!discover && "lg:min-h-0 lg:flex-1")}>
         {discover ? <DiscoverTab cap={state.cap} onCapChange={setCap} /> : <ScreenerTab screen={state.screen} onScreenChange={setScreen} />}
       </div>
     </div>

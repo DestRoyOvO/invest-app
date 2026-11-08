@@ -236,9 +236,11 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
   };
 
   return (
-    <div className={cn("grid gap-px bg-line", railOpen && "lg:grid-cols-[15rem_minmax(0,1fr)]")}>
+    // From lg up the tab fills the viewport and the rail and the table scroll on their own, so the results stay in view
+    // while the person works down the filters. Phones keep the page flow.
+    <div className={cn("grid gap-px bg-line lg:h-full lg:grid-rows-[minmax(0,1fr)]", railOpen && "lg:grid-cols-[15rem_minmax(0,1fr)]")}>
       {railOpen ? (
-        <div className="hidden min-w-0 flex-col gap-px lg:flex">
+        <div className="hidden min-w-0 flex-col gap-px lg:flex lg:min-h-0 lg:overflow-y-auto">
           <Panel
             title={t.screener.filters.title}
             actions={
@@ -253,11 +255,12 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
         </div>
       ) : null}
 
-      <div className="flex min-w-0 flex-col gap-px">
+      <div className="flex min-w-0 flex-col gap-px lg:min-h-0">
         {/* The results fill their column, so a short list leaves panel, not canvas, under the table. */}
         <Panel
           title={t.screener.results}
-          className="flex-1"
+          className="flex-1 lg:min-h-0"
+          bodyClassName="flex flex-col"
           actions={
             <>
               {snapshot ? <PanelMeta>{tpl(t.screener.count, { n: matches.length, total: rows.length })}</PanelMeta> : null}
@@ -395,7 +398,11 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
             <ErrorState error={error} onRetry={() => mutate()} />
           ) : (
             // Row clicks bubble here; keyboard users have the symbol link in each row.
-            <div onClick={onTableClick} style={{ "--eqs-wide": `${tableMinWidthRem(metrics)}rem` } as CSSProperties}>
+            <div
+              onClick={onTableClick}
+              style={{ "--eqs-wide": `${tableMinWidthRem(metrics)}rem` } as CSSProperties}
+              className="relative [--eqs-max-h:max(22rem,calc(100dvh-19rem))] lg:min-h-64 lg:flex-1 lg:[--eqs-max-h:none]"
+            >
               <DataTable
                 rows={matches}
                 columns={columns}
@@ -407,9 +414,9 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
                 loading={!snapshot}
                 loadingRows={10}
                 stickyHeader
-                maxHeight="max(22rem, calc(100dvh - 19rem))"
+                maxHeight="var(--eqs-max-h)"
                 minWidth="var(--eqs-min)"
-                className="[--eqs-min:0px] sm:[--eqs-min:var(--eqs-wide)]"
+                className="[--eqs-min:0px] sm:[--eqs-min:var(--eqs-wide)] lg:absolute lg:inset-0"
                 empty={
                   <EmptyState
                     actions={

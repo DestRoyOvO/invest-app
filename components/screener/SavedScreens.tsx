@@ -69,13 +69,13 @@ export function SavedScreens({ screen, onOpen, bare = false, className }: SavedS
                 <button
                   type="button"
                   onClick={() => onOpen(parsed)}
-                  aria-label={tpl(t.screener.saved.open, { name: entry.name })}
+                  title={tpl(t.screener.saved.open, { name: entry.name })}
                   aria-current={current ? "true" : undefined}
                   className="flex min-h-9 min-w-0 flex-1 flex-col justify-center py-1 pl-3 text-left max-sm:min-h-11 focus-visible:outline-offset-[-2px]"
                 >
                   <span className="truncate text-sm text-fg">{entry.name}</span>
                   <span className="truncate text-micro text-fg-3">
-                    {count > 0 ? tpl(t.screener.saved.meta, { kind, n: count }) : tpl(t.screener.saved.metaNone, { kind })}
+                    {tpl(count === 0 ? t.screener.saved.metaNone : count === 1 ? t.screener.saved.metaOne : t.screener.saved.meta, { kind, n: count })}
                     {current ? ` · ${t.screener.saved.current}` : ""}
                   </span>
                 </button>

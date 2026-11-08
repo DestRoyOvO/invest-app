@@ -33,7 +33,7 @@ const WIDTHS: Readonly<Record<MetricKey, number | null>> = {
   assets: 5.75,
   er: 4.5,
   pe: 4,
-  fpe: 6,
+  fpe: 6.5,
   pb: 4,
   yield: 5,
   div: 5.25,
