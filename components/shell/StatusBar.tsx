@@ -36,7 +36,8 @@ export function StatusBar({ goPending = false, dataSource = "yahoo" }: { goPendi
           <StateDot state={state} />
           <span className="text-fg-2">{state ? t.shell.marketState[state] : t.shell.marketState.unknown}</span>
         </span>
-        <span className="hidden lg:inline">{dataSource === "fixtures" ? t.shell.dataSourceFixtures : t.shell.dataSource}</span>
+        {/* Synthetic prices must be hard to miss: the label shows wherever the status line does, in the caveat color. */}
+        {dataSource === "fixtures" ? <span className="text-warn">{t.shell.dataSourceFixtures}</span> : <span className="hidden lg:inline">{t.shell.dataSource}</span>}
         {notice ? (
           // Shown here and announced once through the live region below (the refresh time changes too often to announce).
           <span aria-hidden className="flex min-w-0 items-center gap-1.5 text-warn">
