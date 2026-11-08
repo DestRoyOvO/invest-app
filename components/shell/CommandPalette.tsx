@@ -35,6 +35,7 @@ import { cn } from "@/lib/cn";
 import { tpl } from "@/lib/format";
 import { shortcutKeys } from "@/lib/functions";
 import type { Messages } from "@/lib/i18n/messages";
+import { quoteTypeName } from "@/lib/i18n/yahoo-terms";
 import { chineseNameOf } from "@/lib/names-zh";
 import { MAX_WATCHLIST, SECTORS } from "@/lib/universe";
 import type { Lang } from "@/types/api";
@@ -176,7 +177,11 @@ function PaletteDialog({ initialQuery }: { initialQuery: string }) {
   const debounced = useDebounced(trimmed, 180);
   const searchTerm = shouldSearch(debounced) ? debounced : "";
   const { data: search, isLoading } = useSymbolSearch(searchTerm);
-  const results = searchTerm && searchTerm === trimmed ? (search?.results ?? null) : null;
+  // A result line shows Yahoo's quote type (EQUITY, FUTURE): in the reader's language.
+  const results = useMemo(
+    () => (searchTerm && searchTerm === trimmed ? (search?.results.map((r) => ({ ...r, type: r.type && quoteTypeName(r.type, lang) })) ?? null) : null),
+    [searchTerm, trimmed, search, lang],
+  );
 
   const close = () => closeCommand();
   const closeFromDocument = useEffectEvent(() => closeCommand());
