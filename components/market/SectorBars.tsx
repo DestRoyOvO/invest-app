@@ -4,18 +4,23 @@ import Link from "next/link";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Delta } from "@/components/ui/Delta";
+import { displayedSign } from "@/lib/format";
 import { getSector } from "@/lib/universe";
 import type { SectorSnapshot } from "@/types/api";
 
-/** A bar growing left (down) or right (up) from a center line, scaled to the largest move in the list. Decorative. */
+/**
+ * A bar growing left (down) or right (up) from a center line, scaled to the largest move in the list. Decorative. A
+ * change that prints as 0.00% beside it gets no bar, so the bar's color never disagrees with the flat number.
+ */
 export function DivergingBar({ change, maxAbs }: { change: number | null; maxAbs: number }) {
   const value = change ?? 0;
+  const sign = displayedSign(value, 2);
   const width = `${(Math.min(Math.abs(value), maxAbs) / maxAbs) * 50}%`;
   return (
     <span aria-hidden className="relative h-2.5">
       <span className="absolute inset-y-0 left-1/2 w-px bg-line-2" />
-      {value !== 0 ? (
-        <span className={value > 0 ? "absolute inset-y-0 left-1/2 bg-up/70" : "absolute inset-y-0 right-1/2 bg-down/70"} style={{ width }} />
+      {sign !== 0 ? (
+        <span className={sign > 0 ? "absolute inset-y-0 left-1/2 bg-up/70" : "absolute inset-y-0 right-1/2 bg-down/70"} style={{ width }} />
       ) : null}
     </span>
   );

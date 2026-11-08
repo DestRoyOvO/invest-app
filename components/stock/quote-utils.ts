@@ -4,6 +4,7 @@
 
 import { isNonEquity, knownNonEquity } from "@/components/calendar/earnings-model";
 import { isDateOnly } from "@/lib/events";
+import { displayedSign } from "@/lib/format";
 import { priceDigits } from "@/lib/quote-figures";
 import { normalizeSymbol } from "@/lib/symbols";
 import type { Bar, Quote } from "@/types/api";
@@ -211,7 +212,9 @@ export function liveTitle(symbol: string, price: number | null, changePercent: n
   const digits = priceDigits(symbol, null) ?? (Math.abs(price) < 1 ? 4 : 2);
   const priceText = price.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
   if (changePercent === null || !Number.isFinite(changePercent)) return `${label} ${priceText} · InvestSeek`;
-  const arrow = changePercent > 0 ? "▲" : changePercent < 0 ? "▼" : "";
+  // The arrow follows the printed change: a move that rounds to 0.00% gets none.
+  const sign = displayedSign(changePercent, 2);
+  const arrow = sign > 0 ? "▲" : sign < 0 ? "▼" : "";
   return `${label} ${priceText} ${arrow}${Math.abs(changePercent).toFixed(2)}% · InvestSeek`;
 }
 

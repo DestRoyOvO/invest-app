@@ -4,6 +4,8 @@
 // among priced positions, USD on a tie) make up the totals and weights. Positions in another currency are valued on
 // their own, and positions without a usable price are listed separately, so no position disappears silently.
 
+import { displayedSign } from "./format";
+
 export interface PositionLike {
   symbol: string;
   shares: number;
@@ -173,9 +175,13 @@ export function extendedHoursPnl(rows: readonly ValuedPosition[], quoteOf: (symb
   return { session, pnl, ratio: value > 0 ? pnl / value : null, positions };
 }
 
-/** The largest gains and losses of the day in money: contributors (largest gain first) and detractors (largest loss first). */
-export function dayMovers(rows: readonly ValuedPosition[], count = 3): { contributors: ValuedPosition[]; detractors: ValuedPosition[] } {
-  const known = rows.filter((row) => row.dayPnl !== null && row.dayPnl !== 0);
+/**
+ * The largest gains and losses of the day in money: contributors (largest gain first) and detractors (largest loss
+ * first). A day P&L that rounds to zero at `digits` decimals, as My day prints it, is neither: it would show as a flat
+ * 0.00 under a direction heading.
+ */
+export function dayMovers(rows: readonly ValuedPosition[], count = 3, digits = 2): { contributors: ValuedPosition[]; detractors: ValuedPosition[] } {
+  const known = rows.filter((row) => displayedSign(row.dayPnl, digits) !== 0);
   return {
     contributors: known
       .filter((row) => (row.dayPnl as number) > 0)

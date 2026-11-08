@@ -126,6 +126,13 @@ describe("liveTitle", () => {
     expect(liveTitle("XYZ", 10, null)).toBe("XYZ 10.00 · InvestSeek");
   });
 
+  it("gives a change that rounds to 0.00% no arrow", () => {
+    expect(liveTitle("AAPL", 270.5, -0.001)).toBe("AAPL 270.50 0.00% · InvestSeek");
+    expect(liveTitle("AAPL", 270.5, 0.004)).toBe("AAPL 270.50 0.00% · InvestSeek");
+    expect(liveTitle("AAPL", 270.5, -0)).toBe("AAPL 270.50 0.00% · InvestSeek");
+    expect(liveTitle("AAPL", 270.5, -0.005)).toBe("AAPL 270.50 ▼0.01% · InvestSeek");
+  });
+
   it("keeps a currency pair's decimals", () => {
     expect(liveTitle("EURUSD=X", 1.1143303, -0.6686)).toBe("EURUSD=X 1.1143 ▼0.67% · InvestSeek");
     expect(liveTitle("USDJPY=X", 158.425, 0.49)).toBe("USDJPY=X 158.425 ▲0.49% · InvestSeek");

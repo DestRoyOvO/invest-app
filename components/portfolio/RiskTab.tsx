@@ -4,7 +4,7 @@ import { usePrefs } from "@/components/providers/PrefsProvider";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { withTrueMinus } from "@/components/ui/Delta";
 import { stockPath } from "@/lib/api-client";
-import { formatRatio, tpl } from "@/lib/format";
+import { formatRatio, formatSigned, tpl } from "@/lib/format";
 import { displayName } from "@/lib/names-zh";
 import { largestRiskGap, type PositionRisk, type RiskReport } from "@/lib/portfolio-analytics";
 import type { Quote } from "@/types/api";
@@ -66,7 +66,7 @@ export function RiskTab({ report, quotes, positions }: RiskTabProps) {
       sortValue: pts,
       render: (p) => {
         const v = pts(p);
-        return <span className="num text-fg-2">{v === null ? "—" : withTrueMinus(`${v > 0 ? "+" : ""}${v.toFixed(1)}`)}</span>;
+        return <span className="num text-fg-2">{v === null ? "—" : withTrueMinus(formatSigned(v, 1, lang))}</span>;
       },
     },
     { key: "beta", header: r.beta, align: "right", width: "4.5rem", sortValue: (p) => p.beta, render: (p) => <span className="num text-fg-2">{p.beta === null ? "—" : withTrueMinus(p.beta.toFixed(2))}</span> },

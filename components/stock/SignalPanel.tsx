@@ -26,7 +26,7 @@ import { Whisker } from "@/components/ui/Whisker";
 import { cn } from "@/lib/cn";
 import { evaluationVerdict, findHorizon, type HorizonOutcome, type LabelOutcome } from "@/lib/evaluation";
 import { EVALUATION_DAYS, SIGNAL_EVALUATION } from "@/lib/evaluation-data";
-import { DASH, formatInteger, formatMultiple, formatShortDate, tpl } from "@/lib/format";
+import { DASH, displayedSign, formatInteger, formatMultiple, formatShortDate, tpl } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/messages";
 import { labelForScore, SIGNAL_THRESHOLDS } from "@/lib/signal";
 import type { BacktestResult, FactorResult, Lang, SignalCode, SignalReport } from "@/types/api";
@@ -214,8 +214,10 @@ function Backtest({ results, costBps, t, lang }: { results: BacktestResult[]; co
   const b = t.signal.backtest;
   const domain = rateDomain(results.flatMap((r) => [r.winRate, r.winRateCI?.[0], r.winRateCI?.[1], r.baselineWinRate]));
   const returnCell = (value: number | null, row: BacktestResult) => {
-    const colored = backtestTiming(row) === "unlikely" && value !== null && value !== 0;
-    return <span className={cn("num", colored ? (value > 0 ? "text-up" : "text-down") : "text-fg-3")}>{pct(value, 2, true)}</span>;
+    // The color follows the printed return: one that rounds to 0.00% stays neutral.
+    const sign = value === null ? 0 : displayedSign(value * 100, 2);
+    const colored = backtestTiming(row) === "unlikely" && sign !== 0;
+    return <span className={cn("num", colored ? (sign > 0 ? "text-up" : "text-down") : "text-fg-3")}>{pct(value, 2, true)}</span>;
   };
   const columns: DataTableColumn<BacktestResult>[] = [
     {
