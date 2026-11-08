@@ -1,9 +1,13 @@
+import { randomInt } from "node:crypto";
+
 import AxeBuilder from "@axe-core/playwright";
 import { test as base, expect, type APIRequestContext, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
 import { BASE_URL, PINNED_NOW } from "./env";
 
 // The suite's `test`: Playwright's, plus
+// - its own client address per test (X-Forwarded-For; the server trusts it), so per-client limits such as the 20 AI
+//   notes per 10 minutes apply to each test, as to separate visitors, rather than to the whole suite;
 // - the browser clock set to the server's pinned clock (E2E_NOW), so pages compute "today" and "in 3 days" for the
 //   same moment the data was made for;
 // - consoleErrors (automatic): fails a test on any console error or uncaught page error (CSP violations and failed
@@ -62,6 +66,11 @@ const PENDING_PAGE_PREFETCH = new RegExp(`status of 404 \\(Not Found\\) \\(https
 const QUIET_MS = 500;
 const SETTLE_TIMEOUT_MS = 10_000;
 
+/** A private address of its own for each test (10.0.0.0/8), sent as X-Forwarded-For. */
+function clientAddress(): string {
+  return `10.${randomInt(256)}.${randomInt(256)}.${randomInt(1, 255)}`;
+}
+
 /** The server's clock now: its /api/health time (pinned at E2E_NOW and running since the server started). */
 async function serverNow(request: APIRequestContext): Promise<number> {
   const response = await request.get("/api/health");
@@ -112,6 +121,10 @@ async function setPrefs(context: BrowserContext, prefs: { theme?: Theme; lang?: 
 }
 
 export const test = base.extend<{ consoleErrors: ConsoleErrors; axe: Axe; app: App }>({
+  extraHTTPHeaders: async ({ extraHTTPHeaders }, provide) => {
+    await provide({ ...extraHTTPHeaders, "x-forwarded-for": clientAddress() });
+  },
+
   context: async ({ context, request }, provide) => {
     // The clock runs on from the server's current time, like the server's own (Playwright's clock flows in real time).
     if (PINNED_NOW !== null) await context.clock.install({ time: await serverNow(request) });

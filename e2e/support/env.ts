@@ -82,7 +82,9 @@ export function appEnv(commit: string | null = gitHead()): Record<string, string
     SESSION_SECRET: TEST_SESSION_SECRET,
     AI_DAILY_LIMIT: "100000",
     SITE_ACCESS: "public",
-    TRUST_PROXY: "0",
+    // Every test sends its own X-Forwarded-For (e2e/support/test.ts), so the per-client limits (20 notes in 10
+    // minutes) apply to each test, as to clients behind a proxy, instead of to the whole suite.
+    TRUST_PROXY: "1",
     SITE_URL: "",
     LOG_LEVEL: "warn",
     NEXT_TELEMETRY_DISABLED: "1",
