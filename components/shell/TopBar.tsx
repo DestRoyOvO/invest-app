@@ -1,6 +1,5 @@
 "use client";
 
-import { Search } from "lucide-react";
 import Link from "next/link";
 
 import { AlertBell } from "@/components/alerts/AlertBell";
@@ -28,23 +27,36 @@ export function TopBar() {
           <Wordmark />
         </Link>
 
-        {/* The accessible name starts with the visible placeholder (WCAG 2.5.3) and adds what the button does. */}
+        {/* The command line. Its accessible name starts with the visible placeholder (WCAG 2.5.3) and adds what the
+            button does. Phones get a field of their own below: the full placeholder would be cut to "> Tic…". */}
         <button
           type="button"
           onClick={openCommand}
           aria-label={`${t.shell.commandPlaceholder}, ${t.shell.openCommand}`}
           aria-haspopup="dialog"
           aria-keyshortcuts="/ Control+K Meta+K"
-          className="flex h-8 min-w-0 max-w-xl flex-1 items-center gap-2 rounded-xs border border-input-border bg-input-bg px-2.5 text-left text-sm text-fg-3 transition-colors hover:border-fg-3 max-sm:h-10"
+          className="hidden h-8 min-w-0 max-w-xl flex-1 items-center gap-2 rounded-xs border border-input-border bg-input-bg px-2.5 text-left text-sm text-fg-3 transition-colors hover:border-fg-3 sm:flex"
         >
           <span aria-hidden className="mono text-accent">
             &gt;
           </span>
           <span className="min-w-0 flex-1 truncate">{t.shell.commandPlaceholder}</span>
-          <Search aria-hidden className="size-4 shrink-0 sm:hidden" strokeWidth={1.75} />
-          <span aria-hidden className="hidden items-center gap-1 sm:flex">
+          <span aria-hidden className="flex items-center gap-1">
             <Kbd>/</Kbd>
           </span>
+        </button>
+        {/* Phones: the same field with a one-word placeholder, as tall as the other phone touch targets. */}
+        <button
+          type="button"
+          onClick={openCommand}
+          aria-label={`${t.nav.search}, ${t.shell.openCommand}`}
+          aria-haspopup="dialog"
+          className="flex h-10 min-w-0 flex-1 items-center gap-2 rounded-xs border border-input-border bg-input-bg px-2.5 text-left text-sm text-fg-3 transition-colors hover:border-fg-3 sm:hidden"
+        >
+          <span aria-hidden className="mono text-accent">
+            &gt;
+          </span>
+          <span className="min-w-0 truncate">{t.nav.search}</span>
         </button>
 
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
