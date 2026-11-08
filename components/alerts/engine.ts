@@ -150,6 +150,9 @@ export function createAlertEngine({ fetchBars, notify: initialNotify, now = () =
       if (patch.side !== undefined && patch.side !== rule.side) urgent = true;
       pending.set(id, { ...pending.get(id), ...patch });
       armedSeen.set(id, rule.armedAt);
+      // Checked live again after a replay that failed for good: a later gap (a laptop asleep overnight) is replayed
+      // again instead of skipped for the life of the tab.
+      gaveUp.delete(id);
     }
     if (urgent || at.getTime() - lastFlush >= FLUSH_INTERVAL_MS) flush();
     deliver(plan.events);

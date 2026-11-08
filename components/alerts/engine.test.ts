@@ -61,7 +61,8 @@ function setup(fetchBars = vi.fn(async (): Promise<readonly AlertBar[]> => [])) 
   const advance = (ms: number) => {
     clock += ms;
   };
-  return { engine, notify, fetchBars, advance };
+  const time = () => new Date(clock).toISOString();
+  return { engine, notify, fetchBars, advance, time };
 }
 
 describe("createAlertEngine", () => {
@@ -131,6 +132,34 @@ describe("createAlertEngine", () => {
     engine.check();
     expect(notify).toHaveBeenCalledTimes(1);
     expect(alertLogStore.getSnapshot()[0].missed).toBeNull();
+  });
+
+  it("replays a later gap again after a replay that failed for good", async () => {
+    seed([rule("down", "below", 150, { lastCheckedAt: "2026-11-01T20:00:00Z" })]);
+    let failing = true;
+    const fetchBars = vi.fn(async (): Promise<readonly AlertBar[]> => {
+      if (failing) throw new Error("upstream");
+      return [];
+    });
+    const { engine, advance, time } = setup(fetchBars);
+    engine.setInputs(new Map([["NVDA", quote()]]), {});
+    for (let attempt = 0; attempt < REPLAY_ATTEMPTS; attempt++) {
+      engine.check();
+      await flushPromises();
+      advance(5 * 60_000);
+    }
+    // Given up: checked live from now on.
+    engine.check();
+    engine.flush();
+    expect(alertsStore.getSnapshot()[0].lastCheckedAt).toBe(time());
+    expect(fetchBars).toHaveBeenCalledTimes(REPLAY_ATTEMPTS);
+    // The tab sleeps for six hours; when it wakes, the new gap is replayed.
+    failing = false;
+    advance(6 * 3_600_000);
+    engine.check();
+    expect(fetchBars).toHaveBeenCalledTimes(REPLAY_ATTEMPTS + 1);
+    await flushPromises();
+    expect(alertsStore.getSnapshot()[0].lastCheckedAt).toBe(time());
   });
 
   it("ignores replays that finish after it stopped and drops results of re-armed rules", async () => {
