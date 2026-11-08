@@ -1,19 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { combineStaleness, rangePosition, relativeVolume, sharePercent, stalenessOf, staleSinceOf } from "./metrics";
-
-describe("relativeVolume", () => {
-  it("divides today's volume by the 3-month average", () => {
-    expect(relativeVolume({ volume: 300, avgVolume: 100 })).toBe(3);
-    expect(relativeVolume({ volume: 0, avgVolume: 100 })).toBe(0);
-  });
-
-  it("is null without both numbers or with a zero average", () => {
-    expect(relativeVolume({ volume: null, avgVolume: 100 })).toBeNull();
-    expect(relativeVolume({ volume: 100, avgVolume: null })).toBeNull();
-    expect(relativeVolume({ volume: 100, avgVolume: 0 })).toBeNull();
-  });
-});
+import { combineStaleness, rangePosition, sharePercent, stalenessOf, staleSinceOf } from "./metrics";
 
 describe("rangePosition", () => {
   it("places the price between the 52-week low and high", () => {

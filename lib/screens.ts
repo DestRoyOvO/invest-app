@@ -902,11 +902,7 @@ export function discoverCapFromParams(params: URLSearchParams): DiscoverCap {
   return findCap(params.get("cap")) ?? DEFAULT_DISCOVER_CAP;
 }
 
-/** Today's volume over the 3-month daily average; null without both. */
-export function relativeVolume(volume: number | null, averageVolume: number | null): number | null {
-  if (volume === null || averageVolume === null || !Number.isFinite(volume) || !Number.isFinite(averageVolume)) return null;
-  return averageVolume > 0 && volume >= 0 ? volume / averageVolume : null;
-}
+export { relativeVolume } from "./volume";
 
 export type RatingKey = "strong_buy" | "buy" | "hold" | "underperform" | "sell";
 

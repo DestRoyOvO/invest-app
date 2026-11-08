@@ -1,13 +1,8 @@
-// Small pure helpers shared by the overview's heatmap card, movers and breadth panels.
+// Small pure helpers shared by the overview's heatmap card and breadth panels and the stale banners of the market pages.
+// Relative volume lives in lib/volume.ts (shared with the screener).
 
 import { toPercent } from "@/components/ui/glyphs";
 import type { OverviewQuote } from "@/types/api";
-
-/** Volume today as a multiple of the 3-month daily average; null without both. */
-export function relativeVolume(quote: Pick<OverviewQuote, "volume" | "avgVolume">): number | null {
-  const { volume, avgVolume } = quote;
-  return volume !== null && avgVolume !== null && volume >= 0 && avgVolume > 0 ? volume / avgVolume : null;
-}
 
 /** Where the price sits in its 52-week range, 0 (at the low) to 100 (at the high); null without a valid range. */
 export function rangePosition(quote: Pick<OverviewQuote, "price" | "fiftyTwoWeekLow" | "fiftyTwoWeekHigh">): number | null {

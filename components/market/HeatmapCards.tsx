@@ -5,16 +5,17 @@ import { Delta } from "@/components/ui/Delta";
 import { formatCompact, formatPrice, tpl } from "@/lib/format";
 import { chineseNameOf } from "@/lib/names-zh";
 import { getSector } from "@/lib/universe";
+import { relativeVolume } from "@/lib/volume";
 import type { OverviewQuote, SectorKey, SectorSnapshot } from "@/types/api";
 
-import { rangePosition, relativeVolume } from "./metrics";
+import { rangePosition } from "./metrics";
 
 /** Hover and focus card of a heatmap tile: the quote, its size and trading, and where it sits in its 52-week range. */
 export function StockCard({ quote, sector }: { quote: OverviewQuote; sector: SectorKey }) {
   const { t, lang } = usePrefs();
   const name = (lang === "zh" ? chineseNameOf(quote.symbol) : undefined) ?? quote.name;
   const position = rangePosition(quote);
-  const rel = relativeVolume(quote);
+  const rel = relativeVolume(quote.volume, quote.avgVolume);
   return (
     <div className="space-y-2.5">
       <div className="flex min-w-0 items-baseline gap-2">

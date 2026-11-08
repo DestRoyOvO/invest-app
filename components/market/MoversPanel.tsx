@@ -15,9 +15,8 @@ import { useLocalString } from "@/hooks/useLocalValue";
 import { stockPath } from "@/lib/api-client";
 import { formatCompact, formatPrice, tpl } from "@/lib/format";
 import { UNIVERSE_STOCKS } from "@/lib/universe";
+import { relativeVolume } from "@/lib/volume";
 import type { DiscoverScreen, MarketOverview, OverviewQuote } from "@/types/api";
-
-import { relativeVolume } from "./metrics";
 
 type MoverList = "gainers" | "losers" | "mostActive";
 type Scope = "us" | "universe";
@@ -65,7 +64,7 @@ export function MoversPanel({ movers, loading, className }: { movers: MarketOver
       align: "right",
       width: "3.75rem",
       render: (q) => {
-        const rel = relativeVolume(q);
+        const rel = relativeVolume(q.volume, q.avgVolume);
         return <span className="num text-fg-2">{rel === null ? "—" : `${rel.toFixed(1)}×`}</span>;
       },
     },
