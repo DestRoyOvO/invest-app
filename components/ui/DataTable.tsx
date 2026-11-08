@@ -3,11 +3,12 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 
 import { useT } from "@/components/providers/PrefsProvider";
 import { cn } from "@/lib/cn";
 
+import { useScrollRegion } from "./scroll-region";
 import { EmptyState, SkeletonRows } from "./States";
 import { ariaSort, nextSort, sortRows, type SortDirection, type SortState, type SortValue } from "./table-sort";
 
@@ -81,7 +82,10 @@ interface DataTableProps<Row> {
   stickyHeader?: boolean;
   /** Scrolls the table inside this height (e.g. "min(70vh, 720px)"). */
   maxHeight?: string;
-  /** Scrolls horizontally below this width instead of squeezing columns. */
+  /**
+   * Scrolls horizontally below this width instead of squeezing columns. While the table overflows its box (either
+   * way), the box is a focusable region named by the caption, so the arrow keys scroll it.
+   */
   minWidth?: string;
   /** <tr> rows for a <tfoot>, e.g. totals. */
   footer?: ReactNode;
@@ -93,6 +97,7 @@ const INTERACTIVE = "a,button,input,select,textarea,label,[role='button'],[role=
 /**
  * Typed, sortable data table: fixed column widths from a colgroup, rows at --row-h (the density setting), sortable
  * headers with aria-sort and a stable sort, optional row links, hover-revealed row actions, loading and empty states.
+ * Its scroll box is positioned (relative) and becomes a focusable region named by the caption while it overflows.
  */
 export function DataTable<Row>({
   rows,
@@ -119,6 +124,8 @@ export function DataTable<Row>({
 }: DataTableProps<Row>) {
   const t = useT();
   const router = useRouter();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const region = useScrollRegion(scrollRef, caption);
   const [ownSort, setOwnSort] = useState<SortState | null>(defaultSort);
   const activeSort = sort !== undefined ? sort : ownSort;
 
@@ -202,7 +209,14 @@ export function DataTable<Row>({
   }
 
   return (
-    <div className={cn(maxHeight ? "overflow-auto" : "overflow-x-auto", className)} style={maxHeight ? { maxHeight } : undefined}>
+    // relative: the scroll box is the containing block of the rows' absolutely positioned sr-only text, so rows scrolled
+    // out of a maxHeight box cannot stretch the page with blank space.
+    <div
+      ref={scrollRef}
+      {...region}
+      className={cn("relative focus-visible:outline-offset-[-2px]", maxHeight ? "overflow-auto" : "overflow-x-auto", className)}
+      style={maxHeight ? { maxHeight } : undefined}
+    >
       <table className="w-full table-fixed border-collapse text-data" style={minWidth ? { minWidth } : undefined}>
         <caption className="sr-only">{caption}</caption>
         <colgroup>
