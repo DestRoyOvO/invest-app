@@ -259,12 +259,18 @@ export function buildDividendHistory(symbol: string, chart: RawChart | null, quo
   const price = quote?.price ?? null;
   const forwardAnnual = quote?.dividendRate ?? null;
   const positivePrice = price !== null && price > 0 ? price : null;
-  const yieldValue =
-    positivePrice !== null && forwardAnnual !== null && forwardAnnual > 0
-      ? forwardAnnual / positivePrice
-      : positivePrice !== null && summary.trailingAnnual !== null
-        ? summary.trailingAnnual / positivePrice
-        : (quote?.dividendYield ?? null);
+  let yieldValue: number | null = null;
+  let yieldBasis: DividendHistory["yieldBasis"] = null;
+  if (positivePrice !== null && forwardAnnual !== null && forwardAnnual > 0) {
+    yieldValue = forwardAnnual / positivePrice;
+    yieldBasis = "forward";
+  } else if (positivePrice !== null && summary.trailingAnnual !== null) {
+    yieldValue = summary.trailingAnnual / positivePrice;
+    yieldBasis = "trailing";
+  } else if (quote?.dividendYield !== null && quote?.dividendYield !== undefined) {
+    yieldValue = quote.dividendYield;
+    yieldBasis = "reported";
+  }
 
   const today = new Date(now).toISOString().slice(0, 10);
   const nextEx = quote?.exDividendDate ? quote.exDividendDate.slice(0, 10) : null;
@@ -279,6 +285,7 @@ export function buildDividendHistory(symbol: string, chart: RawChart | null, quo
     years,
     forwardAnnual,
     yield: yieldValue,
+    yieldBasis,
     next: nextEx && nextEx >= today ? { exDate: nextEx, amount: quote?.dividendAmount ?? null } : null,
     nextPayDate: payDate && payDate >= today ? payDate : null,
   };

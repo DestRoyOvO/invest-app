@@ -4,7 +4,7 @@ import { usePrefs } from "@/components/providers/PrefsProvider";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Panel, PanelMeta } from "@/components/ui/Panel";
 import { StatTile } from "@/components/ui/StatTile";
-import { EmptyState, ErrorState, SkeletonRows } from "@/components/ui/States";
+import { EmptyState, ErrorState, SkeletonRows, StaleBanner } from "@/components/ui/States";
 import type { Position } from "@/hooks/useHoldings";
 import { useDividends } from "@/hooks/useQuoteApi";
 import { cn } from "@/lib/cn";
@@ -40,15 +40,19 @@ export function DividendsTab({ symbol, position }: { symbol: string; position?: 
       </Panel>
     );
   }
+  const stale = <StaleBanner show={Boolean(error && data)} since={data.asOf} />;
   if (data.payments.length === 0) {
     return (
       <Panel title={d.title} code="DVD">
+        {stale}
         <EmptyState>{tpl(d.none, { symbol })}</EmptyState>
       </Panel>
     );
   }
 
-  const annual = data.forwardAnnual ?? data.trailingAnnual;
+  // The holder's income uses the forward rate when Yahoo has one, as the yield does, else the last 12 months.
+  const forward = data.forwardAnnual !== null && data.forwardAnnual > 0;
+  const annual = forward ? data.forwardAnnual : data.trailingAnnual;
   const income = position ? dividendIncome(position, annual) : null;
   const years = data.years.slice(-11);
   const most = Math.max(...years.map((y) => y.total), 0);
@@ -68,8 +72,9 @@ export function DividendsTab({ symbol, position }: { symbol: string; position?: 
   return (
     <div className="flex flex-col gap-px">
       <Panel title={d.title} code="DVD" actions={data.currency ? <PanelMeta>{data.currency}</PanelMeta> : null}>
+        {stale}
         <div className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3 xl:grid-cols-6">
-          <StatTile label={d.yieldLabel} value={formatRatio(data.yield, { digits: 2 })} />
+          <StatTile label={d.yieldLabel} value={formatRatio(data.yield, { digits: 2 })} sub={data.yieldBasis ? d.yieldBasis[data.yieldBasis] : undefined} />
           <StatTile label={d.forward} value={perShare(data.forwardAnnual)} />
           <StatTile label={d.trailing} value={perShare(data.trailingAnnual)} />
           <StatTile label={d.growth5y} value={formatRatio(data.growth5y, { digits: 1, sign: true })} sub={d.growthNote} />
@@ -82,7 +87,11 @@ export function DividendsTab({ symbol, position }: { symbol: string; position?: 
         </div>
         {income && position ? (
           <div className="grid grid-cols-2 gap-px border-t border-line bg-line">
-            <StatTile label={d.yourIncome} value={money(income.income)} sub={tpl(d.holderNote, { shares: formatNumber(position.shares, Number.isInteger(position.shares) ? 0 : 2, lang), cost: money(position.cost) })} />
+            <StatTile
+              label={d.yourIncome}
+              value={money(income.income)}
+              sub={tpl(forward ? d.holderNote : d.holderNoteTrailing, { shares: formatNumber(position.shares, Number.isInteger(position.shares) ? 0 : 2, lang), cost: money(position.cost) })}
+            />
             <StatTile label={d.yieldOnCost} value={formatRatio(income.yieldOnCost, { digits: 2 })} />
           </div>
         ) : null}

@@ -196,6 +196,7 @@ describe("dividends", () => {
     expect(history.years[0].year).toBe(2017);
     expect(history.payments.at(-1)).toEqual({ exDate: "2026-08-12", amount: 0.51 });
     expect(history.yield).toBeCloseTo(2.04 / 70, 6);
+    expect(history.yieldBasis).toBe("forward");
     expect(history.next).toEqual({ exDate: "2026-11-28", amount: 0.51 });
     expect(history.nextPayDate).toBe("2026-12-15");
 
@@ -203,6 +204,12 @@ describe("dividends", () => {
     expect(past.next).toBeNull();
     expect(past.nextPayDate).toBeNull();
     expect(past.yield).toBeCloseTo((0.51 * 4) / 70, 6);
+    expect(past.yieldBasis).toBe("trailing");
+
+    // Without a price, Yahoo's own figure is used and labelled as such.
+    const reported = buildDividendHistory("KO", chart, quote({ price: null, dividendYield: 0.029 }), NOW);
+    expect(reported.yield).toBe(0.029);
+    expect(reported.yieldBasis).toBe("reported");
   });
 
   it("returns an empty history for a stock that pays nothing and null for an unknown symbol", async () => {
@@ -211,6 +218,7 @@ describe("dividends", () => {
     const none = await getDividends("BRK-B");
     expect(none?.payments).toEqual([]);
     expect(none?.yield).toBeNull();
+    expect(none?.yieldBasis).toBeNull();
 
     fake.chart.mockRejectedValue(new Error("No data found, symbol may be delisted"));
     fake.getQuote.mockResolvedValue(null);

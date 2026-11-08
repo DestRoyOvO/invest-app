@@ -7,7 +7,7 @@ import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { withTrueMinus } from "@/components/ui/Delta";
 import { Panel } from "@/components/ui/Panel";
 import { Segmented } from "@/components/ui/Segmented";
-import { EmptyState, ErrorState, SkeletonRows } from "@/components/ui/States";
+import { EmptyState, ErrorState, SkeletonRows, StaleBanner } from "@/components/ui/States";
 import { useFinancials } from "@/hooks/useQuoteApi";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
@@ -107,26 +107,18 @@ export function FinancialsPanel({ symbol, quoteCurrency, className }: { symbol: 
 
   const currency = data?.currency ?? null;
   const notFound = error instanceof ApiError && error.status === 404;
+  const periodOptions = [
+    { value: "annual" as const, label: r.annual },
+    { value: "quarterly" as const, label: r.quarterly },
+  ];
 
   return (
     <Panel
       title={r.title}
       code="FA"
       className={className}
-      actions={
-        <Segmented
-          label={r.period}
-          hideLabel
-          size="sm"
-          value={period}
-          onChange={setPeriod}
-          options={[
-            { value: "annual", label: r.annual },
-            { value: "quarterly", label: r.quarterly },
-          ]}
-          className="w-44"
-        />
-      }
+      // In the header from sm up; on phones the switch moves into the body with 40px segments.
+      actions={<Segmented label={r.period} hideLabel size="sm" value={period} onChange={setPeriod} options={periodOptions} className="w-44 max-sm:hidden" />}
       footer={
         data ? (
           <div className="space-y-0.5 border-t border-line px-3 py-2 text-micro text-fg-3">
@@ -136,6 +128,10 @@ export function FinancialsPanel({ symbol, quoteCurrency, className }: { symbol: 
         ) : null
       }
     >
+      <StaleBanner show={Boolean(error && data)} since={data?.asOf} />
+      <div className="border-b border-line px-3 py-2 sm:hidden">
+        <Segmented label={r.period} hideLabel value={period} onChange={setPeriod} options={periodOptions} className="[&_[role=radio]]:h-10" />
+      </div>
       {currency ? (
         <p className={cn("border-b border-line px-3 py-1.5 text-xs", quoteCurrency && currency !== quoteCurrency ? "text-info" : "text-fg-3")}>
           {quoteCurrency && currency !== quoteCurrency ? tpl(r.currencyDiffers, { currency, trading: quoteCurrency }) : tpl(r.currency, { currency })}

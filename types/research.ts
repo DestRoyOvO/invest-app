@@ -80,6 +80,8 @@ export interface DividendHistory {
   forwardAnnual: number | null;
   /** Forward annual dividend over the price, or the trailing one when no forward rate is known (decimal). */
   yield: number | null;
+  /** How `yield` was found: the forward rate or the last 12 months over the price, or Yahoo's reported figure. */
+  yieldBasis: "forward" | "trailing" | "reported" | null;
   /** The announced next ex-date and amount, when Yahoo lists one. */
   next: { exDate: string; amount: number | null } | null;
   /** Next payment date, when Yahoo's payment date is in the future. */
