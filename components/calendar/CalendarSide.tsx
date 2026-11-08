@@ -1,7 +1,5 @@
 "use client";
 
-import { ExternalLink } from "lucide-react";
-
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Badge } from "@/components/ui/Badge";
 import { Panel } from "@/components/ui/Panel";
@@ -11,6 +9,7 @@ import { nyClock, nyShortDate, nyWeekday, type AgendaItem } from "@/lib/events";
 import { formatDate, formatRatio, tpl } from "@/lib/format";
 import { MACRO_CALENDAR_ENDS, MACRO_EVENTS, MACRO_SOURCES } from "@/lib/macro-calendar";
 
+import { SourceLink } from "./AgendaList";
 import { formatMoney, glance, periodMonthName, type Amount } from "./agenda-format";
 import { weekdayDay } from "./earnings-model";
 
@@ -110,16 +109,7 @@ export function MacroPanel({ now }: { now: number | null }) {
                     </span>
                   ) : null}
                 </span>
-                <a
-                  href={MACRO_SOURCES[event.key]}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={tpl(c.sourceLabel, { name })}
-                  className="inline-flex shrink-0 items-center gap-0.5 text-xs text-fg-3 hover:text-accent max-sm:min-h-10"
-                >
-                  {c.source}
-                  <ExternalLink aria-hidden className="size-3" strokeWidth={1.75} />
-                </a>
+                <SourceLink href={MACRO_SOURCES[event.key]} name={name} />
               </li>
             );
           })}

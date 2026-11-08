@@ -140,6 +140,29 @@ function AgendaRow({ item, zone, now, grid }: { item: AgendaItem; zone: string |
   );
 }
 
+/**
+ * "Source" link to a macro schedule, at least 24px tall (40px on phones). Its accessible name starts with the visible
+ * word and adds the schedule in hidden text, so voice control can use what is on screen (WCAG 2.5.3).
+ */
+export function SourceLink({ href, name, className }: { href: string; name: string; className?: string }) {
+  const { t } = usePrefs();
+  const c = t.calendar;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={cn("inline-flex min-h-6 shrink-0 items-center gap-0.5 px-1 text-xs text-fg-3 hover:text-accent max-sm:min-h-10 max-sm:min-w-10 max-sm:justify-center", className)}
+    >
+      <span>
+        {c.source}
+        <span className="sr-only"> {tpl(c.sourceFor, { name })}</span>
+      </span>
+      <ExternalLink aria-hidden className="size-3" strokeWidth={1.75} />
+    </a>
+  );
+}
+
 function EventText({ item }: { item: AgendaItem }) {
   const { t, lang } = usePrefs();
   const c = t.calendar;
@@ -158,16 +181,7 @@ function EventText({ item }: { item: AgendaItem }) {
             <Badge>{c.tentative}</Badge>
           </span>
         ) : null}
-        <a
-          href={MACRO_SOURCES[event.macro]}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={tpl(c.sourceLabel, { name })}
-          className="relative inline-flex shrink-0 items-center gap-0.5 text-xs text-fg-3 hover:text-accent max-sm:min-h-10"
-        >
-          {c.source}
-          <ExternalLink aria-hidden className="size-3" strokeWidth={1.75} />
-        </a>
+        <SourceLink href={MACRO_SOURCES[event.macro]} name={name} className="relative" />
       </>
     );
   }
