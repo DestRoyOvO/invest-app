@@ -18,7 +18,8 @@ export const WIDTHS: Readonly<Record<MetricKey, number | null>> = {
   er: 4.5,
   pe: 4,
   fpe: 6.5,
-  pb: 4,
+  // A negative book value reaches "−191.2", and "市净率" with the sort arrow needs the same room.
+  pb: 5,
   yield: 5,
   div: 5.25,
   exdiv: 6,

@@ -39,6 +39,14 @@ describe("formatMetric", () => {
       expect(formatMetric(key, value, "en")).not.toMatch(/^-/);
     }
   });
+
+  it("shows no sign on a value that rounds to zero", () => {
+    expect(formatMetric("ma200", -0.0004, "en")).toBe("0.0%");
+    expect(formatMetric("ma50", 0.0004, "en")).toBe("0.0%");
+    expect(formatMetric("beta", -0.001, "en")).toBe("0.00");
+    expect(formatMetric("ma200", -0.0006, "en")).toBe("−0.1%");
+    expect(formatMetric("high", 0, "en")).toBe("0.0%");
+  });
 });
 
 describe("chip labels", () => {

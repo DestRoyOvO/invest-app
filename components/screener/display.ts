@@ -20,7 +20,12 @@ const SIGNED: ReadonlySet<MetricKey> = new Set(["high", "ma50", "ma200"]);
 export function formatMetric(key: MetricKey, value: number | string | null, lang: Lang): string {
   if (value === null || value === undefined) return DASH;
   if (typeof value === "string") return key === "exdiv" || key === "earnings" ? formatShortDate(value, lang, NEW_YORK) : value;
-  return withTrueMinus(numberText(key, value, lang));
+  return withTrueMinus(dropZeroSign(numberText(key, value, lang)));
+}
+
+/** A value that rounds to zero shows no sign: "−0.0%" or "+0.0%" would read as a move. */
+function dropZeroSign(text: string): string {
+  return /^[-+][^1-9]*$/.test(text) ? text.slice(1) : text;
 }
 
 function numberText(key: MetricKey, value: number, lang: Lang): string {
