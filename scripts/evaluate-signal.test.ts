@@ -49,7 +49,18 @@ describe("the evaluation report", () => {
     const legend = (lang: "en" | "zh") => tpl(MESSAGES[lang].signal.track.colors, { limit: pct(EPISODE_SHARE_LIMIT, 0), share: pct(COMMON_READING_DATE_SHARE, 0) });
     // More than 30% (strictly) greys a row; at least 50% of dates (inclusive) exempts a reading.
     expect(legend("en")).toContain("largest episode holds more than 30% of its observations, except for readings seen on at least 50% of dates");
-    expect(legend("zh")).toContain("若最长一段占该读数样本的比例超过 30%，该行显示为灰色；出现日期占全部日期 50% 及以上的读数除外");
+    expect(legend("zh")).toContain("若样本最多的一段占该读数全部样本的比例超过 30%，该行显示为灰色；出现日期占全部日期 50% 及以上的读数除外");
+  });
+
+  it("names the episode with the most observations, not the longest, in the legend and the foot", () => {
+    // countEpisodes (lib/evaluation.ts) measures an episode by its observations, so a short run with many stocks can
+    // be the largest. The Chinese 样本 is the word the tables use for observations.
+    const { colors, foot } = MESSAGES.zh.signal.track;
+    expect(MESSAGES.en.signal.track.foot).toContain("the largest run's share");
+    for (const text of [colors, foot]) {
+      expect(text).toContain("样本最多的一段");
+      expect(text).not.toContain("最长");
+    }
   });
 
   it("names the rows the rule greys, per horizon when they differ", () => {
