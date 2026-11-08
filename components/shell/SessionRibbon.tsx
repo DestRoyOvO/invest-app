@@ -9,6 +9,11 @@ import { etClock, ET_TIME_ZONE, minutesToOpen, ribbonModel, type SegmentKind } f
 
 // Accent mixes over the panel: pre-market and after hours at 25%, the regular session at 60%, the elapsed part of each
 // brighter. Decorative (the market clock carries the same information as text), so it is hidden from screen readers.
+//
+// Each segment has a hover strip reaching 6px up into the top bar, so its title is easy to find with a mouse. Below sm
+// the top bar buttons are 40px tall and end 2px above the ribbon, so the strip would take taps meant for them: there it
+// ignores the pointer (touch has no hover anyway).
+const HOVER_STRIP = "absolute inset-x-0 -top-1.5 bottom-0 z-10 max-sm:pointer-events-none";
 const REMAINING: Record<SegmentKind, string> = {
   pre: "color-mix(in oklab, var(--accent) 25%, var(--panel))",
   regular: "color-mix(in oklab, var(--accent) 60%, var(--panel))",
@@ -39,7 +44,7 @@ export function SessionRibbon({ state }: { state: MarketState | null | undefined
     const when = `${day} ${tpl(t.shell.et, { time: "09:30" })}`;
     return (
       <div aria-hidden className="relative h-0.5 shrink-0 bg-line-2" data-testid="session-ribbon" data-state="closed">
-        <div className="absolute inset-x-0 -top-1.5 bottom-0 z-10" title={tpl(t.shell.session.closed, { when })} />
+        <div className={HOVER_STRIP} title={tpl(t.shell.session.closed, { when })} />
       </div>
     );
   }
@@ -49,7 +54,7 @@ export function SessionRibbon({ state }: { state: MarketState | null | undefined
       {model.segments.map((segment) => (
         <div key={segment.kind} className="relative h-full" style={{ width: `${segment.width * 100}%`, background: REMAINING[segment.kind] }}>
           <div className="absolute inset-y-0 left-0" style={{ width: `${segment.elapsed * 100}%`, background: ELAPSED[segment.kind] }} />
-          <div className="absolute inset-x-0 -top-1.5 bottom-0 z-10" title={t.shell.session[segment.kind]} />
+          <div className={HOVER_STRIP} title={t.shell.session[segment.kind]} />
         </div>
       ))}
       {model.now !== null ? <div className="absolute inset-y-0 z-[5] w-px bg-fg" style={{ left: `calc(${model.now * 100}% - 0.5px)` }} /> : null}
