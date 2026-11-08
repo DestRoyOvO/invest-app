@@ -3,6 +3,7 @@ import "server-only";
 import type { SpreadKey, TenorKey, YieldCurve, YieldCurveResponse, YieldSpread } from "@/types/markets";
 
 import { cached, HOUR, isFresh, MINUTE, put } from "./cache";
+import { treasuryFetch } from "./fixtures/treasury";
 import { logThrottled } from "./log";
 
 // The US Treasury daily par yield curve (GC): Treasury publishes one CSV per calendar year on home.treasury.gov, with
@@ -314,7 +315,7 @@ export function treasuryYear(now: Date): number {
  */
 export async function getYieldCurve(options: { now?: Date; fetchImpl?: TreasuryFetch } = {}): Promise<YieldCurveResponse> {
   const now = options.now ?? new Date();
-  const fetchImpl = options.fetchImpl ?? fetch;
+  const fetchImpl = options.fetchImpl ?? treasuryFetch;
   const year = treasuryYear(now);
   const [current, previous] = await Promise.allSettled([loadYear(year, fetchImpl), loadYear(year - 1, fetchImpl)]);
   const loaded = [previous, current].flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
