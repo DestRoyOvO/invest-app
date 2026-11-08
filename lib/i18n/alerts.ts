@@ -147,6 +147,9 @@ export const alertsMessages = defineMessages(
     page: {
       rules: "Rules",
       history: "History",
+      // Table captions also name the tables' scroll regions, so they differ from the panel titles.
+      rulesCaption: "Alert rules",
+      historyCaption: "Alert history",
       count: "{n} of {max}",
       newAlert: "New alert",
       empty: "No alerts yet. Create one for a price level, a day move, P&L from cost, an upcoming report or a cross of the 200-day average.",
@@ -332,6 +335,8 @@ export const alertsMessages = defineMessages(
     page: {
       rules: "规则",
       history: "历史",
+      rulesCaption: "提醒规则",
+      historyCaption: "提醒记录",
       count: "{n} / {max}",
       newAlert: "新建提醒",
       empty: "还没有提醒。可以为价位、当日涨跌、相对成本盈亏、即将到来的财报或 200 日均线穿越设置提醒。",

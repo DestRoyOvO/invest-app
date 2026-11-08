@@ -25,8 +25,9 @@ every token pair; `lib/design-tokens.test.ts` fails when a pair drops below its 
   直接放在画布上的文字用 `--fg-2`；桌面点击区 ≥ 24px、手机 ≥ 40px：Button、IconButton、Segmented、Select、Tabs、Input
   在手机上自带 40px 高度，页面无需再加覆盖（可排序表头整格可点）；面板标题栏最少 36px，在手机上随 40px 控件长高；
   紧凑密度下行内小图标按钮为 24px，带操作的行也保持约 24px；可排序表头带 aria-sort；表格横向或纵向放不下时，滚动框
-  成为以表格标题命名、可用 Tab 聚焦的区域，方向键即可滚动；Esc 只关闭最内层（先关悬停卡片，再关抽屉）；提示条在悬停
-  或键盘焦点时暂停，键盘关闭后焦点移到下一条或回到原处；实时更新用礼貌型 live region；尊重"减少动态效果"。
+  成为以表格标题命名、可用 Tab 聚焦的区域，方向键即可滚动，所以表格标题不要与面板标题相同；Esc 只关闭最内层（先关
+  悬停卡片，再关抽屉）；提示条在悬停或键盘焦点时暂停，键盘关闭后焦点移到下一条或回到原处；实时更新用礼貌型 live
+  region；尊重"减少动态效果"。
 - **缺失值**：一律显示 `lib/format.ts` 的 `DASH`（U+2014），格式化函数遇到 null 也返回它；不用 U+2013、连字符或
   "N/A"。它只是数据占位符，文案里仍然不用破折号。
 - **非价格的正负读数**（相关系数、z 分数、因子倾向）：只按绝对值深浅着色，用一种中性色阶并标出带符号的数字，不用红绿或
@@ -438,8 +439,9 @@ const columns: DataTableColumn<Quote>[] = [
   (`role="region"`, `tabIndex={0}`), so keyboard users can scroll it with the arrow keys; when everything fits it adds
   no tab stop. Its focus ring sits inside the box, or just outside it with `stickyHeader`, whose cells would cover the
   top of an inset ring. A caller that scrolls the table in its own wrapper turns the box off with
-  `className="overflow-x-visible!"`, and the box then never becomes a region. The caption names that region, so avoid
-  a caption that repeats the panel title word for word where the table overflows (two "Rules" regions on a phone).
+  `className="overflow-x-visible!"`, and the box then never becomes a region. The caption names that region, so it
+  must not repeat the panel title word for word where the table can overflow: the alerts page captions its tables
+  "Alert rules" and "Alert history" inside the Rules and History panels.
 
 ### HoverCard and Tooltip
 
