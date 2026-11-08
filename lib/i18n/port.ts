@@ -9,6 +9,7 @@ const en = {
   kpi: {
     value: "Value · {currency}",
     dayPnl: "Day P&L",
+    lastSessionPnl: "Last session P&L",
     unrealized: "Unrealized P&L",
     dividends: "Dividends / yr",
     dividendsSub: "approx. · {n} of {m} pay",
@@ -25,6 +26,8 @@ const en = {
   basis: "Based on the last 12 months of daily prices and today's positions. Describes past behaviour, not a forecast.",
   betaNote: "Beta is the 1-year daily beta against SPY. Yahoo's beta uses 5 years of monthly returns, so the two differ.",
   sessionsNote: "The statistics use {n} sessions since {date}, the first day every analyzed holding has a price.",
+  subsetNote: "Beta, volatility, VaR and max drawdown cover {n} of {m} positions.",
+  historyDegraded: "Some price histories could not be loaded, so the figures below leave those holdings out.",
   tabs: { label: "Analytics view", overview: "Overview", exposure: "Exposure", risk: "Risk", correlation: "Correlation" },
   overview: {
     benchmark: "Benchmark",
@@ -66,7 +69,6 @@ const en = {
     beta: "Beta",
     volatility: "Volatility",
     sentence: "{symbol}: {weight} of value, {risk} of risk",
-    points: "{n} pts",
     weightNote: "Weights here are shares of the {n} analyzed positions' value.",
     note: "Share of risk is each position's part of the variance of the holdings' daily returns over the same sessions (Euler allocation). Below 0 means the position lowered the total.",
   },
@@ -87,6 +89,7 @@ const en = {
     beyond: "beyond the 24 largest",
     otherCurrency: "in {currency}, not converted",
     noHistory: "no price history",
+    historyFailed: "price history could not be loaded",
     noQuote: "no quote",
   },
   method: {
@@ -103,7 +106,6 @@ const en = {
   historyError: "Price history could not be loaded.",
   myDay: {
     title: "My day",
-    today: "Today",
     contributors: "Top contributors",
     detractors: "Top detractors",
     noMovers: "No moves yet today.",
@@ -125,6 +127,7 @@ export const portMessages = defineMessages(en, {
   kpi: {
     value: "市值 · {currency}",
     dayPnl: "当日盈亏",
+    lastSessionPnl: "上一交易日盈亏",
     unrealized: "浮动盈亏",
     dividends: "年股息",
     dividendsSub: "约数 · {m} 个中 {n} 个派息",
@@ -141,6 +144,8 @@ export const portMessages = defineMessages(en, {
   basis: "基于过去 12 个月的日线和当前持仓，描述的是过去的表现，不是预测。",
   betaNote: "这里的 Beta 是相对 SPY 的 1 年日线 Beta；雅虎的 Beta 用 5 年月线计算，两者会不同。",
   sessionsNote: "统计使用自 {date} 起的 {n} 个交易日，从那天起每个被分析的持仓都有价格。",
+  subsetNote: "Beta、波动率、VaR 和最大回撤覆盖 {m} 个持仓中的 {n} 个。",
+  historyDegraded: "部分持仓的价格历史未能加载，下面的数字没有包含这些持仓。",
   tabs: { label: "分析视图", overview: "概览", exposure: "暴露", risk: "风险", correlation: "相关性" },
   overview: {
     benchmark: "基准",
@@ -182,7 +187,6 @@ export const portMessages = defineMessages(en, {
     beta: "Beta",
     volatility: "波动率",
     sentence: "{symbol}：市值占 {weight}，风险占 {risk}",
-    points: "{n} 个百分点",
     weightNote: "这里的权重按参与分析的 {n} 个持仓的市值计算。",
     note: "风险占比是每个持仓在组合日收益方差中所占的份额（欧拉分配），使用相同的交易日。小于 0 表示这个持仓降低了总风险。",
   },
@@ -203,6 +207,7 @@ export const portMessages = defineMessages(en, {
     beyond: "不在最大的 24 个之内",
     otherCurrency: "以 {currency} 计价，未换算",
     noHistory: "没有价格历史",
+    historyFailed: "价格历史未能加载",
     noQuote: "暂无报价",
   },
   method: {
@@ -219,7 +224,6 @@ export const portMessages = defineMessages(en, {
   historyError: "无法加载价格历史。",
   myDay: {
     title: "我的今日",
-    today: "今日",
     contributors: "主要贡献",
     detractors: "主要拖累",
     noMovers: "今天还没有变动。",

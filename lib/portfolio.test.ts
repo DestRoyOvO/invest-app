@@ -6,6 +6,7 @@ import {
   dayChangeRatio,
   dayMovers,
   extendedHoursPnl,
+  lastSessionDate,
   nextEarnings,
   pickBaseCurrency,
   topWeight,
@@ -223,5 +224,28 @@ describe("calendar days and next earnings", () => {
     expect(nextEarnings(["NVDA", "WMT"], of, now)).toMatchObject({ symbol: "NVDA", days: 10, estimated: false });
     expect(nextEarnings(["NVDA", "WMT"], of, now, 7)).toBeNull();
     expect(nextEarnings(["OLD", "NONE", "MISSING"], of, now)).toBeNull();
+  });
+});
+
+describe("lastSessionDate", () => {
+  const rows = [{ symbol: "AAPL" }, { symbol: "MSFT" }, { symbol: "NONE" }];
+  const times: Record<string, string | null> = { AAPL: "2026-11-06T21:00:00Z", MSFT: "2026-11-06T20:59:58Z", NONE: null };
+  const of = (s: string) => (s in times ? { regularMarketTime: times[s] } : undefined);
+
+  it("names the last session while the market has not traded today", () => {
+    // Saturday 2026-11-07 19:30 in New York: Friday's session (16:00 New York is 21:00 UTC).
+    expect(lastSessionDate(rows, of, Date.parse("2026-11-08T00:30:00Z"))).toBe(Date.UTC(2026, 10, 6));
+    // Monday 08:00 in New York, before the open: still Friday.
+    expect(lastSessionDate(rows, of, Date.parse("2026-11-09T13:00:00Z"))).toBe(Date.UTC(2026, 10, 6));
+  });
+
+  it("is null once a quote traded today, and without times or a clock", () => {
+    // Friday 17:00 in New York (after hours): the day P&L is today's.
+    expect(lastSessionDate(rows, of, Date.parse("2026-11-06T22:00:00Z"))).toBeNull();
+    // One quote from today (crypto trades on weekends) makes it today.
+    const mixed = (s: string) => (s === "BTC-USD" ? { regularMarketTime: "2026-11-07T23:59:00Z" } : of(s));
+    expect(lastSessionDate([...rows, { symbol: "BTC-USD" }], mixed, Date.parse("2026-11-08T00:30:00Z"))).toBeNull();
+    expect(lastSessionDate([{ symbol: "NONE" }, { symbol: "MISSING" }], of, Date.parse("2026-11-08T00:30:00Z"))).toBeNull();
+    expect(lastSessionDate(rows, of, 0)).toBeNull();
   });
 });

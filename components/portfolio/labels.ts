@@ -1,5 +1,5 @@
 import type { Messages } from "@/lib/i18n/messages";
-import type { AssetClass } from "@/lib/portfolio-analytics";
+import { foldSlices, type AssetClass, type ExposureSlice } from "@/lib/portfolio-analytics";
 import type { HoldingGroup } from "@/lib/sectors";
 import { getSector } from "@/lib/universe";
 import type { Lang } from "@/types/api";
@@ -27,3 +27,27 @@ export function assetClassLabel(key: AssetClass, t: Messages): string {
 /** Categorical series colors for slices (identity only, never direction); the last one is the neutral rest. */
 export const SLICE_COLORS = ["var(--series-1)", "var(--series-2)", "var(--series-3)", "var(--series-4)", "var(--series-5)"] as const;
 export const REST_COLOR = "var(--series-6)";
+/** Most legend entries: one per series color, the neutral series-6 included. */
+export const MAX_LEGEND = SLICE_COLORS.length + 1;
+
+export interface LegendEntry<K> {
+  id: string;
+  /** The group, or null for the folded rest ("Other"). */
+  key: K | null;
+  value: number;
+  weight: number;
+  color: string;
+}
+
+/**
+ * Legend entries for an allocation bar, every one in its own series color (colors are identity, so they never
+ * repeat): up to five groups in series 1 to 5, then either a sixth group or the rest folded into "Other", both in the
+ * neutral series 6.
+ */
+export function allocationLegend<K>(slices: readonly ExposureSlice<K>[]): LegendEntry<K>[] {
+  const { shown, rest } = foldSlices(slices, MAX_LEGEND);
+  return [
+    ...shown.map((s, i) => ({ id: s.id, key: s.key, value: s.value, weight: s.weight, color: SLICE_COLORS[i] ?? REST_COLOR })),
+    ...(rest ? [{ id: "rest", key: null, value: rest.value, weight: rest.weight, color: REST_COLOR }] : []),
+  ];
+}

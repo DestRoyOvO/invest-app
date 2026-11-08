@@ -11,6 +11,7 @@ import {
   effectivePositionCount,
   foldSlices,
   fxPairSymbol,
+  fxSymbolsFor,
   HIGH_CORRELATION,
   historySymbols,
   largestRiskGap,
@@ -268,6 +269,13 @@ describe("currencies", () => {
     expect(fxPairSymbol("GBp", "USD")).toBe("GBPUSD=X");
     expect(fxPairSymbol("GBp", "GBP")).toBeNull();
     expect(fxPairSymbol("USD", "USD")).toBeNull();
+  });
+
+  it("lists the FX symbols the breakdown needs, once each and sorted", () => {
+    const foreign = [{ currency: "JPY" }, { currency: "GBp" }, { currency: "JPY" }, { currency: "EUR" }, { currency: "GBP" }];
+    expect(fxSymbolsFor(foreign, "USD")).toEqual(["EURUSD=X", "GBPUSD=X", "JPYUSD=X"]);
+    expect(fxSymbolsFor([{ currency: "GBp" }], "GBP")).toEqual([]);
+    expect(fxSymbolsFor([], "USD")).toEqual([]);
   });
 
   it("converts other currencies for the breakdown and keeps unknown rates apart", () => {

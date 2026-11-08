@@ -225,6 +225,28 @@ export function calendarDaysUntil(iso: string | null | undefined, now: number, t
   return Math.round((calendarDate(at, timeZone) - calendarDate(now, timeZone)) / DAY_MS);
 }
 
+export interface SessionQuoteLike {
+  /** Time of the last regular-session trade (ISO). */
+  regularMarketTime: string | null;
+}
+
+/**
+ * The New York date (UTC midnight) of the latest regular session among the positions' quotes when that session was
+ * before today, so a day figure shown while the market is closed (a weekend, or before the open) can say it covers the
+ * last session rather than today. Null when a quote traded today, when no time is known, or without a clock (now <= 0).
+ */
+export function lastSessionDate(rows: ReadonlyArray<{ symbol: string }>, quoteOf: (symbol: string) => SessionQuoteLike | undefined, now: number): number | null {
+  if (now <= 0) return null;
+  let latest: number | null = null;
+  for (const row of rows) {
+    const at = Date.parse(quoteOf(row.symbol)?.regularMarketTime ?? "");
+    if (!Number.isNaN(at) && (latest === null || at > latest)) latest = at;
+  }
+  if (latest === null) return null;
+  const session = calendarDate(latest);
+  return session < calendarDate(now) ? session : null;
+}
+
 export interface EarningsQuoteLike {
   nextEarningsDate: string | null;
   earningsDateEstimated: boolean | null;

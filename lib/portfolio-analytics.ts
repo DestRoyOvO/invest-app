@@ -439,6 +439,12 @@ export function fxPairSymbol(from: string, to: string): string | null {
   return a === b ? null : `${a}${b}=X`;
 }
 
+/** Yahoo FX symbols that convert positions in other currencies into the base currency: unique and sorted. */
+export function fxSymbolsFor(positions: ReadonlyArray<{ currency: string }>, base: string): string[] {
+  const pairs = positions.map((p) => fxPairSymbol(p.currency, base)).filter((s): s is string => s !== null);
+  return [...new Set(pairs)].sort();
+}
+
 export interface CurrencySlice {
   /** Quote currency as Yahoo reports it. */
   currency: string;
