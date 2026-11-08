@@ -456,15 +456,17 @@ const columns: DataTableColumn<Quote>[] = [
   drops its 1M line below `sm` (its four columns need 360px), Trending drops the price below `md` so the names keep
   room, and the analyst actions hide their date column below `md`. The wide left-hand column at xl is a box of 713px at
   1280px and 819px at 1440px: Discover's movers and ideas tables hide their 120px rating below `3xl`, which left the
-  names 13 and 29px at 1280px (133 and 149px without it), and show it at 1440px and in the single column below xl (958px
-  at 1024px). The container size takes the place of `hideBelow`. When a column uses it, the scroll box becomes the query
-  container (`@container`), so cells can carry container classes too: the analyst actions show the date under the firm
-  with `@md:hidden`. A table whose cells adapt while every column stays makes its box the container itself with
-  `className="@container"`: the reported quarters on the quote page set the report date after the quarter, and under it
-  with `@max-sm:block` below `sm` (the quarter column gets 104px at 1280px and 106px on 360px phones; "3Q2025 10月30日"
-  needs 127). A footer row a caller builds hides its cells with `hideClass(column)`. The compact world tables
-  (currencies, commodities, crypto) keep all four columns at 1280px and let a long name truncate ("EUR/U…", "欧元/…"): the
-  code beside it (EURUSD) stays whole and says the same.
+  names 13 and 29px at 1280px (133 and 149px without it). They show it wherever the table is at least 48rem wide: in
+  that column from about 1363px (names 68 and 84px there, 119 and 135px at 1440px) and in the single column below xl
+  from about 834px (958px at 1024px); the 702px single column at 768px hides it, as phones do. The container size takes
+  the place of `hideBelow`. When a column uses it, the scroll box becomes the query container (`@container`), so cells
+  can carry container classes too: the analyst actions show the date under the firm with `@md:hidden`. A table whose
+  cells adapt while every column stays makes its box the container itself with `className="@container"`: the reported
+  quarters on the quote page set the report date after the quarter, and under it with `@max-sm:block` below `sm` (the
+  quarter column gets 104px at 1280px and 106px on 360px phones; "3Q2025 10月30日" needs 127). A footer row a caller
+  builds hides its cells with `hideClass(column)`. The compact world tables (currencies, commodities, crypto) keep all
+  four columns at 1280px and let a long name truncate ("EUR/U…", "欧元/…"): the code beside it (EURUSD) stays whole and
+  says the same.
 - Sorting: a header click cycles the column's first direction (descending for right-aligned columns), the opposite, then
   the natural order. `aria-sort` marks the sorted header. Missing values sort last both ways; equal values keep their
   `tieBreak` order, then their original order. Pass `sort`/`onSortChange` to control it, for example to keep a
