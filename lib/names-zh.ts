@@ -259,11 +259,16 @@ export function fullName(symbol: string | null | undefined, englishName: string 
 /**
  * A symbol as a tab title names it: in Chinese with its Chinese name in front ("英伟达 NVDA"), since a Chinese reader
  * knows the company by that name; otherwise the symbol alone, as English tabs show it. A name in Latin letters (Meta)
- * would only echo the ticker, so it is left out.
+ * or one that opens with the ticker ("TJX 公司") would only echo the symbol, so it is left out.
  */
 export function symbolTitle(symbol: string, lang: Lang): string {
   const chinese = lang === "zh" ? BY_SYMBOL.get(symbol) : undefined;
-  return chinese && hasCjk(chinese) ? `${chinese} ${symbol}` : symbol;
+  return chinese && hasCjk(chinese) && !opensWithTicker(chinese, symbol) ? `${chinese} ${symbol}` : symbol;
+}
+
+/** True when the name opens with the ticker as a word of its own: "TJX 公司" for TJX, but not "Visa" for V. */
+function opensWithTicker(name: string, symbol: string): boolean {
+  return name.toUpperCase().startsWith(symbol.toUpperCase()) && !/^[a-z0-9]/i.test(name.slice(symbol.length));
 }
 
 /**

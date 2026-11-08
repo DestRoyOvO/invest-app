@@ -131,4 +131,13 @@ describe("symbolTitle", () => {
     expect(symbolTitle("KRMN", "zh")).toBe("KRMN");
     expect(symbolTitle("META", "zh")).toBe("META");
   });
+
+  it("leaves out a name that opens with the ticker, so no title repeats the symbol", () => {
+    expect(symbolTitle("TJX", "zh")).toBe("TJX");
+    expect(symbolTitle("EOG", "zh")).toBe("EOG");
+    expect(symbolTitle("CL=F", "zh")).toBe("WTI 原油 CL=F");
+    for (const { symbol } of CHINESE_NAMES) {
+      expect(symbolTitle(symbol, "zh").split(" ").filter((word) => word === symbol), symbol).toHaveLength(1);
+    }
+  });
 });
