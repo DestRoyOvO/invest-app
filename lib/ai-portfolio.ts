@@ -24,6 +24,8 @@ import { daysUntil, fmtDaysUntil, fmtNumber, fmtRatio, fmtShare, fmtSigned, isFi
 
 const MAX_RANKED = 15;
 const MAX_EVENTS = 15;
+/** Positions left out of the risk block that are named one by one. */
+const MAX_LISTED_GAPS = 10;
 /** Earnings and ex-dividend dates further out than this are left out of the events line. */
 const EVENT_HORIZON_DAYS = 90;
 
@@ -93,8 +95,10 @@ export interface AlignedSeries {
 export interface PortfolioRisk {
   /** Positions with enough price history, largest first. */
   covered: string[];
-  /** Positions left out for lack of history. */
+  /** Positions whose history was loaded but is too short. */
   missing: string[];
+  /** Smaller positions whose history was not loaded (only the largest are), largest first. */
+  notLoaded: string[];
   /** Share of the base-currency value the covered positions hold. */
   coveredShare: number;
   /** Daily returns of the holdings value series. */
@@ -117,15 +121,19 @@ function isoDay(t: number | undefined): string {
 /**
  * Past-year risk of today's holdings (fixed share counts) from adjusted closes aligned on one calendar: volatility,
  * beta to the benchmark, average pairwise correlation, each position's share of variance, historical VaR, the
- * largest drawdown and the effective number of positions. Null when no position has enough history.
+ * largest drawdown and the effective number of positions. `loaded` names the positions whose bars were requested (all
+ * when omitted); the others are reported as not included rather than as lacking history. Null when no position has
+ * enough history.
  */
-export function portfolioRisk(aligned: AlignedSeries, portfolio: Portfolio, benchmark: string): PortfolioRisk | null {
+export function portfolioRisk(aligned: AlignedSeries, portfolio: Portfolio, benchmark: string, loaded?: ReadonlySet<string>): PortfolioRisk | null {
   const rows = portfolio.rows;
   if (rows.length === 0) return null;
   const enough = (symbol: string) => (aligned.closes[symbol] ?? []).filter((close) => isFiniteNumber(close)).length > MIN_RETURNS;
-  const covered = rows.filter((row) => enough(row.symbol));
+  const requested = loaded ? rows.filter((row) => loaded.has(row.symbol)) : rows;
+  const covered = requested.filter((row) => enough(row.symbol));
   if (covered.length === 0) return null;
-  const missing = rows.filter((row) => !enough(row.symbol)).map((row) => row.symbol);
+  const missing = requested.filter((row) => !enough(row.symbol)).map((row) => row.symbol);
+  const notLoaded = loaded ? rows.filter((row) => !loaded.has(row.symbol)).map((row) => row.symbol) : [];
   const coveredValue = covered.reduce((sum, row) => sum + row.value, 0);
 
   const shares = Object.fromEntries(covered.map((row) => [row.symbol, row.shares]));
@@ -156,6 +164,7 @@ export function portfolioRisk(aligned: AlignedSeries, portfolio: Portfolio, benc
   return {
     covered: covered.map((row) => row.symbol),
     missing,
+    notLoaded,
     coveredShare: portfolio.totals.value > 0 ? coveredValue / portfolio.totals.value : 0,
     returns: returnCount,
     volatility: annualizedVolatility(valueReturns),
@@ -179,9 +188,16 @@ export function portfolioRisk(aligned: AlignedSeries, portfolio: Portfolio, benc
 export function riskBlock(risk: PortfolioRisk | null, portfolio: Portfolio, benchmark: string): string | null {
   if (!risk) return null;
   const currency = portfolio.baseCurrency;
+  const gaps: string[] = [];
+  if (risk.notLoaded.length > 0) {
+    const shown = risk.notLoaded.slice(0, MAX_LISTED_GAPS).join(", ");
+    const more = risk.notLoaded.length > MAX_LISTED_GAPS ? ` and ${risk.notLoaded.length - MAX_LISTED_GAPS} more` : "";
+    gaps.push(`not included: ${shown}${more} (outside the ${risk.covered.length + risk.missing.length} largest positions)`);
+  }
+  if (risk.missing.length > 0) gaps.push(`no history for ${risk.missing.join(", ")}`);
   const coverage =
-    risk.missing.length > 0
-      ? `covers ${risk.covered.length} of ${portfolio.rows.length} positions, ${fmtShare(risk.coveredShare)} of value; no history for ${risk.missing.join(", ")}`
+    gaps.length > 0
+      ? `covers ${risk.covered.length} of ${portfolio.rows.length} positions, ${fmtShare(risk.coveredShare)} of value; ${gaps.join("; ")}`
       : `covers all ${risk.covered.length} ${currency} positions`;
   const lines = [
     `Risk of today's holdings over the past year (fixed share counts, dividend-adjusted closes, ${risk.returns} daily returns, ${coverage}). These statistics describe past behaviour, not the future:`,
@@ -221,8 +237,11 @@ interface HoldingEvent {
   text: string;
 }
 
-/** Next earnings and ex-dividend dates of the given symbols within 90 days, soonest first (from Quote fields). */
-export function eventsLine(symbols: readonly string[], quotes: ReadonlyMap<string, Quote>, now: Date): string | null {
+/**
+ * Next earnings and ex-dividend dates of the given symbols within 90 days, soonest first (from Quote fields). `label`
+ * names the symbols: the holdings of a portfolio, or the watchlist symbols when no positions were sent.
+ */
+export function eventsLine(symbols: readonly string[], quotes: ReadonlyMap<string, Quote>, now: Date, label = "holdings"): string | null {
   const events: HoldingEvent[] = [];
   for (const symbol of symbols) {
     const quote = quotes.get(symbol);
@@ -242,11 +261,11 @@ export function eventsLine(symbols: readonly string[], quotes: ReadonlyMap<strin
       }
     }
   }
-  if (events.length === 0) return `Upcoming earnings and ex-dividend dates for holdings: none known in the next ${EVENT_HORIZON_DAYS} days.`;
+  if (events.length === 0) return `Upcoming earnings and ex-dividend dates for ${label}: none known in the next ${EVENT_HORIZON_DAYS} days.`;
   events.sort((a, b) => a.date.localeCompare(b.date) || a.text.localeCompare(b.text));
   const shown = events.slice(0, MAX_EVENTS).map((event) => event.text);
   const more = events.length > MAX_EVENTS ? `; ${events.length - MAX_EVENTS} more` : "";
-  return `Upcoming earnings and ex-dividend dates for holdings (from quotes, next ${EVENT_HORIZON_DAYS} days): ${shown.join("; ")}${more}.`;
+  return `Upcoming earnings and ex-dividend dates for ${label} (from quotes, next ${EVENT_HORIZON_DAYS} days): ${shown.join("; ")}${more}.`;
 }
 
 /** The two positions with the largest absolute day P&L (the movers whose headlines the scan adds). */

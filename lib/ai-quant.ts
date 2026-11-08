@@ -14,6 +14,7 @@ import { labelForScore, SIGNAL_THRESHOLDS } from "@/lib/signal";
 import type { FactorProfile, SignalCode, SignalReport, StyleFactorKey } from "@/types/api";
 
 import { cleanInline, fmtMultiple, fmtNumber, fmtPrice, fmtRatio, isFiniteNumber, NA, ordinal } from "./ai-format";
+import type { AssetClass } from "./ai-notes";
 
 export const FACTOR_RESEARCH = factorResearchData as unknown as FactorResearch;
 export const RISK_CALIBRATION = riskCalibrationData as unknown as RiskCalibration;
@@ -98,8 +99,11 @@ export function volatilityQuintile(volatility63: number, calibration: RiskCalibr
   return 1 + bounds.filter((bound) => volatility63 > bound).length;
 }
 
-/** The risk forecast with its measured coverage, and the universe volatility group with its drawdown history. */
-export function riskForecastLines(risk: SignalReport["risk"], calibration: RiskCalibration = RISK_CALIBRATION): string[] {
+/**
+ * The risk forecast with its coverage as measured on the stock universe, and for stocks (`stockGroups`) the universe
+ * volatility group with its drawdown history; the groups and their history say nothing about a fund or a coin.
+ */
+export function riskForecastLines(risk: SignalReport["risk"], calibration: RiskCalibration = RISK_CALIBRATION, stockGroups = true): string[] {
   if (!risk) return ["- risk forecast: not available (too little price history)"];
   const lines: string[] = [];
   const parts: string[] = [];
@@ -107,7 +111,7 @@ export function riskForecastLines(risk: SignalReport["risk"], calibration: RiskC
     const coverage = calibration.bands.overall;
     const measured =
       isFiniteNumber(coverage.within1) && isFiniteNumber(coverage.within2) && calibration.bands.horizon === risk.horizonDays
-        ? `; in tests on ${calibration.window.from.slice(0, 4)}-${calibration.window.to.slice(0, 4)} data, ${fmtRatio(coverage.within1)} of ${risk.horizonDays}-session moves stayed inside the first range and ${fmtRatio(coverage.within2)} inside the second`
+        ? `; in tests on large US stocks over ${calibration.window.from.slice(0, 4)}-${calibration.window.to.slice(0, 4)}, ${fmtRatio(coverage.within1)} of ${risk.horizonDays}-session moves stayed inside the first range and ${fmtRatio(coverage.within2)} inside the second`
         : "";
     parts.push(
       `next ${risk.horizonDays} sessions ${fmtPrice(risk.range1.low)}-${fmtPrice(risk.range1.high)} (plus or minus one standard deviation) and ${fmtPrice(risk.range2.low)}-${fmtPrice(risk.range2.high)} (two) around the last close ${fmtPrice(risk.price)}${measured}`,
@@ -119,7 +123,7 @@ export function riskForecastLines(risk: SignalReport["risk"], calibration: RiskC
   lines.push(parts.length > 0 ? `- risk forecast (a range, not a direction): ${parts.join("; ")}` : "- risk forecast: not available");
 
   if (isFiniteNumber(risk.volatility63)) {
-    const quintile = volatilityQuintile(risk.volatility63, calibration);
+    const quintile = stockGroups ? volatilityQuintile(risk.volatility63, calibration) : null;
     const row = quintile ? calibration.quintiles.overall.find((r) => r.quintile === quintile) : undefined;
     const bounds = calibration.quintiles.breakpoints.latest;
     if (quintile && row && isFiniteNumber(row.drawdown)) {
@@ -188,25 +192,37 @@ export function backtestLine(report: SignalReport): string {
 export interface QuantInput {
   report: SignalReport | null;
   profile: FactorProfile | null;
+  /** The statistics measured on the stock universe (evaluation, volatility groups, factors) are for equities only. */
+  asset?: AssetClass;
   evaluation?: SignalEvaluation;
   research?: FactorResearch;
   calibration?: RiskCalibration;
 }
 
+const ASSET_PLURALS: Record<Exclude<AssetClass, "equity">, string> = {
+  fund: "funds",
+  crypto: "cryptocurrencies",
+  futures: "futures",
+  currency: "currencies",
+  index: "indices",
+};
+
 /** The quant facts block of the stock context. */
-export function quantBlock({ report, profile, evaluation = SIGNAL_EVALUATION, research = FACTOR_RESEARCH, calibration = RISK_CALIBRATION }: QuantInput): string {
+export function quantBlock({ report, profile, asset = "equity", evaluation = SIGNAL_EVALUATION, research = FACTOR_RESEARCH, calibration = RISK_CALIBRATION }: QuantInput): string {
+  const stock = asset === "equity";
   if (!report) {
-    const factors = factorLine(profile, research);
+    const factors = stock ? factorLine(profile, research) : null;
     return factors ? `InvestSeek quant facts: model signal not available.\n${factors}` : "InvestSeek quant facts: not available.";
   }
   if (report.status !== "ok" || report.code === null) {
     const reason = cleanInline(report.reason, 120);
     return `InvestSeek quant facts: insufficient data${reason ? ` (${reason})` : ""}.`;
   }
-  const lines = [`InvestSeek quant facts (model v${evaluation.model.version}; they describe the stock, none of them is a forecast of returns):`];
+  const lines = [`InvestSeek quant facts (model v${evaluation.model.version}; they describe ${stock ? "the stock" : "this instrument"}, none of them is a forecast of returns):`];
   if (isFiniteNumber(report.technicalScore)) {
+    // Every input comes from the symbol's own price and volume history; the score is not a rank against other stocks.
     lines.push(
-      `- short-term relative strength (the technical score, 0-100, from price momentum, trend, RSI and volume against other large caps over recent weeks): ${report.technicalScore.toFixed(1)}, reads ${READING[labelForScore(report.technicalScore)]}`,
+      `- short-term relative strength (the technical score, 0-100, from its own recent momentum, trend, RSI and volume; not a rank against other stocks): ${report.technicalScore.toFixed(1)}, reads ${READING[labelForScore(report.technicalScore)]}`,
     );
   }
   // Factors without weight (the volatility regime in v4) describe risk, which the risk forecast covers.
@@ -217,12 +233,16 @@ export function quantBlock({ report, profile, evaluation = SIGNAL_EVALUATION, re
   } else if (informative.length > 0) {
     lines.push(`- factor readings (0-100, higher reads stronger): ${informative.map(describe).join(", ")}`);
   }
-  const evidence = evaluationLine(evaluation);
-  if (evidence) lines.push(evidence);
-  const hindsight = hindsightLine(evaluation);
-  if (hindsight) lines.push(hindsight);
-  lines.push(...riskForecastLines(report.risk, calibration));
-  const factors = factorLine(profile, research);
+  if (stock) {
+    const evidence = evaluationLine(evaluation);
+    if (evidence) lines.push(evidence);
+    const hindsight = hindsightLine(evaluation);
+    if (hindsight) lines.push(hindsight);
+  } else {
+    lines.push(`- evidence: the score and the risk ranges were tested on large US stocks only; there is no tested evidence for them on ${ASSET_PLURALS[asset]}`);
+  }
+  lines.push(...riskForecastLines(report.risk, calibration, stock));
+  const factors = stock ? factorLine(profile, research) : null;
   if (factors) lines.push(factors);
   lines.push(backtestLine(report));
   lines.push(

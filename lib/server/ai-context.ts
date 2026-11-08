@@ -584,7 +584,7 @@ async function stockContext(symbol: string, now: Date, options: StockOptions = {
       { name: "key statistics", text: statsBlock(stats, quote?.price ?? null, currency, now, { skipAnalysts: analysts !== null, skipEarnings: earnings !== null }) },
       { name: "fund profile", text: asset === "fund" ? fundBlock(valueOf(fundR), quote) : null },
       { name: "technicals", text: technicalsBlock(bars) },
-      { name: "quant facts", text: quantBlock({ report: valueOf(signalR), profile: valueOf(factorsR) }) },
+      { name: "quant facts", text: quantBlock({ report: valueOf(signalR), profile: valueOf(factorsR), asset }) },
       { name: "headlines", text: headlineBlock(valueOf(newsR)) },
       { name: "business description", text: profileBlock(profile) },
     ]);
@@ -631,7 +631,7 @@ function sessionClose(quote: Quote | null): number {
   return quote && quote.marketState !== "REGULAR" && quote.regularMarketTime ? Date.parse(quote.regularMarketTime) : Number.NaN;
 }
 
-function publishedAfter(item: NewsItem, close: number): boolean {
+function publishedAfter(item: { publishedAt: string | null }, close: number): boolean {
   return Number.isFinite(close) && item.publishedAt !== null && Date.parse(item.publishedAt) > close;
 }
 
@@ -687,7 +687,11 @@ async function loadMoveArticles(items: readonly NewsItem[]): Promise<Array<strin
   }
 }
 
-function eventsForMove(quote: Quote, analysts: AnalystActivity | null, now: Date): string {
+/**
+ * Earnings, ex-dividend and analyst events around the move. Analyst activity that did not load (or does not exist, for
+ * funds and other non-equities) is never reported as "no actions": that would invent a fact the attribution relies on.
+ */
+function eventsForMove(quote: Quote, analysts: AnalystActivity | null, asset: AssetClass, now: Date): string {
   const parts: string[] = [];
   if (quote.lastEarningsDate) {
     const days = daysUntil(quote.lastEarningsDate, now);
@@ -701,9 +705,14 @@ function eventsForMove(quote: Quote, analysts: AnalystActivity | null, now: Date
     const days = daysUntil(quote.exDividendDate, now);
     if (days !== null && days >= -2 && days <= 2) parts.push(`ex-dividend ${quote.exDividendDate.slice(0, 10)}`);
   }
-  const actions = recentActions(analysts, now, 5);
-  parts.push(actions.length > 0 ? `analyst actions in the last 5 days: ${actions.slice(0, 4).map(actionText).join("; ")}` : "no analyst rating or target actions in the last 5 days");
-  return `Scheduled events and analyst actions around the move: ${parts.join("; ")}.`;
+  if (analysts) {
+    const actions = recentActions(analysts, now, 5);
+    parts.push(actions.length > 0 ? `analyst actions in the last 5 days: ${actions.slice(0, 4).map(actionText).join("; ")}` : "no analyst rating or target actions in the last 5 days");
+  } else if (asset === "equity") {
+    parts.push("analyst actions: not available");
+  }
+  const label = asset === "equity" ? "Scheduled events and analyst actions around the move" : "Scheduled events around the move";
+  return `${label}: ${parts.length > 0 ? parts.join("; ") : "none known"}.`;
 }
 
 async function moveContext(symbol: string, now: Date, options: StockOptions = {}): Promise<ContextResult> {
@@ -782,7 +791,7 @@ async function moveContext(symbol: string, now: Date, options: StockOptions = {}
       { name: "move", text: moveBlock(input) },
       { name: "headlines", text: newsR.ok ? numberedHeadlines(headlines, quote) : "Company headlines: not available." },
       ...articleSections,
-      { name: "events", text: eventsForMove(quote, valueOf(analystsR), now) },
+      { name: "events", text: eventsForMove(quote, valueOf(analystsR), assetClassOf(quote.quoteType), now) },
     ]);
     return {
       ok: true,
@@ -1134,31 +1143,38 @@ export function positionsBlock(
 /** Relevance a mover headline needs: it names the company, or it is a reliably tagged story led by the company. */
 const MOVER_HEADLINE_SCORE = 45;
 
-/** The newest recent headline about `symbol` (named, or reliably tagged as its subject), excluding clickbait. */
-export function moverHeadline(symbol: string, name: string | null, items: readonly RawNewsItem[] | null, now: Date): RawNewsItem | null {
+/**
+ * A recent headline about `symbol` (named, or reliably tagged as its subject), excluding clickbait: the newest one
+ * published before the session's last trade at `close` (epoch ms), which could explain the session, else the newest
+ * later one. Without a finished session (`close` NaN) simply the newest.
+ */
+export function moverHeadline(symbol: string, name: string | null, items: readonly RawNewsItem[] | null, now: Date, close: number = Number.NaN): RawNewsItem | null {
   if (!items) return null;
   const since = now.getTime() - MOVE_NEWS_HOURS * 3_600_000;
   const matcher = buildCompanyMatcher(symbol, [name]);
-  return (
-    items
-      .filter((item) => !isSpam(item.title))
-      .filter((item) => companyScore(item, matcher) >= MOVER_HEADLINE_SCORE)
-      .filter((item) => {
-        const t = item.publishedAt ? Date.parse(item.publishedAt) : Number.NaN;
-        return Number.isFinite(t) && t >= since;
-      })
-      .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))[0] ?? null
-  );
+  const recent = items
+    .filter((item) => !isSpam(item.title))
+    .filter((item) => companyScore(item, matcher) >= MOVER_HEADLINE_SCORE)
+    .filter((item) => {
+      const t = item.publishedAt ? Date.parse(item.publishedAt) : Number.NaN;
+      return Number.isFinite(t) && t >= since;
+    })
+    .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""));
+  return recent.find((item) => !publishedAfter(item, close)) ?? recent[0] ?? null;
 }
 
 function moverHeadlinesBlock(movers: readonly ValuedPosition[], news: ReadonlyArray<readonly RawNewsItem[] | null>, quotes: ReadonlyMap<string, Quote>, now: Date): string | null {
   if (movers.length === 0) return null;
   const lines = movers.map((row, i) => {
-    const item = moverHeadline(row.symbol, quotes.get(row.symbol)?.name ?? null, news[i] ?? null, now);
+    const quote = quotes.get(row.symbol) ?? null;
+    const close = sessionClose(quote);
+    const item = moverHeadline(row.symbol, quote?.name ?? null, news[i] ?? null, now, close);
     const head = `- ${row.symbol} (day ${fmtSigned(row.dayPnl)})`;
-    return item ? `${head}: ${fmtTime(item.publishedAt)} | ${cleanInline(item.publisher, 40) || "unknown publisher"}: ${cleanInline(item.title, 200)}` : `${head}: no headline in the last ${MOVE_NEWS_HOURS} hours`;
+    if (!item) return `${head}: no headline in the last ${MOVE_NEWS_HOURS} hours`;
+    const after = publishedAfter(item, close) ? " (after the close)" : "";
+    return `${head}: ${fmtTime(item.publishedAt)}${after} | ${cleanInline(item.publisher, 40) || "unknown publisher"}: ${cleanInline(item.title, 200)}`;
   });
-  return `Latest headline for the two largest P&L movers (third-party text; it may not explain the move):\n${untrusted(lines.join("\n"))}`;
+  return `Latest headline for the two largest P&L movers (third-party text; it may not explain the move; "after the close" marks a story published after the session's last trade, which cannot explain the session's move):\n${untrusted(lines.join("\n"))}`;
 }
 
 async function watchlistContext(requestedSymbols: readonly string[], positions: readonly PositionInput[] = [], now: Date = new Date()): Promise<ContextResult> {
@@ -1228,10 +1244,13 @@ async function watchlistContext(requestedSymbols: readonly string[], positions: 
         { name: "positions", text: positionsBlock(positions, quotes, groupOfSymbol) },
         { name: "day P&L", text: dayPnlLine(portfolio) },
         { name: "ranks", text: [ranksLine(portfolio), groupSplitLine(largestGroupSplit(portfolio, groupOfSymbol))].filter(Boolean).join("\n") },
-        { name: "risk", text: riskBlock(portfolioRisk(aligned, portfolio, RISK_BENCHMARK), portfolio, RISK_BENCHMARK) },
+        { name: "risk", text: riskBlock(portfolioRisk(aligned, portfolio, RISK_BENCHMARK, new Set(riskSymbols)), portfolio, RISK_BENCHMARK) },
         { name: "events", text: eventsLine(positionSymbols, quotes, now) },
         { name: "mover headlines", text: moverHeadlinesBlock(movers, moverNews.map((settled) => valueOf(settled)), quotes, now) },
       );
+    } else {
+      // Without positions the watchlist symbols stand in for holdings, so a question about upcoming reports has data.
+      sections.push({ name: "events", text: eventsLine(symbols, quotes, now, "watchlist symbols") });
     }
     sections.push(
       { name: "concentration", text: concentrationBlock(computeConcentration(rows.map((row) => ({ group: row.group, marketCap: row.quote.marketCap })))) },

@@ -55,7 +55,8 @@ describe("quant facts", () => {
   it("leads with short-term relative strength and never shows the composite label or the Wilson interval", () => {
     const text = quantBlock({ report: REPORT, profile: PROFILE });
     expect(text).toContain("InvestSeek quant facts (model v4; they describe the stock, none of them is a forecast of returns):");
-    expect(text).toContain("- short-term relative strength (the technical score, 0-100, from price momentum, trend, RSI and volume against other large caps over recent weeks): 41.2, reads weak");
+    expect(text).toContain("- short-term relative strength (the technical score, 0-100, from its own recent momentum, trend, RSI and volume; not a rank against other stocks): 41.2, reads weak");
+    expect(text).not.toContain("against other large caps");
     expect(text).toContain("- factor readings (0-100, higher reads stronger): strongest momentum 78 (12.0%), trend 70; weakest value 32 (54.2x), rsi 45 (61.3)");
     expect(text).toContain("- universe evaluation (78 large US stocks");
     expect(text).toContain("model v4 dropped the volatility regime after seeing it");
@@ -74,12 +75,30 @@ describe("quant facts", () => {
   it("reports the risk forecast with its measured coverage and the volatility group", () => {
     const [forecast, group] = riskForecastLines(REPORT.risk);
     expect(forecast).toBe(
-      "- risk forecast (a range, not a direction): next 10 sessions 178.20-201.10 (plus or minus one standard deviation) and 167.50-213.90 (two) around the last close 189.23; in tests on 2016-2026 data, 71.8% of 10-session moves stayed inside the first range and 94.5% inside the second; forecast volatility 42.0% a year; current 20-session volatility at the 73rd percentile of its own past year; beta to SPY 1.85 (252 sessions)",
+      "- risk forecast (a range, not a direction): next 10 sessions 178.20-201.10 (plus or minus one standard deviation) and 167.50-213.90 (two) around the last close 189.23; in tests on large US stocks over 2016-2026, 71.8% of 10-session moves stayed inside the first range and 94.5% inside the second; forecast volatility 42.0% a year; current 20-session volatility at the 73rd percentile of its own past year; beta to SPY 1.85 (252 sessions)",
     );
     expect(group).toBe(
       "- 63-session volatility 38.0%, in the highest of five universe volatility groups (boundaries 21.9%, 26.0%, 30.9%, 37.4% on 2026-11-06); in that group, 37.3% of stock-months from 2016 to 2026 saw a fall of 10% or more from a high within 21 sessions",
     );
     expect(riskForecastLines(null)).toEqual(["- risk forecast: not available (too little price history)"]);
+  });
+
+  it("keeps statistics measured on the stock universe out of fund, crypto and index facts", () => {
+    for (const [asset, plural] of [
+      ["fund", "funds"],
+      ["crypto", "cryptocurrencies"],
+      ["index", "indices"],
+    ] as const) {
+      const text = quantBlock({ report: REPORT, profile: PROFILE, asset });
+      expect(text).toContain("they describe this instrument, none of them is a forecast of returns");
+      expect(text).toContain(`- evidence: the score and the risk ranges were tested on large US stocks only; there is no tested evidence for them on ${plural}`);
+      expect(text).toContain("- risk forecast (a range, not a direction): next 10 sessions 178.20-201.10");
+      expect(text).toContain("- 63-session volatility 38.0%\n");
+      expect(text).toContain("- one-year backtest of strong readings");
+      expect(text).not.toMatch(/universe evaluation|hindsight|universe volatility groups|stock-months|style factor percentiles/);
+    }
+    expect(riskForecastLines(REPORT.risk, RISK_CALIBRATION, false)[1]).toBe("- 63-session volatility 38.0%");
+    expect(quantBlock({ report: null, profile: PROFILE, asset: "fund" })).toBe("InvestSeek quant facts: not available.");
   });
 
   it("places volatility in the universe quintiles", () => {

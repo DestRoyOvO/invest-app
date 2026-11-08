@@ -564,6 +564,21 @@ describe("watchlist context", () => {
     expect(sources.getSummary).toHaveBeenCalledWith("PLTR");
   });
 
+  it("lists upcoming reports of the watchlist symbols when no positions are sent", async () => {
+    sources.getQuotes.mockResolvedValue(
+      new Map<string, Quote>([
+        ["NVDA", quote("NVDA", { nextEarningsDate: "2026-11-19T21:00:00.000Z", earningsDateEstimated: false })],
+        ["XOM", quote("XOM", { exDividendDate: "2026-11-13T00:00:00.000Z", dividendAmount: 1.03 })],
+        ["AAPL", quote("AAPL", { nextEarningsDate: "2027-01-29T21:00:00.000Z", earningsDateEstimated: true })],
+      ]),
+    );
+    const text = expectOk(await buildAnalyzeContext({ kind: "watchlist", symbols: ["NVDA", "XOM", "AAPL"], lang: "en" }, NOW));
+    expect(text).toContain(
+      "Upcoming earnings and ex-dividend dates for watchlist symbols (from quotes, next 90 days): XOM ex-dividend 2026-11-13 (in 6 days, 1.03 per share); NVDA earnings 2026-11-19 (confirmed, in 12 days); AAPL earnings 2027-01-29 (estimated, in 83 days).",
+    );
+    expect(text).not.toContain("for holdings");
+  });
+
   it("values the investor's positions by market value, including symbols outside the watchlist", async () => {
     sources.getQuotes.mockResolvedValue(
       new Map<string, Quote>([
@@ -915,6 +930,9 @@ describe("stock context: asset classes", () => {
     const result = await buildAnalyzeContext({ kind: "stock", symbol: "BTC-USD", lang: "en" }, NOW);
     expect(result).toMatchObject({ ok: true, asset: "crypto" });
     expect(expectOk(result)).not.toContain("Fund profile");
+    // Statistics measured on the stock universe do not describe a coin.
+    expect(expectOk(result)).toContain("there is no tested evidence for them on cryptocurrencies");
+    expect(expectOk(result)).not.toContain("universe evaluation");
     expect(sources.quoteSummary).not.toHaveBeenCalled();
     expect(sources.getEarningsDetail).not.toHaveBeenCalled();
   });
@@ -986,7 +1004,9 @@ describe("move context", () => {
     expect(text).toContain("Article text for [2] (third-party, clipped):");
     expect(countOf(text, UNTRUSTED_OPEN)).toBe(3);
     expect(sources.fetchArticleText).toHaveBeenCalledTimes(2);
-    expect(text).toContain("Scheduled events and analyst actions around the move: next earnings report 2026-11-19 (confirmed, in 12 days); no analyst rating or target actions in the last 5 days.");
+    // The analyst getter returned nothing: that is missing data, not a quiet week.
+    expect(text).toContain("Scheduled events and analyst actions around the move: next earnings report 2026-11-19 (confirmed, in 12 days); analyst actions: not available.");
+    expect(text).not.toContain("no analyst rating or target actions");
     const batch = sources.getQuotes.mock.calls[0]?.[0] as string[];
     expect(batch).toEqual(expect.arrayContaining(["^GSPC", "XLK", "SMH", "IGV", "MSFT", "AAPL"]));
     expect(batch).not.toContain("NVDA");
@@ -1002,6 +1022,28 @@ describe("move context", () => {
     expect(text).toContain("with a beta of 1.00 (252 sessions against SPY, from the daily bars)");
     expect(text).toContain("Company headlines from the last 48 hours: none found.");
     expect(sources.fetchArticleText).not.toHaveBeenCalled();
+  });
+
+  it("says there were no analyst actions only when the activity loaded", async () => {
+    primeMove();
+    sources.getAnalystActivity.mockResolvedValue({ ...ANALYSTS, actions: [{ ...ANALYSTS.actions[0], date: "2026-10-20T00:00:00.000Z" }] });
+    const quiet = expectOk(await buildAnalyzeContext({ kind: "move", symbol: "NVDA", lang: "en" }, NOW));
+    expect(quiet).toContain("next earnings report 2026-11-19 (confirmed, in 12 days); no analyst rating or target actions in the last 5 days.");
+    sources.getAnalystActivity.mockResolvedValue(ANALYSTS);
+    const active = expectOk(await buildAnalyzeContext({ kind: "move", symbol: "NVDA", lang: "en" }, NOW));
+    expect(active).toContain("analyst actions in the last 5 days: 2026-11-05 Morgan Stanley: maintains Overweight; target 220.00 -> 250.00 (raises).");
+    sources.getAnalystActivity.mockRejectedValue(new Error("down"));
+    expect(expectOk(await buildAnalyzeContext({ kind: "move", symbol: "NVDA", lang: "en" }, NOW))).toContain("analyst actions: not available.");
+  });
+
+  it("leaves analysts out of the events of a non-equity move", async () => {
+    primeMove();
+    sources.getQuote.mockResolvedValue(quote("BTC-USD", { quoteType: "CRYPTOCURRENCY", name: "Bitcoin USD", marketState: "REGULAR" }));
+    sources.getSummary.mockResolvedValue(null);
+    const text = expectOk(await buildAnalyzeContext({ kind: "move", symbol: "BTC-USD", lang: "en" }, NOW));
+    expect(text).toContain("Scheduled events around the move: none known.");
+    expect(text).not.toContain("analyst");
+    expect(sources.getAnalystActivity).not.toHaveBeenCalled();
   });
 
   it("answers 404 for an unknown symbol and 502 when quotes fail", async () => {
@@ -1158,5 +1200,39 @@ describe("portfolio scan facts", () => {
     expect(sources.getDailyBars).toHaveBeenCalledWith("SPY", 540);
     expect(sources.searchNews).toHaveBeenCalledWith("NVDA", 8);
     expect(text.length).toBeLessThanOrEqual(10_000);
+  });
+
+  it("prefers a mover headline from before the session close and marks a later one", async () => {
+    const closed = { marketState: "CLOSED" as const, regularMarketTime: "2026-11-06T21:00:00.000Z" };
+    sources.getQuotes.mockResolvedValue(
+      new Map<string, Quote>([
+        ["NVDA", quote("NVDA", { ...closed, name: "NVIDIA Corporation", price: 230, change: 6 })],
+        ["JPM", quote("JPM", { ...closed, name: "JPMorgan Chase & Co.", price: 300, change: -3 })],
+      ]),
+    );
+    sources.getDailyBars.mockImplementation(async () => wave(0.03));
+    const story = (id: string, title: string, publishedAt: string, ticker: string) => ({ id, title, publisher: "Wire", link: `https://finance.yahoo.com/${id}`, publishedAt, relatedTickers: [ticker] });
+    sources.searchNews.mockImplementation(async (query: string) =>
+      query === "NVDA"
+        ? [story("late", "NVIDIA And 2 Other AI Stocks To Watch", "2026-11-07T00:12:00.000Z", "NVDA"), story("early", "Nvidia supplier lifts its outlook", "2026-11-06T15:00:00.000Z", "NVDA")]
+        : [story("after", "JPMorgan names a new consumer bank head", "2026-11-06T22:30:00.000Z", "JPM")],
+    );
+    const text = expectOk(
+      await buildAnalyzeContext(
+        {
+          kind: "watchlist",
+          symbols: ["NVDA", "JPM"],
+          lang: "en",
+          positions: [
+            { symbol: "NVDA", shares: 10, cost: 120 },
+            { symbol: "JPM", shares: 10, cost: 250 },
+          ],
+        },
+        NOW,
+      ),
+    );
+    expect(text).toContain("- NVDA (day +60.00): 2026-11-06T15:00Z | Wire: Nvidia supplier lifts its outlook");
+    expect(text).not.toContain("Other AI Stocks To Watch");
+    expect(text).toContain("- JPM (day -30.00): 2026-11-06T22:30Z (after the close) | Wire: JPMorgan names a new consumer bank head");
   });
 });

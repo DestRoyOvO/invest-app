@@ -178,7 +178,20 @@ describe("portfolio risk", () => {
     const risk = portfolioRisk({ ...series, closes: { ...series.closes, MSFT: series.dates.map(() => null) } }, PORTFOLIO, "SPY");
     expect(risk?.missing).toEqual(["MSFT"]);
     expect(riskBlock(risk, PORTFOLIO, "SPY")).toContain("covers 3 of 4 positions, 80% of value; no history for MSFT");
+    expect(risk?.notLoaded).toEqual([]);
     expect(portfolioRisk({ dates: [], closes: {} }, PORTFOLIO, "SPY")).toBeNull();
     expect(riskBlock(null, PORTFOLIO, "SPY")).toBeNull();
+  });
+
+  it("says smaller positions whose history was not loaded are not included, instead of lacking history", () => {
+    const risk = portfolioRisk(aligned(), PORTFOLIO, "SPY", new Set(["JPM", "AAPL", "NVDA"]));
+    expect(risk?.covered).toEqual(["JPM", "AAPL", "NVDA"]);
+    expect(risk?.missing).toEqual([]);
+    expect(risk?.notLoaded).toEqual(["MSFT"]);
+    const text = riskBlock(risk, PORTFOLIO, "SPY") ?? "";
+    expect(text).toContain("covers 3 of 4 positions, 80% of value; not included: MSFT (outside the 3 largest positions)");
+    expect(text).not.toContain("no history");
+    // The effective number of positions still counts every position by value.
+    expect(text).toContain("- effective number of positions 3.9 of 4");
   });
 });
