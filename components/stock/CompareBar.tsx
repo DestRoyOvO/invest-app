@@ -1,7 +1,7 @@
 "use client";
 
 import { Plus, X } from "lucide-react";
-import { useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { IconButton } from "@/components/ui/Button";
@@ -25,6 +25,12 @@ export function SeriesKey({ slot, main = false }: { slot?: SeriesSlot; main?: bo
   return <span aria-hidden className={cn("inline-block h-0.5 w-3 shrink-0", SOLID[slot.token])} />;
 }
 
+/**
+ * Where keyboard focus goes once the compare list, which lives in the URL, has caught up with an action: `added`
+ * (from a chip, or from the search with `viaSearch`), `removed` (the chip at `index`), or `closed` (the search).
+ */
+type PendingFocus = { kind: "added"; symbol: string; viaSearch: boolean; interim?: boolean } | { kind: "removed"; symbol: string; index: number } | { kind: "closed" };
+
 interface CompareBarProps {
   symbol: string;
   compare: readonly string[];
@@ -42,6 +48,9 @@ export function CompareBar({ symbol, compare, slots, suggestions, onChange }: Co
   const [value, setValue] = useState("");
   const [active, setActive] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
+  const addButtonRef = useRef<HTMLButtonElement>(null);
+  const removeRefs = useRef(new Map<string, HTMLButtonElement>());
+  const pendingFocus = useRef<PendingFocus | null>(null);
   const listId = useId();
   const inputId = useId();
   const query = useDebounced(value.trim(), 200);
@@ -53,26 +62,72 @@ export function CompareBar({ symbol, compare, slots, suggestions, onChange }: Co
     : [];
   const options = results.filter((r) => r.symbol !== symbol && !compare.includes(r.symbol));
 
-  const add = (input: string) => {
+  // Every action here unmounts the control that has focus (a suggested chip, a remove button, the search field), and
+  // the chips only change once the URL does. Focus then moves on: to the new chip's remove button after a chip is
+  // added, to the Add symbol button after the search closes (or to the new chip when the list is now full), and to
+  // the next chip (else the Add symbol button) after a removal, so keyboard users keep their place.
+  useEffect(() => {
+    const pending = pendingFocus.current;
+    if (!pending) return;
+    if (pending.kind === "closed") {
+      pendingFocus.current = null;
+      addButtonRef.current?.focus();
+      return;
+    }
+    if (pending.kind === "removed") {
+      if (compare.includes(pending.symbol)) return;
+      pendingFocus.current = null;
+      (removeRefs.current.get(compare[pending.index] ?? "") ?? addButtonRef.current ?? inputRef.current)?.focus();
+      return;
+    }
+    if (!compare.includes(pending.symbol)) {
+      // Waiting for the URL: a search that just closed hands focus to the Add symbol button meanwhile.
+      if (pending.viaSearch && !pending.interim) {
+        pending.interim = true;
+        addButtonRef.current?.focus();
+      }
+      return;
+    }
+    pendingFocus.current = null;
+    const addButton = addButtonRef.current;
+    if (pending.viaSearch && addButton) {
+      if (document.activeElement !== addButton) addButton.focus();
+    } else {
+      removeRefs.current.get(pending.symbol)?.focus();
+    }
+  });
+
+  const add = (input: string, viaSearch = false) => {
     const next = normalizeSymbol(input);
     if (!next || next === symbol || compare.includes(next) || full) return;
+    pendingFocus.current = { kind: "added", symbol: next, viaSearch };
     onChange([...compare, next]);
     setValue("");
     setActive(-1);
     setAdding(false);
   };
 
+  const remove = (item: string, index: number) => {
+    pendingFocus.current = { kind: "removed", symbol: item, index };
+    onChange(compare.filter((s) => s !== item));
+  };
+
+  const closeSearch = () => {
+    pendingFocus.current = { kind: "closed" };
+    setAdding(false);
+    setValue("");
+  };
+
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
-    add(active >= 0 ? (options[active]?.symbol ?? value) : value);
+    add(active >= 0 ? (options[active]?.symbol ?? value) : value, true);
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing) return;
     if (event.key === "Escape") {
       event.preventDefault();
-      setAdding(false);
-      setValue("");
+      closeSearch();
       return;
     }
     if (options.length === 0) return;
@@ -95,7 +150,17 @@ export function CompareBar({ symbol, compare, slots, suggestions, onChange }: Co
         <span key={item} className={cn(chipClass, "border-line-2 pr-0.5 text-fg max-sm:h-auto max-sm:pr-0")}>
           <SeriesKey slot={slots[slot]} />
           {item}
-          <IconButton size="sm" label={tpl(t.chart.remove, { symbol: item })} icon={<X className="size-3" strokeWidth={2} />} onClick={() => onChange(compare.filter((s) => s !== item))} className="size-6 max-sm:size-10" />
+          <IconButton
+            ref={(el) => {
+              if (el) removeRefs.current.set(item, el);
+              else removeRefs.current.delete(item);
+            }}
+            size="sm"
+            label={tpl(t.chart.remove, { symbol: item })}
+            icon={<X className="size-3" strokeWidth={2} />}
+            onClick={() => remove(item, slot)}
+            className="size-6 max-sm:size-10"
+          />
         </span>
       ))}
       {!full
@@ -143,9 +208,9 @@ export function CompareBar({ symbol, compare, slots, suggestions, onChange }: Co
                   aria-selected={i === active}
                   onMouseDown={(event) => {
                     event.preventDefault();
-                    add(option.symbol);
+                    add(option.symbol, true);
                   }}
-                  className={cn("flex cursor-pointer items-center gap-2 px-2.5 py-1.5 text-xs", i === active ? "bg-hover text-fg" : "text-fg-2")}
+                  className={cn("flex cursor-pointer items-center gap-2 px-2.5 py-1.5 text-xs max-sm:min-h-10", i === active ? "bg-hover text-fg" : "text-fg-2")}
                 >
                   <span className="mono w-20 shrink-0 font-medium text-fg">{option.symbol}</span>
                   <span className="min-w-0 truncate">{option.name}</span>
@@ -155,7 +220,7 @@ export function CompareBar({ symbol, compare, slots, suggestions, onChange }: Co
           ) : null}
         </form>
       ) : (
-        <button type="button" onClick={() => setAdding(true)} className={cn(chipClass, "border-transparent text-fg-3 transition-colors hover:text-fg")}>
+        <button ref={addButtonRef} type="button" onClick={() => setAdding(true)} className={cn(chipClass, "border-transparent text-fg-3 transition-colors hover:text-fg")}>
           <Plus aria-hidden className="size-3" strokeWidth={2} />
           {t.chart.addPlaceholder}
         </button>
