@@ -95,6 +95,8 @@ export const helpMessages = defineMessages(
       fund: "{symbol} is a fund, and funds have no {tab} tab. Showing the overview.",
       overviewOnly: "{symbol} has no {tab} tab: indices, currencies, futures and crypto have only an overview.",
     },
+    // The browser tab title of the 404 page (app/not-found.tsx).
+    notFound: { title: "Not found" },
   },
   {
     functions: {
@@ -187,5 +189,6 @@ export const helpMessages = defineMessages(
       fund: "{symbol} 是基金，基金没有“{tab}”页，已显示概览。",
       overviewOnly: "{symbol} 没有“{tab}”页：指数、货币、期货和加密货币只有概览。",
     },
+    notFound: { title: "未找到页面" },
   },
 );
