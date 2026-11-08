@@ -22,7 +22,7 @@ import { lastDayOfPreviousYear, priceDigits } from "./prices";
 import { recentRows } from "./quote";
 import { between, pick, round } from "./random";
 import { securityOf, YAHOO_SECTORS, type QuoteType, type Security } from "./securities";
-import { DAY_MS, dailyStamp, dayNumber, localToUtc, marketStateAt, sessionClose, yearOf } from "./sessions";
+import { DAY_MS, dailyStamp, dayNumber, localToUtc, marketStateAt, PROFILES, sessionClose, tradingDayOnOrBefore, yearOf } from "./sessions";
 
 // quoteSummary() of the fixture data. Each module has the shape yahoo-finance2 returns after validation (raw numbers,
 // Date objects, Yahoo's units: fractions in quoteSummary, percent only where Yahoo uses it, such as debtToEquity).
@@ -654,7 +654,14 @@ const FIRMS = [
   "Lakeshore Markets",
   "Copperfield Analytics",
 ];
-const GRADES = ["Buy", "Outperform", "Overweight", "Neutral", "Hold", "Equal-Weight", "Underweight"];
+/** Rating scales, best grade first: each firm rates on one of them. */
+const SCALES: ReadonlyArray<readonly string[]> = [
+  ["Buy", "Hold", "Sell"],
+  ["Outperform", "Market Perform", "Underperform"],
+  ["Overweight", "Equal-Weight", "Underweight"],
+  ["Buy", "Neutral", "Sell"],
+  ["Outperform", "Neutral", "Underperform"],
+];
 
 function recommendationTrendModule(ctx: Context): Module {
   const figures = companyFigures(ctx.security);
@@ -672,28 +679,40 @@ function recommendationTrendModule(ctx: Context): Module {
   };
 }
 
+/**
+ * Twelve rating actions, newest first, about eleven days apart. Each comes out on a trading day at a New York time
+ * between 07:00 and 17:00, as Yahoo stamps them; each firm keeps its own rating scale, and its next action starts from
+ * the grade and price target of its previous one (a firm's first action in the list may be an initiation).
+ */
 function upgradeDowngradeModule(ctx: Context): Module {
   const s = ctx.security.symbol;
   const figures = companyFigures(ctx.security);
-  const history = Array.from({ length: 12 }, (_, i) => {
-    const daysAgo = 3 + i * 11 + pick(6, s, "grade-day", i);
+  const previous = new Map<string, { grade: number; target: number }>();
+  const history: Module[] = [];
+  // Oldest first, so each firm's previous action is known.
+  for (let i = 11; i >= 0; i--) {
+    const day = tradingDayOnOrBefore(PROFILES.us, ctx.latest - (3 + i * 11 + pick(6, s, "grade-day", i)));
     const firm = FIRMS[pick(FIRMS.length, s, "firm", i)];
-    const toGrade = GRADES[pick(4, s, "to", i)];
-    const fromGrade = GRADES[pick(GRADES.length, s, "from", i)];
-    const action = i % 5 === 4 ? "init" : toGrade === fromGrade ? "main" : GRADES.indexOf(toGrade) < GRADES.indexOf(fromGrade) ? "up" : "down";
-    const prior = round(ctx.price * figures.targetRatio * between(0.88, 1.02, s, "prior", i), 0);
+    const scale = SCALES[pick(SCALES.length, firm, "scale")];
+    // Mostly the top or the middle grade, now and then the bottom one.
+    const to = pick(10, s, "to", i) < 9 ? pick(2, s, "to-grade", i) : scale.length - 1;
+    const last = previous.get(firm);
+    const from = last ? last.grade : i % 5 === 4 ? null : pick(scale.length, s, "from", i);
+    const action = from === null ? "init" : to === from ? "main" : to < from ? "up" : "down";
+    const prior = last?.target ?? round(ctx.price * figures.targetRatio * between(0.88, 1.02, s, "prior", i), 0);
     const current = round(prior * between(0.97, 1.12, s, "current", i), 0);
-    return {
-      epochGradeDate: midnight(ctx.latest - daysAgo),
+    previous.set(firm, { grade: to, target: current });
+    history.unshift({
+      epochGradeDate: at(localToUtc("America/New_York", day, 7 * 60 + pick(600, s, "grade-time", i))),
       firm,
-      toGrade,
-      fromGrade: action === "init" ? "" : fromGrade,
+      toGrade: scale[to],
+      fromGrade: from === null ? "" : scale[from],
       action,
-      priceTargetAction: current > prior ? "Raises" : current < prior ? "Lowers" : "Maintains",
+      priceTargetAction: action === "init" ? "Announces" : current > prior ? "Raises" : current < prior ? "Lowers" : "Maintains",
       currentPriceTarget: current,
       priorPriceTarget: action === "init" ? 0 : prior,
-    };
-  });
+    });
+  }
   return { history, maxAge: 86400 };
 }
 

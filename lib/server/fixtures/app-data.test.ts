@@ -37,6 +37,7 @@ import { getSignalReport } from "../signal-service";
 import { getWorldMarkets } from "../world";
 import { getDailyBars, getQuotes, getSparkline, getSummary, searchNews, searchSymbols } from "../yahoo";
 
+import { isNyseSession, parseDayKey } from "./sessions";
 import { treasuryFetch } from "./treasury";
 
 // The fixture data through the app's own getters and mappers (mapQuote, mapSummary, normalizeBars, the news scoring,
@@ -304,6 +305,29 @@ describe("quote page research", () => {
       expect(Date.parse(action.date), `action ${i}`).toBeGreaterThanOrEqual(SATURDAY - 90 * DAY_MS);
       expect(Date.parse(action.date), `action ${i}`).toBeLessThanOrEqual(SATURDAY + DAY_MS);
       if (i > 0) expect(action.date <= analysts.actions[i - 1].date, `action ${i} is newest first`).toBe(true);
+    }
+  });
+
+  it("date analyst actions at New York business hours of trading days and chain each firm's grades", async () => {
+    const hourIn = (ms: number) => Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hourCycle: "h23" }).format(ms));
+    for (const symbol of ["AAPL", "MSFT", "XOM", "JPM", "0700.HK"]) {
+      const activity = await getAnalystActivity(symbol);
+      expect(activity?.actions.length, symbol).toBeGreaterThan(4);
+      const grades = new Map<string, string>();
+      for (const action of [...activity!.actions].reverse()) {
+        const at = Date.parse(action.date);
+        const label = `${symbol} ${action.date} ${action.firm}`;
+        expect(isNyseSession(parseDayKey(nyDate(at))), label).toBe(true);
+        expect(hourIn(at), label).toBeGreaterThanOrEqual(7);
+        expect(hourIn(at), label).toBeLessThan(17);
+        // A firm's next action starts from the grade it gave last.
+        const last = grades.get(action.firm);
+        if (last !== undefined) {
+          expect(action.action, label).not.toBe("init");
+          expect(action.fromGrade, label).toBe(last);
+        }
+        grades.set(action.firm, action.toGrade!);
+      }
     }
   });
 
