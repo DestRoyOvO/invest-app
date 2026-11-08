@@ -20,23 +20,31 @@ interface WhiskerProps {
    * the glyph alone cannot be read by screen readers.
    */
   label: string;
+  /**
+   * Greys the whole glyph (interval and dot in --fg-3, never accent) for a row the color rules grey out, such as a
+   * reading whose result comes from too few episodes. Pass it wherever the row text turns --fg-3.
+   */
+  neutral?: boolean;
   className?: string;
 }
 
 /**
  * Compact interval glyph for honest track records: a track, a 1px tick at the base rate, a 1px line across the
  * interval and a dot at the estimate. The dot turns accent only when the interval excludes the base rate, which is what
- * a real edge looks like; an interval that overlaps the base stays neutral.
+ * a real edge looks like; an interval that overlaps the base stays neutral. `neutral` greys it all.
  */
-export function Whisker({ estimate, low, high, base, min = 0, max = 1, width = 72, height = 12, label, className }: WhiskerProps) {
+export function Whisker({ estimate, low, high, base, min = 0, max = 1, width = 72, height = 12, label, neutral = false, className }: WhiskerProps) {
   const g = whiskerGeometry({ estimate, low, high, base, min, max, width, height });
+  const dotFill = neutral ? "var(--fg-3)" : g.excludesBase ? "var(--accent)" : "var(--fg)";
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} role="img" aria-label={label} className={cn("inline-block shrink-0 align-middle", className)}>
       <title>{label}</title>
       <rect x={g.track.x1} y={g.midY - 1} width={Math.max(g.track.x2 - g.track.x1, 0)} height={2} fill="var(--line-2)" />
       {g.baseX !== null ? <rect x={g.baseX - 0.5} y={1} width={1} height={height - 2} fill="var(--fg-3)" /> : null}
-      {g.interval ? <rect x={g.interval.x1} y={g.midY - 0.5} width={Math.max(g.interval.x2 - g.interval.x1, 1)} height={1} fill="var(--fg-2)" /> : null}
-      {g.dot ? <circle cx={g.dot.x} cy={g.midY} r={g.dot.r} fill={g.excludesBase ? "var(--accent)" : "var(--fg)"} /> : null}
+      {g.interval ? (
+        <rect x={g.interval.x1} y={g.midY - 0.5} width={Math.max(g.interval.x2 - g.interval.x1, 1)} height={1} fill={neutral ? "var(--fg-3)" : "var(--fg-2)"} />
+      ) : null}
+      {g.dot ? <circle cx={g.dot.x} cy={g.midY} r={g.dot.r} fill={dotFill} /> : null}
     </svg>
   );
 }
