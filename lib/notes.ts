@@ -214,6 +214,21 @@ export function reviewDaysLeft(reviewBy: string | null | undefined, now: Date): 
   return Math.round((due - today) / DAY_MS);
 }
 
+/** The range a review date can be picked from (the date field's min and max). */
+export const REVIEW_MIN_DATE = "1970-01-01";
+export const REVIEW_MAX_DATE = "2100-12-31";
+
+/**
+ * True for a whole calendar date (YYYY-MM-DD) from REVIEW_MIN_DATE to REVIEW_MAX_DATE. A date field reports every
+ * keystroke, so typing a year passes through "0002", "0020" and "0202" first; those are never stored.
+ */
+export function isPlausibleReviewDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value < REVIEW_MIN_DATE || value > REVIEW_MAX_DATE) return false;
+  const [y, m, d] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+}
+
 /** Review state of a note for lists and badges; "soon" is within the next 7 days. */
 export type ReviewStatus = "none" | "overdue" | "today" | "soon" | "later";
 

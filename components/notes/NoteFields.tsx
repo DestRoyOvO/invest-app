@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useId, useState, type KeyboardEvent } from "react";
+import { useId, useRef, useState, type KeyboardEvent } from "react";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Button } from "@/components/ui/Button";
@@ -10,7 +10,7 @@ import { Segmented } from "@/components/ui/Segmented";
 import { parseNumberInput } from "@/components/alerts/form";
 import { cn } from "@/lib/cn";
 import { tpl } from "@/lib/format";
-import { MAX_TAGS, mergeTags, type Conviction } from "@/lib/notes";
+import { isPlausibleReviewDate, MAX_TAGS, mergeTags, REVIEW_MAX_DATE, REVIEW_MIN_DATE, type Conviction } from "@/lib/notes";
 
 import { levelLine, reviewText } from "./format";
 import { useDraft } from "./useDraft";
@@ -92,13 +92,48 @@ export function LevelField({ kind, value, price, onSave }: LevelFieldProps) {
   );
 }
 
-/** Review date with the days left or overdue. */
+/**
+ * Review date with the days left or overdue. A date field reports every keystroke: typing a year passes through
+ * "0002", "0020" and "0202", and a half-typed date reads as empty. So the field keeps a draft and stores only a whole,
+ * plausible date, after a pause in typing, on blur or on Enter. Emptying the field removes the date; leaving it half
+ * typed shows the stored date again.
+ */
 export function ReviewField({ value, days, onChange }: { value: string | null; days: number | null; onChange: (value: string | null) => void }) {
   const { t } = usePrefs();
+  // True while the field holds a partly typed date, which the browser reports as an empty value.
+  const incomplete = useRef(false);
+  const { draft, setDraft, flush, reset } = useDraft(value ?? "", (text) => {
+    if (isPlausibleReviewDate(text) && text !== value) onChange(text);
+  });
+  const finish = () => {
+    if (draft === "" && !incomplete.current) {
+      // Emptied on purpose: remove the date (the draft hook ignores the empty value itself).
+      flush();
+      if (value !== null) onChange(null);
+    } else if (isPlausibleReviewDate(draft)) {
+      flush();
+    } else {
+      reset();
+    }
+  };
   const status = days === null ? null : reviewText(days, t);
   return (
     <Field label={t.notes.reviewBy} hint={status ? <span className={days !== null && days < 0 ? "text-warn" : undefined}>{status}</span> : undefined}>
-      <Input type="date" value={value ?? ""} onChange={(event) => onChange(event.target.value || null)} className="num max-sm:h-10" />
+      <Input
+        type="date"
+        value={draft}
+        min={REVIEW_MIN_DATE}
+        max={REVIEW_MAX_DATE}
+        onChange={(event) => {
+          incomplete.current = event.currentTarget.validity.badInput;
+          setDraft(event.currentTarget.value);
+        }}
+        onBlur={finish}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") finish();
+        }}
+        className="num max-sm:h-10"
+      />
     </Field>
   );
 }

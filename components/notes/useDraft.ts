@@ -15,6 +15,8 @@ export interface Draft<T> {
   dirty: boolean;
   /** Writes a waiting change now (on blur or Enter). */
   flush: () => void;
+  /** Drops the draft and shows the stored value again, writing nothing. */
+  reset: () => void;
 }
 
 /**
@@ -63,6 +65,10 @@ export function useDraft<T>(stored: T, save: (value: T) => void, { delay = 800, 
     flush: () => {
       if (!dirty) return;
       save(draft);
+      setDirty(false);
+    },
+    reset: () => {
+      setDraftState(stored);
       setDirty(false);
     },
   };

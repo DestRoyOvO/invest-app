@@ -5,6 +5,7 @@ import {
   compareByReview,
   emptyNote,
   isEmptyNote,
+  isPlausibleReviewDate,
   levelDistance,
   MAX_ENTRIES,
   MAX_TAGS,
@@ -175,6 +176,15 @@ describe("levels and review dates", () => {
     expect(reviewDaysLeft("2027-01-31", localNoon)).toBe(85);
     expect(reviewDaysLeft(null, localNoon)).toBeNull();
     expect(reviewDaysLeft("Jan 5", localNoon)).toBeNull();
+  });
+
+  it("accepts only whole, plausible review dates", () => {
+    expect(isPlausibleReviewDate("2027-02-15")).toBe(true);
+    expect(isPlausibleReviewDate("2100-12-31")).toBe(true);
+    // What a date field reports while a year is typed digit by digit, and other half-typed or impossible values.
+    for (const value of ["0001-02-15", "0012-02-15", "0123-02-15", "1231-02-15", "12312-02-15", "2101-01-01", "", "2027-2-15", "2027-02-30", "2027-13-01"]) {
+      expect(isPlausibleReviewDate(value)).toBe(false);
+    }
   });
 
   it("labels review states", () => {
