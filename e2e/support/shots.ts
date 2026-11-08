@@ -34,8 +34,10 @@ export interface DemoData extends StoredData {
 /** A page made ready for its image by stage(). */
 export interface Shot {
   /**
-   * Scrolls main so that `target` starts at its top edge, or with `slack`, at the offset within that many pixels of
-   * it, nearest to it, where the edge cuts no line of text in either column. Waits for the panels' data first.
+   * Scrolls main so that `target` starts at its top edge: at the offset nearest to that, within `slack` pixels (0 by
+   * default), where the edge cuts no line of text in either column (both columns of a two-column page scroll at once)
+   * and the next line starts at least TEXT_MARGIN_PX below it. Fails when there is none. Waits for the panels' data
+   * first, so it measures the page as the image shows it.
    */
   scrollToTop(target: Locator, slack?: number): Promise<void>;
   /**

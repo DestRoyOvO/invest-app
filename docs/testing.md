@@ -369,8 +369,8 @@ servers with the settings of `e2e/support/env.ts` (fixture data, the mock model,
 server's time (Playwright's `clock.setFixedTime`). The server stamps its data with its clock ("Updated 10:00 ET", a
 panel's "As of", the screener's snapshot time), so a running clock would put another minute into each run's images. The
 files end in `.shots.ts` outside `e2e/specs`, so neither `npm run e2e` nor Vitest runs them, and CI does not either.
-The command takes two to two and a half minutes, most of it the build. With `E2E_REUSE=1` and servers already up, a shot
-takes 15 to 25 seconds on a freshly started server and two or three once its caches are warm.
+The command takes about two minutes, most of it the build. With `E2E_REUSE=1` and servers already up, a shot takes two or
+three seconds once the server's caches are warm, and 15 to 40 on a freshly started server or a busy machine.
 
 | Image | Page | Look |
 |---|---|---|
