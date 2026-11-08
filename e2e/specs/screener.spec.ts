@@ -272,8 +272,7 @@ test.describe("screener", () => {
 
   test("each ETF column set shows the fund columns", async ({ page, app }) => {
     test.skip(app.isPhone, "Phones show the symbol and two columns of each set, which the stock column sets test checks; one project is enough.");
-    // From a link, on a table with room for every set: beside the filter rail the overview gives up its 1M column at
-    // 1440px (the next test).
+    // From a link, on the widest table, with the filter rail hidden (the next test checks the overview beside it).
     await app.goto("/screener?u=etfs");
     const view = results(page);
     await expect(view.table.getByRole("link", { name: "SPY", exact: true })).toBeVisible();
@@ -284,7 +283,6 @@ test.describe("screener", () => {
 
   test("a 1440px screen fits the ETF overview beside the filter rail", async ({ page, app }) => {
     test.skip(app.isPhone, "The filter rail is the desktop layout.");
-    test.fixme(true, "The 208px nav and the 240px rail leave a 61.8rem table, the ETF overview needs 62.25rem with the scrollbar reserve, so 1M drops.");
     // lib/screens.ts: each column set fits a 1440px screen with the filter rail open.
     await app.goto("/screener?u=etfs");
     const view = results(page);

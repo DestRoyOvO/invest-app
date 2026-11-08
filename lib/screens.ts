@@ -479,7 +479,8 @@ export function firstSortDirection(key: MetricKey): SortDirection {
 // Column sets
 // ---------------------------------------------------------------------------
 
-// Each set fits a 1440px screen with the filter rail open; phones show the symbol and two of the columns.
+// Each set fits a 1440px screen with the filter rail open (with the column widths of components/screener/widths.ts,
+// whose test checks it); phones show the symbol and two of the columns.
 const MOMENTUM_SET: readonly MetricKey[] = ["symbol", "name", "r1m", "r3m", "r6m", "high", "ma50", "ma200", "rsi"];
 const RISK_SET: readonly MetricKey[] = ["symbol", "name", "vol", "volPct", "beta", "betaPct", "high", "dvol"];
 const FACTOR_SET: readonly MetricKey[] = ["symbol", "name", "momPct", "revPct", "highPct", "volPct", "betaPct"];
