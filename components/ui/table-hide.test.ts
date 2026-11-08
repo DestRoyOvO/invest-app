@@ -20,9 +20,10 @@ describe("hideClass", () => {
     }
   });
 
-  it("hides them below 50rem with Tailwind's arbitrary container size, which has no name of its own", () => {
-    expect(hideClass({ hideBelowContainer: "50rem" })).toBe("hidden @min-[50rem]:table-cell");
-    expect(hideClass({ hideBelowContainer: "50rem" }, "col")).toBe("hidden @min-[50rem]:table-column");
+  it("hides them below 50.75rem, or below 44.75rem while the viewport is narrower than lg, with arbitrary sizes", () => {
+    const size = "50.75rem, 44.75rem below lg";
+    expect(hideClass({ hideBelowContainer: size })).toBe("hidden @min-[44.75rem]:max-lg:table-cell @min-[50.75rem]:table-cell");
+    expect(hideClass({ hideBelowContainer: size }, "col")).toBe("hidden @min-[44.75rem]:max-lg:table-column @min-[50.75rem]:table-column");
   });
 
   it("lets the container size take the place of the viewport breakpoint", () => {

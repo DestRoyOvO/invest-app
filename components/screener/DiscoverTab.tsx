@@ -149,10 +149,13 @@ function useColumns(keys: readonly ColumnKey[], now: number): DataTableColumn<Qu
       },
       sortValue: (q) => q.analystRating,
       firstSort: "asc",
-      // By the table's width: beside every column of the movers (700px) and ideas (684px) tables, the 120px rating
-      // leaves the name 100 and 116px in an 800px table. So it shows from 50rem up: in the left column at xl from about
-      // 1411px (819px wide at 1440, names 119 and 135px) and in the single column from about 866px (958px at 1024).
-      hideBelowContainer: "50rem",
+      // By the table's width: beside all the other columns of the movers (700px) and ideas (684px) tables, the 120px
+      // rating leaves the name 100 and 116px in an 800px table. Chrome measures the scroll box with its own vertical
+      // scrollbar (10px), so the size keeps 0.75rem for it, as the screener does (SCROLLBAR_REM): 50.75rem, and 44.75rem
+      // below lg, where the tables drop the 6rem earnings column. In the left column at xl it shows from about 1429px,
+      // 1439px with scrollbars (the table is 819px wide at 1440, 813px with scrollbars: names 119 and 103px); in the
+      // single column below lg from about 782px, 792px with scrollbars.
+      hideBelowContainer: "50.75rem, 44.75rem below lg",
     },
     star: {
       key: "star",

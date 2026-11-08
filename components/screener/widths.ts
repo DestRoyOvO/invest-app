@@ -54,7 +54,7 @@ export const NAME_MIN_REM = 6.5;
 /** Fits the checkbox and the label gap inside the cell padding, so the truncating cell draws no ellipsis. */
 export const SELECT_REM = 3;
 export const STAR_REM = 3.25;
-/** Room kept for the table's vertical scrollbar: app/globals.css asks for thin ones (11px in Chrome on Windows). */
+/** Room kept for the table's vertical scrollbar: app/globals.css asks for thin ones (10px in Chrome on Windows). */
 export const SCROLLBAR_REM = 0.75;
 
 /** Width at which the visible columns stop squeezing the name, for the table's minWidth from sm up. */
