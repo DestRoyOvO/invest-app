@@ -451,14 +451,16 @@ const columns: DataTableColumn<Quote>[] = [
   5.5rem, market cap 5.25rem, P/E 3.75rem, trend 6.5rem) and leave the name column free so it takes the rest.
 - Columns hide below a viewport breakpoint (`hideBelow: "sm"`) or while the table's own box is narrower than a container
   size (`hideBelowContainer: "md"`; Tailwind's `@` sizes: 3xs 16rem, 2xs 18rem, xs 20rem, sm 24rem, md 28rem, lg 32rem,
-  xl 36rem, 2xl 42rem, 3xl 48rem). Use the container size for a table that can sit in the 22rem right-hand column at xl,
-  a box of 356px at 1280px and 410px at 1440px, where `hideBelow` only sees a wide viewport: the overview's watchlist
-  drops its 1M line below `sm` (its four columns need 360px), Trending drops the price below `md` so the names keep
-  room, and the analyst actions hide their date column below `md`. The wide left-hand column at xl is a box of 713px at
-  1280px and 819px at 1440px: Discover's movers and ideas tables hide their 120px rating below `3xl`, which left the
-  names 13 and 29px at 1280px (133 and 149px without it). They show it wherever the table is at least 48rem wide: in
-  that column from about 1363px (names 68 and 84px there, 119 and 135px at 1440px) and in the single column below xl
-  from about 834px (958px at 1024px); the 702px single column at 768px hides it, as phones do. The container size takes
+  xl 36rem, 2xl 42rem, 3xl 48rem, and `"50rem"`, an arbitrary `@min-[50rem]`). Use the container size for a table that
+  can sit in the 22rem right-hand column at xl, a box of 356px at 1280px and 410px at 1440px, where `hideBelow` only
+  sees a wide viewport: the overview's watchlist drops its 1M line below `sm` (its four columns need 360px), Trending
+  drops the price below `md` so the names keep room, and the analyst actions hide their date column below `md`. The
+  wide left-hand column at xl is a box of 713px at 1280px and 819px at 1440px: Discover's movers and ideas tables hide
+  their 120px rating below 50rem, so the names keep at least 100 and 116px wherever it shows (at 48rem they were 68 and
+  84px at 1363px). Measured in English and Chinese alike: in that column the rating is hidden at 1280, 1363 and 1400px
+  (names 133 and 149, 188 and 204, 213 and 229px) and shows from 1411px (names 100 and 116px there, 119 and 135px at
+  1440px); in the single column below xl it is hidden at 768 and 834px (a box of 702 and 768px, names 218 and 234, 284
+  and 300px) and shows from 866px (958px at 1024px, names 258 and 274px); phones hide it. The container size takes
   the place of `hideBelow`. When a column uses it, the scroll box becomes the query container (`@container`), so cells
   can carry container classes too: the analyst actions show the date under the firm with `@md:hidden`. A table whose
   cells adapt while every column stays makes its box the container itself with `className="@container"`: the reported
