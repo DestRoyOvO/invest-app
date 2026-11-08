@@ -5,7 +5,10 @@ import { useMemo } from "react";
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Delta } from "@/components/ui/Delta";
+import { ErrorState } from "@/components/ui/States";
+import { TickNumber } from "@/components/ui/TickNumber";
 import { stockPath } from "@/lib/api-client";
+import { formatPrice } from "@/lib/format";
 import type { HistoryResponse, Quote } from "@/types/api";
 
 import { EMPTY_RETURNS, trailingReturns, type TrailingReturns } from "./etf-returns";
@@ -15,14 +18,32 @@ function returnDigits(value: number | null): number {
   return value !== null && Math.abs(value) >= 0.0995 ? 0 : 1;
 }
 
+/**
+ * The five return columns are narrow (with tighter cell padding) so the ETF column keeps room for its symbol, price and
+ * name in the 22rem right-hand column; the headers are two to three characters in both languages.
+ */
+const RETURN_WIDTH = "3.25rem";
+const RETURN_CELL = "px-1.5!";
+
 interface EtfRow {
   quote: Quote;
   returns: TrailingReturns;
 }
 
-/** The sector's ETFs with today's change and trailing returns over a week, a month, three months and the year. */
-export function EtfReturnsTable({ quotes, history }: { quotes: Quote[]; history: HistoryResponse | undefined }) {
-  const { t } = usePrefs();
+interface EtfReturnsTableProps {
+  quotes: Quote[];
+  history: HistoryResponse | undefined;
+  /** The history request failed: the return cells show dashes, with a note and a retry under the table. */
+  historyError?: unknown;
+  onRetryHistory?: () => void;
+}
+
+/**
+ * The sector's ETFs: symbol, last price and name, today's change and trailing returns over a week, a month, three
+ * months and the year.
+ */
+export function EtfReturnsTable({ quotes, history, historyError, onRetryHistory }: EtfReturnsTableProps) {
+  const { t, lang } = usePrefs();
   const rows = useMemo<EtfRow[]>(
     () =>
       quotes.map((quote) => {
@@ -32,22 +53,31 @@ export function EtfReturnsTable({ quotes, history }: { quotes: Quote[]; history:
     [quotes, history],
   );
 
+  // Two or three ETFs per sector: a fixed order (the sector ETF first) reads better than sortable columns here.
   const ret = (key: keyof TrailingReturns, header: string): DataTableColumn<EtfRow> => ({
     key,
     header,
     align: "right",
-    width: "4.25rem",
+    width: RETURN_WIDTH,
+    className: RETURN_CELL,
     render: (row) => <Delta value={row.returns[key]} kind="ratio" digits={returnDigits(row.returns[key])} />,
-    sortValue: (row) => row.returns[key],
   });
 
   const columns: DataTableColumn<EtfRow>[] = [
     {
-      key: "symbol",
-      header: t.columns.symbol,
+      key: "etf",
+      header: t.markets.sector.etf,
       render: (row) => (
-        <span className="mono font-medium text-fg" title={row.quote.name}>
-          {row.quote.symbol}
+        <span className="block py-0.5">
+          <span className="flex items-baseline gap-1.5">
+            <span className="mono font-medium text-fg">{row.quote.symbol}</span>
+            <TickNumber value={row.quote.price} className="text-fg-2">
+              {formatPrice(row.quote.price, lang)}
+            </TickNumber>
+          </span>
+          <span className="block truncate text-micro text-fg-3" title={row.quote.name}>
+            {row.quote.name}
+          </span>
         </span>
       ),
     },
@@ -55,9 +85,9 @@ export function EtfReturnsTable({ quotes, history }: { quotes: Quote[]; history:
       key: "d1",
       header: t.markets.sector.d1,
       align: "right",
-      width: "4.25rem",
+      width: RETURN_WIDTH,
+      className: RETURN_CELL,
       render: (row) => <Delta value={row.quote.changePercent} digits={row.quote.changePercent !== null && Math.abs(row.quote.changePercent) >= 9.95 ? 0 : 1} />,
-      sortValue: (row) => row.quote.changePercent,
     },
     ret("w1", t.markets.sector.w1),
     ret("m1", t.markets.sector.m1),
@@ -68,7 +98,11 @@ export function EtfReturnsTable({ quotes, history }: { quotes: Quote[]; history:
   return (
     <>
       <DataTable rows={rows} columns={columns} rowKey={(row) => row.quote.symbol} caption={t.markets.sector.etfReturns} rowHref={(row) => stockPath(row.quote.symbol)} />
-      <p className="border-t border-line px-3 py-1.5 text-micro text-fg-3">{t.markets.sector.returnsNote}</p>
+      {historyError && !history ? (
+        <ErrorState error={historyError} title={t.markets.sector.returnsUnavailable} onRetry={onRetryHistory} compact className="border-t border-line" />
+      ) : (
+        <p className="border-t border-line px-3 py-1.5 text-micro text-fg-3">{t.markets.sector.returnsNote}</p>
+      )}
     </>
   );
 }

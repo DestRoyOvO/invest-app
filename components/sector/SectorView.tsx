@@ -55,7 +55,7 @@ export function SectorView({ sector }: { sector: SectorDef }) {
   const { data: sparks } = useSparklines(sector.stocks);
   const { data: news, error: newsError, mutate: retryNews } = useSectorNews(sector.key);
   const { data: etfs, error: etfsError, mutate: retryEtfs } = useQuotes(sector.relatedEtfs);
-  const { data: history } = useHistory(sector.relatedEtfs, "1y");
+  const { data: history, error: historyError, mutate: retryHistory } = useHistory(sector.relatedEtfs, "1y");
   const request = useMemo<AnalyzeRequest>(() => ({ kind: "sector", sector: sector.key, lang }), [sector.key, lang]);
   const etf = etfs?.quotes.find((q) => q.symbol === sector.etf);
 
@@ -84,7 +84,8 @@ export function SectorView({ sector }: { sector: SectorDef }) {
       key: "cap",
       header: t.columns.marketCap,
       align: "right",
-      width: "5.25rem",
+      // Room for "7364.65亿" in Chinese.
+      width: "5.75rem",
       hideBelow: "sm",
       render: (q) => <span className="num text-fg-2">{formatCompact(q.marketCap, lang)}</span>,
       sortValue: (q) => q.marketCap,
@@ -161,7 +162,7 @@ export function SectorView({ sector }: { sector: SectorDef }) {
       <div className="flex min-w-0 flex-col gap-px">
         <Panel title={t.markets.sector.etfReturns} code="ETF">
           {etfs ? (
-            <EtfReturnsTable quotes={etfs.quotes} history={history} />
+            <EtfReturnsTable quotes={etfs.quotes} history={history} historyError={historyError} onRetryHistory={() => retryHistory()} />
           ) : etfsError ? (
             <ErrorState error={etfsError} onRetry={() => retryEtfs()} compact />
           ) : (
