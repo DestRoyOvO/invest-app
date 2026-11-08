@@ -13,21 +13,25 @@ const NEW_YORK = "America/New_York";
 const SIGNED: ReadonlySet<MetricKey> = new Set(["high", "ma50", "ma200"]);
 
 /**
- * Neutral text for a metric value in a table cell: dollars, percents, compact sizes and plain numbers. Returns, P&L and
- * prices that tick are rendered by Delta and TickNumber instead; this covers everything else.
+ * Neutral text for a metric value in a table cell: dollars, percents, compact sizes and plain numbers, negatives with a
+ * true minus (a negative beta, P/E or price to book). Returns, P&L and prices that tick are rendered by Delta and
+ * TickNumber instead; this covers everything else.
  */
 export function formatMetric(key: MetricKey, value: number | string | null, lang: Lang): string {
   if (value === null || value === undefined) return DASH;
   if (typeof value === "string") return key === "exdiv" || key === "earnings" ? formatShortDate(value, lang, NEW_YORK) : value;
+  return withTrueMinus(numberText(key, value, lang));
+}
+
+function numberText(key: MetricKey, value: number, lang: Lang): string {
   switch (metricUnit(key)) {
     case "price":
       return formatPrice(value, lang);
     case "percent":
-      return withTrueMinus(formatNumber(value, 2, lang) + "%");
+      return formatNumber(value, 2, lang) + "%";
     case "ratio":
-      if (key === "er") return formatRatio(value, { digits: 2 });
-      if (key === "yield") return formatRatio(value, { digits: 2 });
-      return withTrueMinus(formatRatio(value, { digits: 1, sign: SIGNED.has(key) }));
+      if (key === "er" || key === "yield") return formatRatio(value, { digits: 2 });
+      return formatRatio(value, { digits: 1, sign: SIGNED.has(key) });
     case "billions":
       return formatCompact(value, lang);
     case "multiple":

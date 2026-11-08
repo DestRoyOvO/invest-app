@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
 import { Delta } from "@/components/ui/Delta";
+import { withTrueMinus } from "@/components/ui/delta-utils";
 import { Panel } from "@/components/ui/Panel";
 import { EmptyState, ErrorState, StaleBanner } from "@/components/ui/States";
 import { Tabs } from "@/components/ui/Tabs";
@@ -104,7 +105,7 @@ function useColumns(keys: readonly ColumnKey[], now: number): DataTableColumn<Qu
       header: t.columns.pe,
       align: "right",
       width: "4rem",
-      render: (q) => (q.trailingPE === null ? missing : <span className="num text-fg">{formatNumber(q.trailingPE, 1, lang)}</span>),
+      render: (q) => (q.trailingPE === null ? missing : <span className="num text-fg">{withTrueMinus(formatNumber(q.trailingPE, 1, lang))}</span>),
       sortValue: (q) => q.trailingPE,
       hideBelow: "md",
     },

@@ -27,6 +27,18 @@ describe("formatMetric", () => {
     expect(formatMetric("exdiv", "2026-11-12T05:00:00.000Z", "en")).toBe("Nov 12");
     expect(formatMetric("exdiv", "2026-11-12T05:00:00.000Z", "zh")).toBe("11月12日");
   });
+
+  it("writes negative multiples and numbers with a true minus", () => {
+    expect(formatMetric("beta", -0.35, "en")).toBe("−0.35");
+    expect(formatMetric("pb", -11.5, "en")).toBe("−11.5");
+    expect(formatMetric("fpe", -38.9, "en")).toBe("−38.9");
+    expect(formatMetric("pe", -4.2, "zh")).toBe("−4.2");
+    expect(formatMetric("chg", -1.5, "en")).toBe("−1.50%");
+    expect(formatMetric("r3m", -0.051, "en")).toBe("−5.1%");
+    for (const [key, value] of [["beta", -0.35], ["pb", -11.5], ["pe", -4.2], ["rsi", -1], ["vol", -0.1], ["cap", -2e9]] as const) {
+      expect(formatMetric(key, value, "en")).not.toMatch(/^-/);
+    }
+  });
 });
 
 describe("chip labels", () => {
