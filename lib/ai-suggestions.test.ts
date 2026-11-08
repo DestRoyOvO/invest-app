@@ -42,13 +42,29 @@ describe("suggested questions", () => {
       "Which holdings report in the next two weeks?",
       "How has my portfolio behaved over the past year?",
     ]);
-    expect(suggestedQuestions(data({ page: { view: "watchlist" } }), EN)[0].text).toBe("How did my watchlist do today?");
+    expect(suggestedQuestions(data({ page: { view: "watchlist" } }), EN).map((i) => i.text)).toEqual([
+      "How did my watchlist do today?",
+      "How concentrated is my watchlist by sector?",
+      "Which watchlist companies report in the next two weeks?",
+    ]);
+  });
+
+  it("never asks about holdings or a portfolio without positions on the watchlist", () => {
+    const input = data({ page: { view: "watchlist" } });
+    for (const asked of [[], ["How concentrated is my watchlist by sector?"]]) {
+      for (const item of followUpQuestions(input, EN, asked)) expect(item.text).not.toMatch(/holdings|portfolio|position/i);
+    }
+    for (const item of [...suggestedQuestions(data({ page: { view: "watchlist" }, lang: "zh" }), ZH), ...followUpQuestions(data({ page: { view: "watchlist" }, lang: "zh" }), ZH, [])]) {
+      expect(item.text).not.toMatch(/持仓/);
+    }
   });
 
   it("covers the market and sector pages, in Chinese too", () => {
     expect(suggestedQuestions(data({ hasPositions: true }), EN).map((i) => i.text)).toContain("How did my portfolio do today?");
     const sector = suggestedQuestions(data({ page: { view: "sector", sector: "technology" }, lang: "zh" }), ZH);
     expect(sector[0].text).toBe("信息技术今天的涨跌由什么驱动？");
+    expect(suggestedQuestions(data({ lang: "zh", live: false }), ZH).map((i) => i.text)).toContain("各板块在最近一个交易日的涨跌怎么解释？");
+    expect(suggestedQuestions(data({ lang: "zh" }), ZH).map((i) => i.text)).toContain("各板块今天的涨跌怎么解释？");
     const stock = suggestedQuestions(data({ page: { view: "stock", symbol: "NVDA" }, lang: "zh", changePercent: 2.78 }), ZH);
     expect(stock[0].text).toBe("NVDA 今天为什么上涨 2.78%？");
     expect(stock.find((item) => item.intent?.kind === "compare")?.text).toBe("比较 NVDA 与 MSFT 和 AAPL");

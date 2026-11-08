@@ -26,6 +26,7 @@ export interface SuggestionMessages {
   portfolioDay: string;
   concentration: string;
   reports: string;
+  watchlistReports: string;
   portfolioRisk: string;
   riskContributor: string;
   watchlistDay: string;
@@ -120,7 +121,7 @@ export function suggestedQuestions(data: SuggestionData, m: SuggestionMessages):
     if (data.hasPositions) {
       out.push({ text: tpl(m.portfolioDay, { when: when(data, m) }) }, { text: m.concentration }, { text: m.reports }, { text: m.portfolioRisk });
     } else {
-      out.push({ text: tpl(m.watchlistDay, { when: when(data, m) }) }, { text: m.watchlistMix }, { text: m.reports });
+      out.push({ text: tpl(m.watchlistDay, { when: when(data, m) }) }, { text: m.watchlistMix }, { text: m.watchlistReports });
     }
   } else if (page.view === "sector" && page.sector) {
     const sector = sectorLabel(data);
@@ -149,9 +150,9 @@ export function followUpQuestions(data: SuggestionData, m: SuggestionMessages, a
   } else if (page.view === "watchlist") {
     pool.push(
       data.hasPositions ? { text: m.riskContributor } : { text: m.watchlistMix },
-      { text: m.reports },
+      { text: data.hasPositions ? m.reports : m.watchlistReports },
       data.hasPositions ? { text: m.portfolioRisk } : { text: tpl(m.watchlistDay, { when: when(data, m) }) },
-      { text: m.concentration },
+      data.hasPositions ? { text: m.concentration } : null,
     );
   } else if (page.view === "sector" && page.sector) {
     const sector = sectorLabel(data);
