@@ -39,13 +39,17 @@ export function NotFoundView() {
     if (window.matchMedia("(pointer: fine)").matches) inputRef.current?.focus({ preventScroll: true });
   }, []);
 
+  // Hands the first typed text to the command bar. "/" (the command bar key, shown as this field's hint) opens it
+  // empty rather than as typed text, and a pasted "/nvda" arrives as "nvda".
   const handOver = () => {
     const input = inputRef.current;
     if (!input || composing.current) return;
-    const text = input.value;
-    if (!text.trim()) return;
+    const typed = input.value;
+    if (!typed.trim()) return;
     input.value = "";
-    openCommandWith(text);
+    const text = typed.replace(/^\s*\/+/, "");
+    if (text.trim()) openCommandWith(text);
+    else openCommand();
   };
 
   return (
