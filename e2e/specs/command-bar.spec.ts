@@ -3,13 +3,27 @@ import { functionByKey, functionsByCode } from "@/lib/functions";
 import { CHINESE_NAMES } from "@/lib/names-zh";
 import type { SearchResponse } from "@/types/api";
 
-import { apiJson, commandBar, en, escapeRegExp, expectPage, functionHref, functionLabel, mainHeading, panel, stockPath, typeCommand } from "../support/shell";
+import {
+  apiJson,
+  commandBar,
+  en,
+  escapeRegExp,
+  expectLanded,
+  expectPage,
+  functionHref,
+  functionLabel,
+  hashLanding,
+  mainHeading,
+  panel,
+  stockPath,
+  typeCommand,
+} from "../support/shell";
 import { expect, test } from "../support/test";
 
 // The command bar: function codes, the TICKER CODE grammar in both orders, COMP, Chinese company names, the symbol search
 // with keyboard selection, unknown input, and questions for the assistant. Expected pages and labels come from the
-// function registry (lib/functions.ts); listed matches are compared with the app's own /api/search answer. The bar opens
-// with "/" on the desktop and from its button on phones.
+// function registry (lib/functions.ts); listed matches are compared with the app's own /api/search answer. A code that
+// opens a part of a page (GC, GP) must land there. The bar opens with "/" on the desktop and from its button on phones.
 
 const esc = escapeRegExp;
 
@@ -42,12 +56,21 @@ test.describe("desktop", () => {
     test.slow();
     await app.goto("/");
     for (const code of ["WL", "PORT", "EVTS", "EQS", "MOST", "MKT", "WEI", "GC", "LAB", "DATA", "HELP"]) {
+      const href = functionHref(byCode(code));
+      if (code === "GC") {
+        // GC opens a part of the world markets page, open already after WEI: the Treasury curve, which heads the right
+        // column on the desktop. Scrolled to the end of the page, the curve is out of sight, and GC must bring it back.
+        await page.getByRole("main").evaluate((main) => main.scrollTo(0, main.scrollHeight));
+        expect(await hashLanding(page, href), "the curve before GC").not.toBe("landed");
+      }
       const bar = await typeCommand(page, code);
       await expect(bar.selected).toHaveAccessibleName(functionRow(code));
       await page.keyboard.press("Enter");
-      await expectPage(page, functionHref(byCode(code)));
-      // GC is a part of the world markets page (open already, after WEI): the page scrolls to it.
-      if (code === "GC") await expect(panel(page, en.markets.rates.title)).toBeInViewport();
+      await expectPage(page, href);
+      if (code === "GC") {
+        await expectLanded(page, href);
+        await expect(panel(page, en.markets.rates.title)).toBeInViewport();
+      }
     }
   });
 
@@ -67,10 +90,11 @@ test.describe("desktop", () => {
       const bar = await typeCommand(page, text);
       await expect(bar.selected).toHaveAccessibleName(functionRow(code, symbol));
       await page.keyboard.press("Enter");
-      await expectPage(page, functionHref(byCode(code), symbol));
+      const href = functionHref(byCode(code), symbol);
+      await expectPage(page, href);
       await expect(page.getByRole("navigation", { name: en.stock.tabs.label }).getByRole("link", { name: tab })).toHaveAttribute("aria-current", "page");
-      // GP lands on the chart.
-      if (code === "GP") await expect(panel(page, en.stock.chart)).toBeInViewport();
+      // GP lands on the chart, which sits below the quote header: the page scrolls to it.
+      if (code === "GP") await expectLanded(page, href);
     }
 
     // A Chinese name alone offers its quote first ("Open AAPL"), before the symbol's actions.
@@ -78,6 +102,16 @@ test.describe("desktop", () => {
     await expect(bar.selected).toHaveAccessibleName(new RegExp(`^${esc(en.command.open)} AAPL\\b`));
     await page.keyboard.press("Enter");
     await expectPage(page, stockPath("AAPL"));
+
+    // GP on the quote that is open already: the page stays, and scrolls to the chart.
+    const gpHref = functionHref(byCode("GP"), "AAPL");
+    await page.getByRole("main").evaluate((main) => main.scrollTo(0, 0));
+    expect(await hashLanding(page, gpHref), "the chart below the quote header").not.toBe("landed");
+    bar = await typeCommand(page, "AAPL GP");
+    await expect(bar.selected).toHaveAccessibleName(functionRow("GP", "AAPL"));
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(gpHref);
+    await expectLanded(page, gpHref);
 
     // COMP compares the first symbol with the others on its chart.
     const comp = functionByKey("comp");

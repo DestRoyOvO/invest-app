@@ -3,7 +3,7 @@ import { DEFAULT_SYMBOL, FUNCTION_GROUPS, FUNCTIONS, functionByKey, GO_SHORTCUTS
 
 import { PINNED_NOW } from "../support/env";
 import { expectedNoise, routeCase } from "../support/routes";
-import { commandBar, en, escapeRegExp, expectPage, functionHref, functionLabel, mainHeading, panel, stockPath } from "../support/shell";
+import { commandBar, en, escapeRegExp, expectLanded, expectPage, functionHref, functionLabel, mainHeading, panel, stockPath } from "../support/shell";
 import { expect, test } from "../support/test";
 
 // Getting around: the desktop nav rail, the phone tab bar and its More sheet, Back and Forward, the 404 page and /help,
@@ -175,11 +175,13 @@ test.describe("navigation", () => {
     // Every listed address is a page: the server answers 404 for anything else.
     for (const path of paths) expect((await page.request.get(path)).status(), `status of ${path}`).toBe(200);
 
-    // A listed link opens its page, at the part it names: GC lands on the Treasury curve.
-    const gc = functionByKey("gc");
-    await panel(page, en.nav.groups[gc.group]).getByRole("link", { name: gc.code, exact: true }).click();
-    await expectPage(page, functionHref(gc));
-    await expect(panel(page, en.markets.rates.title)).toBeInViewport();
+    // A listed link opens its page, at the part it names: RISK lands on the risk panel, far down the quote page.
+    const risk = functionByKey("risk");
+    const href = functionHref(risk);
+    await panel(page, en.nav.groups[risk.group]).getByRole("link", { name: risk.code, exact: true }).click();
+    await expectPage(page, href);
+    await expectLanded(page, href);
+    await expect(panel(page, en.risk.title)).toBeInViewport();
   });
 });
 

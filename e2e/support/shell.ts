@@ -1,6 +1,7 @@
 import type { APIRequestContext } from "@playwright/test";
 
 import { signedMoneyText } from "@/components/portfolio/money-format";
+import { LANDING_MARGIN } from "@/components/shell/hash-landing";
 import { withTrueMinus } from "@/components/ui/delta-utils";
 import { stockPath } from "@/lib/api-client";
 import { formatChange, formatPercent, formatRatio } from "@/lib/format";
@@ -182,6 +183,36 @@ export async function expectPage(page: Page, href: string): Promise<void> {
 }
 
 export { stockPath };
+
+// --- Landing on the part of a page a hash names ---------------------------------------------------------------------------
+
+/**
+ * Where the element the hash of `href` names (/markets#rates: the element with the id "rates") sits in the scrolling
+ * area, the main element: "landed" when it is where HashLanding puts it, its scroll-margin-top below main's top, or above
+ * that place with main scrolled to its top (it cannot rise further); otherwise where it is. A function that opens a part
+ * of a page (GC, GP, RISK) must land there.
+ */
+export async function hashLanding(page: Page, href: string): Promise<string> {
+  const id = decodeURIComponent(new URL(href, "http://localhost").hash.slice(1));
+  if (!id) throw new Error(`${href} names no part of its page`);
+  return page.evaluate(
+    ({ id, fallback }) => {
+      const target = document.getElementById(id);
+      const main = document.getElementById("main");
+      if (!target || !main || !main.contains(target)) return `no #${id} inside main`;
+      const margin = Number.parseFloat(getComputedStyle(target).scrollMarginTop) || fallback;
+      const offset = target.getBoundingClientRect().top - main.getBoundingClientRect().top;
+      if (Math.abs(offset - margin) < 1.5 || (offset < margin && main.scrollTop === 0)) return "landed";
+      return `#${id} ${Math.round(offset)} px below the top of main, scrolled ${Math.round(main.scrollTop)} px (lands at ${margin} px)`;
+    },
+    { id, fallback: LANDING_MARGIN },
+  );
+}
+
+/** Waits until the element the hash of `href` names has landed at the top of the scrolling area. */
+export async function expectLanded(page: Page, href: string): Promise<void> {
+  await expect.poll(() => hashLanding(page, href), { message: `the part of the page ${href} names, at the top of the scrolling area` }).toBe("landed");
+}
 
 // --- The command bar -----------------------------------------------------------------------------------------------------
 
