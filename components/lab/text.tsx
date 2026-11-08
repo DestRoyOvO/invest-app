@@ -2,27 +2,44 @@ import { Fragment, type ReactNode } from "react";
 
 import type { Lang } from "@/types/api";
 
-/**
- * Statistical symbols that CSS uppercase must not change: the small sigma ("±1Σ" reads as a sum), and t, p and h as
- * letters of their own ("NW t", "One-sided p", "lag 2h"; "T, LAG 2H" reads like hours). Letters inside words are left
- * alone, so "Stock-days" or "don't" never match.
- */
-const KEEP_CASE = /(σ|(?<![A-Za-z0-9'’])[tp](?![A-Za-z'’])|(?<=\d)h(?![A-Za-z]))/;
+const LETTER = /[A-Za-z]/;
+/** Characters that tie a t or p to a word when they come right before it ("it", "don't", "2p"). */
+const JOINS_BEFORE = /[A-Za-z0-9'’]/;
+/** Characters that tie a t or p to a word when they come right after it ("to", "p's"). */
+const JOINS_AFTER = /[A-Za-z'’]/;
 
-/** Text for an uppercase role (.col-head, .panel-title) with its statistical symbols kept lowercase (see KEEP_CASE). */
+/**
+ * True for a statistical symbol that CSS uppercase must not change: the small sigma ("±1Σ" reads as a sum), and t, p
+ * and h as letters of their own ("NW t", "One-sided p", "lag 2h"; "T, LAG 2H" reads like hours). Letters inside words
+ * are left alone, so "Stock-days" or "don't" never match.
+ */
+function isSymbolAt(text: string, i: number): boolean {
+  const char = text[i];
+  const before = text[i - 1] ?? "";
+  const after = text[i + 1] ?? "";
+  if (char === "σ") return true;
+  if (char === "t" || char === "p") return !JOINS_BEFORE.test(before) && !JOINS_AFTER.test(after);
+  if (char === "h") return /\d/.test(before) && !LETTER.test(after);
+  return false;
+}
+
+/** Text for an uppercase role (.col-head, .panel-title) with its statistical symbols kept lowercase (see isSymbolAt). */
 export function keepSymbols(text: string): ReactNode {
-  const parts = text.split(KEEP_CASE);
-  if (parts.length === 1) return text;
-  // split() with a capturing group puts the matched symbols at the odd indexes.
-  return parts.map((part, i) =>
-    i % 2 === 1 ? (
-      <span key={i} className="normal-case">
-        {part}
-      </span>
-    ) : (
-      <Fragment key={i}>{part}</Fragment>
-    ),
-  );
+  const parts: ReactNode[] = [];
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (!isSymbolAt(text, i)) continue;
+    if (i > start) parts.push(<Fragment key={`t${start}`}>{text.slice(start, i)}</Fragment>);
+    parts.push(
+      <span key={`s${i}`} className="normal-case">
+        {text[i]}
+      </span>,
+    );
+    start = i + 1;
+  }
+  if (parts.length === 0) return text;
+  if (start < text.length) parts.push(<Fragment key={`t${start}`}>{text.slice(start)}</Fragment>);
+  return parts;
 }
 
 /** tpl() for React nodes: replaces {name} placeholders with nodes, e.g. a ticker in mono inside a sentence. */
