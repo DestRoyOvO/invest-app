@@ -44,7 +44,7 @@ export function ProfilePanel({ profile, className }: { profile: StockProfile; cl
           <dt className="col-head">{s.website}</dt>
           <dd className="truncate">
             {website ? (
-              <a href={website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-info hover:underline">
+              <a href={website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-info hover:underline max-sm:min-h-10">
                 {new URL(website).hostname.replace(/^www\./, "")}
                 <ArrowUpRight aria-hidden className="size-3" strokeWidth={1.75} />
               </a>

@@ -35,7 +35,7 @@ function MoverList({ title, rows, quotes, lang, empty }: { title: string; rows: 
         <ul className="mt-1">
           {rows.map((row) => (
             <li key={row.symbol} className="flex h-7 items-center gap-3 text-data max-sm:h-10">
-              <Link href={stockPath(row.symbol)} className="mono w-16 shrink-0 font-medium text-fg hover:text-accent">
+              <Link href={stockPath(row.symbol)} className="mono w-16 shrink-0 font-medium text-fg hover:text-accent max-sm:inline-flex max-sm:h-10 max-sm:items-center">
                 {row.symbol}
               </Link>
               <SignedMoney value={row.dayPnl} lang={lang} className="ml-auto" />
