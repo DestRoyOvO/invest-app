@@ -140,12 +140,23 @@ export function StockView({ symbol, rawInput }: { symbol: string | null; rawInpu
     if (data && symbol) rememberSymbol(symbol);
   }, [data, symbol]);
 
-  // Live tab title with arrows rather than colors, e.g. "NVDA 186.64 ▲2.78% · InvestSeek".
+  // Live tab title with arrows rather than colors, e.g. "NVDA 186.64 ▲2.78% · InvestSeek". Next.js writes the page's
+  // metadata title ("NVDA · InvestSeek") again on every navigation within the page (?tab=, ?compare=, Back), so a head
+  // observer puts the live title back whenever it is replaced while this quote is still the current page.
   const titleSymbol = quote?.symbol;
   const titlePrice = quote?.price ?? null;
   const titleChange = quote?.changePercent ?? null;
   useEffect(() => {
-    if (titleSymbol) document.title = liveTitle(titleSymbol, titlePrice, titleChange);
+    if (!titleSymbol) return;
+    const title = liveTitle(titleSymbol, titlePrice, titleChange);
+    const path = window.location.pathname;
+    const apply = () => {
+      if (window.location.pathname === path && document.title !== title) document.title = title;
+    };
+    apply();
+    const observer = new MutationObserver(apply);
+    observer.observe(document.head, { subtree: true, childList: true, characterData: true });
+    return () => observer.disconnect();
   }, [titleSymbol, titlePrice, titleChange]);
 
   const why = useCallback(() => {
