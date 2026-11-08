@@ -89,11 +89,11 @@ describe("Chinese names", () => {
     expect(hasCjk("英伟达")).toBe(true);
     expect(hasCjk("nvda")).toBe(false);
     // Both ends of both ranges, escaped: U+F900 typed as a character turns into U+8C48 under Unicode normalization.
-    for (const ideograph of ["㐀", "鿿", "豈", "﫿"]) expect(hasCjk(ideograph), ideograph).toBe(true);
+    for (const ideograph of ["\u3400", "\u9fff", "\uf900", "\ufaff"]) expect(hasCjk(ideograph), ideograph).toBe(true);
   });
 
   it("leaves Hangul, emoji and other text to Yahoo search", () => {
-    for (const text of ["삼성전자", "samsung 전자", "apple 🍎", "😀", "", "Ꜳ", "ﬀ"]) expect(hasCjk(text), text).toBe(false);
+    for (const text of ["삼성전자", "samsung 전자", "apple 🍎", "😀", "\ue000", "\ua732", "\ufb00"]) expect(hasCjk(text), text).toBe(false);
   });
 });
 
