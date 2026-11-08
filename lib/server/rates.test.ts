@@ -12,6 +12,7 @@ import { GET as curveRoute } from "@/app/api/rates/curve/route";
 import { clearCache } from "./cache";
 import {
   buildYieldCurve,
+  EMPTY_YEAR_TTL_MS,
   getYieldCurve,
   headerMonths,
   mergeObservations,
@@ -19,6 +20,7 @@ import {
   observationOnOrBefore,
   parseTreasuryCsv,
   parseTreasuryDate,
+  RATES_TTL_MS,
   splitCsvLine,
   spreadBp,
   treasuryCsvUrl,
@@ -56,6 +58,7 @@ function fixtureFetch(overrides: Partial<Record<number, () => Promise<Response>>
 
 beforeEach(() => {
   clearCache();
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.spyOn(console, "warn").mockImplementation(() => undefined);
 });
@@ -180,7 +183,7 @@ describe("buildYieldCurve", () => {
   });
 
   it("returns today's curve with the curves a month and a year earlier", () => {
-    const curve = buildYieldCurve(observations, false, NOW) as YieldCurveResponse;
+    const curve = buildYieldCurve(observations, { now: NOW }) as YieldCurveResponse;
     expect(curve.current.date).toBe("2026-11-06");
     expect(curve.monthAgo?.date).toBe("2026-10-06");
     expect(curve.yearAgo?.date).toBe("2025-11-06");
@@ -189,10 +192,20 @@ describe("buildYieldCurve", () => {
     expect(curve.yearAgo?.yields[curve.tenors.indexOf("10Y")]).toBe(4.11);
     expect(curve.asOf).toBe(NOW.toISOString());
     expect(curve.stale).toBe(false);
+    expect(curve.fetchedAt).toBe(NOW.toISOString());
+    expect(curve.warnings).toEqual([]);
+  });
+
+  it("carries the download time, staleness and warnings it is given", () => {
+    const fetchedAt = new Date("2026-11-06T22:00:00Z");
+    const curve = buildYieldCurve(observations, { now: NOW, stale: true, fetchedAt, warnings: ["previous_year"] }) as YieldCurveResponse;
+    expect(curve.stale).toBe(true);
+    expect(curve.fetchedAt).toBe("2026-11-06T22:00:00.000Z");
+    expect(curve.warnings).toEqual(["previous_year"]);
   });
 
   it("keeps a year of spread history and counts inverted days", () => {
-    const curve = buildYieldCurve(observations, false, NOW) as YieldCurveResponse;
+    const curve = buildYieldCurve(observations, { now: NOW }) as YieldCurveResponse;
     const twos = curve.spreads.find((spread) => spread.key === "2s10s");
     expect(twos?.bp).toBe(35);
     expect(twos?.monthAgoBp).toBe(48);
@@ -204,7 +217,7 @@ describe("buildYieldCurve", () => {
       { date: "2026-01-02", yields: { "3M": 5, "2Y": 4.8, "10Y": 4.5 } },
       { date: "2026-01-05", yields: { "3M": 4.6, "2Y": 4.4, "10Y": 4.5 } },
     ];
-    const short = buildYieldCurve(inverted, false, NOW) as YieldCurveResponse;
+    const short = buildYieldCurve(inverted, { now: NOW }) as YieldCurveResponse;
     expect(short.spreads.map((spread) => [spread.key, spread.bp, spread.invertedDays])).toEqual([
       ["2s10s", 10, 1],
       ["3m10y", -10, 2],
@@ -243,7 +256,54 @@ describe("getYieldCurve", () => {
     const curve = await getYieldCurve({ now: NOW, fetchImpl: impl });
     expect(curve.current.date).toBe("2025-12-31");
     expect(curve.stale).toBe(true);
+    expect(curve.warnings).toEqual([]);
     expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("rates.download_failed"));
+  });
+
+  it("serves the cached file after a failed refresh, with the time it was downloaded", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const downloadedAt = new Date("2026-11-07T15:00:00Z");
+    vi.setSystemTime(downloadedAt);
+    const first = await getYieldCurve({ now: NOW, fetchImpl: fixtureFetch().impl });
+    expect(first).toMatchObject({ stale: false, fetchedAt: downloadedAt.toISOString() });
+
+    vi.setSystemTime(downloadedAt.getTime() + RATES_TTL_MS + 60_000);
+    const { impl } = fixtureFetch({ 2026: async () => csvResponse("Service Unavailable", 503) });
+    const later = await getYieldCurve({ now: NOW, fetchImpl: impl });
+    expect(later.current.date).toBe("2026-11-06");
+    expect(later).toMatchObject({ stale: true, fetchedAt: downloadedAt.toISOString() });
+  });
+
+  it("treats Treasury's empty file for a new year as a year without data, and looks again within the hour", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const newYear = new Date("2027-01-02T15:00:00Z");
+    vi.setSystemTime(newYear);
+    const { impl, urls } = fixtureFetch({ 2027: async () => csvResponse("") });
+
+    const curve = await getYieldCurve({ now: newYear, fetchImpl: impl });
+    expect(curve.current.date).toBe("2026-11-06");
+    expect(curve.stale).toBe(false);
+    expect(curve.warnings).toEqual([]);
+    expect(console.warn).not.toHaveBeenCalled();
+
+    // Cached like any download, but for an hour rather than six.
+    expect(uncachedRatesCalls(newYear)).toBe(0);
+    await getYieldCurve({ now: newYear, fetchImpl: impl });
+    expect(urls).toHaveLength(2);
+    vi.setSystemTime(newYear.getTime() + EMPTY_YEAR_TTL_MS + 60_000);
+    expect(uncachedRatesCalls(newYear)).toBe(1);
+    await getYieldCurve({ now: newYear, fetchImpl: impl });
+    expect(urls.filter((url) => url === treasuryCsvUrl(2027))).toHaveLength(2);
+    expect(urls.filter((url) => url === treasuryCsvUrl(2026))).toHaveLength(1);
+  });
+
+  it("warns when last year's file is missing", async () => {
+    const { impl } = fixtureFetch({ 2025: async () => csvResponse("Bad Gateway", 502) });
+    const curve = await getYieldCurve({ now: NOW, fetchImpl: impl });
+    expect(curve.current.date).toBe("2026-11-06");
+    expect(curve.yearAgo).toBeNull();
+    expect(curve.stale).toBe(false);
+    expect(curve.warnings).toEqual(["previous_year"]);
   });
 
   it("fails when neither year can be downloaded", async () => {

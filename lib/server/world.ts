@@ -71,6 +71,15 @@ export async function loadSparks(symbols: readonly string[], budgetMs: number): 
   return { sparks: new Map(sparks), complete: outcome === "done" && !failed };
 }
 
+/** The oldest fetch time among the quotes served stale (ISO), or null when every quote is fresh. */
+export function oldestStaleFetch(quotes: Iterable<Pick<Quote, "stale" | "fetchedAt">>): string | null {
+  let oldest: string | null = null;
+  for (const quote of quotes) {
+    if (quote.stale && quote.fetchedAt && (oldest === null || quote.fetchedAt < oldest)) oldest = quote.fetchedAt;
+  }
+  return oldest;
+}
+
 /** The board with as many series as arrive within the budget. Throws only when no quote at all can be loaded. */
 export async function getWorldMarkets(budgetMs = SPARK_BUDGET_MS): Promise<WorldMarketsResponse> {
   const [quotesResult, sparksResult] = await Promise.allSettled([getQuotes([...WORLD_SYMBOLS]), loadSparks(WORLD_SYMBOLS, budgetMs)]);
@@ -83,7 +92,7 @@ export async function getWorldMarkets(budgetMs = SPARK_BUDGET_MS): Promise<World
   const warnings: string[] = [];
   if (sparksResult.status === "rejected" || !sparksResult.value.complete) warnings.push("sparklines");
   if (rows.some((row) => row.stale)) warnings.push("quotes_stale");
-  return { asOf: new Date().toISOString(), rows, missing, warnings };
+  return { asOf: new Date().toISOString(), rows, missing, warnings, staleSince: oldestStaleFetch(quotes.values()) };
 }
 
 /** Yahoo calls a request for the board would make now: one batched quote request if any quote expired, plus each uncached series. */

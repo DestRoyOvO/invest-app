@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SpreadKey, TenorKey, YieldCurve, YieldCurveResponse, YieldSpread } from "@/types/markets";
 
-import { cached, HOUR, isFresh, MINUTE } from "./cache";
+import { cached, HOUR, isFresh, MINUTE, put } from "./cache";
 import { logThrottled } from "./log";
 
 // The US Treasury daily par yield curve (GC): Treasury publishes one CSV per calendar year on home.treasury.gov, with
@@ -37,6 +37,8 @@ const SPREADS: ReadonlyArray<{ key: SpreadKey; long: TenorKey; short: TenorKey }
 
 export const RATES_TTL_MS = 6 * HOUR;
 const RATES_STALE_MS = 48 * HOUR;
+/** A year Treasury has not published yet (the first business days of January) is checked again after an hour. */
+export const EMPTY_YEAR_TTL_MS = HOUR;
 const FETCH_TIMEOUT_MS = 10_000;
 /** A year of daily rows is about 20 KB; anything far larger is not the file we asked for. */
 const MAX_CSV_BYTES = 512 * 1024;
@@ -198,11 +200,21 @@ function curveOf(observation: YieldObservation, tenors: readonly TenorKey[]): Yi
   return { date: observation.date, yields: tenors.map((key) => observation.yields[key] ?? null) };
 }
 
+export interface CurveMeta {
+  /** The latest download failed and older data is shown. */
+  stale?: boolean;
+  /** When the file behind the latest observation was downloaded (defaults to `now`). */
+  fetchedAt?: Date;
+  warnings?: string[];
+  now?: Date;
+}
+
 /**
  * The curve response from observations sorted by date: the latest curve with a 10-year yield, the latest curves on or
  * before one month and one year earlier, and the spreads over the last year. Null without a usable observation.
  */
-export function buildYieldCurve(observations: readonly YieldObservation[], stale = false, now: Date = new Date()): YieldCurveResponse | null {
+export function buildYieldCurve(observations: readonly YieldObservation[], meta: CurveMeta = {}): YieldCurveResponse | null {
+  const { stale = false, now = new Date(), fetchedAt = now, warnings = [] } = meta;
   const withTenYear = observations.filter((observation) => observation.yields["10Y"] !== undefined);
   const latest = withTenYear[withTenYear.length - 1];
   if (!latest) return null;
@@ -235,6 +247,8 @@ export function buildYieldCurve(observations: readonly YieldObservation[], stale
     yearAgo: yearAgo ? curveOf(yearAgo, tenors) : null,
     spreads,
     stale,
+    fetchedAt: fetchedAt.toISOString(),
+    warnings,
   };
 }
 
@@ -260,6 +274,9 @@ async function downloadYear(year: number, fetchImpl: TreasuryFetch): Promise<Yie
   if (Number.isFinite(declared) && declared > MAX_CSV_BYTES) throw new Error(`Treasury CSV ${year} is too large`);
   const text = await response.text();
   if (text.length > MAX_CSV_BYTES) throw new Error(`Treasury CSV ${year} is too large`);
+  // A year Treasury has not published yet (January 1 until its first release) comes back as an empty 200 response:
+  // that is a year without observations, not a broken download.
+  if (text.trim() === "") return [];
   return parseTreasuryCsv(text);
 }
 
@@ -267,15 +284,21 @@ function yearKey(year: number): string {
   return `rates:treasury:${year}`;
 }
 
-function loadYear(year: number, fetchImpl: TreasuryFetch): Promise<YearData> {
-  return cached(yearKey(year), { ttlMs: RATES_TTL_MS, staleMs: RATES_STALE_MS }, async () => {
+async function loadYear(year: number, fetchImpl: TreasuryFetch): Promise<YearData> {
+  const load = { downloaded: false };
+  const data = await cached(yearKey(year), { ttlMs: RATES_TTL_MS, staleMs: RATES_STALE_MS }, async () => {
     try {
-      return { observations: await downloadYear(year, fetchImpl), fetchedAt: Date.now() };
+      const observations = await downloadYear(year, fetchImpl);
+      load.downloaded = true;
+      return { observations, fetchedAt: Date.now() };
     } catch (error) {
       logThrottled(`rates.download.${year}`, 10 * MINUTE, "warn", "rates.download_failed", { year, error });
       throw error;
     }
   });
+  // An empty year is kept for an hour only, so the first curve of the year shows up soon after Treasury publishes it.
+  if (load.downloaded && data.observations.length === 0) put(yearKey(year), data, { ttlMs: EMPTY_YEAR_TTL_MS, staleMs: RATES_STALE_MS });
+  return data;
 }
 
 /** The calendar year in New York, where Treasury publishes. */
@@ -285,8 +308,9 @@ export function treasuryYear(now: Date): number {
 
 /**
  * The yield curve from this year's and last year's files. A failed download falls back to the cached copy (up to 48
- * hours old) and marks the response stale; without the current year the curve comes from last year alone. Throws when
- * neither year can be loaded.
+ * hours old) and marks the response stale; without the current year the curve comes from last year alone, and without
+ * last year it says so in `warnings`. A year Treasury has not published yet is simply empty. Throws when neither year
+ * can be loaded.
  */
 export async function getYieldCurve(options: { now?: Date; fetchImpl?: TreasuryFetch } = {}): Promise<YieldCurveResponse> {
   const now = options.now ?? new Date();
@@ -297,7 +321,16 @@ export async function getYieldCurve(options: { now?: Date; fetchImpl?: TreasuryF
   if (loaded.length === 0) throw current.status === "rejected" ? current.reason : new Error("Treasury yield curve unavailable");
 
   const stale = current.status === "rejected" || Date.now() - current.value.fetchedAt > RATES_TTL_MS;
-  const curve = buildYieldCurve(mergeObservations(loaded.map((data) => data.observations)), stale, now);
+  // The latest curve comes from the newest file with observations; its download time is the age of what is shown.
+  const newest = [current, previous].find(
+    (result): result is PromiseFulfilledResult<YearData> => result.status === "fulfilled" && result.value.observations.length > 0,
+  );
+  const curve = buildYieldCurve(mergeObservations(loaded.map((data) => data.observations)), {
+    stale,
+    now,
+    fetchedAt: new Date(newest ? newest.value.fetchedAt : Date.now()),
+    warnings: previous.status === "rejected" ? ["previous_year"] : [],
+  });
   if (!curve) throw new Error("Treasury yield curve has no observations");
   return curve;
 }

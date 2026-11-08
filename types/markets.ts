@@ -32,6 +32,8 @@ export interface WorldMarketsResponse {
   missing: string[];
   /** "sparklines" when some series are still loading or failed, "quotes_stale" when some quotes are old. */
   warnings: string[];
+  /** With "quotes_stale": the oldest fetch time among the stale quotes (ISO), so the page can say how old they are. */
+  staleSince: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -80,4 +82,8 @@ export interface YieldCurveResponse {
   spreads: YieldSpread[];
   /** True when the latest Treasury download failed and older data is shown. */
   stale: boolean;
+  /** When the file behind the latest curve was downloaded from Treasury (ISO): how old the data is when `stale`. */
+  fetchedAt: string;
+  /** "previous_year" when last year's file could not be loaded, so the year-ago curve and part of the history are missing. */
+  warnings: string[];
 }

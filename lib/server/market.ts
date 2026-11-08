@@ -204,6 +204,15 @@ export function computeBreadth(quotes: ReadonlyMap<string, Quote>, nearExtreme =
   return breadth.stocks > 0 ? breadth : null;
 }
 
+/** The oldest fetch time among the quotes served stale (ISO), or null when every quote is fresh. */
+export function oldestStaleFetch(quotes: Iterable<Pick<Quote, "stale" | "fetchedAt">>): string | null {
+  let oldest: string | null = null;
+  for (const quote of quotes) {
+    if (quote.stale && quote.fetchedAt && (oldest === null || quote.fetchedAt < oldest)) oldest = quote.fetchedAt;
+  }
+  return oldest;
+}
+
 /** Board items in MARKET_BOARD order; symbols without a quote are omitted. */
 export function buildBoard(quotes: ReadonlyMap<string, Quote>, sparks: ReadonlyMap<string, number[]>): BoardItem[] {
   return BOARD_SYMBOLS.flatMap((symbol) => {
@@ -336,6 +345,7 @@ async function buildOverview(): Promise<MarketOverview> {
     breadth: computeBreadth(quotes),
     news,
     warnings,
+    staleSince: oldestStaleFetch(quotes.values()),
   };
 }
 

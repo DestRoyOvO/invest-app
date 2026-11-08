@@ -16,7 +16,7 @@ vi.mock("./yahoo", () => yahoo);
 
 import { GET as worldRoute } from "@/app/api/markets/world/route";
 
-import { buildWorldRows, getWorldMarkets, loadSparks, uncachedWorldCalls, WORLD_SYMBOLS } from "./world";
+import { buildWorldRows, getWorldMarkets, loadSparks, oldestStaleFetch, uncachedWorldCalls, WORLD_SYMBOLS } from "./world";
 
 function quote(symbol: string, overrides: Partial<Quote> = {}): Quote {
   return {
@@ -154,11 +154,14 @@ describe("getWorldMarkets", () => {
     expect(world.rows.every((row) => row.spark.length === 3)).toBe(true);
     expect(world.missing).toEqual([]);
     expect(world.warnings).toEqual([]);
+    expect(world.staleSince).toBeNull();
   });
 
   it("warns about missing series and stale quotes instead of failing", async () => {
     const quotes = allQuotes();
-    quotes.set("BTC-USD", quote("BTC-USD", { stale: true }));
+    quotes.set("BTC-USD", quote("BTC-USD", { stale: true, fetchedAt: "2026-11-07T20:01:00.000Z" }));
+    quotes.set("GC=F", quote("GC=F", { stale: true, fetchedAt: "2026-11-07T19:58:00.000Z" }));
+    quotes.set("^GSPC", quote("^GSPC", { fetchedAt: "2026-11-07T19:00:00.000Z" }));
     yahoo.getQuotes.mockResolvedValue(quotes);
     yahoo.getSparkline.mockImplementation(async (symbol) => {
       if (symbol === "^HSI") throw new Error("timeout");
@@ -166,7 +169,22 @@ describe("getWorldMarkets", () => {
     });
     const world = await getWorldMarkets(1_000);
     expect(world.warnings).toEqual(["sparklines", "quotes_stale"]);
+    // How old the stale quotes are: the oldest of them, not the fresh ones.
+    expect(world.staleSince).toBe("2026-11-07T19:58:00.000Z");
     expect(world.rows.find((row) => row.symbol === "^HSI")?.spark).toEqual([]);
+  });
+
+  it("finds the oldest fetch among stale quotes only", () => {
+    expect(oldestStaleFetch([])).toBeNull();
+    expect(oldestStaleFetch([{ stale: false, fetchedAt: "2026-11-07T10:00:00.000Z" }])).toBeNull();
+    expect(oldestStaleFetch([{ stale: true, fetchedAt: null }])).toBeNull();
+    expect(
+      oldestStaleFetch([
+        { stale: true, fetchedAt: "2026-11-07T12:00:00.000Z" },
+        { stale: false, fetchedAt: "2026-11-07T09:00:00.000Z" },
+        { stale: true, fetchedAt: "2026-11-07T11:00:00.000Z" },
+      ]),
+    ).toBe("2026-11-07T11:00:00.000Z");
   });
 
   it("fails only when no quote can be loaded", async () => {

@@ -211,6 +211,8 @@ export interface MarketOverview {
   news: NewsItem[];
   /** Sections that failed upstream and were omitted or served stale, e.g. ["news"]; "quotes_stale" when some quotes are old. */
   warnings: string[];
+  /** With "quotes_stale": the oldest fetch time among the stale quotes (ISO), so the page can say how old they are. */
+  staleSince: string | null;
 }
 
 export type Sparklines = Record<string, number[]>;

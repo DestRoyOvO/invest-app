@@ -22,7 +22,7 @@ vi.mock("./yahoo", () => yahoo);
 vi.mock("./news", () => news);
 
 import { clearCache } from "./cache";
-import { computeBreadth, getMarketOverview, NEAR_EXTREME, OVERVIEW_SYMBOLS, slimQuote } from "./market";
+import { computeBreadth, getMarketOverview, NEAR_EXTREME, oldestStaleFetch, OVERVIEW_SYMBOLS, slimQuote } from "./market";
 
 function quote(symbol: string, overrides: Partial<Quote> = {}): Quote {
   return {
@@ -190,5 +190,27 @@ describe("getMarketOverview breadth", () => {
     expect(overview.breadth?.equalWeight).toBe(0.1);
     expect(overview.movers.gainers.length).toBeLessThanOrEqual(8);
     expect(Object.keys(overview.movers.gainers[0])).not.toContain("quoteType");
+    expect(overview.staleSince).toBeNull();
+  });
+});
+
+describe("getMarketOverview staleSince", () => {
+  it("says how old the stale quotes are", async () => {
+    const quotes = quoteMap([
+      ...UNIVERSE_STOCKS.map((symbol) => quote(symbol, { fetchedAt: "2026-11-07T20:00:00.000Z" })),
+      quote("^GSPC", { stale: true, fetchedAt: "2026-11-07T19:40:00.000Z" }),
+      quote("SPY", { stale: true, fetchedAt: "2026-11-07T19:45:00.000Z" }),
+    ]);
+    yahoo.getQuotes.mockResolvedValue(quotes);
+    yahoo.getSparkline.mockResolvedValue([]);
+    news.getMarketNews.mockResolvedValue([]);
+
+    const overview = await getMarketOverview();
+    expect(overview.warnings).toContain("quotes_stale");
+    expect(overview.staleSince).toBe("2026-11-07T19:40:00.000Z");
+  });
+
+  it("ignores fresh quotes and stale ones without a fetch time", () => {
+    expect(oldestStaleFetch([quote("A", { fetchedAt: "2026-11-07T09:00:00.000Z" }), quote("B", { stale: true, fetchedAt: null })])).toBeNull();
   });
 });
