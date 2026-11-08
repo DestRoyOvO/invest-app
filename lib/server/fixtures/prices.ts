@@ -230,7 +230,23 @@ function dailyBar(security: Security, day: number, previous: number, close: numb
 }
 
 const rowCache = new Map<string, readonly DailyRow[]>();
-const ROW_CACHE_SIZE = 400;
+let cachedRows = 0;
+/**
+ * The cache keeps at most this many rows in all (about 90 bytes each, so some 20 MB) and this many windows: a client
+ * asking for the full history of many synthetic symbols evicts old windows instead of growing the process.
+ */
+const MAX_CACHED_ROWS = 250_000;
+const MAX_CACHED_WINDOWS = 2_000;
+
+function cacheRows(key: string, rows: readonly DailyRow[]): void {
+  rowCache.set(key, rows);
+  cachedRows += rows.length;
+  while ((cachedRows > MAX_CACHED_ROWS || rowCache.size > MAX_CACHED_WINDOWS) && rowCache.size > 1) {
+    const oldest = rowCache.keys().next().value as string;
+    cachedRows -= rowCache.get(oldest)?.length ?? 0;
+    rowCache.delete(oldest);
+  }
+}
 
 /**
  * Daily bars of the trading days in [from, to] (day numbers). Callers pass `to` no later than the latest completed
@@ -246,8 +262,7 @@ export function dailyRows(security: Security, from: number, to: number): readonl
     const { previous, closes } = rawCloses(security, days);
     rows = days.map((day, i) => dailyBar(security, day, i === 0 ? previous : closes[i - 1], closes[i]));
   }
-  rowCache.set(key, rows);
-  if (rowCache.size > ROW_CACHE_SIZE) rowCache.delete(rowCache.keys().next().value as string);
+  cacheRows(key, rows);
   return rows;
 }
 
