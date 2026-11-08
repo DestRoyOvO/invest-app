@@ -325,13 +325,19 @@ export function readRule(rule: AlertRule, quote: AlertQuote | null | undefined, 
     case "below": {
       const up = rule.kind === "above";
       if (up ? price >= level : price <= level) return { ...NO_READING, unavailable: null, met: true, observed: price };
-      // Between two checks in one session, a new high (or low) that reached the level counts: polling every few
-      // seconds, or less often in a background tab, can miss a brief touch, but the session range records it.
-      const sameSession = rule.checkedSession !== null && rule.checkedSession === sessionOf(quote, now);
+      // Polling every few seconds, or less often in a background tab, can miss a brief touch, but the session range
+      // records it. Between two checks in one session, a new high (or low) beyond the one seen at the last check counts;
+      // in a session that began after the last check, the whole range is new. That needs the quote's own trade time: a
+      // session inferred from the clock may still show the last session's range. Without a last check nothing counts,
+      // so a move from before the rule existed (or was resumed) is never reported.
+      const session = sessionOf(quote, now);
+      const sameSession = rule.checkedSession !== null && rule.checkedSession === session;
+      const newerSession = rule.checkedSession !== null && Boolean(quote.regularMarketTime) && session > rule.checkedSession;
       const baseline = up ? rule.checkedHigh : rule.checkedLow;
       const extreme = up ? quote.dayHigh : quote.dayLow;
-      const touched =
-        sameSession && baseline !== null && isPositive(extreme) && (up ? extreme > baseline && extreme >= level : extreme < baseline && extreme <= level);
+      const reached = isPositive(extreme) && (up ? extreme >= level : extreme <= level);
+      const beyondBaseline = baseline !== null && isPositive(extreme) && (up ? extreme > baseline : extreme < baseline);
+      const touched = reached && (newerSession || (sameSession && beyondBaseline));
       return { ...NO_READING, unavailable: null, met: touched, observed: price, extreme: touched ? extreme : null };
     }
     case "day_move": {

@@ -188,10 +188,26 @@ describe("evaluate", () => {
     const check = evaluate(watched, quote({ price: 186.9, dayHigh: 188.4 }), {}, NOW);
     expect(check.fire).toBe(true);
     expect(check.event).toMatchObject({ observed: 186.9, extreme: 188.4 });
-    // The same high seen before (or a high from before the rule existed) does not count.
+    // The same high seen before does not count, nor does a high when there is no last check to compare with (a new
+    // rule without a quote, a resumed rule): it may be from before the rule existed.
     expect(evaluate({ ...watched, checkedHigh: 188.4 }, quote({ price: 186.9, dayHigh: 188.4 }), {}, NOW).fire).toBe(false);
-    expect(evaluate({ ...watched, checkedSession: "2026-11-05" }, quote({ price: 186.9, dayHigh: 188.4 }), {}, NOW).fire).toBe(false);
     expect(evaluate({ ...watched, checkedHigh: null }, quote({ price: 186.9, dayHigh: 188.4 }), {}, NOW).fire).toBe(false);
+    expect(evaluate({ ...watched, checkedSession: null, checkedHigh: null }, quote({ price: 186.9, dayHigh: 188.4 }), {}, NOW).fire).toBe(false);
+  });
+
+  it("counts the whole range of a session that began after the last check", () => {
+    // Last checked on Thursday's session (a tab left open overnight): Friday's early spike to 188.40 came after it.
+    const above = rule({ kind: "above", value: 188 }, { lastCheckedAt: "2026-11-05T21:30:00Z", checkedSession: "2026-11-05", checkedHigh: 187.5, checkedLow: 181.2 });
+    const check = evaluate(above, quote({ price: 186.9, dayHigh: 188.4 }), {}, NOW);
+    expect(check.fire).toBe(true);
+    expect(check.event).toMatchObject({ observed: 186.9, extreme: 188.4, session: SESSION });
+    expect(check.patch).toMatchObject({ checkedSession: SESSION, checkedHigh: 188.4 });
+    const below = rule({ kind: "below", value: 182 }, { checkedSession: "2026-11-05", checkedHigh: 190, checkedLow: 183 });
+    expect(evaluate(below, quote({ price: 186.9, dayLow: 181.2 }), {}, NOW).event?.extreme).toBe(181.2);
+    // A range that stayed short of the level does not count.
+    expect(evaluate(above, quote({ price: 186.9, dayHigh: 187.9 }), {}, NOW).fire).toBe(false);
+    // Without the quote's trade time the session comes from the clock, and the range may still be the last session's.
+    expect(evaluate(above, quote({ price: 186.9, dayHigh: 188.4, regularMarketTime: null }), {}, NOW).fire).toBe(false);
   });
 
   it("checks day moves in either direction", () => {
