@@ -40,6 +40,7 @@ import { MAX_WATCHLIST, SECTORS } from "@/lib/universe";
 import type { Lang } from "@/types/api";
 
 import { CodeChip } from "./CodeChip";
+import { openHref } from "./HashLanding";
 import { buildPalette, shouldSearch, type PaletteItem, type SettingChoice } from "./palette";
 
 const iconClass = "size-4 shrink-0 text-fg-3";
@@ -181,7 +182,8 @@ function PaletteDialog({ initialQuery }: { initialQuery: string }) {
   const closeFromDocument = useEffectEvent(() => closeCommand());
 
   // Modal behaviour: focus starts in the input and cannot leave the dialog, Escape closes it from anywhere, and focus
-  // returns to where it was when the dialog closes.
+  // returns to where it was when the dialog closes, without scrolling: a command such as RISK has just scrolled the
+  // page to its target.
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const input = inputRef.current;
@@ -201,7 +203,7 @@ function PaletteDialog({ initialQuery }: { initialQuery: string }) {
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("focusin", onFocusIn);
-      previous?.focus?.();
+      previous?.focus?.({ preventScroll: true });
     };
   }, []);
 
@@ -217,8 +219,9 @@ function PaletteDialog({ initialQuery }: { initialQuery: string }) {
   }, [safeIndex]);
 
   const go = (href: string) => {
-    router.push(href);
     close();
+    // Once the dialog has closed and handed focus back, so a page that focuses its anchor (PASTE) keeps the focus.
+    window.setTimeout(() => openHref(router, href));
   };
 
   const watch = (symbol: string) => {

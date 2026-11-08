@@ -3,6 +3,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
+import { hashId } from "@/components/shell/hash-landing";
 import { Button } from "@/components/ui/Button";
 import { Field, Textarea } from "@/components/ui/Field";
 import { Panel } from "@/components/ui/Panel";
@@ -20,10 +21,12 @@ export function PastePanel() {
   const { outcome, record, undo, clear } = useImportOutcome();
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Links such as "Paste positions" on the overview open /data#paste: put the cursor in the box, ready to paste.
+  // Links such as "Paste positions" on the overview open /data#paste: put the cursor in the box, ready to paste. The
+  // shell's HashLanding settles the address in a layout effect, before this effect reads it, and scrolls the panel into
+  // place, so the focus itself does not scroll.
   useEffect(() => {
     const focusOnHash = () => {
-      if (window.location.hash === "#paste") inputRef.current?.focus();
+      if (hashId(window.location.hash) === "paste") inputRef.current?.focus({ preventScroll: true });
     };
     focusOnHash();
     window.addEventListener("hashchange", focusOnHash);

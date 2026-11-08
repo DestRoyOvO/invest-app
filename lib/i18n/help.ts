@@ -90,6 +90,13 @@ export const helpMessages = defineMessages(
       allFunctions: "All functions and codes",
       or: "or",
     },
+    // Where a symbol function lands when the quote has no such tab (FA on a fund, ERN on an index).
+    landing: {
+      fund: "{symbol} is a fund, and funds have no {tab} tab. Showing the overview.",
+      overviewOnly: "{symbol} has no {tab} tab: indices, currencies, futures and crypto have only an overview.",
+    },
+    // The browser tab title of the 404 page (app/not-found.tsx).
+    notFound: { title: "Not found" },
   },
   {
     functions: {
@@ -178,5 +185,10 @@ export const helpMessages = defineMessages(
       allFunctions: "全部功能和代码",
       or: "或",
     },
+    landing: {
+      fund: "{symbol} 是基金，基金没有“{tab}”页，已显示概览。",
+      overviewOnly: "{symbol} 没有“{tab}”页：指数、货币、期货和加密货币只有概览。",
+    },
+    notFound: { title: "未找到页面" },
   },
 );

@@ -74,6 +74,8 @@ export const dataMessages = defineMessages(
       },
       change: "{name}: {from} to {to}",
     },
+    // Keyed by the store name inside each storage key ("investseek:<name>:v1"); components/data/labels.test.ts checks
+    // that every key the app writes has a name here.
     stores: {
       watchlist: "Watchlist",
       holdings: "Positions",
@@ -83,10 +85,15 @@ export const dataMessages = defineMessages(
       screens: "Saved screens",
       chart: "Chart settings",
       "watchlist-view": "Watchlist view",
+      port: "Portfolio view",
+      calendar: "Calendar view",
+      movers: "Movers view",
       recents: "Recent symbols",
       "last-symbol": "Last viewed symbol",
-      chats: "Assistant chats",
+      "last-sector": "Last viewed sector",
+      "ai-chats": "Assistant chats",
       "ai-notes": "AI notes",
+      ai: "Assistant settings",
       prefs: "Display settings",
     },
     stored: {
@@ -279,10 +286,15 @@ export const dataMessages = defineMessages(
       screens: "已存筛选",
       chart: "图表设置",
       "watchlist-view": "自选视图",
+      port: "组合视图",
+      calendar: "日历视图",
+      movers: "异动榜视图",
       recents: "最近查看",
       "last-symbol": "上次查看的代码",
-      chats: "助手对话",
+      "last-sector": "上次查看的板块",
+      "ai-chats": "助手对话",
       "ai-notes": "AI 笔记",
+      ai: "助手设置",
       prefs: "显示设置",
     },
     stored: {

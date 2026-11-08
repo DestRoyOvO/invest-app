@@ -7,7 +7,11 @@
 //   TICKER CODE     a security function for that symbol ("NVDA GP"); CODE TICKER works too ("GP NVDA")
 //   COMP A B C      compare A with B and C on the chart of A
 //   ?question       ask the assistant
-// A token can be a code, an alias ("chart", "图表", "EXPORT") or, for symbols, a Chinese company name ("英伟达").
+// A token can be a code, an alias ("chart", "图表", "EXPORT") or, for symbols, a Chinese company name ("英伟达"). Some
+// aliases open a part of their page: "IMPORT" opens /data#import (FunctionDef.anchors).
+//
+// Every href is a page under app/ and every #anchor an element id on it; lib/functions.test.ts walks app/ and the
+// components to check both, so a renamed route, tab or id fails the tests.
 
 import { stockPath } from "@/lib/api-client";
 import type { helpMessages } from "@/lib/i18n/help";
@@ -45,6 +49,8 @@ export interface FunctionDef {
   /** Keyboard sequence, e.g. "g p". */
   shortcut?: string;
   href: (symbol?: string, context?: HrefContext) => string;
+  /** Aliases (lowercase) that open a part of the page when typed in full: { import: "#import" }. */
+  anchors?: Readonly<Record<string, `#${string}`>>;
 }
 
 function sectorKey(value: string | null | undefined): string {
@@ -191,7 +197,21 @@ export const FUNCTIONS: readonly FunctionDef[] = [
     group: "tools",
     shortcut: "g d",
     href: page("/data"),
-    aliases: ["EXPORT", "IMPORT", "BACKUP", "data", "restore", "csv", "数据", "导出", "导入", "备份", "恢复"],
+    aliases: ["EXPORT", "IMPORT", "BACKUP", "data", "restore", "csv", "paste", "数据", "导出", "导入", "备份", "恢复", "粘贴"],
+    // The backup panel (export and restore), the imports (paste and CSV) and the paste box itself.
+    anchors: {
+      export: "#restore",
+      backup: "#restore",
+      restore: "#restore",
+      导出: "#restore",
+      备份: "#restore",
+      恢复: "#restore",
+      import: "#import",
+      csv: "#import",
+      导入: "#import",
+      paste: "#paste",
+      粘贴: "#paste",
+    },
   },
   {
     code: "HELP",
@@ -323,13 +343,22 @@ export function symbolOfToken(token: string): string | null {
 interface Named {
   defs: readonly FunctionDef[];
   rank: 0 | 1;
+  /** The alias typed in full (rank 1), which can name a part of the page (FunctionDef.anchors). */
+  alias?: string;
 }
 
 function named(token: string): Named | null {
   const byCode = BY_CODE.get(token.trim().toUpperCase());
   if (byCode) return { defs: byCode, rank: 0 };
-  const byAlias = BY_ALIAS.get(aliasKey(token));
-  return byAlias ? { defs: byAlias, rank: 1 } : null;
+  const alias = aliasKey(token);
+  const byAlias = BY_ALIAS.get(alias);
+  return byAlias ? { defs: byAlias, rank: 1, alias } : null;
+}
+
+/** The match pointed at the part of the page its alias names ("import" opens /data#import), if any. */
+function anchored(match: FunctionMatch, alias: string | undefined): FunctionMatch {
+  const anchor = alias === undefined ? undefined : match.fn.anchors?.[alias];
+  return anchor ? { ...match, href: `${match.href.split("#")[0]}${anchor}` } : match;
 }
 
 /** A function as a command-bar candidate: its href for the symbol (or the last one) and how it was named. */
@@ -353,7 +382,7 @@ export function functionMatch(fn: FunctionDef, rank: MatchRank, ctx: ParseContex
 function standalone(match: Named, ctx: ParseContext): FunctionMatch[] {
   const globals = match.defs.filter((fn) => fn.scope === "global");
   const chosen = globals.length > 0 ? globals : match.defs;
-  return chosen.map((fn) => functionMatch(fn, match.rank, ctx, null));
+  return chosen.map((fn) => anchored(functionMatch(fn, match.rank, ctx, null), match.alias));
 }
 
 function partialMatches(token: string, ctx: ParseContext, symbol: string | null): FunctionMatch[] {
@@ -402,7 +431,7 @@ export function parseCommand(input: string, ctx: ParseContext): CommandMatch[] {
 
   const whole = tokens.length > 1 ? BY_ALIAS.get(aliasKey(text)) : undefined;
   if (tokens.length === 1 || whole) {
-    const match = whole ? { defs: whole, rank: 1 as const } : named(tokens[0]);
+    const match: Named | null = whole ? { defs: whole, rank: 1, alias: aliasKey(text) } : named(tokens[0]);
     if (match) {
       for (const fn of standalone(match, ctx)) push(fn);
       const symbol = tokens.length === 1 ? normalizeSymbol(tokens[0]) : null;
@@ -421,7 +450,7 @@ export function parseCommand(input: string, ctx: ParseContext): CommandMatch[] {
       const security = match.defs.find((fn) => fn.scope === "security");
       const fn = security ?? match.defs[0];
       const weight = index === tokens.length - 1 ? 0 : 1;
-      push(functionMatch(fn, match.rank, ctx, security ? subject : null, security?.code === "COMP" ? rest : []), weight);
+      push(anchored(functionMatch(fn, match.rank, ctx, security ? subject : null, security?.code === "COMP" ? rest : []), match.alias), weight);
     });
     // Still typing the code after a ticker: "NVDA F" offers FA and the other F codes for NVDA.
     if (out.length === 0 && tokens.length === 2) {

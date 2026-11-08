@@ -1,7 +1,10 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join, relative, sep } from "node:path";
 
 import { describe, expect, it } from "vitest";
+
+import { PORT_TABS } from "@/components/portfolio/port-view";
+import { QUOTE_TABS } from "@/components/stock/quote-utils";
 
 import {
   editDistance,
@@ -19,12 +22,90 @@ import {
   suggestForPath,
   symbolOfToken,
   type CommandMatch,
+  type FunctionDef,
   type FunctionMatch,
   type ParseContext,
 } from "./functions";
 import { MESSAGES } from "./i18n/messages";
+import { viewFromParams } from "./screens";
+import { getSector, SECTOR_KEYS } from "./universe";
 
 const ctx: ParseContext = { lastSymbol: "AAPL" };
+
+// ---------------------------------------------------------------------------
+// The merged app as it is on disk: page routes under app/ and element ids in the components
+// ---------------------------------------------------------------------------
+
+const ROOT = process.cwd();
+const APP = join(ROOT, "app");
+
+function filesUnder(dir: string, keep: (name: string) => boolean): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return entry.name === "node_modules" ? [] : filesUnder(path, keep);
+    return keep(entry.name) ? [path] : [];
+  });
+}
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Every page route under app/ as a pattern over the pathname: route groups such as (terminal) and parallel slots are
+ * left out, [param] matches one segment and [...param] several. Private folders (_x) and API routes have no pages.
+ */
+function pageRoutes(): Array<{ file: string; pattern: RegExp }> {
+  return filesUnder(APP, (name) => /^page\.(tsx|ts|jsx|js|mdx)$/.test(name))
+    .map((file) => relative(APP, file).split(sep).slice(0, -1))
+    .filter((segments) => !segments.some((segment) => segment.startsWith("_") || segment === "api"))
+    .map((segments) => {
+      const parts = segments
+        .filter((segment) => !/^\(.+\)$/.test(segment) && !segment.startsWith("@"))
+        .map((segment) => {
+          if (segment.startsWith("[[...")) return "(?:/.+)?";
+          if (segment.startsWith("[...")) return "/.+";
+          if (segment.startsWith("[")) return "/[^/]+";
+          return `/${escapeRegExp(segment)}`;
+        });
+      return { file: segments.join("/") || "(root)", pattern: new RegExp(`^${parts.join("") || "/"}$`) };
+    });
+}
+
+const COMPONENTS = join(ROOT, "components");
+
+/**
+ * The components of a page: the folder named after its first path segment (/stock/NVDA in components/stock, / in
+ * components/market) and the components those files import from other folders (the quote page imports NotesPanel).
+ */
+function pageComponentFiles(pathname: string): string[] {
+  const folder = pathname.split("/")[1] || "market";
+  const dir = readdirSync(COMPONENTS).includes(folder) ? join(COMPONENTS, folder) : COMPONENTS;
+  const own = filesUnder(dir, (name) => name.endsWith(".tsx"));
+  const imported = own.flatMap((file) => [...readFileSync(file, "utf8").matchAll(/from "@\/components\/([^"]+)"/g)].map((match) => join(COMPONENTS, `${match[1]}.tsx`)));
+  return [...new Set([...own, ...imported.filter((file) => existsSync(file))])];
+}
+
+/** How many elements with the id a #anchor scrolls to the components of a page declare: exactly one is right. */
+function elementIdCount(pathname: string, id: string): number {
+  return pageComponentFiles(pathname).reduce((count, file) => count + readFileSync(file, "utf8").split(`id="${id}"`).length - 1, 0);
+}
+
+/** Every href a function can produce: with typed and fallback symbols, comparisons, every sector and every anchor alias. */
+function hrefsOf(entry: FunctionDef): string[] {
+  const hrefs = new Set<string>();
+  if (entry.scope === "security") {
+    for (const symbol of [undefined, "NVDA", "^GSPC", "BRK-B", "0700.HK"]) {
+      hrefs.add(entry.href(symbol));
+      hrefs.add(entry.href(symbol, { compare: ["MSFT", "SPY"] }));
+    }
+  } else {
+    for (const lastSector of [null, "bogus", ...SECTOR_KEYS]) hrefs.add(entry.href(undefined, { lastSector }));
+  }
+  for (const alias of Object.keys(entry.anchors ?? {})) {
+    const match = parseCommand(alias, ctx).find((m): m is FunctionMatch => m.kind === "function" && m.fn === entry);
+    if (match) hrefs.add(match.href);
+  }
+  return [...hrefs];
+}
 
 function first(input: string, context: ParseContext = ctx): CommandMatch | undefined {
   return parseCommand(input, context)[0];
@@ -90,21 +171,71 @@ describe("the registry", () => {
     expect(href("gp")).toBe("/stock/AAPL#chart");
   });
 
-  it("points every function at a page that exists, or that another package builds", () => {
-    // Pages built by other wave-2 packages; they exist once the branches are merged.
-    const builtElsewhere = new Set(["/portfolio", "/calendar", "/screener", "/markets", "/lab", "/notes", "/alerts", "/data"]);
-    const pageFile = (base: string) => {
-      const app = join(process.cwd(), "app", "(terminal)");
-      if (base === "/") return join(app, "page.tsx");
-      if (base === "/stock") return join(app, "stock", "[symbol]", "page.tsx");
-      if (base === "/sector") return join(app, "sector", "[key]", "page.tsx");
-      return join(app, ...base.slice(1).split("/"), "page.tsx");
-    };
+  it("finds the pages of the merged app under app/", () => {
+    const routes = pageRoutes();
+    const matching = (path: string) => routes.filter((route) => route.pattern.test(path)).map((route) => route.file);
+    expect(matching("/")).toEqual(["(terminal)"]);
+    expect(matching("/stock/NVDA")).toEqual(["(terminal)/stock/[symbol]"]);
+    expect(matching("/sector/energy")).toEqual(["(terminal)/sector/[key]"]);
+    expect(matching("/unlock")).toEqual(["unlock"]);
+    expect(matching("/stock")).toEqual([]);
+    expect(matching("/api/health")).toEqual([]);
+  });
+
+  it("points every function at a page under app/", () => {
+    const routes = pageRoutes();
     for (const entry of FUNCTIONS) {
-      const base = functionBasePath(entry);
-      expect(existsSync(pageFile(base)) || builtElsewhere.has(base), `${entry.code} -> ${base}`).toBe(true);
+      for (const href of hrefsOf(entry)) {
+        const path = href.split(/[?#]/)[0];
+        expect(
+          routes.some((route) => route.pattern.test(path)),
+          `${entry.code} -> ${href}`,
+        ).toBe(true);
+        // functionBasePath (the active navigation item) is the start of every route of the function.
+        expect(path === functionBasePath(entry) || path.startsWith(`${functionBasePath(entry)}/`), `${entry.code} -> ${href}`).toBe(true);
+      }
     }
-    expect(existsSync(pageFile("/help"))).toBe(true);
+  });
+
+  it("opens only tabs, sectors and anchors that exist on those pages", () => {
+    for (const entry of FUNCTIONS) {
+      for (const href of hrefsOf(entry)) {
+        const url = new URL(href, "http://localhost");
+        const where = `${entry.code} -> ${href}`;
+        const tab = url.searchParams.get("tab");
+        if (url.pathname.startsWith("/stock/")) {
+          if (tab !== null) expect(QUOTE_TABS as readonly string[], where).toContain(tab);
+          for (const symbol of url.searchParams.get("compare")?.split(",") ?? []) expect(symbol, where).toMatch(/^[A-Z0-9^.=-]+$/);
+        } else if (url.pathname === "/portfolio") {
+          if (tab !== null) expect(PORT_TABS as readonly string[], where).toContain(tab);
+        } else if (url.pathname === "/screener") {
+          if (tab !== null) expect(viewFromParams(url.searchParams).tab, where).toBe(tab);
+        } else {
+          expect(tab, where).toBeNull();
+        }
+        if (url.pathname.startsWith("/sector/")) expect(getSector(url.pathname.slice("/sector/".length)), where).toBeTruthy();
+        if (url.hash) expect(elementIdCount(url.pathname, url.hash.slice(1)), `${where}: elements with id "${url.hash.slice(1)}"`).toBe(1);
+      }
+    }
+  });
+
+  it("lets anchor aliases open a part of the page and nothing else", () => {
+    for (const entry of FUNCTIONS) {
+      const aliases = new Set(entry.aliases.map((alias) => alias.trim().toLowerCase()));
+      for (const [alias, anchor] of Object.entries(entry.anchors ?? {})) {
+        expect(aliases.has(alias), `${entry.code}: ${alias} is not one of its aliases`).toBe(true);
+        expect(fn(alias).href).toBe(`${entry.href().split("#")[0]}${anchor}`);
+      }
+    }
+    expect(fn("IMPORT").href).toBe("/data#import");
+    expect(fn("导入").href).toBe("/data#import");
+    expect(fn("Backup").href).toBe("/data#restore");
+    expect(fn("export").href).toBe("/data#restore");
+    expect(fn("粘贴").href).toBe("/data#paste");
+    expect(fn("DATA").href).toBe("/data");
+    expect(fn("数据").href).toBe("/data");
+    // A partial alias opens the page itself.
+    expect(fn("impo")).toMatchObject({ rank: 3, href: "/data" });
   });
 
   it("has a label and a description in both languages for every function", () => {
@@ -207,7 +338,7 @@ describe("parseCommand", () => {
   });
 
   it("accepts English and Chinese aliases, including EXPORT, IMPORT and BACKUP for DATA", () => {
-    for (const input of ["EXPORT", "import", "Backup", "备份"]) expect(fn(input)).toMatchObject({ rank: 1, href: "/data" });
+    for (const input of ["EXPORT", "import", "Backup", "备份", "导出", "恢复", "paste"]) expect(fn(input)).toMatchObject({ rank: 1, fn: functionByKey("data") });
     expect(fn("watchlist").href).toBe("/watchlist");
     expect(fn("自选").href).toBe("/watchlist");
     expect(fn("most active").href).toBe("/screener?tab=discover");

@@ -5,6 +5,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, type ReactNode } from "react";
 
 import { ResearchNote } from "@/components/ai/ResearchNote";
+import { missingQuoteTab } from "@/components/help/landing";
+import { TabLandingNote } from "@/components/help/TabLandingNote";
 import { NotesPanel } from "@/components/notes/NotesPanel";
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { useUi } from "@/components/providers/UiProvider";
@@ -129,6 +131,8 @@ export function StockView({ symbol, rawInput }: { symbol: string | null; rawInpu
   // tab but shows a skeleton: no research request goes out for a fund or an index that has no such tab.
   const tabs = data ? tabsFor(data.quote.quoteType) : QUOTE_TABS;
   const tab = resolveTab(searchParams.get("tab"), tabs);
+  // A link to a tab this quote does not have (FA on a fund) shows the overview and says why.
+  const missingTab = data ? missingQuoteTab(searchParams.get("tab"), tabs) : null;
   const compareParam = searchParams.get("compare");
   const compare = useMemo(() => parseCompare(compareParam, symbol ?? ""), [compareParam, symbol]);
 
@@ -234,6 +238,7 @@ export function StockView({ symbol, rawInput }: { symbol: string | null; rawInpu
           <HeaderSkeleton />
         )}
         {data ? <QuoteTabs tabs={tabs} active={tab} hrefFor={hrefFor} /> : <TabsSkeleton />}
+        {data && missingTab ? <TabLandingNote symbol={data.quote.symbol} tab={missingTab} quoteType={data.quote.quoteType} /> : null}
       </div>
 
       {tab === "overview" ? (

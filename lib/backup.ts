@@ -19,14 +19,18 @@
 //
 // The file is validated with zod (components/data/backup-schema.ts), which is loaded only when a file is checked, so
 // validateBackup is async: the settings menu on every page imports this module for the backup age, and should not
-// download a validator.
+// download a validator. For the same reason the stores of other pages (saved screens, view settings) are loaded when a
+// file is checked (loadRestoreStores), so a restore on /data sanitizes and previews them like the stores it imports.
+//
+// Display preferences are restored only with values this version can show (isKnownPrefValue); the page applies them
+// through the preferences provider (components/data/prefs-sync.ts), as the settings menu does.
 
 import { HOLDINGS_STORAGE_KEY, sanitizeHoldings, type Holdings } from "@/hooks/useHoldings";
 import { sanitizeWatchlist, WATCHLIST_STORAGE_KEY } from "@/hooks/useWatchlist";
 
 import { createLocalStore, registeredLocalStores, STORAGE_PREFIX, type LocalStore } from "./local-store";
 import { NOTES_STORAGE_KEY, sanitizeNotes, type NotesBook, type SymbolNote } from "./notes";
-import { PREF_COOKIE_MAX_AGE } from "./prefs";
+import { DENSITIES, PREF_COOKIE_MAX_AGE, THEMES, UPDOWNS } from "./prefs";
 import { DEFAULT_WATCHLIST, MAX_WATCHLIST } from "./universe";
 
 export const BACKUP_APP = "investseek";
@@ -46,6 +50,19 @@ export type PrefCookieName = (typeof PREF_COOKIE_NAMES)[number];
 export type PrefCookies = Partial<Record<PrefCookieName, string>>;
 /** Preference values are short lowercase words ("zh", "dark", "cb", "compact"), which also keeps them safe in a cookie. */
 export const COOKIE_VALUE = /^[a-z]{1,16}$/;
+
+/** The values this version can show for each preference (lib/prefs.ts). */
+const PREF_VALUES: Readonly<Record<PrefCookieName, readonly string[]>> = {
+  is_lang: ["en", "zh"],
+  is_theme: THEMES,
+  is_updown: UPDOWNS,
+  is_density: DENSITIES,
+};
+
+/** True for a preference value this version can show; a newer version's value (a new theme) is not restored. */
+export function isKnownPrefValue(name: PrefCookieName, value: string): boolean {
+  return PREF_VALUES[name].includes(value);
+}
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
@@ -525,7 +542,34 @@ export interface ParsedBackup {
   diff: Record<RestoreMode, StoreDiff[]>;
 }
 
-/** Validates a backup file and previews both restore modes against the current storage. */
+let restoreStores: Promise<unknown> | null = null;
+
+/**
+ * Registers the stores a restore needs even on a page that never imported them, so their values are sanitized and
+ * diffed like every other registered store: saved screens (lib/screens.ts) and the view settings of the calendar, the
+ * chart, the watchlist and the portfolio page belong to those pages, not to /data. Loaded on demand like the schema,
+ * so the settings menu on every page does not download the screener model. A failed load is tried again with the next
+ * file; until then those keys restore as unknown keys, and their stores still sanitize them when they read them.
+ */
+export function loadRestoreStores(): Promise<void> {
+  restoreStores ??= Promise.all([
+    import("./screens"),
+    import("@/components/calendar/calendar-prefs"),
+    import("@/components/stock/chart-settings"),
+    import("@/components/watchlist/watchlist-view"),
+    import("@/components/portfolio/port-view"),
+  ]).catch((error: unknown) => {
+    restoreStores = null;
+    throw error;
+  });
+  return restoreStores.then(() => undefined);
+}
+
+/**
+ * Validates a backup file and previews both restore modes against the current storage. The default registry gains
+ * the stores of loadRestoreStores first, so the preview and the restore that follows treat saved screens and view
+ * settings as stores.
+ */
 export async function parseBackup(
   text: string,
   current: StorageSnapshot,
@@ -533,6 +577,7 @@ export async function parseBackup(
 ): Promise<{ ok: true; value: ParsedBackup } | { ok: false; error: BackupError }> {
   const result = await validateBackup(text);
   if (!result.ok) return result;
+  await loadRestoreStores().catch(() => undefined);
   const { backup } = result;
   return { ok: true, value: { backup, diff: { merge: diffRestore(current, backup, "merge", stores), replace: diffRestore(current, backup, "replace", stores) } } };
 }
@@ -543,11 +588,11 @@ export interface PrefChange {
   to: string;
 }
 
-/** Preference cookies in the backup that differ from the current ones. */
+/** Preference cookies in the backup that differ from the current ones, leaving out values this version cannot show. */
 export function prefChanges(backup: Backup, current: PrefCookies): PrefChange[] {
   return PREF_COOKIE_NAMES.flatMap((name) => {
     const to = backup.data.cookies[name];
-    return to && to !== current[name] ? [{ name, from: current[name] ?? null, to }] : [];
+    return to && to !== current[name] && isKnownPrefValue(name, to) ? [{ name, from: current[name] ?? null, to }] : [];
   });
 }
 
