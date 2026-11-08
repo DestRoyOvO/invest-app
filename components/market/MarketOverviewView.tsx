@@ -1,31 +1,35 @@
 "use client";
 
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 import { ResearchNote } from "@/components/ai/ResearchNote";
 import { WeekAheadPanel } from "@/components/calendar/WeekAheadPanel";
 import { NewsList } from "@/components/news/NewsList";
 import { MyDayPanel } from "@/components/portfolio/MyDayPanel";
 import { usePrefs } from "@/components/providers/PrefsProvider";
+import { HeatLegend } from "@/components/ui/HeatLegend";
 import { Panel, PanelMeta } from "@/components/ui/Panel";
 import { EmptyState, ErrorState, Skeleton, SkeletonRows, StaleBanner } from "@/components/ui/States";
-import { Tabs } from "@/components/ui/Tabs";
 import { useOverview, useQuotes, useSparklines } from "@/hooks/useApi";
 import { useWatchlist } from "@/hooks/useWatchlist";
 import { formatTime, tpl } from "@/lib/format";
 import type { AnalyzeRequest, Quote } from "@/types/api";
 
+import { BreadthStrip } from "./BreadthStrip";
 import { MarketBoard } from "./MarketBoard";
+import { staleSinceOf } from "./metrics";
+import { MoversPanel } from "./MoversPanel";
 import { QuoteTable } from "./QuoteTable";
 import { SectorBars } from "./SectorBars";
 import { SectorHeatmap } from "./SectorHeatmap";
 
-type MoverTab = "gainers" | "losers" | "mostActive";
+const STARTERS = ["AAPL", "MSFT", "NVDA", "SPY", "QQQ"];
 
 function WatchlistPanel() {
   const { t } = usePrefs();
-  const { symbols, hydrated } = useWatchlist();
+  const { symbols, hydrated, add } = useWatchlist();
   const visible = symbols.slice(0, 10);
   const { data, error, mutate } = useQuotes(visible);
   const { data: sparks } = useSparklines(visible);
@@ -37,8 +41,9 @@ function WatchlistPanel() {
   return (
     <Panel
       title={t.market.watchlist}
+      code="WL"
       actions={
-        <Link href="/watchlist" className="text-xs text-fg-3 hover:text-fg">
+        <Link href="/watchlist" className="flex items-center text-xs text-fg-3 transition-colors hover:text-fg max-sm:min-h-10">
           {t.common.viewAll}
         </Link>
       }
@@ -46,89 +51,95 @@ function WatchlistPanel() {
       {!hydrated || (visible.length > 0 && !data && !error) ? (
         <SkeletonRows rows={5} />
       ) : visible.length === 0 ? (
-        <EmptyState>{t.market.emptyWatchlist}</EmptyState>
+        <EmptyState chips={STARTERS.map((symbol) => ({ label: symbol, onSelect: () => add(symbol) }))} chipsLabel={t.common.add}>
+          {t.market.emptyWatchlist}
+        </EmptyState>
       ) : error && !data ? (
         <ErrorState error={error} onRetry={() => mutate()} compact />
       ) : (
-        <QuoteTable quotes={quotes} columns={["last", "changePct", "trend"]} sparklines={sparks} caption={t.market.watchlist} />
+        <>
+          <StaleBanner show={Boolean(error && data)} since={data?.asOf} />
+          <QuoteTable quotes={quotes} columns={["last", "changePct", "trend"]} sparklines={sparks} caption={t.market.watchlist} />
+        </>
       )}
     </Panel>
   );
 }
 
+/**
+ * The home page, personal first: my day and the week ahead, then the markets board, breadth, the heatmap and the movers
+ * on the left; the watchlist, sectors, headlines and the AI brief on the right. Two independent column stacks
+ * (docs/design-system.md, column flow), so no panel stretches to its neighbour; the heatmap grows into whatever height
+ * the left column has to spare, up to a size that still reads at a glance. The movers table sits in the wide column,
+ * where its names have room. DOM order is the phone order.
+ */
 export function MarketOverviewView() {
   const { t, lang } = usePrefs();
-  const { data, error, isLoading, mutate } = useOverview();
-  const [moverTab, setMoverTab] = useState<MoverTab>("gainers");
+  const { data, error, mutate } = useOverview();
   const marketRequest = useMemo<AnalyzeRequest>(() => ({ kind: "market", lang }), [lang]);
-
-  const movers = data ? (moverTab === "gainers" ? data.movers.gainers : moverTab === "losers" ? data.movers.losers : data.movers.mostActive) : [];
-
-  if (error && !data && !isLoading) {
-    return (
-      <div className="p-px">
-        <div className="bg-panel">
-          <ErrorState error={error} onRetry={() => mutate()} />
-        </div>
-      </div>
-    );
-  }
+  const failed = Boolean(error && !data);
+  const stale = Boolean(error && data) || Boolean(data?.warnings.includes("quotes_stale"));
 
   return (
-    <div className="grid gap-px bg-line p-px lg:grid-cols-6 xl:grid-cols-12">
+    <div className="grid gap-px bg-line p-px xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
       <h1 className="sr-only">{t.market.title}</h1>
 
-      <MyDayPanel className="lg:col-span-6 xl:col-span-8" />
-      <WeekAheadPanel className="lg:col-span-6 xl:col-span-4" />
+      <div className="flex min-w-0 flex-col gap-px">
+        <MyDayPanel />
+        <WeekAheadPanel />
 
-      <Panel
-        title={t.market.board}
-        actions={data ? <PanelMeta>{tpl(t.common.asOf, { time: formatTime(data.asOf, lang) })}</PanelMeta> : null}
-        className="lg:col-span-6 xl:col-span-12"
-      >
-        <StaleBanner show={!!error && !!data} />
-        <MarketBoard board={data?.board} />
-      </Panel>
-
-      <Panel title={t.market.heatmap} actions={<span className="hidden sm:inline"><PanelMeta>{t.market.heatmapHint}</PanelMeta></span>} className="lg:col-span-6 xl:col-span-8">
-        {data ? <SectorHeatmap sectors={data.sectors} /> : <Skeleton className="h-[420px] rounded-none" />}
-      </Panel>
-
-      <div className="grid gap-px bg-line lg:col-span-6 lg:grid-cols-2 xl:col-span-4 xl:grid-cols-1">
-        <Panel title={t.market.sectorPerformance}>{data ? <SectorBars sectors={data.sectors} /> : <SkeletonRows rows={8} />}</Panel>
         <Panel
-          title={t.market.movers}
+          title={t.market.board}
+          code="WEI"
           actions={
-            <Tabs
-              label={t.market.movers}
-              value={moverTab}
-              onChange={setMoverTab}
-              options={[
-                { value: "gainers", label: t.market.gainers },
-                { value: "losers", label: t.market.losers },
-                { value: "mostActive", label: t.market.mostActive },
-              ]}
-            />
+            <>
+              {data ? (
+                <span className="hidden sm:inline">
+                  <PanelMeta>{tpl(t.markets.asOfEt, { time: formatTime(data.asOf, lang, "America/New_York") })}</PanelMeta>
+                </span>
+              ) : null}
+              <Link href="/markets" className="ml-2 flex items-center gap-1 text-xs text-fg-3 transition-colors hover:text-fg max-sm:min-h-10">
+                {t.markets.worldLink}
+                <ArrowRight aria-hidden className="size-3.5" strokeWidth={1.75} />
+              </Link>
+            </>
           }
         >
+          <StaleBanner show={stale} since={staleSinceOf(data)} />
+          {failed ? <ErrorState error={error} onRetry={() => mutate()} compact /> : <MarketBoard board={data?.board} />}
+        </Panel>
+
+        <BreadthStrip breadth={data?.breadth} loading={!data && !error} />
+
+        {/* Fills the spare height of the column, capped at about one screen so the whole map stays in view. */}
+        <Panel title={t.market.heatmap} code="HMAP" actions={<HeatLegend />} className="flex-1 xl:max-h-[min(54rem,calc(100dvh_-_5rem))]" bodyClassName="flex flex-col">
           {data ? (
-            <QuoteTable
-              quotes={movers}
-              columns={moverTab === "mostActive" ? ["last", "changePct", "dollarVolume"] : ["name", "last", "changePct"]}
-              caption={t.market.movers}
-            />
+            <SectorHeatmap sectors={data.sectors} phoneList />
+          ) : failed ? (
+            <ErrorState error={error} onRetry={() => mutate()} />
           ) : (
-            <SkeletonRows rows={6} />
+            <Skeleton className="min-h-[420px] flex-1 rounded-none" />
           )}
         </Panel>
+
+        <MoversPanel movers={data?.movers} loading={!data && !error} />
       </div>
 
-      <Panel title={t.market.news} className="lg:col-span-6 xl:col-span-8">
-        {data ? <NewsList news={data.news} limit={12} twoColumn unavailable={data.warnings.includes("news")} /> : <SkeletonRows rows={8} />}
-      </Panel>
-
-      <div className="grid grid-rows-[auto_1fr] gap-px bg-line lg:col-span-6 xl:col-span-4">
+      <div className="flex min-w-0 flex-col gap-px">
         <WatchlistPanel />
+        {/* Phones get the same list, expandable, in place of the heatmap. */}
+        <Panel title={t.market.sectorPerformance} code="SECT" className="max-sm:hidden">
+          {data ? <SectorBars sectors={data.sectors} /> : failed ? <ErrorState error={error} onRetry={() => mutate()} compact /> : <SkeletonRows rows={8} />}
+        </Panel>
+        <Panel title={t.market.news} code="NEWS">
+          {data ? (
+            <NewsList news={data.news} limit={8} unavailable={data.warnings.includes("news")} />
+          ) : failed ? (
+            <ErrorState error={error} onRetry={() => mutate()} compact />
+          ) : (
+            <SkeletonRows rows={8} />
+          )}
+        </Panel>
         <ResearchNote title={t.market.aiBrief} request={marketRequest} ready={!!data} />
       </div>
     </div>
