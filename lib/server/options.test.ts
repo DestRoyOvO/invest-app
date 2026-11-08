@@ -18,6 +18,7 @@ import { clearCache } from "./cache";
 import {
   atmStraddle,
   getImpliedMove,
+  getImpliedMoveResponse,
   legPrice,
   mapOptionsPayload,
   optionsTtlMs,
@@ -191,11 +192,11 @@ describe("mapOptionsPayload", () => {
   });
 });
 
-describe("getImpliedMove", () => {
+describe("getImpliedMoveResponse", () => {
   it("fetches the expiries, then the first expiry after the report, and caches both", async () => {
     mocks.options.mockImplementation(async (_symbol: string, query: { date?: Date }) => (query.date ? NOV20 : NEAREST));
     expect(uncachedImpliedMoveCalls("NVDA")).toBe(2);
-    const answer = await getImpliedMove("NVDA");
+    const answer = await getImpliedMoveResponse("NVDA");
     expect(answer).toMatchObject({ available: true });
     const move = moveOf(answer);
     expect(mocks.options).toHaveBeenCalledTimes(2);
@@ -217,7 +218,7 @@ describe("getImpliedMove", () => {
     expect(move.move).toBeCloseTo(21 / 186.64, 10);
 
     expect(uncachedImpliedMoveCalls("NVDA")).toBe(0);
-    await getImpliedMove("NVDA");
+    await getImpliedMoveResponse("NVDA");
     expect(mocks.options).toHaveBeenCalledTimes(2);
     expect(mocks.getQuote).not.toHaveBeenCalled();
   });
@@ -226,7 +227,7 @@ describe("getImpliedMove", () => {
     // Reported before Monday's open: Monday's own expiry prices it.
     const early = { ...NEAREST, quote: quote({ earningsTimestamp: new Date("2026-11-09T12:00:00.000Z"), earningsTimestampStart: undefined, earningsTimestampEnd: undefined }) };
     mocks.options.mockResolvedValue(early);
-    const move = moveOf(await getImpliedMove("NVDA"));
+    const move = moveOf(await getImpliedMoveResponse("NVDA"));
     expect(mocks.options).toHaveBeenCalledTimes(1);
     expect(move).toMatchObject({ expiry: "2026-11-09T00:00:00.000Z", report: { timing: "pre" }, daysToExpiry: 2 });
     expect(move.move).toBeCloseTo((3.02 + 3.75) / 186.64, 10);
@@ -235,17 +236,17 @@ describe("getImpliedMove", () => {
   it("says why a known symbol has no implied move: no options, no report on file, or a report over 30 days out", async () => {
     const asOf = new Date(NOW).toISOString();
     mocks.options.mockResolvedValueOnce({ underlyingSymbol: "0700.HK", expirationDates: [], strikes: [], quote: { symbol: "0700.HK", regularMarketPrice: 419.8 }, options: [] });
-    expect(await getImpliedMove("0700.HK")).toEqual({ symbol: "0700.HK", asOf, available: false, reason: "no_options" });
+    expect(await getImpliedMoveResponse("0700.HK")).toEqual({ symbol: "0700.HK", asOf, available: false, reason: "no_options" });
     expect(uncachedImpliedMoveCalls("0700.HK")).toBe(0);
 
     // A fund, or Berkshire the day after its Saturday report: options, but no upcoming report in the quote.
     const noReport = { ...NEAREST, quote: quote({ symbol: "SPY", earningsTimestamp: undefined, earningsTimestampStart: undefined, earningsTimestampEnd: undefined }) };
     mocks.options.mockResolvedValueOnce(noReport);
-    expect(await getImpliedMove("SPY")).toMatchObject({ available: false, reason: "no_report" });
+    expect(await getImpliedMoveResponse("SPY")).toMatchObject({ available: false, reason: "no_report" });
 
     const far = { ...NEAREST, quote: quote({ earningsTimestamp: new Date("2027-01-28T21:00:00.000Z"), earningsTimestampStart: undefined, earningsTimestampEnd: undefined }) };
     mocks.options.mockResolvedValueOnce(far);
-    expect(await getImpliedMove("AAPL")).toMatchObject({ available: false, reason: "report_far" });
+    expect(await getImpliedMoveResponse("AAPL")).toMatchObject({ available: false, reason: "report_far" });
     expect(mocks.options).toHaveBeenCalledTimes(3);
     expect(uncachedImpliedMoveCalls("AAPL")).toBe(0);
     expect(mocks.getQuote).not.toHaveBeenCalled();
@@ -254,16 +255,16 @@ describe("getImpliedMove", () => {
   it("says so when no listed expiry settles after the report", async () => {
     const short = { ...NEAREST, expirationDates: EXPIRIES.slice(0, 3), quote: quote() };
     mocks.options.mockResolvedValueOnce(short);
-    expect(await getImpliedMove("NVDA")).toMatchObject({ available: false, reason: "no_expiry" });
+    expect(await getImpliedMoveResponse("NVDA")).toMatchObject({ available: false, reason: "no_expiry" });
   });
 
   it("tells an unknown symbol (null) from a known one without options by its quote", async () => {
     mocks.options.mockResolvedValue(undefined);
-    expect(await getImpliedMove("ZZZZQX")).toBeNull();
+    expect(await getImpliedMoveResponse("ZZZZQX")).toBeNull();
     expect(mocks.getQuote).toHaveBeenCalledWith("ZZZZQX");
 
     mocks.getQuote.mockResolvedValueOnce({ symbol: "BRK-A" });
-    expect(await getImpliedMove("BRK-A")).toMatchObject({ available: false, reason: "no_options" });
+    expect(await getImpliedMoveResponse("BRK-A")).toMatchObject({ available: false, reason: "no_options" });
 
     // With the answer cached, only the quote can cost a call.
     expect(uncachedImpliedMoveCalls("ZZZZQX")).toBe(1);
@@ -274,7 +275,27 @@ describe("getImpliedMove", () => {
   it("reports unusable quotes instead of an implausible straddle built from placeholders", async () => {
     const junk = payload("2026-11-20", [contract("C", "2026-11-20", 187.5, 150, 0, 0)], [contract("P", "2026-11-20", 187.5, 140, 0, 0)]);
     mocks.options.mockImplementation(async (_symbol: string, query: { date?: Date }) => (query.date ? junk : NEAREST));
-    expect(await getImpliedMove("NVDA")).toMatchObject({ symbol: "NVDA", available: false, reason: "no_quotes" });
+    expect(await getImpliedMoveResponse("NVDA")).toMatchObject({ symbol: "NVDA", available: false, reason: "no_quotes" });
+  });
+});
+
+describe("getImpliedMove", () => {
+  it("gives the move alone, and null when there is none or the symbol is unknown", async () => {
+    const noReport = { ...NEAREST, quote: quote({ symbol: "SPY", earningsTimestamp: undefined, earningsTimestampStart: undefined, earningsTimestampEnd: undefined }) };
+    mocks.options.mockImplementation(async (symbol: string, query: { date?: Date }) => {
+      if (symbol === "ZZZZQX") return undefined;
+      if (symbol === "SPY") return noReport;
+      return query.date ? NOV20 : NEAREST;
+    });
+    const move = await getImpliedMove("NVDA");
+    expect(move).toMatchObject({ symbol: "NVDA", expiry: "2026-11-20T00:00:00.000Z", strike: 187.5, price: 186.64 });
+    expect(move?.move).toBeCloseTo(21 / 186.64, 10);
+    // The same cached answer as the route's.
+    expect(await getImpliedMoveResponse("NVDA")).toMatchObject({ available: true, strike: 187.5 });
+    expect(mocks.options).toHaveBeenCalledTimes(2);
+
+    expect(await getImpliedMove("SPY")).toBeNull();
+    expect(await getImpliedMove("ZZZZQX")).toBeNull();
   });
 });
 

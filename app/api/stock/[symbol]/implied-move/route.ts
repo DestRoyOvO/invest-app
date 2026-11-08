@@ -1,6 +1,6 @@
 import { extraUnits } from "@/lib/server/charging";
 import { jsonError, jsonOk, upstreamError } from "@/lib/server/http";
-import { getImpliedMove, uncachedImpliedMoveCalls } from "@/lib/server/options";
+import { getImpliedMoveResponse, uncachedImpliedMoveCalls } from "@/lib/server/options";
 import { chargePublicRequest, limitPublicRequest } from "@/lib/server/request-guard";
 import { normalizeSymbol } from "@/lib/symbols";
 
@@ -33,7 +33,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ symbol: str
   if (charged) return charged;
 
   try {
-    const data = await getImpliedMove(symbol);
+    const data = await getImpliedMoveResponse(symbol);
     if (!data) return jsonError(404, "not_found", `Unknown symbol ${symbol}.`);
     return jsonOk(data, { cacheSeconds: CACHE_SECONDS });
   } catch (error) {

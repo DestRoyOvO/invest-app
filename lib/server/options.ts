@@ -220,10 +220,10 @@ async function fetchOptions(symbol: string, expiry?: string): Promise<unknown> {
 }
 
 /**
- * Uncached Yahoo calls behind getImpliedMove(symbol), for charging the public route: none while the head and the target
- * chain are cached (or the symbol has no options or no report soon), one for a missing chain or for the quote that
- * tells an unknown symbol from one without options, and two (the head and, when the nearest expiry does not qualify,
- * the target chain or that quote) while the head is unknown.
+ * Uncached Yahoo calls behind getImpliedMoveResponse(symbol), for charging the public route: none while the head and
+ * the target chain are cached (or the symbol has no options or no report soon), one for a missing chain or for the
+ * quote that tells an unknown symbol from one without options, and two (the head and, when the nearest expiry does not
+ * qualify, the target chain or that quote) while the head is unknown.
  */
 export function uncachedImpliedMoveCalls(symbol: string, now = Date.now()): number {
   if (!isFresh(headKey(symbol))) return 2;
@@ -241,10 +241,11 @@ function unavailable(symbol: string, reason: ImpliedMoveReason, now: number): Im
 
 /**
  * Implied move into the next report, or why there is none (see targetExpiry; no_quotes when the chain gives no usable
- * straddle). Null only for a symbol Yahoo does not know: an options answer without the symbol's quote is checked
- * against the quote itself, so a known symbol without listed options still gets its reason.
+ * straddle): the answer of GET /api/stock/[symbol]/implied-move. Null only for a symbol Yahoo does not know: an options
+ * answer without the symbol's quote is checked against the quote itself, so a known symbol without listed options still
+ * gets its reason.
  */
-export async function getImpliedMove(symbol: string): Promise<ImpliedMoveResponse | null> {
+export async function getImpliedMoveResponse(symbol: string): Promise<ImpliedMoveResponse | null> {
   const now = Date.now();
   const options = { ttlMs: optionsTtlMs(now), staleMs: STALE_MS };
   const head = await cached(headKey(symbol), options, async () => {
@@ -262,4 +263,13 @@ export async function getImpliedMove(symbol: string): Promise<ImpliedMoveRespons
   });
   const move = chain ? impliedMoveFrom(symbol, target, chain, head, now) : null;
   return move ? { ...move, available: true } : unavailable(symbol, "no_quotes", now);
+}
+
+/**
+ * Implied move into the next report, or null when there is none for any reason (getImpliedMoveResponse says which) or
+ * the symbol is unknown: for server code that only needs the number.
+ */
+export async function getImpliedMove(symbol: string): Promise<ImpliedMove | null> {
+  const answer = await getImpliedMoveResponse(symbol);
+  return answer?.available ? answer : null;
 }
