@@ -106,7 +106,7 @@ export function CsvImportPanel() {
   return (
     <Panel id="import-csv" title={t.data.csv.title} actions={file ? <PanelMeta>{file.name}</PanelMeta> : null}>
       <div
-        className={cn("space-y-3 px-3 py-3 transition-colors", dragging && "bg-hover")}
+        className={cn("space-y-3 px-3 py-3 transition-colors", dragging && "ring-1 ring-accent ring-inset")}
         onDragOver={(event) => {
           event.preventDefault();
           setDragging(true);
