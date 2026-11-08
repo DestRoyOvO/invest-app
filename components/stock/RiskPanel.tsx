@@ -45,7 +45,8 @@ function RangeBand({ risk, t, lang }: { risk: SignalRisk; t: Messages; lang: Lan
         <div aria-hidden className="relative h-3">
           <span className="absolute inset-y-0 bg-line-2" style={{ left: `${layout.outer.left}%`, width: `${layout.outer.width}%` }} />
           <span className="absolute inset-y-0 bg-fg-3" style={{ left: `${layout.inner.left}%`, width: `${layout.inner.width}%` }} />
-          <span className="absolute -inset-y-1 w-0.5 -translate-x-1/2 bg-accent" style={{ left: `${layout.marker}%` }} />
+          {/* A 1px panel halo keeps the accent marker apart from the ±1σ band it sits on (accent on fg-3 is about 1.1:1). */}
+          <span className="absolute -inset-y-1 w-0.5 -translate-x-1/2 bg-accent shadow-[0_0_0_1px_var(--panel)]" style={{ left: `${layout.marker}%` }} />
         </div>
       ) : null}
       <dl className="mt-2.5 grid grid-cols-5 gap-1 text-center">

@@ -3,8 +3,19 @@
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 
-import { backtestTiming, isConcentrated, rateDomain, rsiState, scoreText, selectionTone, symmetricDomain } from "@/components/lab/evidence";
+import {
+  backtestTiming,
+  COMMON_READING_DATE_SHARE,
+  EPISODE_SHARE_LIMIT,
+  isConcentrated,
+  rateDomain,
+  rsiState,
+  scoreText,
+  selectionTone,
+  symmetricDomain,
+} from "@/components/lab/evidence";
 import { formatIc, formatP, formatT, pct, yearSpan } from "@/components/lab/stats-format";
+import { keepSymbols } from "@/components/lab/text";
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Badge } from "@/components/ui/Badge";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
@@ -124,10 +135,14 @@ function SelectionCell({ row, tone, domain, t }: { row: LabelOutcome; tone: "up"
   });
   return (
     <span className="inline-flex items-center justify-end gap-2">
+      {/* The trigger is a tap target too: 24px tall on desktop, 40px on phones (the row grows with it). */}
       <Tooltip label={raw}>
         <button
           type="button"
-          className={cn("num rounded-xs focus-visible:outline-offset-[-2px]", tone === "up" ? "text-up" : tone === "down" ? "text-down" : undefined)}
+          className={cn(
+            "num min-h-6 rounded-xs focus-visible:outline-offset-[-2px] max-sm:min-h-10 max-sm:min-w-10",
+            tone === "up" ? "text-up" : tone === "down" ? "text-down" : undefined,
+          )}
         >
           {pct(row.selection, 2, true)}
         </button>
@@ -140,7 +155,6 @@ function SelectionCell({ row, tone, domain, t }: { row: LabelOutcome; tone: "up"
         min={domain[0]}
         max={domain[1]}
         label={tpl(tr.whisker, { reading: t.signal.codes[row.code], value: pct(row.selection, 2, true), lo: pct(interval?.[0], 2, true), hi: pct(interval?.[1], 2, true) })}
-        className="hidden sm:inline-block"
       />
     </span>
   );
@@ -179,7 +193,8 @@ function TrackRecord({ horizon, code, t, lang }: { horizon: HorizonOutcome; code
       key: "episodes",
       header: tr.episodes,
       align: "right",
-      width: "5.5rem",
+      // Fits "41（13%）" with the Chinese full-width parentheses.
+      width: "6rem",
       hideBelow: "sm",
       render: (row) => <span className="num">{tpl(tr.episodeCell, { n: formatInteger(row.episodes, lang), share: pct(row.largestEpisodeShare, 0) })}</span>,
     },
@@ -240,7 +255,7 @@ function Backtest({ results, costBps, t, lang }: { results: BacktestResult[]; co
       render: (r) => <span className="num text-fg-3">{pct(r.baselineAvgReturn, 2, true)}</span>,
     },
     { key: "edge", header: b.cols.edge, align: "right", width: "5.5rem", render: (r) => returnCell(r.edge, r) },
-    { key: "p", header: b.cols.p, align: "right", width: "4rem", render: (r) => <span className="num text-fg-2">{formatP(r.pValue)}</span> },
+    { key: "p", header: keepSymbols(b.cols.p), align: "right", width: "4rem", render: (r) => <span className="num text-fg-2">{formatP(r.pValue)}</span> },
   ];
   return (
     <div className="border-t border-line">
@@ -281,7 +296,7 @@ function Evidence({ report, code, t, lang }: { report: SignalReport; code: Signa
           <TrackRecord horizon={horizon} code={code} t={t} lang={lang} />
           <div className="space-y-1 px-3 py-2 text-xs text-fg-3">
             <p>{tpl(tr.foot, { days: horizon.days, n: evaluation.universe, from: evaluation.from, to: evaluation.to })}</p>
-            <p>{tr.colors}</p>
+            <p>{tpl(tr.colors, { limit: pct(EPISODE_SHARE_LIMIT, 0), share: pct(COMMON_READING_DATE_SHARE, 0) })}</p>
             <p className="text-fg-2">
               {tpl(tr.holdout, {
                 years: yearSpan(holdout.period.from, holdout.period.to),
