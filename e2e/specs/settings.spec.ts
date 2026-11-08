@@ -85,7 +85,7 @@ test.describe("language", () => {
     const zh = MESSAGES.zh;
     await app.goto("/notes");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(MESSAGES.en.notes.title);
-    expect(await page.locator("html").getAttribute("lang")).toBe("en");
+    await expect(page.locator("html")).toHaveAttribute("lang", "en");
 
     await choose(page, "Language", "中文");
     await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");

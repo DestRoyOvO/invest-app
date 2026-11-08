@@ -270,10 +270,7 @@ test.describe("the notes list", () => {
     // Stored in another order, so the list's order is its own.
     const book = Object.fromEntries([...plan].reverse().map((row) => [row.symbol, row.note]));
     await app.seedStorage({ watchlist: ["NVDA"], notes: book });
-    const quotes = await listQuotes(
-      request,
-      plan.map((row) => row.symbol),
-    );
+    const quotes = await listQuotes(request, plan.map((row) => row.symbol));
 
     await app.goto("/notes");
     const notesPanel = panel(page, "Notes");
@@ -283,10 +280,10 @@ test.describe("the notes list", () => {
     await expect(symbols).toHaveText(plan.map((row) => row.symbol));
     // Three reviews are due: the overdue ones and today's.
     await expect(notesPanel.getByText("6 notes · 3 due for review", { exact: true })).toBeVisible();
-    const reviewText = (days: number | null) => (days === null ? "—" : days === 0 ? "Due today" : reviewWords(days));
     for (const row of plan) {
       const shown = rows.filter({ hasText: row.note.thesis });
-      await expect(shown).toContainText(reviewText(row.days));
+      if (row.days === null) await expect(shown).not.toContainText(/overdue|Due today|in \d+ days/);
+      else await expect(shown).toContainText(row.days === 0 ? "Due today" : reviewWords(row.days));
       const last = quotes.get(row.symbol)?.price;
       if (!last) throw new Error(`No quote for ${row.symbol}`);
       if (row.note.target !== null) await expect(shown).toContainText(listedLevel(row.note.target, last));
