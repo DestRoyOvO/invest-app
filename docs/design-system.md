@@ -544,11 +544,11 @@ focus) and are announced (under `aria-modal`, assistive technology may ignore a 
 side panel the strip sits between the content and the footer, and the content gives up the room at its bottom edge.
 In a bottom sheet it sits at the top (after the content in the reading and Tab order), and the sheet grows past 85dvh
 into the backdrop while it shows toasts, up to 2.75rem below the top of the screen. Once a sheet is at that limit, a
-toast that comes or goes moves the top edge of the content, and the drawer scrolls the content by as much, so what is
-on screen stays where it is. If the strip takes the room where the focused control sat, the content scrolls just
-enough to show it again. The outlet's `watch` does this: the provider calls it before and after every change of the
-toasts (`createContentKeeper` in `Drawer.tsx`, unit tested). Hover and focus pause the toasts, Undo and the focus
-return work as at the screen's edge. A toast is announced once, where it first shows: toasts that move as a drawer
+toast that comes or goes moves the top edge of the content, and the drawer scrolls the content by as much (as far as
+its scroll range allows), so what is on screen stays where it is. If the strip takes the room where the focused control
+sat, the content scrolls just enough to show it again. The outlet's `watch` does this: the provider calls it before
+and after every change of the toasts (`createContentKeeper` in `Drawer.tsx`, unit tested). Hover and focus pause the
+toasts, Undo and the focus return work as at the screen's edge. A toast is announced once, where it first shows: toasts that move as a drawer
 opens or closes sit beside the live region of their new place, not in it (`ToastStacks`). The live region at the
 screen's edge stays mounted meanwhile, so a toast shown as a drawer closes (Save, Delete) lands in a live region that
 already existed and is announced. The specs check what reaches a screen reader with `watchToasts`
