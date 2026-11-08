@@ -7,7 +7,7 @@ import { META_STORAGE_KEY } from "@/lib/backup";
 import { NOTES_STORAGE_KEY } from "@/lib/notes";
 import { DEFAULT_WATCHLIST } from "@/lib/universe";
 
-import { cellOf, chooseFile, dataRows, downloadFrom, fetchQuotes, parseCsvText, readStored, rowOf, storedKeys, toast, valueHoldings } from "../support/personal";
+import { BOM, chooseFile, dataRows, downloadFrom, expectCells, fetchQuotes, parseCsvText, readStored, rowOf, storedKeys, toast, valueHoldings } from "../support/personal";
 import { SAMPLE_DATA } from "../support/routes";
 import { expect, test, type Locator, type Page } from "../support/test";
 
@@ -23,6 +23,20 @@ const FIXTURES = path.join(__dirname, "..", "fixtures", "personal");
 function fixture(name: string): string {
   return path.join(FIXTURES, name);
 }
+
+/**
+ * A backup made on another device (backup.json) and this browser's data before it is restored. This browser: three
+ * symbols, two positions and a note newer than the file's. The file: AAPL, AMZN and GOOGL, positions in AAPL and GOOGL,
+ * an older AAPL note, an MSFT note and the compact density.
+ */
+const ELSEWHERE = (() => {
+  const file = JSON.parse(readFileSync(fixture("backup.json"), "utf8")) as { data: { storage: Record<string, Record<string, unknown> | string[]> } };
+  return {
+    local: { watchlist: ["NVDA", "AAPL", "MSFT"], holdings: { AAPL: { shares: 10, cost: 150 }, MSFT: { shares: 5, cost: 300 } }, notes: SAMPLE_DATA.notes },
+    file,
+    fileNotes: file.data.storage[NOTES_STORAGE_KEY] as Record<string, unknown>,
+  };
+})();
 
 function panel(page: Page, title: string): Locator {
   return page.getByRole("region", { name: title, exact: true }).first();
@@ -52,11 +66,7 @@ async function expectStores(page: Page, expected: { watchlist: readonly string[]
 
 /** One row of the restore preview: what the restore adds, changes and removes in a store, and the symbols involved. */
 async function expectDiff(table: Locator, store: string, counts: { added: number; changed: number; removed: number }, details: string): Promise<void> {
-  const row = rowOf(table, store);
-  await expect(await cellOf(table, row, "Added")).toHaveText(String(counts.added));
-  await expect(await cellOf(table, row, "Changed")).toHaveText(String(counts.changed));
-  await expect(await cellOf(table, row, "Removed")).toHaveText(String(counts.removed));
-  await expect(await cellOf(table, row, "Details")).toHaveText(details);
+  await expectCells(table, rowOf(table, store), { Added: String(counts.added), Changed: String(counts.changed), Removed: String(counts.removed), Details: details });
 }
 
 function escapeRegExp(text: string): string {
@@ -68,15 +78,18 @@ function escapeRegExp(text: string): string {
  * rewritten symbol is followed by what the file said ("BRK-B from BRK.B"), set off by a margin rather than a space.
  */
 async function expectReviewLine(table: Locator, line: number, expected: { symbol: string; shares?: string; cost?: string; status: string }): Promise<void> {
-  const row = rowOf(table, String(line));
-  const symbol = new RegExp(`^${escapeRegExp(expected.symbol).replace(" from ", "\\s*from ")}$`);
-  await expect(await cellOf(table, row, "Symbol")).toHaveText(symbol, { useInnerText: true });
-  if (expected.shares !== undefined) await expect(await cellOf(table, row, "Shares")).toHaveText(expected.shares);
-  if (expected.cost !== undefined) await expect(await cellOf(table, row, "Avg cost")).toHaveText(expected.cost);
-  await expect(await cellOf(table, row, "Status")).toHaveText(expected.status);
+  await expectCells(table, rowOf(table, String(line)), {
+    Symbol: new RegExp(`^${escapeRegExp(expected.symbol).replace(" from ", "\\s*from ")}$`),
+    ...(expected.shares === undefined ? {} : { Shares: expected.shares }),
+    ...(expected.cost === undefined ? {} : { "Avg cost": expected.cost }),
+    Status: expected.status,
+  });
 }
 
-/** The selected column of a mapping field in the CSV import. */
+/**
+ * The selected column of a mapping field in the CSV import. The options' values are column indexes, so the selected
+ * option is read by its label (:checked is how CSS names a selected option).
+ */
 function mappedColumn(csv: Locator, field: string): Locator {
   return csv.getByRole("combobox", { name: field, exact: true }).locator("option:checked");
 }
@@ -88,25 +101,38 @@ test.describe("backup and restore", () => {
     await app.seedStorage(SAMPLE_DATA);
     await app.goto("/data");
     const backup = panel(page, "Backup and restore");
-    await expect(backup).toContainText("No backup yet");
+    const exportButton = backup.getByRole("button", { name: "Export backup" });
+    // Once the page has read this browser's storage (the Stored panel lists it), the backup panel names no last backup,
+    // since none was made here (whatever words it uses for that).
+    const stored = panel(page, "Stored in this browser").getByRole("table");
+    await expect(rowOf(stored, "Watchlist")).toBeVisible();
+    await expect(backup).not.toContainText("Last backup");
     const date = await browserDate(page);
     const now = await page.evaluate(() => Date.now());
 
-    const saved = await downloadFrom(page, backup.getByRole("button", { name: "Export backup" }), (name) => test.info().outputPath(name));
+    const saved = await downloadFrom(page, exportButton, (name) => test.info().outputPath(name));
     expect(saved.download.suggestedFilename()).toBe(`investseek-backup-${date}.json`);
-    const file = JSON.parse(saved.text) as { app: string; schema: number; exportedAt: string; data: { storage: Record<string, unknown>; text: object; cookies: object } };
+    type BackupFile = { app: string; schema: number; exportedAt: string; data: { storage: Record<string, unknown>; text: object; cookies: object } };
+    const file = JSON.parse(saved.text) as BackupFile;
     expect(file).toMatchObject({ app: "investseek", schema: 1, data: { cookies: { is_theme: "light" } } });
     expect(file.data.text).toEqual({});
     expect(Math.abs(Date.parse(file.exportedAt) - now)).toBeLessThan(60_000);
-    // Each store's own value, as the stores keep it; the browser's backup bookkeeping is not part of the file.
-    expect(Object.keys(file.data.storage).sort()).toEqual([HOLDINGS_STORAGE_KEY, NOTES_STORAGE_KEY, WATCHLIST_STORAGE_KEY].sort());
+    // Each store's own value, as the stores keep it.
+    const storeKeys = [HOLDINGS_STORAGE_KEY, NOTES_STORAGE_KEY, WATCHLIST_STORAGE_KEY].sort();
+    expect(Object.keys(file.data.storage).sort()).toEqual(storeKeys);
     expect(file.data.storage[WATCHLIST_STORAGE_KEY]).toEqual(SAMPLE_DATA.watchlist);
     expect(file.data.storage[HOLDINGS_STORAGE_KEY]).toEqual(SAMPLE_DATA.holdings);
     expect(file.data.storage[NOTES_STORAGE_KEY]).toEqual(SAMPLE_DATA.notes);
 
+    // The export is recorded in this browser's backup bookkeeping.
     await expect(toast(page, `Saved investseek-backup-${date}.json.`)).toBeVisible();
     await expect(backup).toContainText("Last backup today");
     await expect.poll(async () => Date.parse((await readStored<{ lastBackupAt: string }>(page, META_STORAGE_KEY))?.lastBackupAt ?? "") - now).toBeLessThan(60_000);
+
+    // That bookkeeping belongs to this browser: the next backup leaves it out, as the first one had nothing to leave out.
+    const again = JSON.parse((await downloadFrom(page, exportButton, (name) => test.info().outputPath(`again-${name}`))).text) as BackupFile;
+    expect(Object.keys(again.data.storage).sort()).toEqual(storeKeys);
+    expect(again.data.text).toEqual({});
   });
 
   test("clears all data after its confirmation and brings it back from the exported backup", async ({ page, app }) => {
@@ -161,19 +187,14 @@ test.describe("backup and restore", () => {
     await expect(backup.getByRole("status").filter({ hasText: "Restored from" })).toContainText(`Restored from ${fileName}: ${summary}.`);
     await expectStores(page, SAMPLE_DATA);
     const stored = panel(page, "Stored in this browser").getByRole("table");
-    await expect(await cellOf(stored, rowOf(stored, "Watchlist"), "Items")).toHaveText(String(SAMPLE_DATA.watchlist.length));
-    await expect(await cellOf(stored, rowOf(stored, "Positions"), "Items")).toHaveText(String(positions.length));
-    await expect(await cellOf(stored, rowOf(stored, "Notes"), "Items")).toHaveText(String(notes.length));
+    await expectCells(stored, rowOf(stored, "Watchlist"), { Items: String(SAMPLE_DATA.watchlist.length) });
+    await expectCells(stored, rowOf(stored, "Positions"), { Items: String(positions.length) });
+    await expectCells(stored, rowOf(stored, "Notes"), { Items: String(notes.length) });
   });
 
-  test("restores a backup by merge or by replace as its preview says, and Undo takes a restore back", async ({ page, app }) => {
+  test("merges a backup made elsewhere as its preview says, and Undo takes the restore back", async ({ page, app }) => {
     test.skip(app.isPhone, "The same panel on phones.");
-    // This browser: three symbols, two positions and a note newer than the file's. The file (made on another device):
-    // AAPL, AMZN and GOOGL, positions in AAPL and GOOGL, an older AAPL note, an MSFT note and the compact density.
-    const local = { watchlist: ["NVDA", "AAPL", "MSFT"], holdings: { AAPL: { shares: 10, cost: 150 }, MSFT: { shares: 5, cost: 300 } }, notes: SAMPLE_DATA.notes };
-    const file = JSON.parse(readFileSync(fixture("backup.json"), "utf8")) as { data: { storage: Record<string, Record<string, unknown> | string[]> } };
-    const fileNotes = file.data.storage[NOTES_STORAGE_KEY] as Record<string, unknown>;
-    await app.seedStorage(local);
+    await app.seedStorage(ELSEWHERE.local);
     await app.goto("/data");
     const before = await storageSnapshot(page);
     const backup = panel(page, "Backup and restore");
@@ -194,15 +215,7 @@ test.describe("backup and restore", () => {
     await expect(settings).toBeChecked();
     await expect(settings).toHaveAccessibleName(/Density: Comfortable to Compact$/);
 
-    // Replace: this browser becomes the file.
-    await mode.getByRole("radio", { name: "Replace" }).click();
-    await expect(backup).toContainText("Makes this browser match the file. Anything that is not in the file is removed.");
-    await expectDiff(preview, "Watchlist", { added: 2, changed: 0, removed: 2 }, "+AMZN +GOOGL −NVDA −MSFT");
-    await expectDiff(preview, "Positions", { added: 1, changed: 1, removed: 1 }, "+GOOGL ~AAPL −MSFT");
-    await expectDiff(preview, "Notes", { added: 1, changed: 1, removed: 0 }, "+MSFT ~AAPL");
-
     // Apply the merge, with the display settings.
-    await mode.getByRole("radio", { name: "Merge" }).click();
     await backup.getByRole("button", { name: "Restore", exact: true }).click();
     await expect(backup).toContainText("Merge into this browser: 4 added, 1 changed, 0 removed.");
     await backup.getByRole("button", { name: "Restore now" }).click();
@@ -211,7 +224,7 @@ test.describe("backup and restore", () => {
     await expectStores(page, {
       watchlist: ["NVDA", "AAPL", "MSFT", "AMZN", "GOOGL"],
       holdings: { AAPL: { shares: 12, cost: 160 }, MSFT: { shares: 5, cost: 300 }, GOOGL: { shares: 4, cost: 120 } },
-      notes: { AAPL: SAMPLE_DATA.notes.AAPL, MSFT: fileNotes.MSFT },
+      notes: { AAPL: SAMPLE_DATA.notes.AAPL, MSFT: ELSEWHERE.fileNotes.MSFT },
     });
     await expect(page.locator("html")).toHaveAttribute("data-density", "compact");
 
@@ -220,18 +233,34 @@ test.describe("backup and restore", () => {
     await expect(toast(page, "Restore undone.")).toBeVisible();
     await expect.poll(() => storageSnapshot(page)).toEqual(before);
     await expect(page.locator("html")).toHaveAttribute("data-density", "comfortable");
+  });
 
-    // Replace, after its confirmation.
+  test("replaces this browser's data with a backup made elsewhere after its confirmation, as its preview says", async ({ page, app }) => {
+    test.skip(app.isPhone, "The same panel on phones.");
+    await app.seedStorage(ELSEWHERE.local);
+    await app.goto("/data");
+    const backup = panel(page, "Backup and restore");
     await chooseFile(page, backup.getByRole("button", { name: "Restore from file" }), fixture("backup.json"));
+    await expect(backup).toContainText("backup.json");
+
+    // Replace: this browser becomes the file.
+    const mode = backup.getByRole("radiogroup", { name: "How to restore" });
     await mode.getByRole("radio", { name: "Replace" }).click();
+    await expect(backup).toContainText("Makes this browser match the file. Anything that is not in the file is removed.");
+    const preview = backup.getByRole("table");
+    await expectDiff(preview, "Watchlist", { added: 2, changed: 0, removed: 2 }, "+AMZN +GOOGL −NVDA −MSFT");
+    await expectDiff(preview, "Positions", { added: 1, changed: 1, removed: 1 }, "+GOOGL ~AAPL −MSFT");
+    await expectDiff(preview, "Notes", { added: 1, changed: 1, removed: 0 }, "+MSFT ~AAPL");
+
+    // After its confirmation, which repeats what changes.
     await backup.getByRole("button", { name: "Restore", exact: true }).click();
     await expect(backup).toContainText("Replace this browser's data: 4 added, 2 changed, 3 removed.");
     await backup.getByRole("button", { name: "Restore now" }).click();
-    await expect(result).toContainText("Restored from backup.json: 4 added, 2 changed, 3 removed.");
+    await expect(backup.getByRole("status").filter({ hasText: "Restored from" })).toContainText("Restored from backup.json: 4 added, 2 changed, 3 removed.");
     await expectStores(page, {
-      watchlist: file.data.storage[WATCHLIST_STORAGE_KEY] as string[],
-      holdings: file.data.storage[HOLDINGS_STORAGE_KEY] as object,
-      notes: fileNotes,
+      watchlist: ELSEWHERE.file.data.storage[WATCHLIST_STORAGE_KEY] as string[],
+      holdings: ELSEWHERE.file.data.storage[HOLDINGS_STORAGE_KEY] as object,
+      notes: ELSEWHERE.fileNotes,
     });
   });
 
@@ -386,7 +415,7 @@ test.describe("CSV export", () => {
     // Positions: largest value first, with the quote's last price and what it makes of the shares and cost.
     const positions = await downloadFrom(page, exports.getByRole("button", { name: "Download Positions as CSV" }), (name) => test.info().outputPath(name));
     expect(positions.download.suggestedFilename()).toBe(`investseek-positions-${date}.csv`);
-    expect(positions.text.startsWith("﻿"), "a byte order mark for Excel").toBe(true);
+    expect(positions.text.startsWith(BOM), "a byte order mark for Excel").toBe(true);
     const [head, ...rows] = parseCsvText(positions.text).filter((row) => row.some((cell) => cell !== ""));
     expect(head).toEqual(["Symbol", "Shares", "Average cost", "Currency", "Last", "Value", "Weight %", "Unrealized P&L", "Unrealized P&L %"]);
     expect(rows.map((row) => row[0])).toEqual(valued.rows.map((row) => row.symbol));
