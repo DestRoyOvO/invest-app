@@ -1,13 +1,17 @@
-import { mkdirSync } from "node:fs";
+import { closeSync, mkdirSync, openSync, readSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { request, type FullConfig } from "@playwright/test";
 
-import { BASE_URL, E2E_NOW, gitHead, PINNED_NOW, REUSE, STORAGE_STATE, TEST_PASSWORD } from "./env";
+import { BASE_URL, E2E_NOW, gitHead, NO_NETWORK_LOG, PINNED_NOW, REUSE, STORAGE_STATE, TEST_PASSWORD } from "./env";
 
 // Checks that the app on the port is the server this suite tests, then signs in once through the real sign-in API and
 // stores the session cookie as the browser state every spec starts from (specs that need to be signed out open a
 // fresh context with an empty state).
+//
+// At the end of the run (the teardown this setup returns, which runs while the servers are still up), the run fails if
+// the app server refused an outbound connection meanwhile: the no-network preload appends each refusal to
+// NO_NETWORK_LOG, and only the lines written since this setup count, so a reused server's earlier runs do not.
 //
 // The production build names the cookie __Host-is_session and marks it Secure. Browsers treat http://127.0.0.1 as a
 // secure context, so Chrome keeps and sends it there; Playwright's request context does the same for loopback hosts.
@@ -56,6 +60,49 @@ async function checkServer(baseURL: string): Promise<void> {
   }
 }
 
+/** The no-network log from byte `offset` on, or "" when nothing was added. */
+function readLogFrom(offset: number): string {
+  const size = statSync(NO_NETWORK_LOG).size;
+  if (size <= offset) return "";
+  const buffer = Buffer.alloc(size - offset);
+  const fd = openSync(NO_NETWORK_LOG, "r");
+  try {
+    readSync(fd, buffer, 0, buffer.length, offset);
+  } finally {
+    closeSync(fd);
+  }
+  return buffer.toString("utf8");
+}
+
+/**
+ * The current length of the no-network log. Throws when the server under test does not write one: without it, a
+ * refused connection would only show in the server output and the run would still pass.
+ */
+function noNetworkLogOffset(): number {
+  let size: number;
+  try {
+    size = statSync(NO_NETWORK_LOG).size;
+  } catch {
+    size = -1;
+  }
+  if (size <= 0 || !readLogFrom(0).includes("[no-network] guard active")) {
+    throw new Error(`The app server keeps no no-network log at ${NO_NETWORK_LOG}: it was not started with this checkout's e2e/support/env.ts. ${REUSE ? "Restart `npm run e2e:serve`." : ""}`.trim());
+  }
+  return size;
+}
+
+/** Fails the run when the app server refused an outbound connection after `offset`. */
+function checkNoNetworkLog(offset: number): void {
+  const refused = readLogFrom(offset)
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("[no-network] refused"));
+  if (refused.length > 0) {
+    throw new Error(
+      `The app server tried to reach the network ${refused.length} time(s) during the run; fixture mode must answer every request from this machine:\n- ${[...new Set(refused)].join("\n- ")}`,
+    );
+  }
+}
+
 async function isSignedIn(baseURL: string): Promise<boolean> {
   const context = await request.newContext({ baseURL, storageState: STORAGE_STATE }).catch(() => null);
   if (!context) return false;
@@ -72,11 +119,13 @@ async function isSignedIn(baseURL: string): Promise<boolean> {
   }
 }
 
-export default async function globalSetup(config: FullConfig): Promise<void> {
+export default async function globalSetup(config: FullConfig): Promise<() => Promise<void>> {
   const baseURL = config.projects[0]?.use.baseURL ?? BASE_URL;
   await checkServer(baseURL);
+  const logOffset = noNetworkLogOffset();
+  const teardown = async () => checkNoNetworkLog(logOffset);
   mkdirSync(path.dirname(STORAGE_STATE), { recursive: true });
-  if (await isSignedIn(baseURL)) return;
+  if (await isSignedIn(baseURL)) return teardown;
 
   const context = await request.newContext({ baseURL });
   try {
@@ -93,4 +142,5 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
     await context.dispose();
   }
   if (!(await isSignedIn(baseURL))) throw new Error("The stored session is not accepted by the server.");
+  return teardown;
 }

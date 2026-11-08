@@ -4,6 +4,7 @@
 // (a production build on 127.0.0.1 with MARKET_DATA_SOURCE=fixtures and the mock model); never use them anywhere else.
 
 import { execFileSync } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 
 /** The app under test (E2E_PORT) and the mock model (E2E_LLM_PORT). Other local dev servers use 3300-3499. */
@@ -19,6 +20,13 @@ export const TEST_SESSION_SECRET = "e2e-test-session-secret-0123456789abcdef";
 
 /** The signed-in browser state written by the global setup (gitignored). */
 export const STORAGE_STATE = path.join(__dirname, "..", ".auth", "state.json");
+
+/**
+ * Where the app server's no-network preload records each connection it refuses, so the suite fails on them (the
+ * global setup's teardown reads it): a temporary file per app port, the same for a server Playwright starts and one
+ * from `npm run e2e:serve`. The lines also go to the server's stderr.
+ */
+export const NO_NETWORK_LOG = path.join(os.tmpdir(), `investseek-e2e-no-network-${APP_PORT}.log`);
 
 /**
  * The instant the server's clock starts at, and the browser's with it (E2E_NOW): Saturday 2026-11-07 10:00 in New
@@ -90,7 +98,8 @@ export function appEnv(commit: string | null = gitHead()): Record<string, string
     NEXT_TELEMETRY_DISABLED: "1",
     // Shown by /api/health, so the global setup can tell a server of another commit.
     GIT_SHA: commit ?? "",
-    // Read by the clock preload, not by the app.
+    // Read by the preloads, not by the app.
     E2E_NOW,
+    E2E_NO_NETWORK_LOG: NO_NETWORK_LOG,
   };
 }

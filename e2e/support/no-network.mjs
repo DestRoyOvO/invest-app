@@ -3,8 +3,26 @@
 // A download the fixtures do not cover (a new data source, a forgotten fetchImpl) then fails loudly: its request
 // errors, the page shows the failure and the server output has a "[no-network]" line, instead of the suite quietly
 // depending on the internet.
+//
+// With E2E_NO_NETWORK_LOG set (e2e/support/env.ts sets it), each refusal is also appended to that file, and the
+// suite fails at the end of a run that logged one (e2e/support/global-setup.ts). The file first gets a "guard active"
+// line, so the global setup can tell that the server it tests records its refusals there.
 
+import { appendFileSync } from "node:fs";
 import net from "node:net";
+
+const LOG = process.env.E2E_NO_NETWORK_LOG;
+
+function appendToLog(line) {
+  if (!LOG) return;
+  try {
+    appendFileSync(LOG, `${line}\n`);
+  } catch {
+    // The stderr line remains.
+  }
+}
+
+appendToLog(`[no-network] guard active in process ${process.pid}`);
 
 function isLocal(host) {
   if (host === undefined || host === null || host === "") return true; // Node connects to localhost by default
@@ -32,7 +50,9 @@ net.Socket.prototype.connect = function connectLocalOnly(...args) {
   // Like Node itself: a truthy path is a local pipe or socket file, anything else a TCP connection to host:port.
   if (!path && !isLocal(host)) {
     const error = Object.assign(new Error(`The end-to-end server has no network access: refused ${host}:${port}`), { code: "E2E_NO_NETWORK" });
-    process.stderr.write(`[no-network] refused a connection to ${host}:${port}\n`);
+    const line = `[no-network] refused a connection to ${host}:${port}`;
+    process.stderr.write(`${line}\n`);
+    appendToLog(line);
     process.nextTick(() => this.destroy(error));
     return this;
   }
