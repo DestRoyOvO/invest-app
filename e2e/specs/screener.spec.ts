@@ -6,7 +6,7 @@ import { COLUMN_SET_KEYS, COLUMN_SETS, ETF_UNIVERSE, PHONE_COLUMNS, PRESETS, typ
 import { getSector, UNIVERSE_STOCKS } from "@/lib/universe";
 import type { DiscoverResponse, DiscoverScreen, ScreenerResponse, ScreenerRow, ScreenerUniverse } from "@/types/api";
 
-import { BASE_URL } from "../support/env";
+import { AT_DEFAULT_NOW, BASE_URL } from "../support/env";
 import {
   columnTexts,
   expectSymbols,
@@ -122,9 +122,10 @@ async function expectPresetButtons(view: Results, said: ReadonlyArray<(typeof PR
 
 /**
  * Presses a preset and checks what it does: it alone is pressed, its filters show as chips, its column set and sort are
- * picked, and the table holds the rows its rule keeps (from `rows`, the snapshot on screen), in its order.
+ * picked, and the table holds the rows its rule keeps (from `rows`, the snapshot of `universe` on screen), in its order,
+ * or says that none match. At the default E2E_NOW every preset keeps some rows; on another day one can keep none.
  */
-async function checkPreset(view: Results, said: (typeof PRESETS_SAY)[number], rows: readonly ScreenerRow[], now: number): Promise<void> {
+async function checkPreset(view: Results, universe: ScreenerUniverse, said: (typeof PRESETS_SAY)[number], rows: readonly ScreenerRow[], now: number): Promise<void> {
   const preset = PRESETS.find((entry) => entry.key === said.key)!;
   const presets = view.region.getByRole("list", { name: S.presets.label });
   await presets.getByRole("button", { name: S.presets[said.key], exact: true }).click();
@@ -133,8 +134,10 @@ async function checkPreset(view: Results, said: (typeof PRESETS_SAY)[number], ro
   await expect(view.region.getByRole("tablist", { name: S.columnSets.label }).getByRole("tab", { name: S.columnSets[preset.columns], exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(view.table.getByRole("columnheader", { name: S.metrics[preset.sort.key as keyof typeof S.metrics], exact: true })).toHaveAttribute("aria-sort", ariaSort(preset.sort.direction));
   const kept = rows.filter((row) => said.keeps(row, now));
-  expect(kept.length, `rows the ${said.key} preset keeps`).toBeGreaterThan(0);
+  if (AT_DEFAULT_NOW) expect(kept.length, `rows the ${said.key} preset keeps`).toBeGreaterThan(0);
+  await expect(view.table).toHaveAccessibleName(tpl(S.caption, { n: kept.length, kind: S.kinds[universe] }));
   await expectSymbols(view.table, sortedSymbols(kept, preset.sort.key, preset.sort.direction));
+  if (kept.length === 0) await expect(view.table.getByText(tpl(S.empty.noMatch, { kind: S.kindNouns[universe] }))).toBeVisible();
 }
 
 /**
@@ -222,7 +225,7 @@ test.describe("screener", () => {
     const presets = view.region.getByRole("list", { name: S.presets.label });
     // Every stock preset, each titled with the hint its rule encodes.
     await expectPresetButtons(view, PRESETS_SAY);
-    for (const said of PRESETS_SAY) await checkPreset(view, said, snapshot.rows, now);
+    for (const said of PRESETS_SAY) await checkPreset(view, "stocks", said, snapshot.rows, now);
 
     // Pressing the active preset again clears its filters.
     await presets.getByRole("button", { name: S.presets[PRESETS_SAY.at(-1)!.key], exact: true }).click();
@@ -261,7 +264,7 @@ test.describe("screener", () => {
     // within the funds), with its columns and order.
     const forFunds = PRESETS_SAY.filter((said) => said.funds);
     await expectPresetButtons(view, forFunds);
-    for (const said of forFunds) await checkPreset(view, said, funds.rows, Date.parse(funds.asOf));
+    for (const said of forFunds) await checkPreset(view, "etfs", said, funds.rows, Date.parse(funds.asOf));
     await view.region.getByRole("list", { name: S.presets.label }).getByRole("button", { name: S.presets[forFunds.at(-1)!.key], exact: true }).click();
     await expect(view.chips).toHaveCount(0);
     await expect(view.table).toHaveAccessibleName(tpl(S.caption, { n: funds.rows.length, kind: S.kinds.etfs }));
