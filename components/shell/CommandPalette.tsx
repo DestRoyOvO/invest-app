@@ -296,7 +296,11 @@ function PaletteDialog({ initialQuery }: { initialQuery: string }) {
 
   const searching = Boolean(searchTerm) && isLoading;
   const onlyUnconfirmed = items.length === 1 && items[0].kind === "symbol" && items[0].name === null && results !== null && results.length === 0;
-  const showEmpty = trimmed.length > 0 && !searching && debounced === trimmed && (items.length === 0 || onlyUnconfirmed);
+  // "?" alone starts a question: say what comes next instead of "No match".
+  const askPrefixOnly = trimmed === "?" || trimmed === "？";
+  const showEmpty = !askPrefixOnly && trimmed.length > 0 && !searching && debounced === trimmed && (items.length === 0 || onlyUnconfirmed);
+  const notice = askPrefixOnly ? t.command.askHint : showEmpty ? t.command.empty : null;
+  const count = items.length === 1 ? t.command.result : tpl(t.command.results, { n: items.length });
 
   // Consecutive items of one section form a labelled group.
   const groups: Array<{ section: PaletteItem["section"]; entries: Array<{ item: PaletteItem; index: number }> }> = [];
@@ -344,14 +348,14 @@ function PaletteDialog({ initialQuery }: { initialQuery: string }) {
           {searching ? <span className="shrink-0 text-xs text-fg-3">{t.command.searching}</span> : null}
         </div>
 
-        <div role="status" className={cn("shrink-0 text-sm text-fg-2", showEmpty ? "border-b border-line px-3 py-3" : "sr-only")}>
-          {showEmpty ? t.command.empty : items.length > 0 && trimmed ? tpl(t.command.results, { n: items.length }) : ""}
+        <div role="status" className={cn("shrink-0 text-sm text-fg-2", notice ? "border-b border-line px-3 py-3" : "sr-only")}>
+          {notice ?? (items.length > 0 && trimmed ? count : "")}
         </div>
 
         <div ref={listRef} id={listId} role="listbox" aria-label={t.command.title} className="min-h-0 flex-1 overflow-y-auto py-1">
           {groups.map(({ section, entries }) => (
             <div key={`${section}-${entries[0].index}`} role="group" aria-label={t.command.sections[section]}>
-              <div aria-hidden className="label px-3 pt-2 pb-1">
+              <div aria-hidden className="col-head px-3 pt-2 pb-1">
                 {t.command.sections[section]}
               </div>
               {entries.map(({ item, index }) => {

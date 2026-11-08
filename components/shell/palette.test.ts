@@ -62,17 +62,19 @@ describe("buildPalette", () => {
     expect(summary(build({ query: "KO", results: null }))[0]).toBe("open:KO");
   });
 
-  it("opens an unconfirmed ticker directly: first while searching, last after other results", () => {
+  it("opens an unconfirmed ticker directly while searching or when nothing was found, not next to real results", () => {
     expect(summary(build({ query: "QQQZ", results: null }))).toEqual(["symbols:QQQZ"]);
     expect(summary(build({ query: "ZZZZ", results: [] }))).toEqual(["symbols:ZZZZ"]);
-    expect(summary(build({ query: "apple", results: [result("AAPL", "Apple Inc.")] }))).toEqual(["symbols:AAPL", "symbols:APPLE"]);
+    expect(summary(build({ query: "apple", results: [result("AAPL", "Apple Inc.")] }))).toEqual(["symbols:AAPL"]);
     expect(summary(build({ query: "QQQZ", results: [result("QQQZ", "Example Fund")] }))[0]).toBe("open:QQQZ");
   });
 
-  it("ranks an exact function code first, and offers the ticker too when it exists", () => {
+  it("ranks an exact function code first, and offers only Open for a ticker with the same name", () => {
     expect(summary(build({ query: "GP", results: null }))).toEqual(["fn:GP:AAPL"]);
-    const lab = summary(build({ query: "LAB", results: [result("LAB", "Standard BioTools")] }));
-    expect(lab.slice(0, 2)).toEqual(["fn:LAB", "open:LAB"]);
+    expect(summary(build({ query: "LAB", results: [result("LAB", "Standard BioTools")] }))).toEqual(["fn:LAB", "open:LAB"]);
+    const gp = build({ query: "GP", results: [result("GP", "GreenPower Motor"), result("GPRO", "GoPro")] });
+    expect(summary(gp)).toEqual(["fn:GP:AAPL", "open:GP", "symbols:GPRO"]);
+    expect(gp[1]).toMatchObject({ kind: "action", action: "open", name: "GreenPower Motor" });
     expect(summary(build({ query: "wl", results: [] }))[0]).toBe("fn:WL");
   });
 

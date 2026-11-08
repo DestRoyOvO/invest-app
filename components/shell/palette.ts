@@ -3,7 +3,8 @@
 //
 // Empty query: recent symbols, the watchlist, then every function. Otherwise: exact function matches (codes, aliases
 // and the TICKER CODE grammar) lead; an exact symbol gets its actions (open, watchlist, position, alert, why is it
-// moving); then other symbols (Yahoo search, or local Chinese names), partial function matches, sectors and settings.
+// moving), or only "open" when it is also a function code (GP, LAB); then other symbols (Yahoo search, or local
+// Chinese names), partial function matches, sectors and settings.
 
 import { FUNCTIONS, functionByKey, functionMatch, parseCommand, symbolOfToken, type FunctionMatch } from "@/lib/functions";
 import { CHINESE_NAMES, chineseNameOf, hasCjk, searchChineseNames } from "@/lib/names-zh";
@@ -128,14 +129,21 @@ export function buildPalette(input: PaletteInput): PaletteItem[] {
     else if (known(typed) && exactFunctions.length === 0) exact = { symbol: typed, name: null };
   }
 
-  const actionItems: PaletteItem[] = exact
-    ? (["open", input.watchlist.includes(exact.symbol) ? "unwatch" : "watch", "position", "alert", "why"] as const).map((action) => ({
-        id: `act:${action}:${exact.symbol}`,
+  // A ticker that is also a function code only gets "open" under the function: enough to offer both readings.
+  const target = exact;
+  const actions: readonly SymbolAction[] = !target
+    ? []
+    : exactFunctions.length > 0
+      ? ["open"]
+      : ["open", input.watchlist.includes(target.symbol) ? "unwatch" : "watch", "position", "alert", "why"];
+  const actionItems: PaletteItem[] = target
+    ? actions.map((action) => ({
+        id: `act:${action}:${target.symbol}`,
         section: "actions" as const,
         kind: "action" as const,
         action,
-        symbol: exact.symbol,
-        name: action === "open" ? exact.name : null,
+        symbol: target.symbol,
+        name: action === "open" ? target.name : null,
       }))
     : [];
 
@@ -151,11 +159,10 @@ export function buildPalette(input: PaletteInput): PaletteItem[] {
       const detail = [hit.exchange, hit.type].filter(Boolean).join(" · ") || null;
       symbolItems.push({ id: `sym:${hit.symbol}`, section: "symbols", kind: "symbol", symbol: hit.symbol, name: hit.name, detail });
     }
-    // A plausible ticker nobody has confirmed yet: open it directly (first while searching, last after the results).
-    if (typed && !exact && exactFunctions.length === 0 && !symbolItems.some((item) => item.kind === "symbol" && item.symbol === typed)) {
-      const raw: PaletteItem = { id: `sym:${typed}`, section: "symbols", kind: "symbol", symbol: typed, name: null, detail: null };
-      if (results.length === 0) symbolItems.unshift(raw);
-      else symbolItems.push(raw);
+    // A plausible ticker nobody has confirmed yet: open it directly while the search runs, or when the search found
+    // nothing (the bar then also says there is no match). Once Yahoo lists other symbols, the typed text is left out.
+    if (typed && !exact && exactFunctions.length === 0 && results.length === 0) {
+      symbolItems.push({ id: `sym:${typed}`, section: "symbols", kind: "symbol", symbol: typed, name: null, detail: null });
     }
   }
 

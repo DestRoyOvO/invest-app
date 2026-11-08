@@ -144,7 +144,9 @@ export const en = {
     searching: "Searching…",
     empty: "No match. Try a ticker or an English company name, e.g. AAPL or apple.",
     hint: "↑↓ select · Enter open · Esc close",
+    askHint: "Type a question after ?",
     hints: { move: "Select", run: "Open", close: "Close", ask: "Ask" },
+    result: "1 result",
     results: "{n} results",
   },
   settings: {
@@ -564,7 +566,9 @@ export const zh: Messages = {
     searching: "搜索中…",
     empty: "没有匹配结果。可以输入代码或英文公司名，例如 AAPL、apple。",
     hint: "↑↓ 选择 · Enter 打开 · Esc 关闭",
+    askHint: "在 ? 后输入问题",
     hints: { move: "选择", run: "打开", close: "关闭", ask: "提问" },
+    result: "1 个结果",
     results: "{n} 个结果",
   },
   settings: {
