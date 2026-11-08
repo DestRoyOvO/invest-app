@@ -7,6 +7,10 @@
 //
 // The global setup checks that the app it finds is the fixture-mode build of the checked-out commit and that its clock
 // started at E2E_NOW, so rebuild (restart this script) after committing or changing E2E_NOW.
+//
+// The servers exit with this script, however it ends. Stopping a background shell that started it does not end it on
+// Windows, which keeps the process tree alive: Ctrl+C in its terminal, or end this script's process (its PID is
+// printed once the servers are up; taskkill /PID <pid> /F, or kill <pid> elsewhere).
 
 import { spawn, type ChildProcess } from "node:child_process";
 
@@ -68,7 +72,10 @@ async function main(): Promise<void> {
     });
   }
   await Promise.all([waitFor(`${LLM_URL}/health`, 30_000), waitFor(`${BASE_URL}/api/health`, 120_000)]);
-  console.log(`[e2e:serve] app on ${BASE_URL} (clock from ${E2E_NOW}), mock model on ${LLM_URL}. Run the suite with E2E_REUSE=1 npm run e2e; Ctrl+C stops both.`);
+  const stop = process.platform === "win32" ? `taskkill /PID ${process.pid} /F` : `kill ${process.pid}`;
+  console.log(
+    `[e2e:serve] app on ${BASE_URL} (clock from ${E2E_NOW}), mock model on ${LLM_URL}. Run the suite with E2E_REUSE=1 npm run e2e; Ctrl+C stops both, or from another shell: ${stop}`,
+  );
 }
 
 main().catch((error: unknown) => {

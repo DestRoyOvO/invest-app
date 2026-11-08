@@ -165,6 +165,10 @@ npm run e2e:serve                  # terminal 1: build, then serve until Ctrl+C 
 E2E_REUSE=1 npm run e2e            # terminal 2, as often as needed
 ```
 
+The servers exit with `e2e:serve`, however it ends. On Windows, stopping a background shell that started it (a task
+runner's stop, say) does not end it, because the process tree lives on: press Ctrl+C in its terminal, or end the process
+whose PID it prints once the servers are up (`taskkill /PID <pid> /F`; `kill <pid>` elsewhere).
+
 The global setup checks the app before any test runs: `/api/health` must report fixture data, a configured AI, the
 checked-out commit and a clock that started at `E2E_NOW` (and has run for less than six hours; with `E2E_NOW=real`, a
 clock within five minutes of this machine's), the server must keep a no-network log, and the sign-in must set the
@@ -193,7 +197,9 @@ per-client limits (20 AI notes in 10 minutes, the sign-in limit) apply to each t
 
 Projects: `desktop` (1440x900) and `phone` (390x844, touch). Locally they run in Google Chrome; set `E2E_CHANNEL=chromium`
 to use Playwright's bundled Chromium (`npx playwright install chromium`). Failures keep a trace and a screenshot in
-`test-results/` (`npx playwright show-trace <path>`).
+`test-results/` (`npx playwright show-trace <path>`). A page that fails to load with `net::ERR_NO_BUFFER_SPACE` means
+the machine ran out of sockets (on Windows, another program holding thousands of them): close it or run with fewer
+workers (`--workers=2`).
 
 The global setup signs in once through `/api/auth/login` and stores the session in `e2e/.auth/state.json` (gitignored).
 The production cookie is `__Host-is_session` with `Secure`; browsers treat `http://127.0.0.1` as a secure context, so it
