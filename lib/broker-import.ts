@@ -17,6 +17,7 @@
 // - Market prefixes as some brokers and APIs write them (HK.00700, SH.600519, SZ.000001, US.AAPL) and the .SH suffix
 //   are rewritten the same way.
 // - An exact Chinese company name from lib/names-zh.ts becomes its symbol (苹果 becomes AAPL).
+// - Codes a spreadsheet keeps as text to hold on to their leading zeros, ="600519" or '000001, are unwrapped first.
 
 import type { Holdings } from "@/hooks/useHoldings";
 
@@ -162,6 +163,17 @@ export function detectHeader(rows: readonly string[][], scan = 25): HeaderDetect
   return best;
 }
 
+/**
+ * A cell as a spreadsheet shows it: a text formula (="600519") and a leading apostrophe ('000001), the two ways
+ * spreadsheets and Chinese broker exports keep leading zeros, are unwrapped.
+ */
+export function unwrapSpreadsheetText(text: string): string {
+  const trimmed = text.trim();
+  const formula = /^="([\s\S]*)"$/.exec(trimmed);
+  if (formula) return formula[1].replace(/""/g, '"').trim();
+  return trimmed.startsWith("'") ? trimmed.slice(1).trim() : trimmed;
+}
+
 const CURRENCY_MARKS = /(?:US|HK|NZ|A|C|S)?\$|[€£¥₩₹元股]|USD|HKD|CNY|CNH|RMB|EUR|GBP|JPY|CAD|AUD|CHF|SGD|shares?$/gi;
 
 /**
@@ -172,7 +184,7 @@ const CURRENCY_MARKS = /(?:US|HK|NZ|A|C|S)?\$|[€£¥₩₹元股]|USD|HKD|CNY|
  */
 export function parseMoney(input: string | null | undefined, options: { decimalComma?: boolean } = {}): number | null {
   if (input === null || input === undefined) return null;
-  let text = String(input)
+  let text = unwrapSpreadsheetText(String(input))
     .normalize("NFKC")
     .replace(/−/g, "-")
     .trim()
@@ -240,7 +252,7 @@ function result(symbol: string, fix: SymbolFix | null): { symbol: string | null;
  * cannot be a symbol.
  */
 export function fixSymbol(raw: string): { symbol: string | null; fix: SymbolFix | null } {
-  let text = raw.normalize("NFKC").trim().replace(/\*+$/, "").replace(/^\$/, "").trim();
+  let text = unwrapSpreadsheetText(raw.normalize("NFKC")).replace(/\*+$/, "").replace(/^\$/, "").trim();
   if (!text) return { symbol: null, fix: null };
   if (hasCjk(text)) {
     const match = CHINESE_NAMES.find((entry) => entry.names.some((name) => name === text));
@@ -309,15 +321,29 @@ const OPTION_SYMBOLS = [
   /^-?[A-Z]{1,6}\s*\d{6}[CP]\d{8}$/, // OCC: AAPL  250117C00150000
   /^-?[A-Z]{1,6}\d{6}[CP]\d+(?:\.\d+)?$/, // Fidelity: -AAPL250117C150
   /^[A-Z]{1,6} \d{2}\/\d{2}\/\d{4} \d+(?:\.\d+)? [CP]$/, // Schwab: AAPL 01/17/2025 150.00 C
+  /^[A-Z]{1,6}\s+\d{1,2}[A-Z]{3}\d{2}\s+\d+(?:\.\d+)?\s+[CP]$/, // Interactive Brokers: AAPL 17JAN25 150 C
 ];
-const OPTION_NAME = /\b(?:call|put)\b.*\d|\d.*\b(?:call|put)\b|期权|认购|认沽/i;
+// An option written out in words names "call" or "put" together with a strike or an expiry: "AAPL JAN 17 2025 $150
+// CALL", "CALL APPLE INC $300 EXP 01/17/27", "AAPL Jan 17 '25 $150 Call". The word alone is not enough, because covered
+// call funds ("GLOBAL X NASDAQ 100 COVERED CALL ETF") are shares like any other fund.
+const OPTION_WORD = /\b(?:call|put)s?\b/i;
+const OPTION_DETAIL =
+  /\$\s?\d|\bexp(?:iry|iration|ires)?\b|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b|\b(?:jan|feb|mar|apr|may|jun|jul|aug|sept?|oct|nov|dec)\.?\s+\d{1,2}\b|\b\d{1,2}\s?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s?'?\d{2}(?:\d{2})?\b/i;
+/** Chinese option names: 期权, 认购 or 认沽, or an exchange-traded option such as "50ETF购3月2800". */
+const OPTION_ZH = /期权|认购|认沽|[购沽]\d{1,2}月/;
+
+function looksLikeOption(text: string): boolean {
+  return (OPTION_WORD.test(text) && OPTION_DETAIL.test(text)) || OPTION_ZH.test(text);
+}
 
 function skipReason(symbol: string, name: string, assetType: string): SkipReason | null {
   if (TOTAL_ROW.test(symbol) || (!symbol && TOTAL_ROW.test(name))) return "total";
   if (CASH_ROW.test(symbol) || /^cash$/i.test(assetType)) return "cash";
   if (/\*\*$/.test(symbol) || MONEY_MARKET.test(name) || MONEY_MARKET.test(assetType)) return "moneyMarket";
   const upper = symbol.toUpperCase();
-  if (OPTION_SYMBOLS.some((pattern) => pattern.test(upper)) || /^options?$/i.test(assetType) || OPTION_NAME.test(name)) return "option";
+  if (OPTION_SYMBOLS.some((pattern) => pattern.test(upper)) || /^(?:options?|calls?|puts?)$/i.test(assetType) || looksLikeOption(symbol) || looksLikeOption(name)) {
+    return "option";
+  }
   return null;
 }
 
@@ -353,7 +379,7 @@ function buildRow(values: RowValues, decimalComma: boolean): ImportRow {
 }
 
 function cellAt(cells: readonly string[], index: number | undefined): string {
-  return index === undefined ? "" : (cells[index] ?? "").trim();
+  return index === undefined ? "" : unwrapSpreadsheetText(cells[index] ?? "");
 }
 
 /**
@@ -434,7 +460,7 @@ export function parsePastedPositions(text: string): ImportRow[] {
 
   const rows: ImportRow[] = [];
   clean.split("\n").forEach((line, index) => {
-    const fields = splitPasteLine(line);
+    const fields = splitPasteLine(line).map(unwrapSpreadsheetText);
     if (fields.length === 0 || fields[0].startsWith("#")) return;
     const [rawSymbol, shares = "", cost = ""] = fields;
     if (rows.length === 0 && parseMoney(shares) === null && matchHeader(rawSymbol)?.field === "symbol") return;

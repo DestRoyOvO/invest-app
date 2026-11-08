@@ -11,7 +11,9 @@ import {
   parsePastedPositions,
   positionsCsvRows,
   POSITIONS_TEMPLATE_ROWS,
+  POSITIONAL_MAPPING,
   readPositionsCsv,
+  unwrapSpreadsheetText,
   watchlistCsvRows,
   type ImportRow,
 } from "./broker-import";
@@ -125,6 +127,14 @@ describe("parseMoney", () => {
   it("returns null for text that is not a number", () => {
     for (const text of ["", "  ", "--", "N/A", "n/a", "abc", "1,2,3", "12.3.4", "1e5", "$", null, undefined]) expect(parseMoney(text)).toBeNull();
   });
+
+  it("reads numbers a spreadsheet kept as text", () => {
+    expect(parseMoney('="100"')).toBe(100);
+    expect(parseMoney("'1,450.00")).toBe(1450);
+    expect(unwrapSpreadsheetText('  ="a""b"  ')).toBe('a"b');
+    expect(unwrapSpreadsheetText("'000001")).toBe("000001");
+    expect(unwrapSpreadsheetText("AAPL")).toBe("AAPL");
+  });
 });
 
 describe("fixSymbol", () => {
@@ -159,6 +169,13 @@ describe("fixSymbol", () => {
     expect(fixSymbol("SZ.000001")).toEqual({ symbol: "000001.SZ", fix: "prefix" });
     // Beijing codes have no Yahoo suffix rule here; the live check decides.
     expect(fixSymbol("430047")).toEqual({ symbol: "430047", fix: null });
+  });
+
+  it("unwraps codes kept as text to hold their leading zeros", () => {
+    expect(fixSymbol('="600519"')).toEqual({ symbol: "600519.SS", fix: "shanghai" });
+    expect(fixSymbol("'000001")).toEqual({ symbol: "000001.SZ", fix: "shenzhen" });
+    expect(fixSymbol('="00700"')).toEqual({ symbol: "0700.HK", fix: "hongKong" });
+    expect(fixSymbol('="AAPL"')).toEqual({ symbol: "AAPL", fix: null });
   });
 
   it("drops market prefixes, footnote marks and a leading $, and resolves exact Chinese names", () => {
@@ -231,6 +248,45 @@ describe("mapRows", () => {
       { line: 2, symbol: "0700.HK", shares: 100, cost: 320.5, skip: null, error: null },
       { line: 3, symbol: "600519.SS", shares: 10, cost: 1450, skip: null, error: null },
       { line: 4, symbol: null, shares: null, cost: null, skip: "total", error: null },
+    ]);
+  });
+
+  it("imports covered call funds, and skips options written out in words or as codes", () => {
+    const text = [
+      "Symbol,Description,Quantity,Average Cost Basis,Security Type",
+      "QYLD,GLOBAL X NASDAQ 100 COVERED CALL ETF,100,$17.20,ETF",
+      "XYLD,GLOBAL X S&P 500 COVERED CALL ETF,50,$39.10,ETF",
+      "RYLD,GLOBAL X RUSSELL 2000 COVERED CALL ETF,20,$16.50,ETF",
+      "PUTW,WISDOMTREE PUTWRITE STRATEGY FUND,10,$30.00,ETF",
+      "AAPL,AAPL JAN 17 2025 $150 CALL,1,$5.00,",
+      "SPY,PUT SPDR S&P 500 ETF TRUST EXP 03/20/26,2,$4.10,",
+      "AAPL Jan 17 '25 $150 Call,,1,$5.00,",
+      "AAPL 17JAN25 150 C,,1,$5.00,",
+      "10007321,50ETF购3月2800,10,0.05,",
+      "MSFT,MICROSOFT CORP,3,$400,Call",
+    ].join("\n");
+    const { table, detection } = readPositionsCsv(text);
+    const rows = mapRows(table, detection!.headerRow, detection!.mapping);
+    expect(rows.map((row) => row.skip ?? row.error ?? row.symbol)).toEqual(["QYLD", "XYLD", "RYLD", "PUTW", "option", "option", "option", "option", "option", "option"]);
+  });
+
+  it("reads codes and numbers a spreadsheet kept as text", () => {
+    const table = parseCsv('证券代码,证券名称,持仓数量,成本价\n="600519",贵州茅台,="100","1,450.00"\n\'000001,平安银行,200,12.5\n');
+    const detection = detectHeader(table.rows)!;
+    const rows = mapRows(table, detection.headerRow, detection.mapping);
+    expect(rows.map(brief)).toEqual([
+      { line: 2, symbol: "600519.SS", shares: 100, cost: 1450, skip: null, error: null },
+      { line: 3, symbol: "000001.SZ", shares: 200, cost: 12.5, skip: null, error: null },
+    ]);
+    expect(rows.map((row) => row.rawSymbol)).toEqual(["600519", "000001"]);
+  });
+
+  it("reads a file without a header in column order", () => {
+    const table = parseCsv("AAPL,25,201.30\nMSFT,10,415\n");
+    expect(detectHeader(table.rows)).toBeNull();
+    expect(mapRows(table, -1, POSITIONAL_MAPPING).map(brief)).toEqual([
+      { line: 1, symbol: "AAPL", shares: 25, cost: 201.3, skip: null, error: null },
+      { line: 2, symbol: "MSFT", shares: 10, cost: 415, skip: null, error: null },
     ]);
   });
 
