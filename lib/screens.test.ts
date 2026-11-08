@@ -328,6 +328,77 @@ describe("sorting", () => {
     });
   });
 
+  describe("sectors, as the table shows them", () => {
+    // One stock per sector, in the universe's order of the sectors, which is neither language's.
+    const KEYS: SectorKey[] = [
+      "technology",
+      "communication",
+      "consumer-discretionary",
+      "consumer-staples",
+      "healthcare",
+      "financials",
+      "industrials",
+      "energy",
+      "materials",
+      "utilities",
+      "real-estate",
+    ];
+    const bySector = KEYS.map((sector, i) => row(`S${i}`, { sector }));
+    const sectorsOf = (rows: ScreenRow[]) => rows.map((r) => r.sector);
+
+    it("sort by the short English label in English", () => {
+      // Comm, Cons Disc, Energy, Fin, Health, Indu, Mat, RE, Staples, Tech, Util: the staples come after real estate,
+      // not after the discretionary sector as their key would put them.
+      expect(sectorsOf(sortScreenRows(bySector, { key: "sector", direction: "asc" }, "en"))).toEqual([
+        "communication",
+        "consumer-discretionary",
+        "energy",
+        "financials",
+        "healthcare",
+        "industrials",
+        "materials",
+        "real-estate",
+        "consumer-staples",
+        "technology",
+        "utilities",
+      ]);
+    });
+
+    it("sort by the short Chinese label in pinyin order in Chinese", () => {
+      // 必需消费 (bi), 地产 (di), 工业 (gong), 公用 (gong), 金融 (jin), 科技 (ke ji), 可选消费 (ke xuan), 能源 (neng),
+      // 通信 (tong), 医疗 (yi), 原材料 (yuan).
+      expect(sectorsOf(sortScreenRows(bySector, { key: "sector", direction: "asc" }, "zh"))).toEqual([
+        "consumer-staples",
+        "real-estate",
+        "industrials",
+        "utilities",
+        "financials",
+        "technology",
+        "consumer-discretionary",
+        "energy",
+        "communication",
+        "healthcare",
+        "materials",
+      ]);
+      expect(sectorsOf(sortScreenRows(bySector, { key: "sector", direction: "desc" }, "zh")).slice(0, 3)).toEqual(["materials", "healthcare", "communication"]);
+    });
+
+    it("put a stock without a sector last both ways", () => {
+      const rows = [row("NONE", { sector: null }), row("TECH", { sector: "technology" }), row("FIN", { sector: "financials" })];
+      for (const lang of ["en", "zh"] as const) {
+        // Fin before Tech, 金融 (jin) before 科技 (ke).
+        expect(symbols(sortScreenRows(rows, { key: "sector", direction: "asc" }, lang)), lang).toEqual(["FIN", "TECH", "NONE"]);
+        expect(symbols(sortScreenRows(rows, { key: "sector", direction: "desc" }, lang)), lang).toEqual(["TECH", "FIN", "NONE"]);
+      }
+    });
+
+    it("are the labels the table shows", () => {
+      expect(screenSortValue("sector", bySector[0], "en")).toBe("Tech");
+      expect(screenSortValue("sector", bySector[0], "zh")).toBe("科技");
+      expect(screenSortValue("sector", row("NONE", { sector: null }), "zh")).toBeNull();
+    });
+  });
+
   it("starts numbers high first and text and dates in ascending order", () => {
     expect(firstSortDirection("pe")).toBe("desc");
     expect(firstSortDirection("symbol")).toBe("asc");

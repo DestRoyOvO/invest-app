@@ -136,7 +136,8 @@ function metricColumn(metric: MetricKey, context: ScreenColumnContext): DataTabl
     align: numeric ? "right" : "left",
     width: width === null ? undefined : metricUnit(metric) === "percentile" ? `min(${width}rem, var(--eqs-pct-max, ${width}rem))` : `${width}rem`,
     render: (row) => <MetricCell metric={metric} row={row} context={context} />,
-    // Names sort as they read (by the Chinese name in Chinese), with the values sortScreenRows orders the CSV by.
+    // Names and sectors sort as they read (by the Chinese name and label in Chinese), with the values sortScreenRows
+    // orders the CSV by.
     sortValue: (row) => screenSortValue(metric, row, context.lang),
     firstSort: firstSortDirection(metric),
     hideBelow: phone ? undefined : "sm",

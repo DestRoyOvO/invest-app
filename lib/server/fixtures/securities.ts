@@ -15,9 +15,13 @@ export type QuoteType = "EQUITY" | "ETF" | "INDEX" | "FUTURE" | "CURRENCY" | "CR
 
 /**
  * walk: geometric random walk; vix: mean-reverting volatility index; rate: a point on the Treasury curve; dollar-index:
- * the ICE US Dollar Index of the six currency walks it weighs (prices.ts, DOLLAR_INDEX).
+ * the ICE US Dollar Index of the six currency walks it weighs (prices.ts, DOLLAR_INDEX); cross: a currency pair outside
+ * the table, computed from the table's dollar rates of its two currencies (Security.legs).
  */
-export type PriceModelKind = "walk" | "vix" | "rate" | "dollar-index";
+export type PriceModelKind = "walk" | "vix" | "rate" | "dollar-index" | "cross";
+
+/** A table symbol and the power of its close in a computed rate: ["HKD=X", -1] is one over USD/HKD. */
+export type RateLeg = readonly [symbol: string, power: number];
 
 /** Symbols starting with this prefix are unknown to the fixture data, like an unlisted symbol is to Yahoo. */
 export const NOT_FOUND_PREFIX = "ZZ";
@@ -67,6 +71,8 @@ export interface Security {
   seedKey: string;
   /** Maturity in years for "rate" symbols (Treasury yields). */
   tenorYears: number | null;
+  /** For "cross": the table's rates whose closes, raised to their powers and multiplied, give each close; null otherwise. */
+  legs: readonly RateLeg[] | null;
   /** Market cap (stocks), net assets (funds) or market value (crypto) at the anchor price; null otherwise. */
   sizeAtAnchor: number | null;
   /** Dividend yield at the anchor price, as a fraction. */
@@ -575,6 +581,7 @@ function stockRecord(row: StockRow): Security {
     sectorLoading: 0.45,
     seedKey: symbol,
     tenorYears: null,
+    legs: null,
     sizeAtAnchor: capB * 1e9,
     dividendYield: yieldPercent / 100,
     trailingPE: pe,
@@ -615,6 +622,7 @@ function fundRecord(row: FundRow): Security {
     sectorLoading: tracked?.sectorLoading ?? (sectorKey ? 0.63 : 0),
     seedKey: tracked?.symbol ?? symbol,
     tenorYears: null,
+    legs: null,
     sizeAtAnchor: assetsB * 1e9,
     dividendYield: yieldPercent / 100,
     trailingPE: null,
@@ -647,6 +655,7 @@ function marketRecord(row: MarketRow): Security {
     sectorLoading: row.sectorLoading ?? 0,
     seedKey: row.symbol,
     tenorYears: row.tenorYears ?? null,
+    legs: null,
     sizeAtAnchor: row.size ?? null,
     dividendYield: 0,
     trailingPE: null,
@@ -718,6 +727,54 @@ function venueFields(venue: Venue): Pick<Security, "exchange" | "fullExchangeNam
   return { exchange: venue.exchange, fullExchangeName: venue.fullExchangeName, market: venue.market, currency: venue.currency };
 }
 
+/**
+ * The table's rate of each currency it quotes against the dollar, with the power that makes it units of the currency
+ * per dollar: EUR/USD and GBP/USD quote dollars per unit (-1); USD/JPY and Yahoo's CAD=X, SEK=X, CHF=X, CNY=X and HKD=X
+ * quote units per dollar (1).
+ */
+const UNITS_PER_DOLLAR: Readonly<Record<string, RateLeg>> = {
+  EUR: ["EURUSD=X", -1],
+  GBP: ["GBPUSD=X", -1],
+  JPY: ["USDJPY=X", 1],
+  CAD: ["CAD=X", 1],
+  SEK: ["SEK=X", 1],
+  CHF: ["CHF=X", 1],
+  CNY: ["CNY=X", 1],
+  HKD: ["HKD=X", 1],
+};
+
+/**
+ * The legs of the rate BASE/QUOTE (units of QUOTE per BASE) from the table's dollar rates: QUOTE per dollar over BASE per
+ * dollar. HKDUSD=X is 1 / HKD=X, USDHKD=X is HKD=X, EURHKD=X is EURUSD=X × HKD=X and EURJPY=X is EURUSD=X × USDJPY=X.
+ * Null unless both currencies are the dollar or one the table quotes against it.
+ */
+export function crossLegs(base: string, quote: string): RateLeg[] | null {
+  const perDollar = (code: string): readonly RateLeg[] | null => (code === "USD" ? [] : Object.hasOwn(UNITS_PER_DOLLAR, code) ? [UNITS_PER_DOLLAR[code]] : null);
+  const over = perDollar(quote);
+  const under = perDollar(base);
+  if (!over || !under) return null;
+  const powers = new Map<string, number>();
+  for (const [symbol, power] of over) powers.set(symbol, (powers.get(symbol) ?? 0) + power);
+  for (const [symbol, power] of under) powers.set(symbol, (powers.get(symbol) ?? 0) - power);
+  return [...powers].filter(([, power]) => power !== 0);
+}
+
+/**
+ * A pair outside the table that the table's dollar rates determine (USDHKD=X, HKDUSD=X, EURHKD=X): each close is the
+ * product of its legs' closes of the same day (prices.ts), so its quote, bars and history agree with the table's pairs
+ * on every day, whatever the range. Its anchor level and volatility follow from its legs, taken as independent walks.
+ */
+function crossRecord(symbol: string, base: string, quote: string, legs: readonly RateLeg[]): Security {
+  const tabled = legs.map(([leg, power]) => {
+    const security = TABLE.get(leg);
+    if (!security) throw new Error(`The fixture table has no ${leg}.`);
+    return { security, power };
+  });
+  const level = Math.exp(tabled.reduce((sum, { security, power }) => sum + power * Math.log(security.anchorPrice), 0));
+  const vol = Math.sqrt(tabled.reduce((sum, { security, power }) => sum + (power * security.vol) ** 2, 0));
+  return { ...marketRecord({ ...fx(symbol, `${base}/${quote}`, level, vol, quote), model: "cross" }), legs, synthetic: true };
+}
+
 function synthesize(symbol: string): Security {
   if (symbol.startsWith("^")) {
     return marketRecord(us(symbol, `${symbol.slice(1)} Index`, logBetween(500, 20000, symbol, "level"), between(0.14, 0.25, symbol, "vol"), "WCB", "Chicago Options", 0, { marketLoading: 0.8 }));
@@ -726,6 +783,9 @@ function synthesize(symbol: string): Security {
   if (currency) {
     const base = currency[1] ?? "USD";
     const quote = currency[2];
+    // A pair of the table's currencies follows the table; any other pair gets a stable made-up level.
+    const legs = crossLegs(base, quote);
+    if (legs) return crossRecord(symbol, base, quote, legs);
     return { ...marketRecord(fx(symbol, `${base}/${quote}`, logBetween(0.5, 150, symbol, "level"), between(0.04, 0.12, symbol, "vol"), quote)), synthetic: true };
   }
   if (symbol.endsWith("=F")) {

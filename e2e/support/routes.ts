@@ -1,10 +1,13 @@
+import type { ApiErrorCode } from "@/types/api";
+
 import { BASE_URL } from "./env";
 import { expect, type Page, type StoredData } from "./test";
 
 // Every page of the app with representative parameters, shared by the route sweep (e2e/specs/routes.spec.ts) and the
 // accessibility checks (e2e/specs/a11y.spec.ts). Each case knows how to tell that its page has loaded its data, with
 // web-first assertions on roles and accessible names (panels are regions named by their title), so the checks that
-// follow look at a settled page rather than at skeletons.
+// follow look at a settled page rather than at skeletons. API paths that no page requests have cases of their own
+// (API_ROUTES), which the sweep requests without a page.
 //
 // The sweep fails when a page.tsx under app/ has no case here, so a new page needs one.
 
@@ -113,6 +116,9 @@ const overviewReady = async (page: Page) => {
 
 /** Every panel of a quote page asks its own route, and each answers 404 for a symbol the data source does not know. */
 const UNKNOWN_SYMBOL = "The stock API and its panel routes answer 404 for a symbol the data source does not know.";
+
+/** The document a malformed percent-escape is sent to answers 404, under its escaped address. */
+const MALFORMED_ESCAPE = "The escaped path that proxy.ts redirects a malformed percent-escape to answers 404.";
 
 /** The terminal's not-found view, "ERR 404 /path · unknown function". */
 const notFoundReady = async (page: Page) => {
@@ -259,6 +265,18 @@ export const ROUTES: readonly RouteCase[] = [
   // A symbol that cannot exist ("$$$") answers 404 from the server without asking for any data: the 404 of the document
   // itself is the only noise.
   { path: "/stock/%24%24%24", status: 404, ready: notFoundReady },
+  // A malformed percent-escape, which Next.js cannot decode to match /stock/[symbol] (a plain-text 500 once): proxy.ts
+  // sends it to the same characters escaped, a symbol that cannot exist, whose document answers 404 like the one above.
+  {
+    path: "/stock/%E0%A4%A",
+    status: 404,
+    ready: async (page) => {
+      await expect(page).toHaveURL(/\/stock\/%25E0%25A4%25A$/);
+      await notFoundReady(page);
+    },
+    console: [{ pattern: /status of 404 \(Not Found\) \(http:\/\/[^/]+\/stock\/%25E0%25A4%25A\)$/, reason: MALFORMED_ESCAPE }],
+    responses: [{ pattern: /^404 GET http:\/\/[^/]+\/stock\/%25E0%25A4%25A$/, reason: MALFORMED_ESCAPE }],
+  },
 
   // Tools
   {
@@ -281,6 +299,19 @@ export const ROUTES: readonly RouteCase[] = [
   { path: "/unlock", finalPath: "/", ready: overviewReady },
   { path: "/no-such-page", status: 404, ready: notFoundReady },
 ];
+
+/** An API path that no page requests, and the error it answers with (an ApiErrorBody). */
+export interface ApiRouteCase {
+  path: string;
+  status: number;
+  code: ApiErrorCode;
+}
+
+/**
+ * API paths the sweep requests directly. A malformed percent-escape in a dynamic segment, which Next.js answered with a
+ * plain-text 500, gets 400 JSON from proxy.ts.
+ */
+export const API_ROUTES: readonly ApiRouteCase[] = [{ path: "/api/stock/%E0%A4%A", status: 400, code: "bad_request" }];
 
 /** The case for a path; throws for a path the catalog does not have. */
 export function routeCase(path: string): RouteCase {

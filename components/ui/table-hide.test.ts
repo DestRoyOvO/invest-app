@@ -20,6 +20,12 @@ describe("hideClass", () => {
     }
   });
 
+  it("hides them below 50.75rem, or below 44.75rem while the viewport is narrower than lg, with arbitrary sizes", () => {
+    const size = "50.75rem, 44.75rem below lg";
+    expect(hideClass({ hideBelowContainer: size })).toBe("hidden @min-[44.75rem]:max-lg:table-cell @min-[50.75rem]:table-cell");
+    expect(hideClass({ hideBelowContainer: size }, "col")).toBe("hidden @min-[44.75rem]:max-lg:table-column @min-[50.75rem]:table-column");
+  });
+
   it("lets the container size take the place of the viewport breakpoint", () => {
     expect(hideClass({ hideBelow: "sm", hideBelowContainer: "md" })).toBe("hidden @md:table-cell");
     expect(hideClass({ hideBelow: "lg", hideBelowContainer: "xs" }, "col")).toBe("hidden @xs:table-column");

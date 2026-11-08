@@ -8,6 +8,8 @@ import type { ApiErrorBody } from "@/types/api";
 // Runs before every page and API route (the matcher below leaves out build assets and root-level static files).
 // - SITE_ACCESS=private: a request without a valid session goes to the unlock page (pages) or gets 401 JSON (APIs),
 //   except the health check, sign-in and the unlock page itself. Every response is marked noindex.
+// - A path with a malformed percent-escape (/stock/%E0%A4%A), which Next.js would answer with a plain-text 500, gets
+//   400 JSON (APIs) or a redirect to the same path escaped (pages), which answers with the not-found page and 404.
 // - Production: each page gets a Content-Security-Policy with a fresh nonce, so inline scripts need no allowance.
 // The rules live in lib/server/site-access.ts; this file only applies them.
 
@@ -27,6 +29,9 @@ export function proxy(request: NextRequest): NextResponse {
   if (decision.action === "unauthorized") {
     const body: ApiErrorBody = { error: { code: "unauthorized", message: "This site is private. Sign in to continue." } };
     response = NextResponse.json(body, { status: 401, headers: { "Cache-Control": "no-store" } });
+  } else if (decision.action === "bad_request") {
+    const body: ApiErrorBody = { error: { code: "bad_request", message: "The path has a malformed percent-escape." } };
+    response = NextResponse.json(body, { status: 400, headers: { "Cache-Control": "no-store" } });
   } else if (decision.action === "redirect") {
     response = NextResponse.redirect(new URL(decision.location, request.url), 307);
     response.headers.set("Cache-Control", "no-store");
