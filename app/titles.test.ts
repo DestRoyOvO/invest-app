@@ -13,12 +13,15 @@ vi.mock("next/headers", () => ({
 
 const pages = {
   "app/not-found.tsx": await import("./not-found"),
+  "app/(terminal)/not-found.tsx": await import("./(terminal)/not-found"),
   "app/(terminal)/help/page.tsx": await import("./(terminal)/help/page"),
   "app/(terminal)/data/page.tsx": await import("./(terminal)/data/page"),
 };
 
 const EXPECTED: Record<keyof typeof pages, { en: string; zh: string }> = {
   "app/not-found.tsx": { en: "Not found", zh: "未找到页面" },
+  // notFound() inside a terminal page (/sector/no-such-sector) renders this boundary, which gives the title.
+  "app/(terminal)/not-found.tsx": { en: "Not found", zh: "未找到页面" },
   "app/(terminal)/help/page.tsx": { en: "Help", zh: "帮助" },
   "app/(terminal)/data/page.tsx": { en: "Your data", zh: "我的数据" },
 };
