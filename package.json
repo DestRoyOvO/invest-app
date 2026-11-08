@@ -13,6 +13,7 @@
     "check": "npm run lint && npm run typecheck && npm run test",
     "e2e": "playwright test",
     "e2e:headed": "playwright test --headed",
+    "e2e:serve": "tsx e2e/serve.ts",
     "evaluate": "tsx scripts/evaluate-signal.ts",
     "research": "tsx scripts/research-factors.ts"
   },
