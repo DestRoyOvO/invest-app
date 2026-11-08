@@ -60,6 +60,43 @@ const INNER_OVERRIDE = /(?:max-sm:)?\[&(?:_|>)(?:\[role=(?:radio|tab)\]|select|b
 /** The controls with a built-in 40px phone target (PHONE_TARGET), and SymbolCombobox, whose inputClassName reaches its Input. */
 const TARGET_PRIMITIVES = ["Button", "IconButton", "Input", "Select", "Segmented", "Tabs", "SymbolCombobox"];
 
+/** The value that starts at `start` in an opening tag: the text of a quoted string, or a braced expression with its whitespace collapsed. */
+function valueAt(tag: string, start: number): string | null {
+  const open = tag[start];
+  if (open === '"' || open === "'") return tag.slice(start + 1, tag.indexOf(open, start + 1));
+  if (open !== "{") return null;
+  let depth = 0;
+  let quote: string | null = null;
+  for (let end = start; end < tag.length; end++) {
+    const char = tag[end];
+    if (quote) {
+      if (char === quote) quote = null;
+    } else if (char === '"' || char === "'" || char === "`") quote = char;
+    else if (char === "{") depth++;
+    else if (char === "}" && --depth === 0) return tag.slice(start + 1, end).replace(/\s+/g, " ").trim();
+  }
+  return null;
+}
+
+/** A prop of the element itself in its opening tag (props of elements nested in other props are skipped), or null. */
+function propOf(tag: string, name: string): string | null {
+  let depth = 0;
+  let quote: string | null = null;
+  for (let i = 0; i < tag.length; i++) {
+    const char = tag[i];
+    if (quote) {
+      if (char === quote) quote = null;
+    } else if (char === '"' || char === "'" || char === "`") quote = char;
+    else if (char === "{") depth++;
+    else if (char === "}") depth--;
+    else if (depth === 0 && /\s/.test(char) && tag.startsWith(`${name}=`, i + 1)) return valueAt(tag, i + name.length + 2);
+  }
+  return null;
+}
+
+/** Components whose `caption` becomes the caption of the DataTable they render, and so the name of its scroll region. */
+const CAPTIONED_TABLES = ["DataTable", "QuoteTable", "WatchlistTable", "WorldTable"];
+
 describe("components/ui conventions", () => {
   it("shows a missing value as DASH from lib/format, never a typed em or en dash", () => {
     expect(DASH).toBe("—");
@@ -96,5 +133,36 @@ describe("phone targets in pages", () => {
 
   it("do not reach into Segmented, Tabs or Select to set their height", () => {
     expect(pages.filter((file) => INNER_OVERRIDE.test(file.code)).map((file) => file.name)).toEqual([]);
+  });
+});
+
+// A DataTable caption also names the table's scroll box once the table overflows it (a region landmark), so it must not
+// repeat the name of the panel or section around the table: axe reports two regions of one name as landmark-unique.
+// lib/i18n/captions.test.ts keeps the caption messages apart from the titles; this check sees which one a page passes.
+describe("table captions in pages", () => {
+  const pages = appSources();
+  const captionsOf = (source: string) => CAPTIONED_TABLES.flatMap((tag) => openingTags(source, tag).map((open) => ({ tag, caption: propOf(open, "caption") })));
+  /** The captions in a source that repeat the title of a Panel or the label of a section in the same source. */
+  const repeats = (source: string) => {
+    const names = new Set([...openingTags(source, "Panel").map((open) => propOf(open, "title")), ...openingTags(source, "section").map((open) => propOf(open, "aria-label"))]);
+    return captionsOf(source)
+      .filter(({ caption }) => caption !== null && names.has(caption))
+      .map(({ tag, caption }) => `${tag} caption={${caption}}`);
+  };
+
+  it("reads the element's own props from an opening tag", () => {
+    const tag = '<Panel actions={<Button title="Add" onClick={() => go("}")} />} title={t.notes.title} code="NOTE">';
+    expect(propOf(tag, "title")).toBe("t.notes.title");
+    expect(propOf(tag, "code")).toBe("NOTE");
+    expect(propOf(tag, "caption")).toBeNull();
+    expect(propOf('<DataTable caption={tpl(t.x.caption, {\n  n: rows.length,\n})} rows={rows} />', "caption")).toBe("tpl(t.x.caption, { n: rows.length, })");
+    expect(repeats('<Panel title={t.notes.title} code="NOTE"><DataTable rows={rows} caption={t.notes.title} /></Panel>')).toEqual(["DataTable caption={t.notes.title}"]);
+    expect(repeats("<section aria-label={l.spreads}><QuoteTable quotes={q} caption={ l.spreads } /></section>")).toEqual(["QuoteTable caption={l.spreads}"]);
+    expect(repeats('<Panel title={t.notes.title}><DataTable caption={t.notes.caption} /><QuoteList caption={t.notes.title} /></Panel>')).toEqual([]);
+  });
+
+  it("never caption a table with the name of the panel or section around it (docs/design-system.md, DataTable)", () => {
+    expect(pages.flatMap((file) => captionsOf(file.code)).filter(({ caption }) => caption !== null).length).toBeGreaterThan(30);
+    expect(pages.flatMap((file) => repeats(file.code).map((repeat) => `${file.name}: ${repeat}`))).toEqual([]);
   });
 });
