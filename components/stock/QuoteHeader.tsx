@@ -1,82 +1,217 @@
 "use client";
 
-import { Star } from "lucide-react";
+import { Bell, CalendarDays, Coins, PencilLine, Plus, Star } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
+import { useUi } from "@/components/providers/UiProvider";
 import { StateDot } from "@/components/shell/MarketClock";
-import { Badge } from "@/components/ui/Badge";
+import { AiChip, Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Delta } from "@/components/ui/Delta";
-import { formatCompact, formatPrice, formatTime } from "@/lib/format";
-import type { StockDetail } from "@/types/api";
+import { TickNumber } from "@/components/ui/TickNumber";
+import type { Position } from "@/hooks/useHoldings";
+import { formatCompact, formatNumber, formatPrice, formatRatio, formatTime, tpl } from "@/lib/format";
+import type { Lang, StockDetail } from "@/types/api";
 
+import { earningsTiming, futureDate, isUsListing, positionFigures, upcomingExDividend } from "./quote-utils";
 import { RangeBar } from "./RangeBar";
 
 interface QuoteHeaderProps {
   detail: StockDetail;
   inWatchlist: boolean;
   onToggleWatchlist: () => void;
+  /** The investor's position in this symbol, if any. */
+  position?: Position;
+  /** The position's share of the portfolio (decimal), when it is in the portfolio's base currency. */
+  portfolioWeight?: number | null;
 }
 
-function Stat({ label, children }: { label: string; children: React.ReactNode }) {
+const LOCALES: Record<Lang, string> = { en: "en-US", zh: "zh-CN" };
+
+function eventDate(iso: string, lang: Lang): string {
+  return new Intl.DateTimeFormat(LOCALES[lang], { weekday: "short", month: "short", day: "numeric", timeZone: "America/New_York" }).format(new Date(iso));
+}
+
+function formatShares(shares: number, lang: Lang): string {
+  return formatNumber(shares, Number.isInteger(shares) ? 0 : Math.min(4, (String(shares).split(".")[1] ?? "").length), lang);
+}
+
+function Stat({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="min-w-0 bg-panel px-3 py-2">
-      <div className="label truncate">{label}</div>
-      <div className="num mt-0.5 truncate text-sm text-fg">{children}</div>
+      <div className="col-head truncate">{label}</div>
+      <div className="num mt-0.5 truncate text-data text-fg">{children}</div>
     </div>
   );
 }
 
-export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist }: QuoteHeaderProps) {
+function Chip({ icon, children, title }: { icon: ReactNode; children: ReactNode; title?: string }) {
+  return (
+    <span title={title} className="inline-flex h-6 items-center gap-1.5 rounded-xs border border-line-2 px-2 text-xs text-fg-2">
+      {icon}
+      {children}
+    </span>
+  );
+}
+
+/**
+ * The quote's headline band: symbol and name, the live price with the day's change and extended hours, the next
+ * earnings report and an ex-dividend date within two weeks, the investor's position, and the page's actions.
+ */
+export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, portfolioWeight = null }: QuoteHeaderProps) {
   const { t, lang } = usePrefs();
+  const { openChat, openPositionEditor, openAlertEditor } = useUi();
   const { quote, profile } = detail;
+  const symbol = quote.symbol;
   const state = quote.marketState;
   const stateLabel = state ? t.shell.marketState[state] : t.shell.marketState.unknown;
+  const figures = position ? positionFigures(position, quote.price, quote.change) : null;
+  const a = t.stock.actions;
+
+  const nextEarnings = futureDate(quote.nextEarningsDate);
+  const estimated = quote.earningsDateEstimated === true;
+  const timing = nextEarnings ? earningsTiming(nextEarnings, estimated, isUsListing(symbol)) : null;
+  const showExDividend = upcomingExDividend(quote.exDividendDate);
+
+  const why = () => openChat({ text: tpl(a.whyMovingPrompt, { symbol }), intent: { kind: "move", symbol } });
 
   return (
-    <section aria-label={quote.symbol} className="bg-panel">
-      <div className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-end md:justify-between">
+    <section aria-label={symbol} className="bg-panel">
+      <div className="flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
-            <h1 className="mono text-xl font-semibold tracking-tight text-fg">{quote.symbol}</h1>
+            <h1 className="mono text-xl font-semibold tracking-tight text-fg">{symbol}</h1>
             <span className="min-w-0 truncate text-sm text-fg-2">{profile.longName ?? quote.name}</span>
             {quote.exchange ? <Badge>{quote.exchange}</Badge> : null}
             {quote.currency && quote.currency !== "USD" ? <Badge tone="info">{quote.currency}</Badge> : null}
+            {quote.stale ? (
+              <span title={tpl(t.stock.staleTitle, { time: formatTime(quote.fetchedAt, lang) })}>
+                <Badge tone="warn">{t.stock.stale}</Badge>
+              </span>
+            ) : null}
           </div>
           <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className="num text-3xl leading-none font-medium text-fg">{formatPrice(quote.price, lang)}</span>
+            <TickNumber value={quote.price} className="text-display font-medium text-fg">
+              {formatPrice(quote.price, lang)}
+            </TickNumber>
             <Delta value={quote.change} kind="change" lang={lang} className="text-base" />
             <Delta value={quote.changePercent} arrow className="text-base" />
             <span className="flex items-center gap-1.5 text-xs text-fg-3">
               <StateDot state={state} />
               {stateLabel}
-              {quote.regularMarketTime ? <span className="num">· {formatTime(quote.regularMarketTime, lang, "America/New_York")} ET</span> : null}
+              {quote.regularMarketTime ? <span className="num">· {tpl(t.stock.asOfTime, { time: formatTime(quote.regularMarketTime, lang, "America/New_York") })}</span> : null}
             </span>
           </div>
           {quote.extendedSession && quote.extendedPrice !== null ? (
             <div className="mt-1 flex items-baseline gap-2 text-sm text-fg-3">
               <span>{quote.extendedSession === "PRE" ? t.stock.preMarket : t.stock.afterHours}</span>
-              <span className="num text-fg-2">{formatPrice(quote.extendedPrice, lang)}</span>
+              <TickNumber value={quote.extendedPrice} className="text-fg-2">
+                {formatPrice(quote.extendedPrice, lang)}
+              </TickNumber>
               <Delta value={quote.extendedChangePercent} />
             </div>
           ) : null}
+          {nextEarnings || showExDividend ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {nextEarnings ? (
+                <Chip icon={<CalendarDays aria-hidden className="size-3.5 text-fg-3" strokeWidth={1.75} />}>
+                  {[tpl(t.stock.events.reports, { date: eventDate(nextEarnings, lang) }), timing ? t.stock.events.timing[timing] : null, estimated ? t.stock.events.estimated : null]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </Chip>
+              ) : null}
+              {showExDividend && quote.exDividendDate ? (
+                <Chip icon={<Coins aria-hidden className="size-3.5 text-fg-3" strokeWidth={1.75} />}>
+                  {quote.dividendAmount !== null
+                    ? tpl(t.stock.events.exDividendAmount, { date: eventDate(quote.exDividendDate, lang), amount: formatPrice(quote.dividendAmount, lang) })
+                    : tpl(t.stock.events.exDividend, { date: eventDate(quote.exDividendDate, lang) })}
+                </Chip>
+              ) : null}
+            </div>
+          ) : null}
         </div>
-        <Button onClick={onToggleWatchlist} aria-pressed={inWatchlist} variant={inWatchlist ? "secondary" : "primary"}>
-          <Star aria-hidden className="size-4" strokeWidth={1.75} fill={inWatchlist ? "currentColor" : "none"} />
-          {inWatchlist ? t.stock.inWatchlist : t.stock.addToWatchlist}
-        </Button>
+
+        <div role="group" aria-label={tpl(a.label, { symbol })} className="flex shrink-0 flex-wrap items-center gap-1.5 lg:justify-end">
+          <Button
+            size="sm"
+            onClick={onToggleWatchlist}
+            aria-pressed={inWatchlist}
+            title={tpl(a.withKey, { label: inWatchlist ? t.stock.inWatchlist : t.stock.addToWatchlist, key: "A" })}
+            className="max-sm:h-10"
+          >
+            <Star aria-hidden className={inWatchlist ? "size-3.5 text-accent" : "size-3.5"} strokeWidth={1.75} fill={inWatchlist ? "currentColor" : "none"} />
+            {inWatchlist ? t.stock.inWatchlist : t.stock.addToWatchlist}
+          </Button>
+          <Button size="sm" onClick={() => openPositionEditor(symbol)} title={tpl(a.withKey, { label: position ? a.editPosition : a.addPosition, key: "P" })} className="max-sm:h-10">
+            {position ? <PencilLine aria-hidden className="size-3.5" strokeWidth={1.75} /> : <Plus aria-hidden className="size-3.5" strokeWidth={1.75} />}
+            {position ? a.editPosition : a.addPosition}
+          </Button>
+          <Button size="sm" onClick={() => openAlertEditor(symbol)} title={tpl(a.withKey, { label: a.setAlert, key: "!" })} className="max-sm:h-10">
+            <Bell aria-hidden className="size-3.5" strokeWidth={1.75} />
+            {a.setAlert}
+          </Button>
+          <Button size="sm" onClick={why} title={tpl(a.withKey, { label: a.whyMoving, key: "W" })} className="max-sm:h-10">
+            <AiChip tone="current" />
+            {a.whyMoving}
+          </Button>
+        </div>
       </div>
+
+      {figures ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-4 py-2 text-sm">
+          <span className="col-head">{t.stock.position.label}</span>
+          <span className="num text-fg">{tpl(t.stock.position.shares, { shares: formatShares(figures.shares, lang), cost: formatPrice(figures.cost, lang) })}</span>
+          <span className="text-fg-3" aria-hidden>
+            ·
+          </span>
+          <span className="text-fg-3">
+            {t.stock.position.value}{" "}
+            <TickNumber value={figures.value} className="text-fg">
+              {formatNumber(figures.value, 2, lang)}
+            </TickNumber>
+          </span>
+          {figures.dayPnl !== null ? (
+            <>
+              <span className="text-fg-3" aria-hidden>
+                ·
+              </span>
+              <span className="text-fg-3">
+                {t.stock.position.today}{" "}
+                <TickNumber value={figures.dayPnl}>
+                  <Delta value={figures.dayPnl} kind="change" lang={lang} />
+                </TickNumber>
+              </span>
+            </>
+          ) : null}
+          <span className="text-fg-3" aria-hidden>
+            ·
+          </span>
+          <span className="text-fg-3">
+            {t.stock.position.total} <Delta value={figures.pnl} kind="change" lang={lang} /> (<Delta value={figures.pnlPct} kind="ratio" digits={1} />)
+          </span>
+          {portfolioWeight !== null ? (
+            <>
+              <span className="text-fg-3" aria-hidden>
+                ·
+              </span>
+              <span className="num text-fg-2">{tpl(t.stock.position.weight, { pct: formatRatio(portfolioWeight, { digits: 0 }) })}</span>
+            </>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="grid grid-cols-2 gap-px border-t border-line bg-line sm:grid-cols-3 lg:grid-cols-6">
         <Stat label={t.stock.stats.open}>{formatPrice(quote.open, lang)}</Stat>
         <Stat label={t.stock.stats.prevClose}>{formatPrice(quote.previousClose, lang)}</Stat>
         <Stat label={t.stock.stats.volume}>{formatCompact(quote.volume, lang)}</Stat>
-        <Stat label={t.stock.stats.marketCap}>{formatCompact(quote.marketCap, lang)}</Stat>
+        <Stat label={quote.marketCap !== null ? t.stock.stats.marketCap : t.stock.stats.netAssets}>{formatCompact(quote.marketCap ?? quote.netAssets, lang)}</Stat>
         <div className="min-w-0 bg-panel px-3 py-2">
-          <div className="label truncate">{t.stock.stats.dayRange}</div>
+          <div className="col-head truncate">{t.stock.stats.dayRange}</div>
           <RangeBar low={quote.dayLow} high={quote.dayHigh} value={quote.price} lang={lang} />
         </div>
         <div className="min-w-0 bg-panel px-3 py-2">
-          <div className="label truncate">{t.stock.stats.range52w}</div>
+          <div className="col-head truncate">{t.stock.stats.range52w}</div>
           <RangeBar low={quote.fiftyTwoWeekLow} high={quote.fiftyTwoWeekHigh} value={quote.price} lang={lang} />
         </div>
       </div>

@@ -6,7 +6,7 @@ import { useState } from "react";
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Button } from "@/components/ui/Button";
 import { Panel } from "@/components/ui/Panel";
-import { formatInteger } from "@/lib/format";
+import { DASH, formatInteger } from "@/lib/format";
 import type { StockProfile } from "@/types/api";
 
 function safeWebsite(url: string | null): string | null {
@@ -26,22 +26,22 @@ export function ProfilePanel({ profile, className }: { profile: StockProfile; cl
   const s = t.stock.stats;
 
   return (
-    <Panel title={t.stock.profile} className={className}>
+    <Panel title={t.stock.profile} code="DES" className={className}>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 border-b border-line px-3 py-3 text-xs">
-        <div>
-          <dt className="text-fg-3">{s.sector}</dt>
-          <dd className="text-fg">{profile.sector ?? "—"}</dd>
+        <div className="min-w-0">
+          <dt className="col-head">{s.sector}</dt>
+          <dd className="truncate text-fg">{profile.sector ?? DASH}</dd>
+        </div>
+        <div className="min-w-0">
+          <dt className="col-head">{s.industry}</dt>
+          <dd className="truncate text-fg">{profile.industry ?? DASH}</dd>
         </div>
         <div>
-          <dt className="text-fg-3">{s.industry}</dt>
-          <dd className="text-fg">{profile.industry ?? "—"}</dd>
-        </div>
-        <div>
-          <dt className="text-fg-3">{s.employees}</dt>
+          <dt className="col-head">{s.employees}</dt>
           <dd className="num text-fg">{formatInteger(profile.employees, lang)}</dd>
         </div>
         <div className="min-w-0">
-          <dt className="text-fg-3">{s.website}</dt>
+          <dt className="col-head">{s.website}</dt>
           <dd className="truncate">
             {website ? (
               <a href={website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-info hover:underline">
@@ -49,7 +49,7 @@ export function ProfilePanel({ profile, className }: { profile: StockProfile; cl
                 <ArrowUpRight aria-hidden className="size-3" strokeWidth={1.75} />
               </a>
             ) : (
-              "—"
+              DASH
             )}
           </dd>
         </div>
@@ -59,7 +59,7 @@ export function ProfilePanel({ profile, className }: { profile: StockProfile; cl
           <p lang="en" className={expanded ? "text-sm leading-relaxed text-fg-2" : "line-clamp-5 text-sm leading-relaxed text-fg-2"}>
             {profile.summary}
           </p>
-          <Button size="sm" variant="ghost" className="mt-1 -ml-2" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
+          <Button size="sm" variant="ghost" className="mt-1 -ml-2 max-sm:h-10" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
             {expanded ? t.common.less : t.common.more}
           </Button>
         </div>
