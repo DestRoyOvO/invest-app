@@ -64,6 +64,18 @@ async function expectNextExDate(page: Page, dividends: DividendHistory): Promise
   await expect(panel(page, "Dividends")).toContainText(inOrder(["Next ex-date", longDate(`${next.exDate}T00:00:00Z`), `${perShare(amount)} · Pay date ${longDate(`${pay}T00:00:00Z`)}`]));
 }
 
+/** The first row of the analysts' table: the latest rating action, with its date, firm, new grade and price target. */
+async function expectLatestAction(page: Page, analysts: AnalystActivity): Promise<void> {
+  const action = known(analysts.actions[0], "rating action");
+  const target = known(action.currentTarget, "price target");
+  await expect(dataRows(tableWithColumn(panel(page, "Analysts"), "Firm")).first().getByRole("cell")).toHaveText([
+    shortDate(action.date, NEW_YORK),
+    action.firm,
+    new RegExp(`${escapeRegExp(known(action.toGrade, "grade"))}$`),
+    new RegExp(`(?:^|→ )${escapeRegExp(target >= 100 ? fixed(target, 0) : price(target))}$`),
+  ]);
+}
+
 test.describe("quote header", () => {
   test("shows the quote's price, change, after-hours trade, events and the investor's position", async ({ page, app, request }) => {
     await app.seedStorage(SAMPLE_DATA);
@@ -165,14 +177,7 @@ test.describe("quote tabs", () => {
     await tabs.getByRole("link", { name: "Analysts" }).click();
     await expect(page).toHaveURL(/\?tab=analysts$/);
     await expectCurrentTab(tabs, "Analysts");
-    const action = known(analysts.actions[0], "rating action");
-    const target = known(action.currentTarget, "price target");
-    await expect(dataRows(tableWithColumn(panel(page, "Analysts"), "Firm")).first().getByRole("cell")).toHaveText([
-      shortDate(action.date, NEW_YORK),
-      action.firm,
-      new RegExp(`${escapeRegExp(known(action.toGrade, "grade"))}$`),
-      new RegExp(`(?:^|→ )${escapeRegExp(target >= 100 ? fixed(target, 0) : price(target))}$`),
-    ]);
+    await expectLatestAction(page, analysts);
 
     // Dividends: the next ex-date and amount, and when it is paid.
     await tabs.getByRole("link", { name: "Dividends" }).click();
@@ -180,16 +185,22 @@ test.describe("quote tabs", () => {
     await expectCurrentTab(tabs, "Dividends");
     await expectNextExDate(page, dividends);
 
-    // Ownership: the largest institution and its share of the company.
+    // Ownership: the largest institution, with its share of the company, its shares and their value, the change since
+    // its previous filing and the date of the filing.
     await tabs.getByRole("link", { name: "Ownership" }).click();
     await expect(page).toHaveURL(/\?tab=ownership$/);
     await expectCurrentTab(tabs, "Ownership");
     const largest = known(ownership.institutions[0], "institution");
-    const holder = dataRows(panel(page, "Top institutions").getByRole("table")).first();
-    await expect(holder.getByRole("cell").first()).toHaveText(largest.name);
-    await expect(holder.getByRole("cell").nth(1)).toHaveText(share(known(largest.pctHeld, "share held"), 2));
+    await expect(dataRows(tableWithColumn(panel(page, "Top institutions"), "Held")).first().getByRole("cell")).toHaveText([
+      largest.name,
+      share(known(largest.pctHeld, "share held"), 2),
+      compact(known(largest.shares, "shares held")),
+      compact(known(largest.value, "value held")),
+      ratio(known(largest.pctChange, "change since the previous filing")),
+      longDate(`${known(largest.reportDate, "filing date")}T00:00:00Z`),
+    ]);
 
-    // Back returns to the tabs in the order they were opened.
+    // Back returns to the tabs in the order they were opened, each with its data.
     await page.goBack();
     await expect(page).toHaveURL(/\?tab=dividends$/);
     await expectCurrentTab(tabs, "Dividends");
@@ -197,7 +208,7 @@ test.describe("quote tabs", () => {
     await page.goBack();
     await expect(page).toHaveURL(/\?tab=analysts$/);
     await expectCurrentTab(tabs, "Analysts");
-    await expect(panel(page, "Analysts")).toBeVisible();
+    await expectLatestAction(page, analysts);
     await expectNoErrorStates(page);
   });
 
