@@ -59,15 +59,62 @@ export function RangePicker({ value, onChange }: { value: ChartRange; onChange: 
   );
 }
 
-interface StudiesMenuProps {
+interface StudiesPanelProps {
   settings: ChartSettings;
   onChange: (patch: Partial<ChartSettings>) => void;
-  disabled?: boolean;
   /**
    * Studies the symbol's data cannot draw, with the reason shown under the switch (volume for ^TNX or EURUSD=X). Their
    * switch is off and disabled; the saved setting stays for the next symbol.
    */
   unavailable?: Partial<Record<ChartStudy, string>>;
+}
+
+/**
+ * The switches of the studies menu. The reason a study is unavailable is a line of its own under the switch, not the
+ * switch's description, which the disabled switch dims along with its label; and it describes the whole group, since
+ * Tab skips a disabled switch: screen readers announce it as focus enters the menu.
+ */
+export function StudiesPanel({ id, settings, onChange, unavailable }: StudiesPanelProps & { id: string }) {
+  const { t } = usePrefs();
+  const reasonId = (study: ChartStudy) => `${id}-${study}-reason`;
+  const reasonIds = CHART_STUDIES.filter((study) => unavailable?.[study]).map(reasonId);
+  return (
+    <div
+      id={id}
+      role="group"
+      aria-label={t.chart.studiesTitle}
+      aria-describedby={reasonIds.length > 0 ? reasonIds.join(" ") : undefined}
+      className="absolute top-full right-0 z-40 mt-1 w-56 space-y-1 rounded-xs border border-line-2 bg-panel p-2 shadow-2xl"
+    >
+      {CHART_STUDIES.map((study: ChartStudy) => {
+        const reason = unavailable?.[study];
+        const toggle = (
+          <Switch
+            key={study}
+            label={t.chart.study[study]}
+            checked={reason ? false : settings[study]}
+            disabled={Boolean(reason)}
+            onCheckedChange={(checked) => onChange({ [study]: checked })}
+            className="flex w-full rounded-xs px-1.5 py-1.5 enabled:hover:bg-hover max-sm:min-h-10 max-sm:items-center"
+          />
+        );
+        if (!reason) return toggle;
+        // Under the label (the row's padding, the switch and the gap: 44px), at full contrast.
+        return (
+          <div key={study}>
+            {toggle}
+            <p id={reasonId(study)} className="-mt-1 pr-1.5 pb-1.5 pl-11 text-xs text-fg-3">
+              {reason}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+interface StudiesMenuProps extends StudiesPanelProps {
+  disabled?: boolean;
 }
 
 /**
@@ -124,24 +171,7 @@ export function StudiesMenu({ settings, onChange, disabled = false, unavailable 
         <SlidersHorizontal aria-hidden className="size-3.5" strokeWidth={1.75} />
         {t.chart.studies}
       </Button>
-      {open ? (
-        <div id={panelId} role="group" aria-label={t.chart.studiesTitle} className="absolute top-full right-0 z-40 mt-1 w-56 space-y-1 rounded-xs border border-line-2 bg-panel p-2 shadow-2xl">
-          {CHART_STUDIES.map((study: ChartStudy) => {
-            const reason = unavailable?.[study];
-            return (
-              <Switch
-                key={study}
-                label={t.chart.study[study]}
-                description={reason}
-                checked={reason ? false : settings[study]}
-                disabled={Boolean(reason)}
-                onCheckedChange={(checked) => onChange({ [study]: checked })}
-                className="flex w-full rounded-xs px-1.5 py-1.5 enabled:hover:bg-hover max-sm:min-h-10 max-sm:items-center"
-              />
-            );
-          })}
-        </div>
-      ) : null}
+      {open ? <StudiesPanel id={panelId} settings={settings} onChange={onChange} unavailable={unavailable} /> : null}
     </div>
   );
 }
