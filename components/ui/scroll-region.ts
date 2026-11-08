@@ -33,9 +33,14 @@ export interface ScrollRegionProps {
   tabIndex?: 0;
 }
 
+/** The attributes of a scroll box: a named region with a tab stop while it overflows, nothing while everything fits. */
+export function scrollRegionProps(overflowing: boolean, label: string): ScrollRegionProps {
+  return overflowing ? { role: "region", "aria-label": label, tabIndex: 0 } : {};
+}
+
 /**
- * Props for a scroll box element: role="region", the label and tabIndex 0 while its content overflows, nothing
- * otherwise. Watches the box and its first child (the table) for size changes.
+ * Props for a scroll box element (see scrollRegionProps). Measures after mounting, so the server render and the first
+ * client render never add a tab stop, then watches the box and its first child (the table) for size changes.
  */
 export function useScrollRegion(ref: RefObject<HTMLElement | null>, label: string): ScrollRegionProps {
   const [overflowing, setOverflowing] = useState(false);
@@ -55,5 +60,5 @@ export function useScrollRegion(ref: RefObject<HTMLElement | null>, label: strin
     return () => observer.disconnect();
   }, [ref]);
 
-  return overflowing ? { role: "region", "aria-label": label, tabIndex: 0 } : {};
+  return scrollRegionProps(overflowing, label);
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isScrollable, overflowsScrollBox } from "./scroll-region";
+import { isScrollable, overflowsScrollBox, scrollRegionProps } from "./scroll-region";
 
 const box = (scrollWidth: number, clientWidth: number, scrollHeight = 100, clientHeight = 100) => ({ scrollWidth, clientWidth, scrollHeight, clientHeight });
 
@@ -32,5 +32,15 @@ describe("overflowsScrollBox", () => {
     expect(overflowsScrollBox(box(736, 388, 900, 100), "hidden", "auto")).toBe(true);
     expect(overflowsScrollBox(box(736, 388, 900, 100), "auto", "hidden")).toBe(true);
     expect(overflowsScrollBox(box(736, 388, 900, 100), "hidden", "hidden")).toBe(false);
+  });
+});
+
+describe("scrollRegionProps", () => {
+  it("makes an overflowing box a region named by the caption, with a tab stop", () => {
+    expect(scrollRegionProps(true, "Alert history")).toEqual({ role: "region", "aria-label": "Alert history", tabIndex: 0 });
+  });
+
+  it("adds nothing while everything fits: no landmark and no tab stop", () => {
+    expect(scrollRegionProps(false, "Alert history")).toEqual({});
   });
 });
