@@ -40,6 +40,32 @@ export interface ToastApi {
   dismiss: (id: string) => void;
 }
 
+/**
+ * What the dialog around a ToastOutlet does while the toasts in it change, given the outlet element: `before` runs
+ * while the old toasts are still on screen, `after` once the new ones are, before the browser paints. Drawer uses it
+ * to keep its content where it was on screen when the strip of toasts takes room from it or gives it back.
+ */
+export interface ToastOutletWatch {
+  before: (outlet: HTMLElement) => void;
+  after: (outlet: HTMLElement) => void;
+}
+
+/** The outlets that have a watch, told before and after the toasts change: a registry kept outside React's state. */
+function createWatchList() {
+  const watches = new Map<HTMLElement, ToastOutletWatch>();
+  return {
+    add(outlet: HTMLElement, watch: ToastOutletWatch) {
+      watches.set(outlet, watch);
+    },
+    remove(outlet: HTMLElement) {
+      watches.delete(outlet);
+    },
+    tell(moment: keyof ToastOutletWatch) {
+      for (const [outlet, watch] of watches) watch[moment](outlet);
+    },
+  };
+}
+
 interface ToastEntry extends ToastOptions {
   id: string;
   duration: number;
@@ -76,8 +102,8 @@ export function toastCardClass(docked: boolean): string {
 }
 
 const ToastContext = createContext<ToastApi | null>(null);
-/** Registers an outlet element and returns the function that removes it again. */
-const ToastOutletContext = createContext<((element: HTMLElement) => () => void) | null>(null);
+/** Registers an outlet element (with what its dialog does around changes) and returns the function that removes it again. */
+const ToastOutletContext = createContext<((element: HTMLElement, watch?: ToastOutletWatch) => () => void) | null>(null);
 
 type ShownToast = ToastOptions & { id: string };
 
@@ -162,8 +188,19 @@ export function ToastStacks({ docked, active, carried, fresh, liveRef, dismissLa
 export function ToastProvider({ children }: { children: ReactNode }) {
   const t = useT();
   const [toasts, setToasts] = useState<ToastEntry[]>([]);
-  // The list and its countdowns live in one store that hands each new list to React.
-  const [store] = useState(() => createToastStore<ToastEntry>(setToasts, { max: MAX_TOASTS }));
+  // The dialogs around the outlets, told before and after the toasts in them change.
+  const [watches] = useState(createWatchList);
+  // The list and its countdowns live in one store that hands each new list to React, once the dialogs have noted
+  // where their content is.
+  const [store] = useState(() =>
+    createToastStore<ToastEntry>(
+      (next) => {
+        watches.tell("before");
+        setToasts(next);
+      },
+      { max: MAX_TOASTS },
+    ),
+  );
   const [outlets, setOutlets] = useState<readonly HTMLElement[]>([]);
   const outlet = activeOutlet(outlets);
   // Toasts a live region has shown (they were in a live stack in the document after a commit), and the ones carried to
@@ -204,15 +241,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   }, [store]);
 
   const registerOutlet = useCallback(
-    (element: HTMLElement) => {
+    (element: HTMLElement, watch?: ToastOutletWatch) => {
       carry();
+      // The toasts leave the dialogs open so far. The new one is added after: it is never seen without them.
+      watches.tell("before");
+      if (watch) watches.add(element, watch);
       setOutlets((list) => addOutlet(list, element));
       return () => {
+        watches.remove(element);
         carry();
+        watches.tell("before");
         setOutlets((list) => removeOutlet(list, element));
       };
     },
-    [carry],
+    [carry, watches],
   );
 
   useLayoutEffect(() => {
@@ -222,6 +264,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     if (!live?.isConnected) return;
     for (const toast of toasts) if (!carried.has(toast)) announced.current.add(toast);
   }, [toasts, carried, outlet]);
+
+  // The toasts are in place in their host: the dialogs put their content back where it was on screen.
+  useLayoutEffect(() => {
+    watches.tell("after");
+  }, [toasts, outlets, watches]);
 
   useEffect(() => {
     // The focusout of a toast that closes under keyboard focus fires while React deletes it and never reaches onBlur,
@@ -306,11 +353,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
  * Where the toasts show while a modal layer is open; Drawer renders one between its content and its footer. Inside the
  * dialog the toasts stay reachable with Tab and get announced (under aria-modal, assistive technology treats the rest
  * of the page as inert), and in a strip of their own they never cover the dialog's fields or buttons. The newest
- * outlet hosts the toasts; with none, they show at the screen's edge.
+ * outlet hosts the toasts; with none, they show at the screen's edge. `watch` (keep it the same object for the life of
+ * the outlet) lets the dialog keep its content in place while the strip changes size.
  */
-export function ToastOutlet({ className }: { className?: string }) {
+export function ToastOutlet({ className, watch }: { className?: string; watch?: ToastOutletWatch }) {
   const register = useContext(ToastOutletContext);
-  const ref = useCallback((element: HTMLDivElement | null) => (element && register ? register(element) : undefined), [register]);
+  const ref = useCallback((element: HTMLDivElement | null) => (element && register ? register(element, watch) : undefined), [register, watch]);
   return <div ref={ref} data-toast-outlet className={className} />;
 }
 
