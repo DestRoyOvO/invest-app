@@ -14,13 +14,23 @@ import { APP_SERVER_ARGS, appEnv, BASE_URL, E2E_NOW, LLM_URL, MOCK_ENV, MOCK_SER
 
 const children: ChildProcess[] = [];
 
+/**
+ * Makes a server exit when this script goes away, also when it is killed without a signal (a task runner's stop, a
+ * killed terminal): the server's stdin is a pipe from this process, which closes with it.
+ */
+const EXIT_WITH_PARENT = ["--import", "data:text/javascript,process.stdin.on('end',()=>process.exit(0));process.stdin.resume();"];
+
 function stopAll(code: number): never {
   for (const child of children) if (child.exitCode === null) child.kill();
   process.exit(code);
 }
 
-function run(command: string, args: string[], env: Record<string, string>, options: { shell?: boolean } = {}): ChildProcess {
-  const child = spawn(command, args, { env: { ...process.env, ...env }, stdio: "inherit", shell: options.shell ?? false });
+function run(command: string, args: string[], env: Record<string, string>, options: { shell?: boolean; server?: boolean } = {}): ChildProcess {
+  const child = spawn(command, options.server ? [...EXIT_WITH_PARENT, ...args] : args, {
+    env: { ...process.env, ...env },
+    stdio: [options.server ? "pipe" : "inherit", "inherit", "inherit"],
+    shell: options.shell ?? false,
+  });
   children.push(child);
   return child;
 }
@@ -51,7 +61,7 @@ async function main(): Promise<void> {
     if (code !== 0) process.exit(code);
   }
 
-  for (const child of [run(process.execPath, MOCK_SERVER_ARGS, MOCK_ENV), run(process.execPath, APP_SERVER_ARGS, env)]) {
+  for (const child of [run(process.execPath, MOCK_SERVER_ARGS, MOCK_ENV, { server: true }), run(process.execPath, APP_SERVER_ARGS, env, { server: true })]) {
     child.on("exit", (code) => {
       console.error(`[e2e:serve] a server stopped (exit code ${code ?? "none"}), stopping the other one.`);
       stopAll(code ?? 1);
