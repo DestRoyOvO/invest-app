@@ -12,38 +12,20 @@ import { cn } from "@/lib/cn";
 import { formatTime, tpl } from "@/lib/format";
 import {
   capParam,
-  DEFAULT_DISCOVER_CAP,
   DISCOVER_CAPS,
   parseCapParam,
-  screenFromParams,
-  screenToQuery,
+  viewFromParams,
+  viewToQuery,
   type DiscoverCap,
   type Screen,
+  type ScreenerViewState,
+  type ScreenerViewTab,
 } from "@/lib/screens";
 import type { ScreenerUniverse } from "@/types/api";
 
 import { capLabel, DiscoverTab } from "./DiscoverTab";
 import { ScreenerTab } from "./ScreenerTab";
-
-export type ScreenerViewTab = "screener" | "discover";
-
-interface ViewState {
-  tab: ScreenerViewTab;
-  screen: Screen;
-  cap: DiscoverCap;
-}
-
-function stateFrom(params: URLSearchParams): ViewState {
-  return { tab: params.get("tab") === "discover" ? "discover" : "screener", screen: screenFromParams(params), cap: parseCapParam(params.get("cap")) };
-}
-
-/** The link for what is on screen: the screen's filters on the Screener tab, the tab and floor on Discover. */
-function queryOf(state: ViewState): string {
-  if (state.tab === "screener") return screenToQuery(state.screen);
-  const params = new URLSearchParams({ tab: "discover" });
-  if (state.cap !== DEFAULT_DISCOVER_CAP) params.set("cap", capParam(state.cap));
-  return params.toString();
-}
+import { screenerPageTitle } from "./titles";
 
 /** "Snapshot 16:10 ET · rebuilt every 10 minutes" for the universe on screen (shares the table's request). */
 function SnapshotMeta({ universe }: { universe: ScreenerUniverse }) {
@@ -66,18 +48,18 @@ export function ScreenerView() {
   const { t } = usePrefs();
   const params = useSearchParams();
   const search = params.toString();
-  const [state, setState] = useState<ViewState>(() => stateFrom(new URLSearchParams(search)));
+  const [state, setState] = useState<ScreenerViewState>(() => viewFromParams(new URLSearchParams(search)));
   const [synced, setSynced] = useState(search);
 
   // A navigation to another /screener link (the command bar, back and forward) replaces the state; the URL updates
   // this view writes itself come back here equal to its own query and change nothing.
   if (search !== synced) {
     setSynced(search);
-    if (search !== queryOf(state)) setState(stateFrom(new URLSearchParams(search)));
+    if (search !== viewToQuery(state)) setState(viewFromParams(new URLSearchParams(search)));
   }
 
   useEffect(() => {
-    const query = queryOf(state);
+    const query = viewToQuery(state);
     if (query === window.location.search.replace(/^\?/, "")) return;
     window.history.replaceState(null, "", query ? `${window.location.pathname}?${query}` : window.location.pathname);
   }, [state]);
@@ -86,6 +68,11 @@ export function ScreenerView() {
   const setScreen = (screen: Screen) => setState((current) => ({ ...current, screen }));
   const setCap = (cap: DiscoverCap) => setState((current) => ({ ...current, cap }));
   const discover = state.tab === "discover";
+
+  // generateMetadata titles the page from the URL on load; a tab switch is client state, so the title follows it here.
+  useEffect(() => {
+    document.title = screenerPageTitle(state.tab, document.title);
+  }, [state.tab]);
 
   return (
     <div className={cn("flex flex-col gap-px bg-line p-px", !discover && "lg:h-full")}>

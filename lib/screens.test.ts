@@ -15,6 +15,7 @@ import {
   daysUntil,
   defaultScreen,
   DEFAULT_DISCOVER_CAP,
+  discoverCapFromParams,
   EMPTY_FILTERS,
   filterRows,
   filtersEqual,
@@ -50,6 +51,8 @@ import {
   toCsv,
   toInput,
   upsertSavedScreen,
+  viewFromParams,
+  viewToQuery,
   type FilterContext,
   type SavedScreen,
   type Screen,
@@ -537,6 +540,42 @@ describe("discover helpers", () => {
     expect(parseCapParam("300M")).toBe(3e8);
     expect(parseCapParam("5B")).toBe(DEFAULT_DISCOVER_CAP);
     expect(parseCapParam(null)).toBe(1e9);
+  });
+
+  it("reads the floor from mincap, or from an older link's cap when it names a floor", () => {
+    expect(discoverCapFromParams(new URLSearchParams("mincap=10B"))).toBe(1e10);
+    expect(discoverCapFromParams(new URLSearchParams("tab=discover&cap=100B"))).toBe(1e11);
+    // A cap range is the screener's market-cap filter, not a floor.
+    expect(discoverCapFromParams(new URLSearchParams("cap=10..200"))).toBe(DEFAULT_DISCOVER_CAP);
+    expect(discoverCapFromParams(new URLSearchParams("cap=10..&mincap=300M"))).toBe(3e8);
+    expect(discoverCapFromParams(new URLSearchParams("mincap=7B&cap=10B"))).toBe(DEFAULT_DISCOVER_CAP);
+    expect(discoverCapFromParams(new URLSearchParams(""))).toBe(DEFAULT_DISCOVER_CAP);
+  });
+});
+
+describe("the /screener address", () => {
+  it("is empty for the default view", () => {
+    expect(viewToQuery({ tab: "screener", screen: defaultScreen(), cap: DEFAULT_DISCOVER_CAP })).toBe("");
+    expect(viewFromParams(new URLSearchParams(""))).toEqual({ tab: "screener", screen: defaultScreen(), cap: DEFAULT_DISCOVER_CAP });
+  });
+
+  it("keeps the screen on the Discover tab and the floor on the Screener tab", () => {
+    const screen = screenFromParams(new URLSearchParams("yield=3..&cols=dividends"));
+    expect(viewToQuery({ tab: "discover", screen, cap: DEFAULT_DISCOVER_CAP })).toBe("tab=discover&yield=3..&cols=dividends");
+    expect(viewToQuery({ tab: "screener", screen, cap: 1e10 })).toBe("yield=3..&cols=dividends&mincap=10B");
+  });
+
+  it("round-trips a market-cap range together with a floor", () => {
+    const view = { tab: "discover" as const, screen: screenFromParams(new URLSearchParams("cap=500..&sector=energy")), cap: 1e11 as const };
+    const query = viewToQuery(view);
+    expect(query).toBe("tab=discover&sector=energy&cap=500..&mincap=100B");
+    expect(viewFromParams(new URLSearchParams(query))).toEqual(view);
+    expect(viewFromParams(new URLSearchParams(query)).screen.filters.ranges.cap).toEqual({ min: 5e11, max: null });
+  });
+
+  it("reads older Discover links", () => {
+    expect(viewFromParams(new URLSearchParams("tab=discover&cap=10B"))).toEqual({ tab: "discover", screen: defaultScreen(), cap: 1e10 });
+    expect(viewToQuery(viewFromParams(new URLSearchParams("tab=discover&cap=10B")))).toBe("tab=discover&mincap=10B");
   });
 
   it("computes relative volume", () => {

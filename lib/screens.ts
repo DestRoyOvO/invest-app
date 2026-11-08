@@ -850,10 +850,27 @@ export function capParam(cap: DiscoverCap): string {
   return CAP_PARAMS[cap];
 }
 
-/** The floor a `cap` parameter names; the default ($1B) for anything else. */
-export function parseCapParam(value: string | null | undefined): DiscoverCap {
+function findCap(value: string | null | undefined): DiscoverCap | null {
   const wanted = value?.trim().toLowerCase();
-  return DISCOVER_CAPS.find((cap) => CAP_PARAMS[cap].toLowerCase() === wanted) ?? DEFAULT_DISCOVER_CAP;
+  return DISCOVER_CAPS.find((cap) => CAP_PARAMS[cap].toLowerCase() === wanted) ?? null;
+}
+
+/** The floor a link value names ("300M", "1B", "10B", "100B"); the default ($1B) for anything else. */
+export function parseCapParam(value: string | null | undefined): DiscoverCap {
+  return findCap(value) ?? DEFAULT_DISCOVER_CAP;
+}
+
+/** Link parameter of the Discover floor. `cap` is the screener's market-cap range, so the floor has a name of its own. */
+export const DISCOVER_CAP_PARAM = "mincap";
+
+/**
+ * The Discover floor a link names: `mincap`, or `cap` in an older link when it names a floor ("cap=10B"; a range such as
+ * "cap=10..200" is a screener filter). The default ($1B) otherwise.
+ */
+export function discoverCapFromParams(params: URLSearchParams): DiscoverCap {
+  const floor = params.get(DISCOVER_CAP_PARAM);
+  if (floor !== null) return parseCapParam(floor);
+  return findCap(params.get("cap")) ?? DEFAULT_DISCOVER_CAP;
 }
 
 /** Today's volume over the 3-month daily average; null without both. */
@@ -872,4 +889,33 @@ export function ratingKey(rating: number | null): RatingKey | null {
   if (rating < 3.5) return "hold";
   if (rating < 4.5) return "underperform";
   return "sell";
+}
+
+// ---------------------------------------------------------------------------
+// The /screener address: both tabs in one link
+// ---------------------------------------------------------------------------
+
+export type ScreenerViewTab = "screener" | "discover";
+
+/** What /screener restores from its address: the tab, the screen and the Discover floor. */
+export interface ScreenerViewState {
+  tab: ScreenerViewTab;
+  screen: Screen;
+  cap: DiscoverCap;
+}
+
+export function viewFromParams(params: URLSearchParams): ScreenerViewState {
+  return { tab: params.get("tab") === "discover" ? "discover" : "screener", screen: screenFromParams(params), cap: discoverCapFromParams(params) };
+}
+
+/**
+ * The address for what is on screen. Each tab keeps the other's state, so Back or a reload after a visit to Discover
+ * still finds the screen: `tab=discover&yield=3..&mincap=10B`. Defaults are left out; the default view is "".
+ */
+export function viewToQuery(view: ScreenerViewState): string {
+  const params = new URLSearchParams();
+  if (view.tab === "discover") params.set("tab", "discover");
+  for (const [key, value] of screenToParams(view.screen)) params.append(key, value);
+  if (view.cap !== DEFAULT_DISCOVER_CAP) params.set(DISCOVER_CAP_PARAM, capParam(view.cap));
+  return params.toString();
 }
