@@ -27,7 +27,7 @@ import { TopBar } from "./TopBar";
 /** How long the second key of a "g" sequence is awaited. */
 const GO_TIMEOUT_MS = 1500;
 
-export function TerminalShell({ children }: { children: ReactNode }) {
+export function TerminalShell({ children, dataSource = "yahoo" }: { children: ReactNode; dataSource?: "yahoo" | "fixtures" }) {
   const t = useT();
   const router = useRouter();
   const pathname = usePathname();
@@ -116,7 +116,7 @@ export function TerminalShell({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
-      <StatusBar goPending={goPending} />
+      <StatusBar goPending={goPending} dataSource={dataSource} />
       <MobileTabBar ctx={ctx} />
       <CommandPalette />
       <ShortcutsSheet />

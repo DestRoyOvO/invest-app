@@ -17,8 +17,9 @@ import { StateDot } from "./MarketClock";
 /**
  * Bottom status line (tablet and desktop): market state, data source and freshness, AI state and the shortcuts key.
  * Its live region, which announces delayed or unavailable quotes, sits outside the line so phones hear it too.
+ * `dataSource` comes from the server (MARKET_DATA_SOURCE): synthetic fixture data is labelled as such.
  */
-export function StatusBar({ goPending = false }: { goPending?: boolean }) {
+export function StatusBar({ goPending = false, dataSource = "yahoo" }: { goPending?: boolean; dataSource?: "yahoo" | "fixtures" }) {
   const { t, lang } = usePrefs();
   const { openShortcuts } = useUi();
   const { data, error } = useBoard();
@@ -35,7 +36,7 @@ export function StatusBar({ goPending = false }: { goPending?: boolean }) {
           <StateDot state={state} />
           <span className="text-fg-2">{state ? t.shell.marketState[state] : t.shell.marketState.unknown}</span>
         </span>
-        <span className="hidden lg:inline">{t.shell.dataSource}</span>
+        <span className="hidden lg:inline">{dataSource === "fixtures" ? t.shell.dataSourceFixtures : t.shell.dataSource}</span>
         {notice ? (
           // Shown here and announced once through the live region below (the refresh time changes too often to announce).
           <span aria-hidden className="flex min-w-0 items-center gap-1.5 text-warn">
