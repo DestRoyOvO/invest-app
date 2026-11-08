@@ -14,6 +14,7 @@ import { useToast } from "@/components/ui/Toast";
 import { useQuotes } from "@/hooks/useApi";
 import { requestNotificationPermission, setAlertEditTarget, useAlertEditTarget, useAlertRules } from "@/hooks/useAlerts";
 import { useHoldings } from "@/hooks/useHoldings";
+import { useDebounced } from "@/hooks/useLocalValue";
 import { useNow } from "@/hooks/useNotes";
 import {
   addAlertRule,
@@ -53,6 +54,9 @@ function QuoteLine({ quote }: { quote: Quote }) {
   );
 }
 
+/** Quiet time after typing in the symbol field before its quote is looked up. */
+const LOOKUP_DELAY_MS = 350;
+
 interface EditorFormProps {
   /** The rule being edited, or null for a new one. */
   rule: AlertRule | null;
@@ -76,8 +80,13 @@ function EditorForm({ rule, initialSymbol, onClose }: EditorFormProps) {
   const [full, setFull] = useState(false);
 
   const normalized = normalizeSymbol(symbol);
-  const { data, isLoading } = useQuotes(normalized ? [normalized] : []);
-  const quote = data?.quotes.find((q) => q.symbol === normalized) ?? null;
+  // Look the quote up once typing pauses, not for every prefix of a ticker: "M" and "MS" are tickers too, and their
+  // quotes would show other companies (and cost upstream calls) while "MSFT" is being typed.
+  const lookup = useDebounced(normalized, LOOKUP_DELAY_MS);
+  const { data, isLoading } = useQuotes(lookup ? [lookup] : []);
+  const current = lookup === normalized;
+  const quote = current ? (data?.quotes.find((q) => q.symbol === normalized) ?? null) : null;
+  const quoteLoading = isLoading || !current;
   const parsed = kind === "cross_ma200" ? null : parseNumberInput(value);
   const input: AlertRuleInput = { symbol, kind, value: parsed, repeat, note };
   const error = validateRuleInput(input);
@@ -163,7 +172,7 @@ function EditorForm({ rule, initialSymbol, onClose }: EditorFormProps) {
           </Field>
         ) : null}
 
-        <AlertContext symbol={normalized} quote={quote} loading={isLoading} kind={kind} value={parsed} holdings={holdings} now={now} />
+        <AlertContext symbol={normalized} quote={quote} loading={quoteLoading} kind={kind} value={parsed} holdings={holdings} now={now} />
 
         <Segmented
           label={editor.repeat}
