@@ -25,12 +25,12 @@ function own(dictionary: object, key: string): string | null {
   return typeof value === "string" ? value : null;
 }
 
-/** "Last backup 3 days ago", "Last backup today" or "No backup yet". */
-export function lastBackupLabel(t: Messages, days: number | null): string {
+/** "Last backup 3 days ago", "Last backup today" or "Never backed up"; `short` gives "Last backup 3d ago" (status bar). */
+export function lastBackupLabel(t: Messages, days: number | null, { short = false }: { short?: boolean } = {}): string {
   if (days === null) return t.data.lastBackup.never;
   if (days === 0) return t.data.lastBackup.today;
   if (days === 1) return t.data.lastBackup.yesterday;
-  return tpl(t.data.lastBackup.days, { n: days });
+  return tpl(short ? t.data.lastBackup.daysShort : t.data.lastBackup.days, { n: days });
 }
 
 /** A preference value in words ("Dark", "Red up"); unknown values are shown as they are. */

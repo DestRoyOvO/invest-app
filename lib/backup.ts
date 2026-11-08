@@ -6,7 +6,8 @@
 // - storage: JSON values by key (the watchlist, positions, notes and every other store);
 // - text: values that are not JSON, by key (the last viewed symbol is stored as a bare string);
 // - cookies: the display preferences (language, theme, price colors, density).
-// This browser's backup bookkeeping (META_STORAGE_KEY) is never exported or restored.
+// This browser's backup bookkeeping (META_STORAGE_KEY) is never exported or taken from a file. A restore records the
+// file's export time as the last backup when the file then holds all of this browser's personal data (applyBackup).
 //
 // A restore is previewed first: per store, what it would add, change and remove. Then it is applied atomically: every
 // key is written, or after a failure (a full storage) the keys already written are put back and nothing has changed;
@@ -24,6 +25,13 @@
 //
 // Display preferences are restored only with values this version can show (isKnownPrefValue); the page applies them
 // through the preferences provider (components/data/prefs-sync.ts), as the settings menu does.
+//
+// The backup reminder (backupReminder) is due when this browser holds personal data (hasPersonalData) and its last
+// backup is more than BACKUP_REMINDER_DAYS days old or never happened. Exporting a backup resets it, and so does
+// restoring a file that holds all the personal data this browser then holds: right after moving to a new browser, the
+// file just restored is its backup. A restore that keeps data the file lacks (a Merge into this browser's own
+// positions) leaves it as it was. The shell shows it on every page (components/shell/BackupReminder.tsx), so it reads
+// only the personal-data keys.
 
 import { HOLDINGS_STORAGE_KEY, sanitizeHoldings, type Holdings } from "@/hooks/useHoldings";
 import { sanitizeWatchlist, WATCHLIST_STORAGE_KEY } from "@/hooks/useWatchlist";
@@ -35,7 +43,7 @@ import { DEFAULT_WATCHLIST, MAX_WATCHLIST } from "./universe";
 
 export const BACKUP_APP = "investseek";
 export const BACKUP_SCHEMA = 1;
-/** This browser's backup bookkeeping (the last backup time). Never exported or restored. */
+/** This browser's backup bookkeeping (the last backup time). Never exported or taken from a file. */
 export const META_STORAGE_KEY = `${STORAGE_PREFIX}meta:v1`;
 /** The largest backup accepted, in characters: about what localStorage holds for one site. */
 export const MAX_BACKUP_BYTES = 5 * 1024 * 1024;
@@ -721,12 +729,22 @@ export interface RestoreResult {
 /**
  * Restores a backup against the latest stored values: plans the writes, applies them atomically (throws
  * StorageWriteError with nothing changed when storage refuses), sets the preference cookies when `prefs` is true, and
- * then notifies the stores.
+ * then notifies the stores. When the file then holds all of this browser's personal data, it is this browser's latest
+ * backup: its export time becomes the last backup (restoredBackupWrite), a change Undo puts back with the others.
  */
-export function applyBackup(backup: Backup, mode: RestoreMode, env: BackupEnv, options: { prefs?: boolean } = {}): RestoreResult {
+export function applyBackup(backup: Backup, mode: RestoreMode, env: BackupEnv, options: { prefs?: boolean; now?: Date } = {}): RestoreResult {
   const currentCookies = env.readCookies();
-  const plan = planRestore(readStorage(env.storage), backup, mode, { stores: env.stores, cookies: options.prefs ? currentCookies : null });
+  const stores = env.stores ?? registeredLocalStores();
+  const plan = planRestore(readStorage(env.storage), backup, mode, { stores, cookies: options.prefs ? currentCookies : null });
   const changes = writeAtomically(env.storage, plan.writes);
+  const record = restoredBackupWrite(env.storage, backup, stores, options.now ?? new Date());
+  if (record) {
+    try {
+      changes.push(...writeAtomically(env.storage, record));
+    } catch {
+      // The restore stands; only the bookkeeping did not fit, so the reminder stays as it was.
+    }
+  }
   const cookies: CookieChange[] = [];
   for (const name of PREF_COOKIE_NAMES) {
     const value = plan.cookies[name];
@@ -760,7 +778,10 @@ export function clearAllData(env: BackupEnv): StorageChange[] {
 }
 
 export interface BackupMeta {
-  /** ISO time of the last export from this browser. */
+  /**
+   * ISO time of the last backup: an export from this browser, or the export time of a restored file that holds all
+   * of its personal data (applyBackup).
+   */
   lastBackupAt: string | null;
 }
 
@@ -771,7 +792,7 @@ export function sanitizeBackupMeta(raw: unknown): BackupMeta {
   return typeof at === "string" && !Number.isNaN(Date.parse(at)) ? { lastBackupAt: at } : EMPTY_META;
 }
 
-/** When this browser last exported a backup (for "Last backup N days ago"). */
+/** When this browser was last backed up (for "Last backup N days ago"). */
 export const backupMetaStore = createLocalStore<BackupMeta>({ key: META_STORAGE_KEY, sanitize: sanitizeBackupMeta, empty: EMPTY_META });
 
 export function recordBackup(now: Date = new Date()): void {
@@ -785,6 +806,112 @@ export function backupAgeDays(lastBackupAt: string | null, now: Date = new Date(
   if (Number.isNaN(then.getTime())) return null;
   const day = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
   return Math.max(0, Math.round((day(now) - day(then)) / 86_400_000));
+}
+
+/** A backup becomes due once the last one is more than this many days old (backupAgeDays). */
+export const BACKUP_REMINDER_DAYS = 30;
+
+function isStarterList(list: readonly string[]): boolean {
+  return list.length === DEFAULT_WATCHLIST.length && DEFAULT_WATCHLIST.every((symbol) => list.includes(symbol));
+}
+
+/**
+ * The stores that hold personal data, with the test for "holds some". Alerts, saved screens and assistant chats are
+ * named by key rather than imported: lib/screens.ts would bring the screener model into every page, and importing a
+ * store's module registers that store wherever this module loads (lib/backup.test.ts checks the keys against them).
+ */
+const PERSONAL_DATA: Readonly<Record<string, (value: unknown) => boolean>> = {
+  // A list of the investor's own: symbols other than the starter list's, or some of those removed. The starter list
+  // reordered, or emptied, is nothing a backup would have to bring back.
+  [WATCHLIST_STORAGE_KEY]: (value) => {
+    const list = sanitizeWatchlist(value);
+    return list.length > 0 && !isStarterList(list);
+  },
+  [HOLDINGS_STORAGE_KEY]: (value) => Object.keys(sanitizeHoldings(value)).length > 0,
+  [NOTES_STORAGE_KEY]: (value) => Object.keys(sanitizeNotes(value)).length > 0,
+  [`${STORAGE_PREFIX}alerts:v1`]: (value) => Array.isArray(value) && value.some(isRecord),
+  [`${STORAGE_PREFIX}screens:v1`]: (value) => Array.isArray(value) && value.some(isRecord),
+  [`${STORAGE_PREFIX}ai-chats:v1`]: (value) => isRecord(value) && Array.isArray(value.conversations) && value.conversations.some(isRecord),
+};
+
+/** The keys hasPersonalData reads: the watchlist, positions, notes, alert rules, saved screens and assistant chats. */
+export const PERSONAL_DATA_KEYS: readonly string[] = Object.keys(PERSONAL_DATA);
+
+/** The raw values of the personal-data keys, as stored: what hasPersonalData needs, without reading other stores. */
+export function readPersonalData(storage: Pick<StorageLike, "getItem">): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const key of PERSONAL_DATA_KEYS) {
+    const value = storage.getItem(key);
+    if (value !== null) out[key] = value;
+  }
+  return out;
+}
+
+/**
+ * True when this browser holds personal data, the investor's own work that only a backup file brings back: a
+ * position, a note, an alert rule, a saved screen, an assistant conversation, or a watchlist other than the starter
+ * list (see PERSONAL_DATA). Browsing history, view settings, display settings, AI notes and the alert history are not
+ * personal data: they come back by themselves or with use.
+ */
+export function hasPersonalData(snapshot: StorageSnapshot): boolean {
+  return PERSONAL_DATA_KEYS.some((key) => {
+    const raw = snapshot[key];
+    if (raw === undefined) return false;
+    const parsed = parseJson(raw);
+    return parsed.ok && PERSONAL_DATA[key](parsed.value);
+  });
+}
+
+/**
+ * True when a backup file holds the personal data of a snapshot as it is: restoring the file with Replace would add,
+ * change or remove nothing in a store that holds personal data, and would keep none of them because the file's copy is
+ * damaged. A store without personal data (the starter watchlist, an empty book) needs nothing from the file.
+ */
+export function backupHoldsPersonalData(snapshot: StorageSnapshot, backup: Backup, stores: StoreRegistry = registeredLocalStores()): boolean {
+  const diffs = diffRestore(snapshot, backup, "replace", stores);
+  return PERSONAL_DATA_KEYS.every((key) => {
+    const raw = snapshot[key];
+    if (raw === undefined || !hasPersonalData({ [key]: raw })) return true;
+    const diff = diffs.find((d) => d.key === key);
+    return diff !== undefined && !diff.rejected && !hasChanges(diff);
+  });
+}
+
+/**
+ * The bookkeeping a restore writes: when the file holds all the personal data stored after the restore
+ * (backupHoldsPersonalData), the file is this browser's latest backup, made when it was exported (now, for a file
+ * dated in the future). Null when nothing personal is stored, when the file lacks some of it, or when a backup as new
+ * or newer is already recorded.
+ */
+function restoredBackupWrite(storage: StorageLike, backup: Backup, stores: StoreRegistry, now: Date): Record<string, string> | null {
+  const snapshot = readStorage(storage);
+  if (!hasPersonalData(snapshot) || !backupHoldsPersonalData(snapshot, backup, stores)) return null;
+  const madeAt = Math.min(Date.parse(backup.exportedAt), now.getTime());
+  if (Number.isNaN(madeAt)) return null;
+  const recorded = sanitizeBackupMeta(parsedOr(storage.getItem(META_STORAGE_KEY) ?? undefined, null)).lastBackupAt;
+  if (recorded !== null && Date.parse(recorded) >= madeAt) return null;
+  const meta: BackupMeta = { lastBackupAt: new Date(madeAt).toISOString() };
+  return { [META_STORAGE_KEY]: JSON.stringify(meta) };
+}
+
+export interface BackupReminder {
+  /** Whole days since the last backup (backupAgeDays); null when this browser never made one. */
+  days: number | null;
+}
+
+/** The age half of the rule: the last backup is more than BACKUP_REMINDER_DAYS days old, or there was none. */
+export function backupDue(lastBackupAt: string | null, now: Date = new Date()): BackupReminder | null {
+  const days = backupAgeDays(lastBackupAt, now);
+  return days === null || days > BACKUP_REMINDER_DAYS ? { days } : null;
+}
+
+/**
+ * The backup reminder: due when this browser holds personal data and its last backup is more than
+ * BACKUP_REMINDER_DAYS days old or never happened; null when nothing is due. Exporting a backup (recordBackup) resets
+ * it, and so does a restore after which the file holds all of this browser's personal data (applyBackup).
+ */
+export function backupReminder(snapshot: StorageSnapshot, lastBackupAt: string | null, now: Date = new Date()): BackupReminder | null {
+  return hasPersonalData(snapshot) ? backupDue(lastBackupAt, now) : null;
 }
 
 /** The store name inside a key: "investseek:alert-log:v1" gives "alert-log". */

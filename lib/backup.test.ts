@@ -3,8 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 import {
   applyBackup,
   applyWrites,
+  BACKUP_REMINDER_DAYS,
   backupAgeDays,
+  backupDue,
   backupFileName,
+  backupHoldsPersonalData,
+  backupMetaStore,
+  backupReminder,
   byteLength,
   clearAllData,
   countEntries,
@@ -13,15 +18,19 @@ import {
   diffHoldings,
   formatBytes,
   hasChanges,
+  hasPersonalData,
   mergeHoldings,
   mergeNotes,
   mergeWatchlist,
   META_STORAGE_KEY,
   parseBackup,
+  PERSONAL_DATA_KEYS,
   planRestore,
   prefChanges,
+  readPersonalData,
   readPrefCookies,
   readStorage,
+  recordBackup,
   sanitizeBackupMeta,
   serializeBackup,
   storedItems,
@@ -397,8 +406,9 @@ describe("applyBackup", () => {
   it("replaces everything except the bookkeeping and keys outside the app", () => {
     const storage = new MemoryStorage({ [WL]: '["AAPL"]', "investseek:gone:v1": "{}", [META_STORAGE_KEY]: '{"lastBackupAt":"2026-11-01T00:00:00.000Z"}', foreign: "keep" });
     const { env } = makeEnv(storage);
-    applyBackup(backupOf({ [HOLD]: { NVDA: { shares: 1, cost: 100 } } }), "replace", env);
-    expect(storage.toObject()).toEqual({ [META_STORAGE_KEY]: '{"lastBackupAt":"2026-11-01T00:00:00.000Z"}', foreign: "keep", [HOLD]: '{"NVDA":{"shares":1,"cost":100}}' });
+    // A file without personal data, so the restore does not count as a backup either (see "a restore as a backup").
+    applyBackup(backupOf({ "investseek:chart:v1": { log: true } }), "replace", env, { now: NOW });
+    expect(storage.toObject()).toEqual({ [META_STORAGE_KEY]: '{"lastBackupAt":"2026-11-01T00:00:00.000Z"}', foreign: "keep", "investseek:chart:v1": '{"log":true}' });
   });
 
   it("sets preference cookies only when asked, and reports what they replaced", () => {
@@ -632,5 +642,206 @@ describe("module side effects", () => {
   it("registers the bookkeeping store without touching storage", async () => {
     const { registeredLocalStores } = await import("./local-store");
     expect(registeredLocalStores().has(META_STORAGE_KEY)).toBe(true);
+  });
+});
+
+describe("backup reminder", () => {
+  const CHATS = "investseek:ai-chats:v1";
+  const STARTER = JSON.stringify(DEFAULT_WATCHLIST);
+  const POSITIONS = { [HOLD]: '{"NVDA":{"shares":20,"cost":120}}' };
+  const at = "2026-11-01T00:00:00.000Z";
+  const conversation = { id: "c1", title: "Why is NVDA moving?", createdAt: at, updatedAt: at, lang: "en", messages: [{ id: "m1", role: "user", content: "Why is NVDA moving?", at }] };
+
+  it("reads the keys of the watchlist, positions, notes, alert rules, saved screens and assistant chats", async () => {
+    const { ALERTS_STORAGE_KEY } = await import("./alerts");
+    const { SCREENS_STORAGE_KEY } = await import("./screens");
+    const { AI_CHATS_KEY } = await import("./ai-store");
+    expect([...PERSONAL_DATA_KEYS].sort()).toEqual([WL, HOLD, NOTES, ALERTS_STORAGE_KEY, SCREENS_STORAGE_KEY, AI_CHATS_KEY].sort());
+  });
+
+  it("finds no personal data in a new browser, in browsing history or in settings", () => {
+    expect(hasPersonalData({})).toBe(false);
+    expect(
+      hasPersonalData({
+        "investseek:recents:v1": '["TSLA"]',
+        "investseek:last-symbol": "TSLA",
+        "investseek:last-sector:v1": '"technology"',
+        "investseek:chart:v1": '{"range":"1y"}',
+        "investseek:ai:v1": '{"includePositions":false}',
+        "investseek:ai-notes:v1": `{"stock:AAPL:en:1x2y3z":{"text":"Apple note","generatedAt":"${at}"}}`,
+        "investseek:alert-log:v1": '[{"id":"e1"}]',
+        [META_STORAGE_KEY]: '{"lastBackupAt":null}',
+      }),
+    ).toBe(false);
+  });
+
+  it("counts a watchlist unless it is the starter list, reordered or emptied", () => {
+    expect(hasPersonalData({ [WL]: STARTER })).toBe(false);
+    expect(hasPersonalData({ [WL]: JSON.stringify([...DEFAULT_WATCHLIST].reverse()) })).toBe(false);
+    expect(hasPersonalData({ [WL]: "[]" })).toBe(false);
+    // Unreadable values show the starter list in the app.
+    expect(hasPersonalData({ [WL]: '"NVDA"' })).toBe(false);
+    expect(hasPersonalData({ [WL]: "NVDA,AAPL" })).toBe(false);
+    expect(hasPersonalData({ [WL]: '["NVDA","AAPL","MSFT","SPY","BRK-B"]' })).toBe(true);
+    expect(hasPersonalData({ [WL]: JSON.stringify([...DEFAULT_WATCHLIST, "SPY"]) })).toBe(true);
+    expect(hasPersonalData({ [WL]: JSON.stringify(DEFAULT_WATCHLIST.slice(0, 3)) })).toBe(true);
+  });
+
+  it("counts positions, notes, alert rules, saved screens and conversations, not empty or broken ones", () => {
+    expect(hasPersonalData(POSITIONS)).toBe(true);
+    expect(hasPersonalData({ [HOLD]: "{}" })).toBe(false);
+    expect(hasPersonalData({ [HOLD]: '{"NVDA":{"shares":0,"cost":120}}' })).toBe(false);
+    expect(hasPersonalData({ [NOTES]: JSON.stringify({ AAPL: note("Services keep growing", at) }) })).toBe(true);
+    expect(hasPersonalData({ [NOTES]: JSON.stringify({ AAPL: emptyNote(NOW) }) })).toBe(false);
+    expect(hasPersonalData({ [ALERTS]: '[{"id":"r1","symbol":"AAPL","kind":"above","value":200}]' })).toBe(true);
+    expect(hasPersonalData({ [ALERTS]: "[]" })).toBe(false);
+    expect(hasPersonalData({ [SCREENS]: '[{"id":"s1","name":"Cheap value","query":"pe=..15"}]' })).toBe(true);
+    expect(hasPersonalData({ [SCREENS]: '[null, 3, "x"]' })).toBe(false);
+    expect(hasPersonalData({ [CHATS]: JSON.stringify({ conversations: [conversation], activeId: "c1" }) })).toBe(true);
+    expect(hasPersonalData({ [CHATS]: '{"conversations":[],"activeId":null}' })).toBe(false);
+    expect(hasPersonalData({ [CHATS]: "{broken" })).toBe(false);
+  });
+
+  it("reads only the personal-data keys from storage", () => {
+    const storage = new MemoryStorage({ [WL]: STARTER, [HOLD]: "{}", "investseek:recents:v1": '["TSLA"]', [META_STORAGE_KEY]: "{}", foreign: "x" });
+    expect(readPersonalData(storage)).toEqual({ [WL]: STARTER, [HOLD]: "{}" });
+  });
+
+  it("is due with personal data and no backup, or a backup more than 30 days old", () => {
+    const now = new Date(2026, 10, 8, 9, 0);
+    expect(BACKUP_REMINDER_DAYS).toBe(30);
+    expect(backupReminder(POSITIONS, null, now)).toEqual({ days: null });
+    expect(backupReminder(POSITIONS, new Date(2026, 8, 24, 18).toISOString(), now)).toEqual({ days: 45 });
+    expect(backupReminder(POSITIONS, new Date(2026, 9, 8, 23, 30).toISOString(), now)).toEqual({ days: 31 });
+    expect(backupReminder(POSITIONS, new Date(2026, 9, 9, 0, 30).toISOString(), now)).toBeNull();
+    expect(backupReminder(POSITIONS, new Date(2026, 10, 8, 8).toISOString(), now)).toBeNull();
+    // A clock set back after the backup does not make it due.
+    expect(backupReminder(POSITIONS, new Date(2026, 10, 20).toISOString(), now)).toBeNull();
+    expect(backupDue("not a date", now)).toEqual({ days: null });
+  });
+
+  it("is never due without personal data, however old the backup", () => {
+    const now = new Date(2026, 10, 8, 9, 0);
+    expect(backupReminder({}, null, now)).toBeNull();
+    expect(backupReminder({ [WL]: STARTER }, new Date(2025, 0, 1).toISOString(), now)).toBeNull();
+  });
+
+  it("is reset by recording a backup, as an export does", () => {
+    const now = new Date(2026, 10, 8, 9, 0);
+    const before = backupMetaStore.getSnapshot();
+    expect(backupReminder(POSITIONS, before.lastBackupAt, now)).toEqual({ days: null });
+    recordBackup(now);
+    expect(backupReminder(POSITIONS, backupMetaStore.getSnapshot().lastBackupAt, now)).toBeNull();
+    backupMetaStore.write(before);
+  });
+});
+
+describe("a restore as a backup", () => {
+  const now = new Date(2026, 10, 8, 9, 0);
+  const exportedAt = new Date(2026, 10, 6, 9, 0).toISOString();
+  const LIST = ["NVDA", "AAPL", "MSFT", "SPY", "BRK-B"];
+  const POSITIONS = { NVDA: { shares: 20, cost: 120 }, AAPL: { shares: 15, cost: 190 } };
+  /** A backup made on another device two days ago. */
+  const file: Backup = { ...backupOf({ [WL]: LIST, [HOLD]: POSITIONS }), exportedAt };
+  const lastBackup = (storage: MemoryStorage) => sanitizeBackupMeta(JSON.parse(storage.getItem(META_STORAGE_KEY) ?? "null")).lastBackupAt;
+
+  it("records the file's export time when moving into a new browser, so the reminder is not due", () => {
+    const storage = new MemoryStorage({ "investseek:recents:v1": '["TSLA"]' });
+    const { env, notified } = makeEnv(storage);
+    const result = applyBackup(file, "replace", env, { now });
+    expect(lastBackup(storage)).toBe(exportedAt);
+    expect(backupReminder(readStorage(storage), lastBackup(storage), now)).toBeNull();
+    // Without the record the reminder would say "Never backed up" next to the "Backup restored" toast.
+    expect(backupReminder(readStorage(storage), null, now)).toEqual({ days: null });
+    // The record is one of the restore's changes, so the stores hear about it and Undo puts it back.
+    expect(result.changes.find((change) => change.key === META_STORAGE_KEY)).toEqual({ key: META_STORAGE_KEY, oldValue: null, newValue: JSON.stringify({ lastBackupAt: exportedAt }) });
+    expect(notified).toEqual([result.changes]);
+  });
+
+  it("is put back by Undo, unless a backup was made since", () => {
+    const storage = new MemoryStorage();
+    const { env } = makeEnv(storage);
+    const undone = applyBackup(file, "replace", env, { now });
+    expect(lastBackup(storage)).toBe(exportedAt);
+    undoChanges(env, undone.changes);
+    expect(storage.toObject()).toEqual({});
+
+    // An export after the restore is kept.
+    const result = applyBackup(file, "replace", env, { now });
+    const exported = JSON.stringify({ lastBackupAt: now.toISOString() });
+    storage.setItem(META_STORAGE_KEY, exported);
+    undoChanges(env, result.changes);
+    expect(storage.toObject()).toEqual({ [META_STORAGE_KEY]: exported });
+  });
+
+  it("counts a Merge too, when this browser held nothing personal the file lacks", () => {
+    // A chart setting makes Merge the mode offered first; the merged browser holds the file's list and positions.
+    const storage = new MemoryStorage({ "investseek:chart:v1": '{"log":true}', "investseek:recents:v1": '["TSLA"]' });
+    expect(defaultRestoreMode(storage.toObject())).toBe("merge");
+    applyBackup(file, "merge", makeEnv(storage).env, { now });
+    expect(lastBackup(storage)).toBe(exportedAt);
+    expect(storage.getItem("investseek:chart:v1")).toBe('{"log":true}');
+  });
+
+  it("leaves the bookkeeping alone when this browser keeps personal data the file lacks", () => {
+    // A position of this browser's own, merged with the file's.
+    const merged = new MemoryStorage({ [HOLD]: '{"MSFT":{"shares":10,"cost":415}}' });
+    applyBackup(file, "merge", makeEnv(merged).env, { now });
+    expect(lastBackup(merged)).toBeNull();
+    expect(backupReminder(readStorage(merged), null, now)).toEqual({ days: null });
+    // Positions kept because the file's copy is damaged.
+    const kept = new MemoryStorage({ [HOLD]: JSON.stringify(POSITIONS) });
+    applyBackup({ ...file, data: { ...file.data, storage: { [WL]: LIST, [HOLD]: ["junk"] } } }, "replace", makeEnv(kept).env, { now });
+    expect(JSON.parse(kept.getItem(HOLD)!)).toEqual(POSITIONS);
+    expect(lastBackup(kept)).toBeNull();
+  });
+
+  it("keeps a newer backup on record, and dates a file from the future now", () => {
+    const newer = JSON.stringify({ lastBackupAt: new Date(2026, 10, 7, 18, 0).toISOString() });
+    const storage = new MemoryStorage({ [META_STORAGE_KEY]: newer });
+    applyBackup(file, "replace", makeEnv(storage).env, { now });
+    expect(storage.getItem(HOLD)).not.toBeNull();
+    expect(storage.getItem(META_STORAGE_KEY)).toBe(newer);
+
+    const future = new MemoryStorage();
+    applyBackup({ ...file, exportedAt: new Date(2026, 10, 20).toISOString() }, "replace", makeEnv(future).env, { now });
+    expect(lastBackup(future)).toBe(now.toISOString());
+  });
+
+  it("records nothing for a file without personal data", () => {
+    const storage = new MemoryStorage();
+    applyBackup(backupOf({ "investseek:chart:v1": { log: true }, [WL]: [...DEFAULT_WATCHLIST] }, { cookies: { is_theme: "light" } }), "replace", makeEnv(storage).env, { now, prefs: true });
+    expect(storage.getItem(META_STORAGE_KEY)).toBeNull();
+  });
+
+  it("keeps the restore when the bookkeeping does not fit", () => {
+    const storage = new MemoryStorage();
+    // The watchlist and the positions are the first two writes; the third, the record, runs out of room.
+    storage.failOnWrite = 3;
+    const { env, notified } = makeEnv(storage);
+    const result = applyBackup(file, "replace", env, { now });
+    expect(JSON.parse(storage.getItem(HOLD)!)).toEqual(POSITIONS);
+    expect(storage.getItem(META_STORAGE_KEY)).toBeNull();
+    expect(result.changes.map((change) => change.key).sort()).toEqual([HOLD, WL].sort());
+    expect(notified).toEqual([result.changes]);
+  });
+
+  it("asks of every store that holds personal data that the file restores it as it is", () => {
+    const own = { [WL]: JSON.stringify(LIST), [HOLD]: JSON.stringify(POSITIONS) };
+    expect(backupHoldsPersonalData(own, file, STORES)).toBe(true);
+    // Nothing personal stored: nothing the file has to hold. The starter list is not personal.
+    expect(backupHoldsPersonalData({}, file, STORES)).toBe(true);
+    expect(backupHoldsPersonalData({ [WL]: JSON.stringify(DEFAULT_WATCHLIST), [HOLD]: "{}" }, backupOf({}), STORES)).toBe(true);
+    // Settings and browsing history the file lacks do not matter.
+    expect(backupHoldsPersonalData({ ...own, "investseek:recents:v1": '["TSLA"]', "investseek:chart:v1": '{"log":true}' }, file, STORES)).toBe(true);
+    // Another list, another position, a position the file lacks, or a store the file has damaged.
+    expect(backupHoldsPersonalData({ ...own, [WL]: '["TSLA"]' }, file, STORES)).toBe(false);
+    expect(backupHoldsPersonalData({ ...own, [HOLD]: '{"NVDA":{"shares":21,"cost":120},"AAPL":{"shares":15,"cost":190}}' }, file, STORES)).toBe(false);
+    expect(backupHoldsPersonalData({ ...own, [NOTES]: JSON.stringify({ AAPL: note("Services keep growing", "2026-11-01T00:00:00.000Z") }) }, file, STORES)).toBe(false);
+    expect(backupHoldsPersonalData(own, backupOf({ [WL]: LIST, [HOLD]: ["junk"] }), STORES)).toBe(false);
+    // Alert rules are compared by id and value.
+    const rules = { [ALERTS]: '[{"id":"r1","symbol":"AAPL","above":200}]' };
+    expect(backupHoldsPersonalData(rules, backupOf({ [ALERTS]: [{ id: "r1", symbol: "AAPL", above: 200 }] }), STORES)).toBe(true);
+    expect(backupHoldsPersonalData(rules, backupOf({ [ALERTS]: [{ id: "r1", symbol: "AAPL", above: 210 }] }), STORES)).toBe(false);
   });
 });

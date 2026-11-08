@@ -32,6 +32,7 @@ import { join } from "node:path";
 import YahooFinance from "yahoo-finance2";
 import { z } from "zod";
 
+import { COMMON_READING_DATE_SHARE, EPISODE_SHARE_LIMIT, isConcentrated } from "../components/lab/evidence";
 import { normalizeBars, type DailyBar, type RawChart } from "../lib/bars";
 import {
   dropFormingBar,
@@ -328,6 +329,25 @@ export function renderEvaluationReport(
       "(the stock against the equal-weight universe on the same day). Selection is the part a stock picker could use. Readings cluster in sell-offs and rallies, so the intervals " +
       `come from a moving-block bootstrap over dates (${config.bootstrap.blockLength}-session blocks, ${config.bootstrap.reps} replicates, seed ${config.bootstrap.seed}); ` +
       `an episode is a run of dates with gaps of at most ${config.episodeGapSessions} sessions.`,
+    "",
+  );
+  // The grey-row rule of the app (components/lab/evidence.ts), with what it does to the rows of this run.
+  const rowRule = evaluation.horizons.map((h) => ({
+    days: h.days,
+    exempt: h.labels.filter((l) => h.ic.dates > 0 && l.dates / h.ic.dates >= COMMON_READING_DATE_SHARE).map((l) => READING[l.code]),
+    grey: h.labels.filter((l) => isConcentrated(l, h.ic.dates)).map((l) => READING[l.code]),
+  }));
+  const exemptText = (names: string[]) => (names.length === 0 ? "no reading is exempt" : `${list(names)} ${names.length > 1 ? "are" : "is"} exempt`);
+  const greyText = (names: string[]) => (names.length === 0 ? "no row is grey" : `${list(names)} ${names.length > 1 ? "are" : "is"} grey`);
+  const sameEverywhere = rowRule.every((r) => r.exempt.join() === rowRule[0].exempt.join() && r.grey.join() === rowRule[0].grey.join());
+  push(
+    `In the app (/lab and the track record on each quote page) a reading's row turns grey when its largest episode holds more than ${share(EPISODE_SHARE_LIMIT)} of its observations, ` +
+      "because one market stretch then dominates the row; its selection value is then not colored even when the interval excludes zero. " +
+      `Readings seen on at least ${share(COMMON_READING_DATE_SHARE)} of all dates are exempt: they form one long run by construction ` +
+      "(Neutral occurs nearly every session, so all of it is one episode), and without the exemption Neutral and the other everyday readings would always be grey. " +
+      (sameEverywhere && rowRule.length > 0
+        ? `Here ${exemptText(rowRule[0].exempt)} at every horizon, and ${greyText(rowRule[0].grey)}.`
+        : `Here, at ${rowRule.map((r) => `${r.days} sessions ${exemptText(r.exempt)} and ${greyText(r.grey)}`).join("; at ")}.`),
     "",
   );
   for (const h of evaluation.horizons) {

@@ -10,13 +10,15 @@ import { useBoard } from "@/hooks/useShellApi";
 import { tpl } from "@/lib/format";
 
 import { aiStateOf } from "./AiStatus";
+import { BackupStatus } from "./BackupReminder";
 import { boardNotice, etLabel } from "./board-status";
 import { useNow } from "./clock";
 import { StateDot } from "./MarketClock";
 
 /**
- * Bottom status line (tablet and desktop): market state, data source and freshness, AI state and the shortcuts key.
- * Its live region, which announces delayed or unavailable quotes, sits outside the line so phones hear it too.
+ * Bottom status line (tablet and desktop): market state, data source and freshness, the backup reminder while a backup
+ * is due, AI state and the shortcuts key. Its live region, which announces delayed or unavailable quotes, sits outside
+ * the line so phones hear it too; the backup reminder is not announced.
  * `dataSource` comes from the server (MARKET_DATA_SOURCE): synthetic fixture data is labelled as such.
  */
 export function StatusBar({ goPending = false, dataSource = "yahoo" }: { goPending?: boolean; dataSource?: "yahoo" | "fixtures" }) {
@@ -53,6 +55,7 @@ export function StatusBar({ goPending = false, dataSource = "yahoo" }: { goPendi
               G · {t.shell.goPending}
             </span>
           ) : null}
+          <BackupStatus />
           {ai === "unknown" ? null : <span>{t.shell.ai[ai]}</span>}
           <button
             type="button"
