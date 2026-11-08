@@ -18,12 +18,12 @@ every token pair; `lib/design-tokens.test.ts` fails when a pair drops below its 
   `flex flex-col gap-px` 的列，面板按内容自然高度排列，不再整行拉伸留白。DOM 顺序就是手机上的顺序；唯一的例外是报价页：
   640px 以下用 `order` 在视觉上重排面板，DOM 保持桌面顺序。各面板相互独立，含义和操作不依赖先后顺序（WCAG 1.3.2、
   2.4.3），而把面板挂载两次更糟，所以接受这种做法。
-- **组件**：Panel（可带琥珀色功能代码）、DataTable（排序、aria-sort、行链接、悬停操作、加载/空状态，可关闭行悬停高亮，
-  列可按视口隐藏，也可按表格自身宽度隐藏：`hideBelowContainer`，容器查询）、
-  Segmented、Select、Switch、Field/Input、Checkbox、Badge/AiChip、Sparkline（中性线条 + 按当日涨跌着色的端点）、Delta 与
-  热力图分档（heatStep/heatStyle）、TickNumber（只闪变化的那个数字）、Whisker（置信区间须线，`neutral` 时整体变灰）、
-  Meter（当前标记带 1px 面板色描边）、StatTile、HoverCard/Tooltip、Toast（可撤销）、Drawer（右侧或底部）、EmptyState
-  （左对齐 + 快捷代码按钮）、Wordmark。
+- **组件**：Panel（可带琥珀色功能代码）、DataTable（排序时文字按界面语言比较，中文名按拼音；aria-sort、行链接、悬停操作、
+  加载/空状态，可关闭行悬停高亮，列可按视口隐藏，也可按表格自身宽度隐藏：`hideBelowContainer`，容器查询）、
+  Segmented、Select、Switch、Field/Input、Checkbox、Badge/AiChip、Sparkline（中性线条 + 按当日涨跌着色的端点）、Delta（价格
+  变动取旁边价格的小数位）与热力图分档（heatStep/heatStyle）、TickNumber（只闪变化的那个数字）、Whisker（置信区间须线，
+  `neutral` 时整体变灰）、Meter（当前标记带 1px 面板色描边）、StatTile、HoverCard/Tooltip、Toast（可撤销）、Drawer（右侧或
+  底部）、EmptyState（左对齐 + 快捷代码按钮）、Wordmark。
 - **无障碍**：文字对比度 ≥ 4.5:1、图形 ≥ 3:1（两套主题、三种配色全部实测通过，含悬停状态；带透明度的颜色先按透明度
   叠加到底色上再测，如评级色阶 `bg-fg/85` 到 `/50`）；`--fg-3` 只用在面板上，直接放在画布上的文字用 `--fg-2`；桌面点击区
   ≥ 24px、手机 ≥ 40px：Button、IconButton、Segmented、Select、Tabs、Input 在手机上自带 40px 高度，页面不再加覆盖
@@ -158,10 +158,17 @@ adjacent pairs at least 15 apart (OKLab x100) for normal vision. Never use red, 
 | Token | Size / line | Utility | Use |
 | --- | --- | --- | --- |
 | `--text-micro` | 11 / 16 | `text-micro` | Column heads, panel meta, the "1M" tag |
+| `--text-xs` | 12 / 16 | `text-xs` | Supporting text: small controls (`size="sm"`), field labels and hints, tabs, chips, status lines, and a quieter line beside a name, such as the quote header's English name after a Chinese one (`text-fg-3`, `lang="en"`) |
 | `--text-data` | 13 / 20 (12 / 16 compact) | `text-data` | Tables and number-heavy rows |
+| `--text-sm` | 14 / 20 | `text-sm` | Interface text: controls (`size="md"`), menus, empty states, names in headers (the quote header's name) |
 | `--text-body` | 14 / 22 | `text-body` | Prose: AI notes, news summaries |
+| `--text-base` | 16 / 24 | `text-base` | The command bar's and the 404 page's text fields on phones (`max-sm:text-base`: iOS zooms into a field with smaller text), the quote header's changes |
 | `--text-figure` | 20 / 24 | `text-figure` | Board values, KPI tiles, portfolio value |
 | `--text-display` | 30 / 36 | `text-display` | The quote price, one headline number per view |
+
+`text-xs`, `text-sm` and `text-base` are Tailwind's own sizes; `app/globals.css` adds the other five. The quote header's
+English name steps back one size and one ink from the name before it: `text-xs text-fg-3` after `text-sm text-fg-2`,
+with `lang="en"` so screen readers read it as English.
 
 ### Density
 
@@ -358,10 +365,17 @@ applies at once; Checkbox is for forms that submit.
 
 ```tsx
 <Delta value={q.changePercent} />                       // +1.35% / −0.52%, colored by direction
-<Delta value={q.change} kind="change" lang={lang} />
+const digits = priceDigits(q.symbol, q.quoteType);      // the price's decimals, or null
+<Delta value={q.change} kind="change" digits={digits ?? undefined} lang={lang} />
 <div style={heatStyle(heatStep(q.changePercent))}>...</div>
 <HeatLegend />                                           // −3.5 [9 swatches] +3.5%
 ```
+
+A change takes the decimals of the price beside it: format the price with `formatQuotePrice(price, digits, lang)` and
+pass the same `digits` from `priceDigits(symbol, quoteType)` (`lib/quote-figures.ts`) to the `kind="change"` Delta. A
+currency pair keeps its pips (USD/JPY at 158.425 moved +0.770, not +0.77), a yield its three decimals and a world-board
+instrument the board's digits. Where `priceDigits` is null (stocks and funds, for example), leave `digits` out: the
+change then follows `formatChange`, 2 decimals or 4 for a sub-cent move.
 
 `directionOf(value)` gives `"up" | "down" | "flat"` for glyph tones.
 
@@ -437,22 +451,31 @@ const columns: DataTableColumn<Quote>[] = [
   5.5rem, market cap 5.25rem, P/E 3.75rem, trend 6.5rem) and leave the name column free so it takes the rest.
 - Columns hide below a viewport breakpoint (`hideBelow: "sm"`) or while the table's own box is narrower than a container
   size (`hideBelowContainer: "md"`; Tailwind's `@` sizes: 3xs 16rem, 2xs 18rem, xs 20rem, sm 24rem, md 28rem, lg 32rem,
-  xl 36rem, 2xl 42rem). Use the container size for a table that can sit in the 22rem right-hand column at xl, a box of
-  356px at 1280px and 410px at 1440px, where `hideBelow` only sees a wide viewport: the overview's watchlist drops its 1M
-  line below `sm` (its four columns need 360px), Trending drops the price below `md` so the names keep room, and the
-  analyst actions hide their date column below `md`. The container size takes the place of `hideBelow`. When a column
-  uses it, the scroll box becomes the query container (`@container`), so cells can carry container classes too: the
-  analyst actions show the date under the firm with `@md:hidden`. A table whose cells adapt while every column stays
-  makes its box the container itself with `className="@container"`: the reported quarters on the quote page set the
-  report date after the quarter, and under it with `@max-sm:block` below `sm` (the quarter column gets 104px at 1280px
-  and 106px on 360px phones; "3Q2025 10月30日" needs 127). A footer row a caller builds hides its cells with
-  `hideClass(column)`. The compact world tables (currencies, commodities, crypto) keep all four columns at 1280px and
-  let a long name truncate ("EUR/U…", "欧元/…"): the code beside it (EURUSD) stays whole and says the same.
+  xl 36rem, 2xl 42rem, 3xl 48rem). Use the container size for a table that can sit in the 22rem right-hand column at xl,
+  a box of 356px at 1280px and 410px at 1440px, where `hideBelow` only sees a wide viewport: the overview's watchlist
+  drops its 1M line below `sm` (its four columns need 360px), Trending drops the price below `md` so the names keep
+  room, and the analyst actions hide their date column below `md`. The wide left-hand column at xl is a box of 713px at
+  1280px and 819px at 1440px: Discover's movers and ideas tables hide their 120px rating below `3xl`, which left the
+  names 13 and 29px at 1280px (133 and 149px without it), and show it at 1440px and in the single column below xl (958px
+  at 1024px). The container size takes the place of `hideBelow`. When a column uses it, the scroll box becomes the query
+  container (`@container`), so cells can carry container classes too: the analyst actions show the date under the firm
+  with `@md:hidden`. A table whose cells adapt while every column stays makes its box the container itself with
+  `className="@container"`: the reported quarters on the quote page set the report date after the quarter, and under it
+  with `@max-sm:block` below `sm` (the quarter column gets 104px at 1280px and 106px on 360px phones; "3Q2025 10月30日"
+  needs 127). A footer row a caller builds hides its cells with `hideClass(column)`. The compact world tables
+  (currencies, commodities, crypto) keep all four columns at 1280px and let a long name truncate ("EUR/U…", "欧元/…"): the
+  code beside it (EURUSD) stays whole and says the same.
 - Sorting: a header click cycles the column's first direction (descending for right-aligned columns), the opposite, then
   the natural order. `aria-sort` marks the sorted header. Missing values sort last both ways; equal values keep their
   `tieBreak` order, then their original order. Pass `sort`/`onSortChange` to control it, for example to keep a
   watchlist's custom order as the unsorted state. The sort button fills its whole header cell (32px tall, 40px below
   `sm`), so even a narrow "P/E" head is an easy target.
+- Text columns sort in the app language, whatever the browser's: DataTable passes the language's collator to `sortRows`
+  (`htmlLang(lang)`: `zh-CN` in Chinese, `en` otherwise), so Chinese names sort in pinyin order (埃克森美孚, 苹果, 微软, 英伟达)
+  before names in Latin letters, and numbers within text in natural order ("A2" before "A10"). A name column sorts by
+  the name it shows (`sortValue: (q) => displayName(q.symbol, q.name, lang)`), not by the English name behind it. Rows
+  listed outside the table follow the same rules: the screener's CSV takes its order from `sortScreenRows`, which uses
+  the table's sort values (`screenSortValue`) and collator, so the file lists the rows as the table shows them.
 - `rowHref` makes the row clickable (Ctrl or Cmd opens a new tab) and renders the first cell as a real link.
 - `rowActions` are revealed on hover and keyboard focus and always shown on touch screens. The column is
   `actionsWidth` wide (4.5rem) and `actionsTouchWidth` (5.5rem) below `sm`, where icon buttons grow to 40px. Its head
