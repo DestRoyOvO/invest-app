@@ -60,6 +60,11 @@ describe("buildHealth", () => {
     expect(APP_VERSION).toBe(packageJson.version);
   });
 
+  it("says when the server serves synthetic fixture data", () => {
+    vi.stubEnv("MARKET_DATA_SOURCE", "fixtures");
+    expect(buildHealth({ ready: false, now: T0 }).body.dataSource).toBe("fixtures");
+  });
+
   it("counts failures in upstream() and turns readiness off after sustained failure", async () => {
     vi.useFakeTimers();
     for (let i = 0; i < DOWN_AFTER_FAILURES; i++) {

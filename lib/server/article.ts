@@ -10,6 +10,8 @@ import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 
 import { load, type CheerioAPI } from "cheerio/slim";
 
+import { readEnv } from "./env";
+import { fixtureArticleText } from "./fixtures/article";
 import { log } from "./log";
 
 // SSRF-safe article reader for news analysis.
@@ -487,8 +489,10 @@ function describeFailure(error: unknown): string {
  * Fetches an allowlisted news article and returns its readable text (at most 6000 characters).
  * Returns null whenever the text cannot be obtained safely: disallowed URL or redirect, non-public address,
  * consent wall, non-HTML response, timeout, or a page without enough readable text.
+ * With MARKET_DATA_SOURCE=fixtures nothing is fetched: fixture story links get canned text, every other link null.
  */
 export async function fetchArticleText(input: string, options: FetchArticleOptions = {}): Promise<string | null> {
+  if (readEnv().marketDataSource === "fixtures") return fixtureArticleText(input);
   let url = parseArticleUrl(input);
   if (!url) return null;
   const transport = options.transport ?? httpsTransport;
