@@ -8,7 +8,7 @@ import { checkAiAccess } from "./auth";
 import { aiTextResponse, AiNotConfiguredError, streamChat, type LlmMessage } from "./deepseek";
 import { BodyError, clientIp, jsonError, readJsonBody } from "./http";
 import { log } from "./log";
-import { checkDailyBudget, clientKey, consumeDailyBudget, consumeRateLimit, RATE_LIMITS, refundDailyBudget, type RateLimitRule } from "./rate-limit";
+import { checkDailyBudget, clientKey, consumeDailyBudget, consumeRateLimit, marketRateLimit, refundDailyBudget, type RateLimitRule } from "./rate-limit";
 
 // Guards shared by the state-changing POST routes (AI, login, logout), and the final step of the AI pipeline.
 
@@ -59,7 +59,7 @@ export function rateLimitedResponse(retryAfterSeconds: number, message: string):
 
 /** Per-client limit for the public market-data GET routes; null when the request may proceed. */
 export function limitPublicRequest(request: Request): NextResponse<ApiErrorBody> | null {
-  const limit = consumeRateLimit(RATE_LIMITS.market, clientKey(clientIp(request)));
+  const limit = consumeRateLimit(marketRateLimit(), clientKey(clientIp(request)));
   return limit.ok ? null : rateLimitedResponse(limit.retryAfterSeconds, "Too many requests. Please slow down and retry shortly.");
 }
 
@@ -69,8 +69,9 @@ export function limitPublicRequest(request: Request): NextResponse<ApiErrorBody>
  */
 export function chargePublicRequest(request: Request, units: number): NextResponse<ApiErrorBody> | null {
   const key = clientKey(clientIp(request));
+  const rule = marketRateLimit();
   for (let i = 0; i < units; i++) {
-    const limit = consumeRateLimit(RATE_LIMITS.market, key);
+    const limit = consumeRateLimit(rule, key);
     if (!limit.ok) return rateLimitedResponse(limit.retryAfterSeconds, "Too many requests. Please slow down and retry shortly.");
   }
   return null;

@@ -821,7 +821,7 @@ export interface HealthResponse {
   commit: string | null;
   uptimeSeconds: number;
   /** Where market data comes from (MARKET_DATA_SOURCE). */
-  dataSource: "yahoo" | "fixtures" | "record";
+  dataSource: "yahoo" | "fixtures";
   /** Only with ?ready=1. */
   upstream?: UpstreamHealth;
 }
