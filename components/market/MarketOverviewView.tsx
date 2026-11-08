@@ -78,8 +78,9 @@ function WatchlistPanel() {
  * where its names have room. DOM order is the phone order.
  *
  * The markets board reads the shell's board payload (useBoard: the ticker strip's data, about 13 KB, refreshed every
- * 15 s while trading), so it is on screen before the 80 KB overview arrives and ticks with the strip. Its stale banner
- * covers both feeds, as of the older one.
+ * 15 s while trading), so it is on screen before the 80 KB overview arrives and ticks with the strip. When that request
+ * fails (an upstream error, the rate limit), the board shows the overview's copy of the same items instead, and an
+ * error only once neither feed can fill it. Its stale banner covers both feeds, as of the older one.
  */
 export function MarketOverviewView() {
   const { t, lang } = usePrefs();
@@ -87,8 +88,13 @@ export function MarketOverviewView() {
   const board = useBoard();
   const marketRequest = useMemo<AnalyzeRequest>(() => ({ kind: "market", lang }), [lang]);
   const failed = Boolean(error && !data);
-  const boardFailed = Boolean(board.error && !board.data);
+  const boardFeed = board.data ?? data;
+  const boardFailed = !boardFeed && Boolean(board.error) && Boolean(error);
   const stale = combineStaleness([stalenessOf(board.data, Boolean(board.error)), stalenessOf(data, Boolean(error))]);
+  const retryBoard = () => {
+    void board.mutate();
+    void mutate();
+  };
 
   return (
     <div className="grid gap-px bg-line p-px xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
@@ -103,9 +109,9 @@ export function MarketOverviewView() {
           code="WEI"
           actions={
             <>
-              {board.data ? (
+              {boardFeed ? (
                 <span className="hidden sm:inline">
-                  <PanelMeta>{tpl(t.markets.asOfEt, { time: formatTime(board.data.asOf, lang, "America/New_York") })}</PanelMeta>
+                  <PanelMeta>{tpl(t.markets.asOfEt, { time: formatTime(boardFeed.asOf, lang, "America/New_York") })}</PanelMeta>
                 </span>
               ) : null}
               <Link href="/markets" className="ml-2 flex items-center gap-1 text-xs text-fg-3 transition-colors hover:text-fg max-sm:min-h-10">
@@ -116,7 +122,7 @@ export function MarketOverviewView() {
           }
         >
           <StaleBanner show={stale.stale} since={stale.since} />
-          {boardFailed ? <ErrorState error={board.error} onRetry={() => board.mutate()} compact /> : <MarketBoard board={board.data?.board} />}
+          {boardFailed ? <ErrorState error={board.error} onRetry={retryBoard} compact /> : <MarketBoard board={boardFeed?.board} />}
         </Panel>
 
         <BreadthStrip breadth={data?.breadth} loading={!data && !error} />
