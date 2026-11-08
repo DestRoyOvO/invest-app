@@ -38,7 +38,7 @@ import { exportBackupNow, getEnv } from "./browser";
 import { usePrefsSync, useStorageSnapshot } from "./hooks";
 import { diffSummary, lastBackupLabel, messagesFor, prefNameLabel, prefValueLabel, storeLabel, symbolList } from "./labels";
 import { ResultLine } from "./ResultLine";
-import { focusSoon, TOUCH } from "./styles";
+import { focusSoon } from "./styles";
 
 type RestoreState =
   | { phase: "idle" }
@@ -193,11 +193,11 @@ export function BackupPanel() {
       <div className="space-y-3 px-3 py-3">
         <p className="text-sm text-fg-2">{t.data.privacy}</p>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="primary" onClick={onExport} className={TOUCH}>
+          <Button variant="primary" onClick={onExport}>
             <Download aria-hidden className="size-4" strokeWidth={1.75} />
             {t.data.backup.export}
           </Button>
-          <Button ref={pickRef} onClick={() => inputRef.current?.click()} className={TOUCH}>
+          <Button ref={pickRef} onClick={() => inputRef.current?.click()}>
             <Upload aria-hidden className="size-4" strokeWidth={1.75} />
             {t.data.backup.restore}
           </Button>
@@ -218,7 +218,7 @@ export function BackupPanel() {
             <AlertCircle aria-hidden className="size-4 shrink-0" strokeWidth={1.75} />
             {state.message}
           </p>
-          <Button size="sm" onClick={() => inputRef.current?.click()} className={TOUCH}>
+          <Button size="sm" onClick={() => inputRef.current?.click()}>
             {t.data.backup.another}
           </Button>
         </div>
@@ -236,7 +236,6 @@ export function BackupPanel() {
               undo(state.result, state.prefsBefore);
               focusSoon(pickRef);
             }}
-            className={TOUCH}
           >
             {t.data.undo}
           </Button>
@@ -292,7 +291,7 @@ export function BackupPanel() {
               // instead of reusing the Cancel button's element.
               <div key="confirm" className="flex flex-wrap items-center gap-2">
                 <p className="w-full text-sm text-fg">{tpl(mode === "merge" ? t.data.backup.confirmMerge : t.data.backup.confirmReplace, { summary: diffSummary(t, visible) })}</p>
-                <Button onClick={restore} className={TOUCH} autoFocus>
+                <Button onClick={restore} autoFocus>
                   {t.data.backup.confirm}
                 </Button>
                 <Button
@@ -301,14 +300,13 @@ export function BackupPanel() {
                     setState({ ...state, confirming: false });
                     focusSoon(startRef);
                   }}
-                  className={TOUCH}
                 >
                   {t.data.cancel}
                 </Button>
               </div>
             ) : (
               <div key="start" className="flex flex-wrap items-center gap-2">
-                <Button ref={startRef} onClick={() => setState({ ...state, confirming: true })} className={TOUCH}>
+                <Button ref={startRef} onClick={() => setState({ ...state, confirming: true })}>
                   {t.data.backup.start}
                 </Button>
                 <Button
@@ -317,7 +315,6 @@ export function BackupPanel() {
                     setState({ phase: "idle" });
                     focusSoon(pickRef);
                   }}
-                  className={TOUCH}
                 >
                   {t.data.cancel}
                 </Button>

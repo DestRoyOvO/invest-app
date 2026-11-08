@@ -314,6 +314,8 @@ function Treemap({ sectors, headers, className }: { sectors: SectorSnapshot[]; h
                 style={{ ...position, ...ring }}
               >
                 {node.label.showLabel ? <span className="truncate font-medium">{short}</span> : null}
+                {/* A real space, so the text reads "Tech 0.00%" like the aria-label; a flex container draws nothing for it. */}
+                {" "}
                 {node.label.showChange ? <span className="num shrink-0">{change}</span> : null}
               </div>
             );
@@ -339,6 +341,8 @@ function Treemap({ sectors, headers, className }: { sectors: SectorSnapshot[]; h
                   {quote.symbol}
                 </span>
               ) : null}
+              {/* As in the header strips: the text reads "CSCO 0.00%" like the aria-label, not "CSCO0.00%". */}
+              {" "}
               {label.showChange ? (
                 <span className="num" style={{ fontSize: label.changeSize }}>
                   {change}

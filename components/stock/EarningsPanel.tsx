@@ -9,8 +9,6 @@ import {
   figureCurrencies,
   hasUsOptions,
   intoReportNote,
-  isNonEquity,
-  knownNonEquity,
   relativeWhen,
   shortDay,
   signedPercent,
@@ -35,7 +33,7 @@ import { formatCompact, formatDate, formatNumber, formatRatio, tpl } from "@/lib
 import type { Messages } from "@/lib/i18n/messages";
 import type { EarningsDetail, EarningsQuarter, ImpliedMoveResponse } from "@/types/earnings";
 
-import { earningsTiming, isUsListing } from "./quote-utils";
+import { earningsTiming, isUsListing, requestsCoverage, showsCoverage } from "./quote-utils";
 
 // Next report, the "Into the report" note, consensus, estimate revisions, the implied move and the reported quarters
 // for one symbol (ERN). Laid out in one column at half width and in two columns when its container is wide (the quote
@@ -50,16 +48,17 @@ export function EarningsPanel({ symbol, className }: { symbol: string; className
   const { t } = usePrefs();
   const e = t.earnings;
   // Shares the quote page's request: the trading currency, and the quote type, so funds and indices (which do not
-  // report earnings) are not asked for. The app's own funds and index symbols are known before the quote arrives.
+  // report earnings) are not asked for. A symbol outside the app's lists waits for that type (requestsCoverage).
   const stock = useStock(symbol);
-  const noEarnings = knownNonEquity(symbol) || isNonEquity(stock.data?.quote.quoteType);
-  const { data, error, isLoading, mutate } = useEarnings(noEarnings ? null : symbol);
+  const quote = stock.data?.quote;
+  const noEarnings = !showsCoverage(symbol, quote?.quoteType);
+  const { data, error, isLoading, mutate } = useEarnings(requestsCoverage(symbol, quote) ? symbol : null);
   const now = useClock();
   const { openChat } = useUi();
   const wantsImplied = Boolean(data?.nextDate && now !== null && hasUsOptions(symbol) && withinDays(data.nextDate, now, IMPLIED_DAYS));
   const implied = useImpliedMove(wantsImplied ? symbol : null);
 
-  const trading = stock.data?.quote.currency ?? null;
+  const trading = quote?.currency ?? null;
   const currencies = data ? figureCurrencies(trading, data) : null;
 
   let body;

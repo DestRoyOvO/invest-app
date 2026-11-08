@@ -12,6 +12,7 @@ import {
   quoteQuery,
   quoteRanges,
   rangesNeedBars,
+  requestsCoverage,
   resolveTab,
   showsCoverage,
   tabsFor,
@@ -56,6 +57,21 @@ describe("tabs", () => {
     expect(showsCoverage("^N225", "INDEX")).toBe(false);
     // Yahoo without a type: treated as a stock, like tabsFor.
     expect(showsCoverage("XYZ", null)).toBe(true);
+  });
+
+  it("asks for earnings and analysts at once for the app's own stocks, after the quote for any other symbol", () => {
+    // The universe's stocks are stocks before their quote arrives, so their panels load in parallel with it.
+    expect(requestsCoverage("AAPL", undefined)).toBe(true);
+    // Funds, indices, currencies, futures and crypto the app knows never ask.
+    for (const symbol of ["SPY", "XLK", "^GSPC", "EURUSD=X", "AUDUSD=X", "ES=F", "BTC-USD"]) expect(requestsCoverage(symbol, { quoteType: "EQUITY" })).toBe(false);
+    // Any other symbol waits for its quote (the panels show skeletons), then asks only for a stock.
+    expect(requestsCoverage("VFIAX", undefined)).toBe(false);
+    expect(requestsCoverage("VFIAX", { quoteType: "MUTUALFUND" })).toBe(false);
+    expect(requestsCoverage("VTI", { quoteType: "ETF" })).toBe(false);
+    expect(requestsCoverage("PLTR", undefined)).toBe(false);
+    expect(requestsCoverage("PLTR", { quoteType: "EQUITY" })).toBe(true);
+    // Yahoo without a type: treated as a stock, like tabsFor and showsCoverage.
+    expect(requestsCoverage("XYZ", { quoteType: null })).toBe(true);
   });
 
   it("builds the query string with readable commas", () => {
@@ -124,6 +140,13 @@ describe("liveTitle", () => {
     expect(liveTitle("DOGE-USD", 0.12345, 0)).toBe("DOGE-USD 0.1235 0.00% · InvestSeek");
     expect(liveTitle("XYZ", null, null)).toBe("XYZ · InvestSeek");
     expect(liveTitle("XYZ", 10, null)).toBe("XYZ 10.00 · InvestSeek");
+  });
+
+  it("gives a change that rounds to 0.00% no arrow", () => {
+    expect(liveTitle("AAPL", 270.5, -0.001)).toBe("AAPL 270.50 0.00% · InvestSeek");
+    expect(liveTitle("AAPL", 270.5, 0.004)).toBe("AAPL 270.50 0.00% · InvestSeek");
+    expect(liveTitle("AAPL", 270.5, -0)).toBe("AAPL 270.50 0.00% · InvestSeek");
+    expect(liveTitle("AAPL", 270.5, -0.005)).toBe("AAPL 270.50 ▼0.01% · InvestSeek");
   });
 
   it("keeps a currency pair's decimals", () => {

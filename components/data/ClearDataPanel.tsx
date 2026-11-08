@@ -13,7 +13,7 @@ import { tpl } from "@/lib/format";
 
 import { exportBackupNow, getEnv } from "./browser";
 import { ResultLine } from "./ResultLine";
-import { focusSoon, TOUCH } from "./styles";
+import { focusSoon } from "./styles";
 
 /** The confirmation word works in either language, whichever the page shows. */
 const CONFIRM_WORDS = ["CLEAR", "清除"];
@@ -65,14 +65,14 @@ export function ClearDataPanel() {
       <div className="space-y-3 px-3 py-3">
         <p className="text-sm text-fg-2">{t.data.clear.body}</p>
         {/* The safety step before a destructive action: a real button, like the other exports, not a quiet link. */}
-        <Button ref={backupRef} size="sm" onClick={() => toast.show({ message: tpl(t.data.backup.exported, { file: exportBackupNow() }) })} className={TOUCH}>
+        <Button ref={backupRef} size="sm" onClick={() => toast.show({ message: tpl(t.data.backup.exported, { file: exportBackupNow() }) })}>
           <Download aria-hidden className="size-3.5" strokeWidth={1.75} />
           {t.data.clear.backupFirst}
         </Button>
         <Field label={tpl(t.data.clear.label, { word: t.data.clear.word })}>
           <Input value={typed} onChange={(event) => setTyped(event.target.value)} autoComplete="off" spellCheck={false} className="max-w-48" />
         </Field>
-        <Button onClick={onClear} disabled={!confirmed} className={TOUCH}>
+        <Button onClick={onClear} disabled={!confirmed}>
           <Trash2 aria-hidden className="size-4" strokeWidth={1.75} />
           {t.data.clear.button}
         </Button>
@@ -87,7 +87,6 @@ export function ClearDataPanel() {
                 undo(cleared.changes);
                 focusSoon(backupRef);
               }}
-              className={TOUCH}
             >
               {t.data.undo}
             </Button>

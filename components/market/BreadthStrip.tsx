@@ -5,12 +5,12 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
-import { Delta, withTrueMinus } from "@/components/ui/Delta";
+import { Delta, deltaParts } from "@/components/ui/Delta";
 import { Panel } from "@/components/ui/Panel";
 import { Skeleton } from "@/components/ui/States";
 import { StatTile } from "@/components/ui/StatTile";
 import { cn } from "@/lib/cn";
-import { formatChange, formatRatio, signOf, tpl } from "@/lib/format";
+import { formatRatio, tpl } from "@/lib/format";
 import { UNIVERSE_STOCKS } from "@/lib/universe";
 import type { BreadthTally, MarketBreadth } from "@/types/api";
 
@@ -35,15 +35,15 @@ export function AdvanceDeclineBar({ breadth, className }: { breadth: Pick<Market
   );
 }
 
-/** Equal-weight minus cap-weighted S&P 500 change, in percentage points, colored as the return gap it is. */
+/** Equal-weight minus cap-weighted S&P 500 change, in percentage points, colored as the return gap it is (flat when it prints as zero). */
 export function WeightGap({ breadth }: { breadth: Pick<MarketBreadth, "equalWeight" | "capWeight"> }) {
   const { t, lang } = usePrefs();
   const { equalWeight, capWeight } = breadth;
   const gap = equalWeight !== null && capWeight !== null ? equalWeight - capWeight : null;
-  const sign = signOf(gap);
+  const { text, sign } = deltaParts(gap, "change", undefined, lang);
   return (
     <span className={cn("num", sign > 0 ? "text-up" : sign < 0 ? "text-down" : "text-fg-3")}>
-      {gap === null ? "—" : tpl(t.markets.breadth.points, { value: withTrueMinus(formatChange(gap, lang)) })}
+      {gap === null ? "—" : tpl(t.markets.breadth.points, { value: text })}
     </span>
   );
 }

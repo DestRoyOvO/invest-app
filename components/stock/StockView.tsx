@@ -114,7 +114,8 @@ function HostedPanel({ children, empty }: { children: ReactNode; empty: string }
   );
 }
 
-export function StockView({ symbol, rawInput }: { symbol: string | null; rawInput: string }) {
+/** The quote page of a well-formed symbol (the page answers 404 for one that cannot exist, before StockView renders). */
+export function StockView({ symbol }: { symbol: string }) {
   const { t, lang } = usePrefs();
   const router = useRouter();
   const pathname = usePathname();
@@ -125,7 +126,7 @@ export function StockView({ symbol, rawInput }: { symbol: string | null; rawInpu
   const watchlist = useWatchlist();
   const { holdings } = useHoldings();
   const inGSequence = useGSequenceGuard();
-  const request = useMemo<AnalyzeRequest | null>(() => (symbol ? { kind: "stock", symbol, lang } : null), [symbol, lang]);
+  const request = useMemo<AnalyzeRequest>(() => ({ kind: "stock", symbol, lang }), [symbol, lang]);
 
   const quote: Quote | null = data?.quote ?? null;
   // Which tabs apply depends on the quote type, so until the quote is known a deep link (?tab=financials) keeps its
@@ -135,13 +136,13 @@ export function StockView({ symbol, rawInput }: { symbol: string | null; rawInpu
   // A link to a tab this quote does not have (FA on a fund) shows the overview and says why.
   const missingTab = data ? missingQuoteTab(searchParams.get("tab"), tabs) : null;
   const compareParam = searchParams.get("compare");
-  const compare = useMemo(() => parseCompare(compareParam, symbol ?? ""), [compareParam, symbol]);
+  const compare = useMemo(() => parseCompare(compareParam, symbol), [compareParam, symbol]);
 
   const hrefFor = useCallback((next: QuoteTab) => `${pathname}${quoteQuery(next, compare)}`, [pathname, compare]);
   const setCompare = useCallback((next: string[]) => router.replace(`${pathname}${quoteQuery(tab, next)}`, { scroll: false }), [router, pathname, tab]);
 
   // The position and its share of the portfolio (needs quotes for the other holdings).
-  const position = symbol ? holdings[symbol] : undefined;
+  const position = holdings[symbol];
   const otherHoldings = useMemo(() => (position ? Object.keys(holdings).filter((s) => s !== symbol) : []), [position, holdings, symbol]);
   const others = useQuotes(otherHoldings);
   const portfolioWeight = useMemo(() => {
@@ -159,7 +160,7 @@ export function StockView({ symbol, rawInput }: { symbol: string | null; rawInpu
   }, [data]);
 
   useEffect(() => {
-    if (data && symbol) rememberSymbol(symbol);
+    if (data) rememberSymbol(symbol);
   }, [data, symbol]);
 
   // Live tab title with arrows rather than colors, e.g. "NVDA 186.64 ▲2.78% · InvestSeek" ("英伟达 NVDA 186.64 ▲2.78%
@@ -183,7 +184,7 @@ export function StockView({ symbol, rawInput }: { symbol: string | null; rawInpu
   }, [titleSymbol, titlePrice, titleChange, lang]);
 
   const why = useCallback(() => {
-    if (symbol) openChat({ text: tpl(t.stock.actions.whyMovingPrompt, { symbol }), intent: { kind: "move", symbol } });
+    openChat({ text: tpl(t.stock.actions.whyMovingPrompt, { symbol }), intent: { kind: "move", symbol } });
   }, [symbol, openChat, t]);
 
   const goToNotes = useCallback(() => {
@@ -203,16 +204,16 @@ export function StockView({ symbol, rawInput }: { symbol: string | null; rawInpu
   const outsideSequence = () => !inGSequence();
   useHotkeys(
     [
-      { key: "a", description: t.stock.addToWatchlist, when: outsideSequence, handler: () => symbol && watchlist.toggle(symbol) },
-      { key: "p", description: t.stock.actions.editPosition, when: outsideSequence, handler: () => symbol && openPositionEditor(symbol) },
+      { key: "a", description: t.stock.addToWatchlist, when: outsideSequence, handler: () => watchlist.toggle(symbol) },
+      { key: "p", description: t.stock.actions.editPosition, when: outsideSequence, handler: () => openPositionEditor(symbol) },
       { key: "n", description: t.stock.actions.goToNotes, when: outsideSequence, handler: goToNotes },
-      { key: "!", description: t.stock.actions.setAlert, handler: () => symbol && openAlertEditor(symbol) },
+      { key: "!", description: t.stock.actions.setAlert, handler: () => openAlertEditor(symbol) },
       { key: "w", description: t.stock.actions.whyMoving, when: outsideSequence, handler: why },
     ],
-    Boolean(symbol && data),
+    Boolean(data),
   );
 
-  if (!symbol || (error instanceof ApiError && error.status === 404)) return <NotFound symbol={symbol ?? rawInput.slice(0, 20)} />;
+  if (error instanceof ApiError && error.status === 404) return <NotFound symbol={symbol} />;
 
   if (error && !data && !isLoading) {
     return (

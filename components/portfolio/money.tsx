@@ -1,8 +1,8 @@
 import { cn } from "@/lib/cn";
-import { DASH, formatNumber } from "@/lib/format";
+import { DASH, displayedSign, formatNumber } from "@/lib/format";
 import type { Lang } from "@/types/api";
 
-import { displayedSign, signedMoneyText } from "./money-format";
+import { signedMoneyText } from "./money-format";
 
 /** An amount of money (value, cost) in --fg with grouping and fixed decimals. */
 export function Money({ value, lang, digits = 2, className }: { value: number | null | undefined; lang: Lang; digits?: number; className?: string }) {

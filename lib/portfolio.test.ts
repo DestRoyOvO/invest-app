@@ -183,6 +183,18 @@ describe("dayMovers and topWeight", () => {
     expect(dayMovers(portfolio.rows, 1).contributors.map((r) => r.symbol)).toEqual(["H"]);
   });
 
+  it("leaves out a day P&L that prints as zero, at the decimals shown", () => {
+    const p = book([
+      ["UP", 1, 1, 10, 0.004],
+      ["DOWN", 1, 1, 10, -0.004],
+      ["REAL", 1, 1, 10, -0.006],
+    ]);
+    const { contributors, detractors } = dayMovers(p.rows);
+    expect(contributors).toEqual([]);
+    expect(detractors.map((r) => r.symbol)).toEqual(["REAL"]);
+    expect(dayMovers(p.rows, 3, 3).contributors.map((r) => r.symbol)).toEqual(["UP"]);
+  });
+
   it("measures concentration in the largest positions", () => {
     const p = book([
       ["BIG", 1, 1, 50, 0],

@@ -10,7 +10,7 @@ import { Panel } from "@/components/ui/Panel";
 import { parsePastedPositions } from "@/lib/broker-import";
 
 import { ImportDone, ImportReview, useImportOutcome } from "./ImportReview";
-import { focusSoon, TOUCH } from "./styles";
+import { focusSoon } from "./styles";
 
 /** Paste positions as text: "AAPL, 25, 201.30" per line, or rows copied from a spreadsheet or a broker's page. */
 export function PastePanel() {
@@ -40,7 +40,7 @@ export function PastePanel() {
       className="scroll-mt-2"
       actions={
         text ? (
-          <Button size="sm" variant="ghost" onClick={() => setText("")} className={TOUCH}>
+          <Button size="sm" variant="ghost" onClick={() => setText("")}>
             {t.data.paste.clear}
           </Button>
         ) : null

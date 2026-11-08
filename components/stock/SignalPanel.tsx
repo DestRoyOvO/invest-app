@@ -26,7 +26,7 @@ import { Whisker } from "@/components/ui/Whisker";
 import { cn } from "@/lib/cn";
 import { evaluationVerdict, findHorizon, type HorizonOutcome, type LabelOutcome } from "@/lib/evaluation";
 import { EVALUATION_DAYS, SIGNAL_EVALUATION } from "@/lib/evaluation-data";
-import { DASH, formatInteger, formatMultiple, formatShortDate, tpl } from "@/lib/format";
+import { DASH, displayedSign, formatInteger, formatMultiple, formatShortDate, tpl } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/messages";
 import { labelForScore, SIGNAL_THRESHOLDS } from "@/lib/signal";
 import type { BacktestResult, FactorResult, Lang, SignalCode, SignalReport } from "@/types/api";
@@ -124,7 +124,11 @@ function ContextRow({ factor, t }: { factor: FactorResult; t: Messages }) {
   );
 }
 
-function SelectionCell({ row, tone, domain, t }: { row: LabelOutcome; tone: "up" | "down" | "neutral"; domain: [number, number]; t: Messages }) {
+/**
+ * A reading's return against the same-day universe: the number (colored by `tone`) with the raw figures in a tooltip,
+ * and its interval whisker, grey throughout when the row is (`neutral`, a concentrated row).
+ */
+function SelectionCell({ row, tone, neutral, domain, t }: { row: LabelOutcome; tone: "up" | "down" | "neutral"; neutral: boolean; domain: [number, number]; t: Messages }) {
   const tr = t.signal.track;
   const interval = row.ci.selection;
   const raw = tpl(tr.rawExcess, {
@@ -154,6 +158,7 @@ function SelectionCell({ row, tone, domain, t }: { row: LabelOutcome; tone: "up"
         base={0}
         min={domain[0]}
         max={domain[1]}
+        neutral={neutral}
         label={tpl(tr.whisker, { reading: t.signal.codes[row.code], value: pct(row.selection, 2, true), lo: pct(interval?.[0], 2, true), hi: pct(interval?.[1], 2, true) })}
       />
     </span>
@@ -186,7 +191,7 @@ function TrackRecord({ horizon, code, t, lang }: { horizon: HorizonOutcome; code
       header: tr.vsUniverse,
       align: "right",
       width: "10rem",
-      render: (row) => <SelectionCell row={row} tone={selectionTone(row, totalDates)} domain={domain} t={t} />,
+      render: (row) => <SelectionCell row={row} tone={selectionTone(row, totalDates)} neutral={isConcentrated(row, totalDates)} domain={domain} t={t} />,
     },
     { key: "beat", header: tr.beatMedian, align: "right", width: "6rem", render: (row) => <span className="num">{pct(row.beatMedian, 0)}</span> },
     {
@@ -214,8 +219,10 @@ function Backtest({ results, costBps, t, lang }: { results: BacktestResult[]; co
   const b = t.signal.backtest;
   const domain = rateDomain(results.flatMap((r) => [r.winRate, r.winRateCI?.[0], r.winRateCI?.[1], r.baselineWinRate]));
   const returnCell = (value: number | null, row: BacktestResult) => {
-    const colored = backtestTiming(row) === "unlikely" && value !== null && value !== 0;
-    return <span className={cn("num", colored ? (value > 0 ? "text-up" : "text-down") : "text-fg-3")}>{pct(value, 2, true)}</span>;
+    // The color follows the printed return: one that rounds to 0.00% stays neutral.
+    const sign = value === null ? 0 : displayedSign(value * 100, 2);
+    const colored = backtestTiming(row) === "unlikely" && sign !== 0;
+    return <span className={cn("num", colored ? (sign > 0 ? "text-up" : "text-down") : "text-fg-3")}>{pct(value, 2, true)}</span>;
   };
   const columns: DataTableColumn<BacktestResult>[] = [
     {

@@ -3,7 +3,7 @@
 // never advice ("Why is NVDA down 3.1% today?", never "Should I sell NVDA?"). Pure; the strings come from lib/i18n.
 
 import { daysUntil } from "@/lib/ai-format";
-import { formatShortDate, tpl } from "@/lib/format";
+import { displayedSign, formatShortDate, tpl } from "@/lib/format";
 import { getSector, sectorOfSymbol } from "@/lib/universe";
 import type { ChatIntentInput, Lang } from "@/types/api";
 
@@ -82,7 +82,8 @@ export function comparePeers(symbol: string): string[] {
 
 function moveQuestion(symbol: string, data: SuggestionData, m: SuggestionMessages): Suggestion {
   const change = data.changePercent;
-  const notable = typeof change === "number" && Number.isFinite(change) && (Math.abs(change) >= NOTABLE_MOVE || (data.relativeVolume ?? 0) >= NOTABLE_VOLUME) && change !== 0;
+  // A move that prints as 0.00% has no direction to ask about, whatever the volume.
+  const notable = typeof change === "number" && Number.isFinite(change) && (Math.abs(change) >= NOTABLE_MOVE || (data.relativeVolume ?? 0) >= NOTABLE_VOLUME) && displayedSign(change, 2) !== 0;
   const text = notable
     ? tpl(m.whyMove, { symbol, direction: (change as number) > 0 ? m.up : m.down, pct: `${Math.abs(change as number).toFixed(2)}%`, when: when(data, m) })
     : tpl(m.whatMoved, { symbol, when: when(data, m) });

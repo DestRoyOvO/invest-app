@@ -11,11 +11,11 @@ import { EmptyState, ErrorState, SkeletonRows, StaleBanner } from "@/components/
 import { useFinancials } from "@/hooks/useQuoteApi";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { formatCompact, formatNumber, formatRatio, tpl } from "@/lib/format";
+import { displayedSign, formatCompact, formatNumber, formatRatio, tpl } from "@/lib/format";
 import type { Lang } from "@/types/api";
 import type { FinancialPeriod } from "@/types/research";
 
-import { barWidths, FINANCIAL_ROWS, fiscalYear, signedFigure, yearOverYear, type FinancialRowSpec } from "./research-utils";
+import { barWidths, FINANCIAL_ROWS, fiscalYear, yearOverYear, type FinancialRowSpec } from "./research-utils";
 
 type Period = "annual" | "quarterly";
 
@@ -32,6 +32,11 @@ function formatValue(value: number | null, format: FinancialRowSpec["format"], l
   if (format === "ratio") return withTrueMinus(formatRatio(value, { digits: 1 }));
   if (format === "perShare") return withTrueMinus(formatNumber(value, 2, lang));
   return withTrueMinus(formatCompact(value, lang));
+}
+
+/** Prefixes an unsigned figure with + or a true minus by its printed sign (displayedSign): none when it prints as zero. */
+function signed(text: string, sign: -1 | 0 | 1): string {
+  return sign > 0 ? `+${text}` : sign < 0 ? `−${text}` : text;
 }
 
 /**
@@ -93,9 +98,9 @@ export function FinancialsPanel({ symbol, quoteCurrency, className }: { symbol: 
         row.yoy === null ? (
           <span className="num text-fg-3">{formatRatio(null)}</span>
         ) : row.spec.change === "points" ? (
-          <span className="num text-fg">{tpl(r.points, { n: signedFigure(Math.abs(row.yoy).toFixed(1), row.yoy) })}</span>
+          <span className="num text-fg">{tpl(r.points, { n: signed(Math.abs(row.yoy).toFixed(1), displayedSign(row.yoy, 1)) })}</span>
         ) : (
-          <span className="num text-fg">{signedFigure(formatRatio(Math.abs(row.yoy), { digits: 1 }), row.yoy)}</span>
+          <span className="num text-fg">{signed(formatRatio(Math.abs(row.yoy), { digits: 1 }), displayedSign(row.yoy * 100, 1))}</span>
         ),
     },
   ];

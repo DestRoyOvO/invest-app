@@ -32,7 +32,7 @@ import { useLocalStore } from "@/hooks/useLocalStore";
 import { useNote } from "@/hooks/useNotes";
 import { isIntradayRange, useChartSeries } from "@/hooks/useQuoteApi";
 import { cn } from "@/lib/cn";
-import { formatCompact, formatDate, formatPrice, formatShortDate, formatTime, tpl } from "@/lib/format";
+import { displayedSign, formatCompact, formatDate, formatPrice, formatShortDate, formatTime, tpl } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/messages";
 import { formatQuotePrice, priceDigits } from "@/lib/quote-figures";
 import { wilderRsiSeries } from "@/lib/signal";
@@ -460,7 +460,10 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
         return prices.map((p, i) => p.toLocaleString(LOCALES[lang], { minimumFractionDigits: decimals[i], maximumFractionDigits: decimals[i] }));
       },
     };
-    const percentText = (value: number, digits = 2) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(digits)}%`;
+    const percentText = (value: number, digits = 2) => {
+      const sign = displayedSign(value, digits);
+      return `${sign > 0 ? "+" : sign < 0 ? "−" : ""}${Math.abs(value).toFixed(digits)}%`;
+    };
     const timeText = (time: Time) => {
       const ms = (time as number) * 1000;
       return intraday ? `${formatShortDate(ms, lang, "UTC")} ${formatTime(ms, lang, "UTC")}` : formatDate(ms, lang, "UTC");

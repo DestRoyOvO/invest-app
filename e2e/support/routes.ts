@@ -79,8 +79,8 @@ function escapeRegExp(text: string): string {
 }
 
 /**
- * A panel by its title. The first match: a table inside a panel can become a labelled scroll region of its own when it
- * overflows (pending in int/ui's DataTable), and the panel comes before it in document order.
+ * A panel by its title. The first match: a table inside a panel becomes a labelled scroll region of its own when it
+ * overflows (DataTable), and the panel comes before it in document order.
  */
 function region(page: Page, name: string) {
   return page.getByRole("region", { name, exact: true }).first();
@@ -113,6 +113,11 @@ const overviewReady = async (page: Page) => {
 
 /** Every panel of a quote page asks its own route, and each answers 404 for a symbol the data source does not know. */
 const UNKNOWN_SYMBOL = "The stock API and its panel routes answer 404 for a symbol the data source does not know.";
+
+/** The terminal's not-found view, "ERR 404 /path · unknown function". */
+const notFoundReady = async (page: Page) => {
+  await expect(page.getByRole("heading", { level: 1, name: /^ERR 404/ })).toBeVisible();
+};
 
 export const ROUTES: readonly RouteCase[] = [
   // Markets
@@ -227,26 +232,33 @@ export const ROUTES: readonly RouteCase[] = [
   // A fund: only the overview and dividends tabs.
   { path: "/stock/SPY", ready: (page) => quoteReady(page, "SPY"), apis: ["/api/stock/SPY", "/api/stock/SPY/chart"] },
   { path: "/stock/SPY?tab=dividends", ready: (page) => firstRow(page, "Recent payments"), apis: ["/api/stock/SPY/dividends"] },
+  // A mutual fund outside the app's lists (the fixture data makes one of any four letters and an X): the page learns that
+  // it is a fund from its quote and asks for no earnings or analysts, which would answer 404 (a 4xx fails the sweep).
+  {
+    path: "/stock/VFIAX",
+    ready: (page) => quoteReady(page, "VFIAX"),
+    apis: ["", "/chart", "/signal", "/factors", "/news"].map((part) => `/api/stock/VFIAX${part}`),
+  },
   // An index, a crypto pair, a currency pair, a future and a Hong Kong listing: the overview only.
   { path: "/stock/%5EGSPC", ready: (page) => quoteReady(page, "^GSPC") },
   { path: "/stock/BTC-USD", ready: (page) => quoteReady(page, "BTC-USD") },
   { path: "/stock/EURUSD%3DX", ready: (page) => quoteReady(page, "EURUSD=X") },
   { path: "/stock/GC%3DF", ready: (page) => quoteReady(page, "GC=F") },
   { path: "/stock/0700.HK", ready: (page) => quoteReady(page, "0700.HK") },
+  // A well-formed symbol the data source does not know answers 200 on purpose (a soft 404): to answer 404 the page would
+  // have to ask Yahoo while it renders, outside the API routes' per-client rate limit and ahead of every quote page. The
+  // stock API answers 404 instead, and StockView shows its not-found view.
   {
     path: "/stock/ZZZZ",
-    status: 404,
-    knownStatus: {
-      status: 200,
-      reason:
-        "soft 404: app/(terminal)/stock/[symbol]/page.tsx (int/pages) answers 200 and StockView shows the not-found view only after /api/stock/ZZZZ answers 404",
-    },
     ready: async (page) => {
       await expect(page.getByRole("heading", { level: 1, name: "No match for ZZZZ" })).toBeVisible();
     },
     console: [{ pattern: /status of 404 \(Not Found\) \(http:\/\/[^/]+\/api\/stock\/ZZZZ(?:[/?][^)]*)?\)$/, reason: UNKNOWN_SYMBOL }],
     responses: [{ pattern: /^404 GET http:\/\/[^/]+\/api\/stock\/ZZZZ(?:[/?]\S*)?$/, reason: UNKNOWN_SYMBOL }],
   },
+  // A symbol that cannot exist ("$$$") answers 404 from the server without asking for any data: the 404 of the document
+  // itself is the only noise.
+  { path: "/stock/%24%24%24", status: 404, ready: notFoundReady },
 
   // Tools
   {
@@ -267,13 +279,7 @@ export const ROUTES: readonly RouteCase[] = [
   },
   // A public site has nothing to unlock: the page sends visitors home.
   { path: "/unlock", finalPath: "/", ready: overviewReady },
-  {
-    path: "/no-such-page",
-    status: 404,
-    ready: async (page) => {
-      await expect(page.getByRole("heading", { level: 1, name: /^ERR 404/ })).toBeVisible();
-    },
-  },
+  { path: "/no-such-page", status: 404, ready: notFoundReady },
 ];
 
 /** The case for a path; throws for a path the catalog does not have. */
@@ -286,8 +292,8 @@ export function routeCase(path: string): RouteCase {
 /**
  * The noise a case expects: its own allowances and, when its document should answer an error status (a not-found
  * page's 404), the console line and the response that document causes, for its URL alone. They follow `status`, the
- * status the page should answer, not the one it answers today: a case with a knownStatus (/stock/ZZZZ answers 200 for
- * now) keeps passing once the owner of the bug fixes it, and only notes that its knownStatus can go.
+ * status the page should answer, not the one it answers today: a case with a knownStatus keeps passing once the owner
+ * of the bug fixes it, and only notes that its knownStatus can go.
  */
 export function expectedNoise(route: RouteCase): { console: Allowance[]; responses: Allowance[] } {
   const status = route.status ?? 200;

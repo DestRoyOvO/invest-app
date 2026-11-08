@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { directionOf, HEAT_EDGES, HEAT_STEPS, heatStep, heatStyle, withTrueMinus } from "./delta-utils";
+import { deltaParts, directionOf, HEAT_EDGES, HEAT_STEPS, heatStep, heatStyle, withTrueMinus } from "./delta-utils";
 
 describe("heatStep", () => {
   it("is flat below 0.10% and for missing values", () => {
@@ -68,6 +68,46 @@ describe("directionOf", () => {
     expect(directionOf(0)).toBe("flat");
     expect(directionOf(null)).toBe("flat");
     expect(directionOf(Number.NaN)).toBe("flat");
+  });
+
+  it("is flat for a change that prints as zero beside it (two decimals unless told otherwise)", () => {
+    expect(directionOf(-0.004)).toBe("flat");
+    expect(directionOf(0.004)).toBe("flat");
+    expect(directionOf(-0)).toBe("flat");
+    expect(directionOf(-0.005)).toBe("down");
+    expect(directionOf(-0.004, 3)).toBe("down");
+    expect(directionOf(-0.4, 0)).toBe("flat");
+  });
+});
+
+describe("deltaParts", () => {
+  it("gives the printed text with a true minus and the sign it prints with", () => {
+    expect(deltaParts(1.234, "percent")).toEqual({ text: "+1.23%", sign: 1 });
+    expect(deltaParts(-0.52, "percent")).toEqual({ text: "−0.52%", sign: -1 });
+    expect(deltaParts(-0.0123, "ratio", 1)).toEqual({ text: "−1.2%", sign: -1 });
+    expect(deltaParts(0.77, "change", 3)).toEqual({ text: "+0.770", sign: 1 });
+    expect(deltaParts(-1.80002, "change")).toEqual({ text: "−1.80", sign: -1 });
+    expect(deltaParts(-0.0042, "change")).toEqual({ text: "−0.0042", sign: -1 });
+  });
+
+  it("is unsigned and flat when the value rounds to zero at the decimals shown", () => {
+    expect(deltaParts(-0.001, "percent")).toEqual({ text: "0.00%", sign: 0 });
+    expect(deltaParts(0.001, "percent")).toEqual({ text: "0.00%", sign: 0 });
+    expect(deltaParts(-0.04, "percent", 1)).toEqual({ text: "0.0%", sign: 0 });
+    expect(deltaParts(-0.4, "percent", 0)).toEqual({ text: "0%", sign: 0 });
+    expect(deltaParts(-0.00004, "ratio")).toEqual({ text: "0.00%", sign: 0 });
+    expect(deltaParts(-0.0004, "ratio", 1)).toEqual({ text: "0.0%", sign: 0 });
+    expect(deltaParts(-0.00004, "change", 4)).toEqual({ text: "0.0000", sign: 0 });
+    expect(deltaParts(-0.00004, "change")).toEqual({ text: "0.00", sign: 0 });
+    expect(deltaParts(-0.004, "change", 2, "zh")).toEqual({ text: "0.00", sign: 0 });
+    expect(deltaParts(-0, "percent")).toEqual({ text: "0.00%", sign: 0 });
+    expect(deltaParts(-0, "change")).toEqual({ text: "0.00", sign: 0 });
+  });
+
+  it("is a dash and flat without a value", () => {
+    expect(deltaParts(null, "percent")).toEqual({ text: "—", sign: 0 });
+    expect(deltaParts(undefined, "change", 4)).toEqual({ text: "—", sign: 0 });
+    expect(deltaParts(Number.NaN, "ratio")).toEqual({ text: "—", sign: 0 });
   });
 });
 
