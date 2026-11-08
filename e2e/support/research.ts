@@ -480,6 +480,7 @@ export const SCREEN_VALUES: Readonly<Record<string, (row: ScreenerRow) => SortVa
   price: (row) => row.price,
   chg: (row) => row.changePercent,
   cap: (row) => row.marketCap,
+  assets: (row) => row.netAssets,
   pe: (row) => row.trailingPE,
   yield: (row) => row.dividendYield,
   rating: (row) => row.analystRating,
