@@ -147,7 +147,8 @@ describe("the screener CSV", () => {
   for (const universe of ["stocks", "etfs"] as const) {
     const rows = universe === "stocks" ? STOCKS : ETFS;
     for (const lang of ["en", "zh"] as const) {
-      it(`lists the ${universe} table's rows in its order and with its names (${lang})`, () => {
+      // Each renders the table over a hundred times: half a second alone, past Vitest's 5 s default on a busy machine.
+      it(`lists the ${universe} table's rows in its order and with its names (${lang})`, { timeout: 30_000 }, () => {
         let compared = 0;
         for (const set of COLUMN_SET_KEYS) {
           // Every column of the set (the table sorts it again), and one it lacks (the table keeps the given order).
