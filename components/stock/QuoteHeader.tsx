@@ -15,6 +15,7 @@ import { formatCompact, formatNumber, formatPrice, formatRatio, formatTime, tpl 
 import type { Lang, StockDetail } from "@/types/api";
 
 import { earningsTiming, futureDate, isUsListing, positionFigures, upcomingExDividend } from "./quote-utils";
+import { perShareDigits } from "./research-utils";
 import { RangeBar } from "./RangeBar";
 
 interface QuoteHeaderProps {
@@ -29,8 +30,18 @@ interface QuoteHeaderProps {
 
 const LOCALES: Record<Lang, string> = { en: "en-US", zh: "zh-CN" };
 
+/** "Thu Nov 12" / "11月12日周四", the date in New York. */
 function eventDate(iso: string, lang: Lang): string {
-  return new Intl.DateTimeFormat(LOCALES[lang], { weekday: "short", month: "short", day: "numeric", timeZone: "America/New_York" }).format(new Date(iso));
+  const format = new Intl.DateTimeFormat(LOCALES[lang], { weekday: "short", month: "short", day: "numeric", timeZone: "America/New_York" });
+  if (lang === "zh") return format.format(new Date(iso));
+  const part = (type: Intl.DateTimeFormatPartTypes) => format.formatToParts(new Date(iso)).find((p) => p.type === type)?.value ?? "";
+  return `${part("weekday")} ${part("month")} ${part("day")}`;
+}
+
+/** A per-share cash amount: 0.27, or up to four decimals for tiny amounts (0.004). */
+function perShareAmount(value: number, lang: Lang): string {
+  const { min, max } = perShareDigits(value);
+  return value.toLocaleString(LOCALES[lang], { minimumFractionDigits: min, maximumFractionDigits: max });
 }
 
 function formatShares(shares: number, lang: Lang): string {
@@ -124,7 +135,7 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, 
               {showExDividend && quote.exDividendDate ? (
                 <Chip icon={<Coins aria-hidden className="size-3.5 text-fg-3" strokeWidth={1.75} />}>
                   {quote.dividendAmount !== null
-                    ? tpl(t.stock.events.exDividendAmount, { date: eventDate(quote.exDividendDate, lang), amount: formatPrice(quote.dividendAmount, lang) })
+                    ? tpl(t.stock.events.exDividendAmount, { date: eventDate(quote.exDividendDate, lang), amount: perShareAmount(quote.dividendAmount, lang) })
                     : tpl(t.stock.events.exDividend, { date: eventDate(quote.exDividendDate, lang) })}
                 </Chip>
               ) : null}
