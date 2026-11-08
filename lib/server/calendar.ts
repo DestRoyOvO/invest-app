@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isUsListing, nyDayKey, weekdayOf } from "@/lib/events";
 import { MACRO_CALENDAR_ENDS, macroEventsBetween } from "@/lib/macro-calendar";
 import type { CalendarEvent, CalendarResponse, Quote } from "@/types/api";
 
@@ -14,10 +15,21 @@ const LOOKBACK_DAYS = 2;
 
 const NY_HOUR = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "numeric", hourCycle: "h23" });
 
-/** Session timing of an earnings release from its New York time; null for estimates (Yahoo uses placeholder times). */
-export function earningsTiming(iso: string, estimated: boolean): CalendarEvent["timing"] {
+export { isUsListing };
+
+/**
+ * Session timing of an earnings release from its New York time. Null for estimates (Yahoo uses placeholder times), for
+ * date-only values (UTC midnight), for listings outside the US, where the New York session says nothing, and for
+ * weekend dates, when there is no session (Berkshire reports on Saturdays).
+ */
+export function earningsTiming(iso: string, estimated: boolean, symbol?: string): CalendarEvent["timing"] {
   if (estimated) return null;
-  const parts = NY_HOUR.formatToParts(new Date(iso));
+  if (symbol !== undefined && !isUsListing(symbol)) return null;
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms) || ms % DAY_MS === 0) return null;
+  const weekday = weekdayOf(nyDayKey(ms));
+  if (weekday === 0 || weekday === 6) return null;
+  const parts = NY_HOUR.formatToParts(new Date(ms));
   const hour = Number(parts.find((p) => p.type === "hour")?.value);
   const minute = Number(parts.find((p) => p.type === "minute")?.value);
   if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
@@ -42,7 +54,10 @@ export function quoteEvents(quote: Quote, from: number, to: number): CalendarEve
     [quote.lastEarningsDate, false],
   ] as const) {
     if (!inWindow(iso, from, to)) continue;
-    events.push({ ...base, id: `earnings:${quote.symbol}:${iso.slice(0, 10)}`, kind: "earnings", at: iso, timing: earningsTiming(iso, estimated), estimated, amount: null });
+    const id = `earnings:${quote.symbol}:${iso.slice(0, 10)}`;
+    // Around a report Yahoo's next and last timestamps can fall on the same day: keep one event so ids stay unique.
+    if (events.some((event) => event.id === id)) continue;
+    events.push({ ...base, id, kind: "earnings", at: iso, timing: earningsTiming(iso, estimated, quote.symbol), estimated, amount: null });
   }
   // Ex-dividend dates (you must hold the shares before this date to receive the dividend). Payment dates are left
   // out: Yahoo often keeps a past one, and the ex-date is the one that matters for a holder.

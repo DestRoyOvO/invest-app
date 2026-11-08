@@ -1,6 +1,7 @@
-import { getAnalystActivity } from "@/lib/server/earnings";
+import { extraUnits } from "@/lib/server/charging";
+import { getAnalystActivity, uncachedAnalystCalls } from "@/lib/server/earnings";
 import { jsonError, jsonOk, upstreamError } from "@/lib/server/http";
-import { limitPublicRequest } from "@/lib/server/request-guard";
+import { chargePublicRequest, limitPublicRequest } from "@/lib/server/request-guard";
 import { normalizeSymbol } from "@/lib/symbols";
 
 const CACHE_SECONDS = 1800;
@@ -21,6 +22,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ symbol: str
   const { symbol: param } = await ctx.params;
   const symbol = normalizeSymbol(decodeParam(param));
   if (!symbol) return jsonError(400, "bad_request", "Invalid symbol.");
+
+  const charged = chargePublicRequest(request, extraUnits(uncachedAnalystCalls(symbol)));
+  if (charged) return charged;
 
   try {
     const data = await getAnalystActivity(symbol);

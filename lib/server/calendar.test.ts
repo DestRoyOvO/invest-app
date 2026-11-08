@@ -78,6 +78,22 @@ describe("earningsTiming", () => {
     expect(earningsTiming("2026-07-15T20:05:00Z", false)).toBe("post"); // 16:05 EDT
     expect(earningsTiming("2027-01-28T21:00:00Z", true)).toBeNull();
   });
+
+  it("gives no slot to date-only values or to listings outside the US", () => {
+    // UTC midnight is how Yahoo sends a date without a time; it is not a 19:00 ET release.
+    expect(earningsTiming("2026-11-18T00:00:00.000Z", false)).toBeNull();
+    expect(earningsTiming("2026-11-18T08:10:00.000Z", false, "0700.HK")).toBeNull();
+    expect(earningsTiming("2026-11-18T13:30:00.000Z", false, "BRK-B")).toBe("pre");
+    expect(earningsTiming("not a date", false)).toBeNull();
+  });
+
+  it("gives no slot to weekend dates, when there is no session", () => {
+    // Berkshire reports on a Saturday; Yahoo's 21:00Z is a placeholder, not "after the close".
+    expect(earningsTiming("2026-11-07T21:00:00.000Z", false, "BRK-B")).toBeNull();
+    expect(earningsTiming("2026-11-08T13:30:00.000Z", false, "XYZ")).toBeNull();
+    // 01:00Z on Saturday is still Friday evening in New York.
+    expect(earningsTiming("2026-11-07T01:00:00.000Z", false, "XYZ")).toBe("post");
+  });
 });
 
 describe("quoteEvents", () => {
@@ -99,6 +115,20 @@ describe("quoteEvents", () => {
       ["dividend", "2026-11-30", null],
     ]);
     expect(events[2]).toMatchObject({ amount: 1.65, symbol: "JPM", name: "JPM Corp", id: "dividend:JPM:2026-11-30" });
+  });
+
+  it("keeps the date of a Hong Kong report but no New York session slot", () => {
+    const events = quoteEvents(quote("0700.HK", { currency: "HKD", nextEarningsDate: "2026-11-18T08:10:00.000Z", earningsDateEstimated: false }), NOW, NOW + 30 * DAY);
+    expect(events.map((e) => [e.id, e.timing, e.estimated])).toEqual([["earnings:0700.HK:2026-11-18", null, false]]);
+  });
+
+  it("keeps one event when the next and the last report share a day", () => {
+    const events = quoteEvents(
+      quote("XYZ", { nextEarningsDate: "2026-11-09T21:00:00.000Z", earningsDateEstimated: false, lastEarningsDate: "2026-11-09T12:00:00.000Z" }),
+      NOW - 2 * DAY,
+      NOW + 30 * DAY,
+    );
+    expect(events.map((e) => [e.id, e.timing])).toEqual([["earnings:XYZ:2026-11-09", "post"]]);
   });
 
   it("skips dates outside the window", () => {
