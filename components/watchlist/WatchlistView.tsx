@@ -40,9 +40,7 @@ function columnLabel(key: string, t: Messages): string {
     symbol: t.columns.symbol,
     name: t.columns.name,
     last: t.columns.last,
-    change: t.columns.change,
     changePct: t.columns.changePct,
-    volume: t.columns.volume,
     marketCap: t.columns.marketCap,
     pe: t.columns.pe,
   };
@@ -101,6 +99,7 @@ export function WatchlistView() {
   const weights = useMemo(() => new Map(portfolio.rows.map((r) => [r.symbol, r.weight])), [portfolio.rows]);
   const missingHere = missing.filter((s) => watchlist.includes(s));
   const showBand = hydrated && (valued || watchQuotes.length > 0);
+  const bandLoading = hydrated && loading && (Object.keys(holdings).length > 0 || watchlist.length > 0);
 
   const onRemove = (symbol: string, index: number) => {
     remove(symbol);
@@ -121,7 +120,13 @@ export function WatchlistView() {
     <div className="grid gap-px bg-line p-px xl:grid-cols-[minmax(0,3fr)_minmax(0,1fr)]">
       <h1 className="sr-only">{t.watchlist.title}</h1>
 
-      {showBand ? (
+      {bandLoading ? (
+        <div className="grid grid-cols-2 gap-px bg-line sm:grid-cols-4 xl:col-span-2" aria-busy="true">
+          {[t.watchlist.today, t.watchlist.unrealized, t.watchlist.costBasis, t.watchlist.avgShort].map((label) => (
+            <StatTile key={label} label={label} value={<span aria-hidden className="inline-block h-5 w-24 animate-pulse rounded-xs bg-line align-middle" />} />
+          ))}
+        </div>
+      ) : showBand ? (
         <div className={cn("grid gap-px bg-line xl:col-span-2", bandGrid(tileCount))}>
           {valued ? (
             <>
@@ -211,7 +216,7 @@ export function WatchlistView() {
       </div>
 
       <div className="flex min-w-0 flex-col gap-px">
-        <AllocationPanel portfolio={portfolio} quotes={quotes} watchlist={watchlist} profiles={profiles} />
+        <AllocationPanel portfolio={portfolio} quotes={quotes} watchlist={watchlist} profiles={profiles} loading={!hydrated || loading} />
         {hydrated && upcomingSymbols.length > 0 ? <UpcomingPanel symbols={upcomingSymbols} weights={weights} /> : null}
         <ResearchNote title={t.watchlist.aiScan} request={request} ready={watchQuotes.length > 0 || valued} />
       </div>

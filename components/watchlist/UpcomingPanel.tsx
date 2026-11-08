@@ -57,11 +57,7 @@ export function UpcomingPanel({ symbols, weights, className }: { symbols: readon
       key: "symbol",
       header: t.columns.symbol,
       width: "4.75rem",
-      render: (r) => (
-        <Link href={stockPath(r.event.symbol ?? "")} className="mono font-medium text-fg hover:text-accent">
-          {r.event.symbol}
-        </Link>
-      ),
+      render: (r) => <span className="mono font-medium text-fg">{r.event.symbol}</span>,
     },
     {
       key: "event",
@@ -112,6 +108,7 @@ export function UpcomingPanel({ symbols, weights, className }: { symbols: readon
           columns={columns}
           rowKey={(r) => r.event.id}
           caption={t.watchlist.upcoming}
+          rowHref={(r) => stockPath(r.event.symbol ?? "")}
           loading={!data}
           loadingRows={3}
           empty={t.watchlist.upcomingEmpty}

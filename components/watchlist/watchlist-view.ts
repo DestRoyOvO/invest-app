@@ -12,7 +12,7 @@ export interface WatchlistViewPrefs {
 }
 
 /** Columns of the watchlist table that can be sorted. */
-export const WATCHLIST_SORT_KEYS = ["symbol", "name", "last", "change", "changePct", "volume", "marketCap", "pe"] as const;
+export const WATCHLIST_SORT_KEYS = ["symbol", "name", "last", "changePct", "marketCap", "pe"] as const;
 
 const EMPTY: WatchlistViewPrefs = { sort: null };
 

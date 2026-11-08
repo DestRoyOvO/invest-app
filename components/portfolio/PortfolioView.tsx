@@ -169,7 +169,7 @@ export function PortfolioView({ initialTab }: { initialTab: PortTab }) {
   } else if (tab === "exposure") {
     body = <ExposureTab portfolio={portfolio} quotes={quotes} infoOf={infoOf} fx={fx} />;
   } else if (tab === "risk") {
-    body = <RiskTab report={report} quotes={quotes} />;
+    body = <RiskTab report={report} quotes={quotes} positions={portfolio.rows.length} />;
   } else {
     body = <CorrelationTab report={report} />;
   }

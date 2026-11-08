@@ -24,10 +24,12 @@ function RiskBars({ weight, risk }: { weight: number; risk: number | null }) {
 interface RiskTabProps {
   report: RiskReport;
   quotes: ReadonlyMap<string, Quote>;
+  /** Base-currency positions in the portfolio; more than the analyzed ones means weights here are of a subset. */
+  positions: number;
 }
 
 /** Each analyzed position's weight, share of risk, beta and volatility over the same sessions. */
-export function RiskTab({ report, quotes }: RiskTabProps) {
+export function RiskTab({ report, quotes, positions }: RiskTabProps) {
   const { t } = usePrefs();
   const r = t.port.risk;
   const gap = largestRiskGap(report.positions);
@@ -86,7 +88,10 @@ export function RiskTab({ report, quotes }: RiskTabProps) {
         defaultSort={{ key: "risk", direction: "desc" }}
         rowHref={(p) => stockPath(p.symbol)}
       />
-      <p className="border-t border-line px-3 py-2 text-xs text-fg-3">{r.note}</p>
+      <div className="space-y-1 border-t border-line px-3 py-2 text-xs text-fg-3">
+        {report.symbols.length < positions ? <p>{tpl(r.weightNote, { n: report.symbols.length })}</p> : null}
+        <p>{r.note}</p>
+      </div>
     </div>
   );
 }

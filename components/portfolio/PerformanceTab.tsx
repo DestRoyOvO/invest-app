@@ -11,7 +11,7 @@ import type { HistoryResponse } from "@/types/api";
 import { LineChart } from "./LineChart";
 import { PORT_BENCHMARKS, type PortBenchmark } from "./port-view";
 
-const RANGE_LABELS: Record<PerformanceRange, string> = { "3m": "3M", "6m": "6M", "1y": "1Y" };
+const RANGES: readonly PerformanceRange[] = ["3m", "6m", "1y"];
 const HOLDINGS_COLOR = "var(--series-1)";
 const BENCHMARK_COLOR = "var(--series-6)";
 
@@ -42,9 +42,9 @@ export function PerformanceTab({ report, benchmark, range, onBenchmarkChange, on
         label={o.range}
         value={range}
         onChange={onRangeChange}
-        options={(Object.keys(RANGE_LABELS) as PerformanceRange[]).map((r) => ({ value: r, label: RANGE_LABELS[r] }))}
+        options={RANGES.map((r) => ({ value: r, label: o.ranges[r] }))}
         size="sm"
-        className="w-40"
+        className="w-48"
       />
     </div>
   );

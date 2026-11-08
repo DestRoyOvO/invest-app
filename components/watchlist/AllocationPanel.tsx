@@ -3,6 +3,7 @@
 import { holdingGroupLabel, REST_COLOR, SLICE_COLORS } from "@/components/portfolio/labels";
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Panel, PanelMeta } from "@/components/ui/Panel";
+import { SkeletonRows } from "@/components/ui/States";
 import { formatNumber, formatRatio, tpl } from "@/lib/format";
 import { topWeight, type Portfolio } from "@/lib/portfolio";
 import { foldSlices, groupExposure, sectorExposure, type ExposureSlice } from "@/lib/portfolio-analytics";
@@ -15,6 +16,8 @@ interface AllocationPanelProps {
   quotes: ReadonlyMap<string, Quote>;
   watchlist: readonly string[];
   profiles: ProfilesResponse | undefined;
+  /** Quotes are still loading. */
+  loading?: boolean;
   className?: string;
 }
 
@@ -25,7 +28,7 @@ const MAX_SLICES = 6;
  * Allocation by sector or asset class: by position value when positions exist, otherwise by number of watchlist
  * symbols (labelled so). Categorical series colors with legend swatches, and how much the three largest positions hold.
  */
-export function AllocationPanel({ portfolio, quotes, watchlist, profiles, className }: AllocationPanelProps) {
+export function AllocationPanel({ portfolio, quotes, watchlist, profiles, loading = false, className }: AllocationPanelProps) {
   const { t, lang } = usePrefs();
   const infoOf = (symbol: string) => ({ quoteType: quotes.get(symbol)?.quoteType ?? null, sector: profiles?.profiles[symbol]?.sector ?? null });
   const byValue = portfolio.rows.length > 0;
@@ -49,8 +52,10 @@ export function AllocationPanel({ portfolio, quotes, watchlist, profiles, classN
   const top3 = byValue && portfolio.rows.length > 3 ? topWeight(portfolio.rows, 3) : null;
 
   return (
-    <Panel title={t.watchlist.allocation} className={className} actions={<PanelMeta>{byValue ? t.watchlist.byValue : t.watchlist.byCount}</PanelMeta>}>
-      {legend.length === 0 ? (
+    <Panel title={t.watchlist.allocation} className={className} actions={loading ? null : <PanelMeta>{byValue ? t.watchlist.byValue : t.watchlist.byCount}</PanelMeta>}>
+      {loading ? (
+        <SkeletonRows rows={4} />
+      ) : legend.length === 0 ? (
         <p className="px-3 py-4 text-sm text-fg-2">{t.watchlist.summaryEmpty}</p>
       ) : (
         <div className="space-y-3 px-3 py-3">

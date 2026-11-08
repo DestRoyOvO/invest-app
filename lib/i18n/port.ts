@@ -29,6 +29,7 @@ const en = {
   overview: {
     benchmark: "Benchmark",
     range: "Range",
+    ranges: { "3m": "3M", "6m": "6M", "1y": "1Y" },
     holdings: "Today's holdings",
     hypothetical: "If you had held today's positions. Not your actual return.",
     drawdown: "Drawdown",
@@ -66,6 +67,7 @@ const en = {
     volatility: "Volatility",
     sentence: "{symbol}: {weight} of value, {risk} of risk",
     points: "{n} pts",
+    weightNote: "Weights here are shares of the {n} analyzed positions' value.",
     note: "Share of risk is each position's part of the variance of the holdings' daily returns over the same sessions (Euler allocation). Below 0 means the position lowered the total.",
   },
   correlation: {
@@ -143,6 +145,7 @@ export const portMessages = defineMessages(en, {
   overview: {
     benchmark: "基准",
     range: "区间",
+    ranges: { "3m": "3个月", "6m": "6个月", "1y": "1年" },
     holdings: "当前持仓",
     hypothetical: "假设一直持有当前持仓，不是你的实际收益。",
     drawdown: "回撤",
@@ -180,6 +183,7 @@ export const portMessages = defineMessages(en, {
     volatility: "波动率",
     sentence: "{symbol}：市值占 {weight}，风险占 {risk}",
     points: "{n} 个百分点",
+    weightNote: "这里的权重按参与分析的 {n} 个持仓的市值计算。",
     note: "风险占比是每个持仓在组合日收益方差中所占的份额（欧拉分配），使用相同的交易日。小于 0 表示这个持仓降低了总风险。",
   },
   correlation: {

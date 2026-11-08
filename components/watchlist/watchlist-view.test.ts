@@ -9,7 +9,7 @@ describe("sanitizeWatchlistView", () => {
   });
 
   it("falls back to the investor's own order for anything else", () => {
-    for (const raw of [null, "x", [], {}, { sort: null }, { sort: { key: "trend", direction: "asc" } }, { sort: { key: "last", direction: "up" } }]) {
+    for (const raw of [null, "x", [], {}, { sort: null }, { sort: { key: "trend", direction: "asc" } }, { sort: { key: "volume", direction: "desc" } }, { sort: { key: "last", direction: "up" } }]) {
       expect(sanitizeWatchlistView(raw)).toEqual({ sort: null });
     }
   });

@@ -222,7 +222,8 @@ export function PositionsPanel({ portfolio, quotes, loading, className }: Positi
         </EmptyState>
       ) : (
         <DataTable
-          rows={rows}
+          // While quotes load every position would read "No quote": show skeleton rows instead.
+          rows={loading ? [] : rows}
           columns={columns}
           rowKey={(r) => r.symbol}
           caption={p.title}
@@ -236,8 +237,8 @@ export function PositionsPanel({ portfolio, quotes, loading, className }: Positi
         />
       )}
       <div className="space-y-1 border-t border-line px-3 py-2 text-xs text-fg-3">
-        {foreign.length > 0 ? <p>{tpl(p.foreignNote, { currency: baseCurrency })}</p> : null}
-        {unpriced.length > 0 ? <p>{p.unpricedNote}</p> : null}
+        {!loading && foreign.length > 0 ? <p>{tpl(p.foreignNote, { currency: baseCurrency })}</p> : null}
+        {!loading && unpriced.length > 0 ? <p>{p.unpricedNote}</p> : null}
         <p>
           {p.storedLocally}{" "}
           <Link href="/data" className="text-fg-2 underline underline-offset-2 hover:text-fg">
