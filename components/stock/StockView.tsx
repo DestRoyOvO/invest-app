@@ -2,7 +2,7 @@
 
 import { SearchX } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, type ReactNode } from "react";
 
 import { ResearchNote } from "@/components/ai/ResearchNote";
 import { NotesPanel } from "@/components/notes/NotesPanel";
@@ -85,7 +85,7 @@ function HeaderSkeleton() {
  * A panel hosted by this page but built by another feature (earnings, analysts). While it renders nothing, for
  * example before its data exists, the slot says so instead of leaving a blank tab.
  */
-function HostedPanel({ children, empty }: { children: React.ReactNode; empty: string }) {
+function HostedPanel({ children, empty }: { children: ReactNode; empty: string }) {
   return (
     <>
       <div className="peer empty:hidden">{children}</div>

@@ -92,10 +92,10 @@ export function CompareBar({ symbol, compare, slots, suggestions, onChange }: Co
     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
       <span className="col-head">{t.chart.compare}</span>
       {compare.map((item, slot) => (
-        <span key={item} className={cn(chipClass, "border-line-2 pr-0.5 text-fg")}>
+        <span key={item} className={cn(chipClass, "border-line-2 pr-0.5 text-fg max-sm:h-auto max-sm:pr-0")}>
           <SeriesKey slot={slots[slot]} />
           {item}
-          <IconButton size="sm" label={tpl(t.chart.remove, { symbol: item })} icon={<X className="size-3" strokeWidth={2} />} onClick={() => onChange(compare.filter((s) => s !== item))} className="size-6 max-sm:size-9" />
+          <IconButton size="sm" label={tpl(t.chart.remove, { symbol: item })} icon={<X className="size-3" strokeWidth={2} />} onClick={() => onChange(compare.filter((s) => s !== item))} className="size-6 max-sm:size-10" />
         </span>
       ))}
       {!full
