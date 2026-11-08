@@ -18,6 +18,7 @@ The live Yahoo contract is covered separately by the canary (`scripts/smoke-yaho
 - [Accessibility](#accessibility)
 - [CI](#ci)
 - [Current state](#current-state)
+- [Screenshots](#screenshots)
 
 ## Unit tests
 
@@ -41,7 +42,7 @@ The fixture generator has its own tests in `lib/server/fixtures`:
 | `client.test.ts` | The unknown-symbol answers of every method, compared with what yahoo-finance2 itself makes of Yahoo's error answers (fed through a stub fetch); module availability per quote type; dispatch at call time. |
 | `company.test.ts` | Sweeps every session of two years: earnings schedules report consecutive quarters, each at least 15 days after it ended, the last before now and the next after it; past dividends lie before the latest session; the quote and quoteSummary show the same trailing EPS and P/E before the open, during the session and after the close. |
 | `sessions.test.ts` | NYSE holidays against the published calendars, special closures, session times across daylight saving time, the FX week from Sunday to Friday 17:00 New York time, the latest completed session, the market state. |
-| `prices.test.ts` | A bar never changes once its session closed, OHLC consistency, long histories within 20 times the anchor price, first trading days of later listings, ^VIX and yields in range, funds that move with their index, intraday bars that match their daily bar, extended-hours trades that match the chart (and none for indices). |
+| `prices.test.ts` | A bar never changes once its session closed, OHLC consistency, long histories within 20 times the anchor price, first trading days of later listings, ^VIX and yields in range, the dollar index against ICE's published formula over its six currencies, funds that move with their index, intraday bars that match their daily bar, extended-hours trades that match the chart (and none for indices). |
 | `app-data.test.ts` | The data through the app's own getters and mappers, with content checks rather than presence: quotes, summaries, bars, search, news (market, sector, company, stock; instrument headlines rather than press releases for funds, indices, yields, crypto, currencies and futures), the overview and the shell's board, screens and every discover screen, the stock and ETF screeners, factor profiles, the calendar, the signal, the earnings detail (its quarters sum to the quote's trailing EPS), analyst activity (actions on trading days during New York business hours, each firm starting from its previous grade), options for US listings only, the implied move, financial statements (for every stock of the universe: net, operating and gross margins in that order, moving between periods, earnings that follow revenue, the dividend history paid out in the cash flow), dividends, ownership (the trades of the company's own officers on trading days), headcounts, insider holdings, leverage and betas that agree with the balance sheet and the price history, the 1d, 5d, ytd, 5y and max chart ranges, the Treasury curve through `getYieldCurve()`'s default fetch (its 10-year agrees with ^TNX), the world board, aligned history, profiles and every kind of AI context. `fetch` and `node:https` are stubbed and the file fails if any getter reached for the network. |
 | `treasury.test.ts` | The Treasury CSV columns, its agreement with ^TNX and ^IRX, and `treasuryFetch` choosing the fixture or the network by data source. |
 
@@ -237,6 +238,64 @@ The specs:
 | `routes.spec.ts` | Every page route (below). |
 | `a11y.spec.ts` | axe on every page of the route sweep, the command bar and the chat drawer ([Accessibility](#accessibility)). |
 | `ai.spec.ts` | Every AI scenario of the mock model, Stop, Regenerate, and the signed-out note panel and API. |
+| `overview.spec.ts` | The overview of a returning investor (`SHELL_DATA`): My day's value, last-session P&L and its ratio over the previous close (the seed moves about 1.5%, so a ratio over today's value would show differently), unrealized and after-hours P&L, largest gains and losses and next report, computed from the page's own quotes; the week ahead against the fixed event dates (NVDA's report, AAPL's ex-date, MSFT's report; nothing after Sunday); the markets board (absolute change and 1M tag only where the cell is wide enough) and the breadth strip against their API answers; the movers in both scopes, kept across a reload; the treemap's single tab stop, arrow keys, Enter, hover card and Escape on the desktop, the sector list on phones. |
+| `markets.spec.ts` | Every region of `/markets` with each instrument's price, change, session and local trade time on the pinned Saturday (exchanges closed since Friday, crypto trading), and the 2s10s and 3m10y spreads against the differences of the plotted curve points. |
+| `navigation.spec.ts` | The nav rail (desktop) and the tab bar with its More sheet (phones) reaching every page with `aria-current`; Back and Forward across pages and quote tabs; `/no-such-page` (404, the registry's suggestions, its command line); `/help` (every function with its route, a page behind each, RISK landing on the risk panel far down the quote page); the keyboard: `?` with the page's own keys, `/` and Ctrl+K, Escape returning the focus, `g` sequences and a late second key. |
+| `command-bar.spec.ts` | Function codes (GC bringing the Treasury curve back from the end of a scrolled page), TICKER CODE in both orders (GP landing on the chart, from another page and on the open quote), Chinese company names with the local matches checked against `searchChineseNames`, COMP, the symbol search against `/api/search` with arrow keys, unknown input, and a `?` question answered by the mock in the chat, which Escape (Close on phones) shuts, returning the focus. |
+| `quote.spec.ts` | The quote page against the routes it reads: the AAPL header (price, change and percentage, market state and time, Friday's after-hours trade, the report and ex-dividend chips, SAMPLE_DATA's position line with value, P&L and portfolio weight from `/api/quotes`); every section tab with figures from its own route (diluted EPS and capital spending by fiscal year, the latest reported quarter, the latest rating action, the next ex-date, the largest institution's share held, shares, value, change and filing date), Tab and Enter, a deep link scrolled into view on phones, and Back with each tab's data; a fund's two tabs without earnings or analyst panels (the note of `?tab=earnings`); and the header and 1Y chart summary of ^GSPC, BTC-USD (open around the clock, a 24-hour 1D), EURUSD=X, GC=F and 0700.HK (HKD) at whatever decimals the page writes. |
+| `chart.spec.ts` | The chart workstation through what it exposes: each range's text summary against the bars of the series the page loads (1M to 1Y as windows of the two-year series), the range keys (arrows, Home, `[` and `]`), extended hours ending at Friday's after-hours trade, comparisons (three at most, from the bar and from a link naming four; returns from `/api/history`; the list in the URL across a reload; the phone search's suggestions on screen), studies and the range kept in `investseek:chart:v1` (L for the log scale, the room made for the RSI pane), the marker key of each range, and the investor's cost, target and stop named in the legend when they lie beyond a quarter of the visible span (the spec's own rule; a fixme test marks the lines drawn on the canvas only). |
+| `position-editor.spec.ts` | The position editor from the positions table and the quote header: the weighted average cost after adding shares (preview, table, `investseek:holdings:v1`), the realized P&L of a sale with the average cost kept, removal with Undo, zero, negative and non-numeric shares and a zero cost refused without saving, Escape back to the opener, a zero or non-numeric price when adding or reducing and an oversold sale refused without saving, and a new position saved through the sheet on a phone. |
+| `watchlist.spec.ts` | The watchlist page: adding a symbol (its quote shows; one already listed is not added twice), the Not found notice of a stored symbol the data source does not know, removing with Undo in place, reordering (the handle's arrow keys and Alt+arrows, the row sheet on phones), sorting a column as a view that keeps the stored order, each checked in `investseek:watchlist:v1` and after a reload; the Upcoming panel against `/api/calendar`, soonest first, and the fixed dates of the default watchlist; the allocation by value, with the seeded positions' groups as fixture facts. |
+| `portfolio.spec.ts` | Positions and the portfolio page against the quotes and a year of closes: each position's value, day P&L, P&L, weight and extended-hours P&L with the totals on both layouts, and the weights shown adding up to 100%; the page's tiles (beta, volatility, VaR and maximum drawdown computed from `/api/history`); today's holdings against SPY or QQQ over 1Y and 3M in the chart's label and its legend; exposure by sector, asset class and currency with a position quoted in HKD; the risk table; the tab in the address and a symmetric correlation matrix; the empty state and a first position added from it. |
+| `data.spec.ts` | The data page: the backup file's contents (a second backup, made after the first was recorded, still leaves out the bookkeeping), clearing after the confirmation word and restoring the exported file, a backup made elsewhere previewed and restored by Merge (with Undo) and by Replace, malformed and damaged files refused with nothing changed, broker CSV exports with English and Chinese headers and pasted positions through the review, and the positions and watchlist CSV files against the quotes. |
+| `calendar.spec.ts` | The events calendar on the pinned Saturday, from the default watchlist with two of its names held: the fixture's scheduled reports (NVDA and MSFT this week; AAPL, GOOGL and AMZN next week) and AAPL's ex-dividend date with ten times the dividend per share of the dividends API. Each period's agenda equals the feed's events in the agenda's order: day headings that read right for a Saturday, and within a day ex-dates first, then by time with a US report at its session slot, holdings before watchlist names. Rows show their time slots and money at stake. Also covered: the macro releases of the committed schedule in the agenda and the side panel; the group chips (counts, what each shows, kept in `investseek:calendar:v1` across a reload, with a Top 78 position outside the lists read from the feed); and the overview's week ahead listing the same week in the same order. |
+| `screener.spec.ts` | The screener against `/api/screener`. Filters (sector, P/E, market cap) are checked against the snapshot rows and the cells. Each stock preset is checked against the rule its hint states, with its count, column set and order. Each column set shows its columns (two on the phone). The ETF universe: the 26 funds by net assets, the four presets that apply to funds, and every fund column set; beside the filter rail at 1440px the ETF overview drops 1M (`test.fixme`). Also: sorting both ways and back, a copied link reopening the screen in a new page, the CSV export, saved screens (save, reload, reopen, update, delete and undo), the watch star, and the phone's filter sheet. Every Discover list (movers, idea lists, trending) matches its API answer with the count in its caption, above the stated $1B floor; the lists on screen are checked again at $10B, which must drop stocks they show at $1B. |
+| `lab.spec.ts` | The factor lab against the committed research files: every pre-registered factor test with its IC, signs, t statistics, Holm-adjusted p and the verdict tally; the track record's row, reading-name, return and whisker colours as `isConcentrated` and `selectionTone` decide at each horizon, read by column head (no reading of the committed file is concentrated, so `components/lab/ReadingTrackPanel.test.ts` renders one and the spec notes it); the risk calibration's range coverage and persistence. |
+| `notes.spec.ts` | Thesis notes: a thesis written from `/notes` (its empty state) and with N on a quote page, with every field and an entry stamped with the price of the moment, kept in `investseek:notes:v1` in `lib/notes.ts`'s format across a reload; the sample AAPL note on its quote page, entries, edits, an alert at the stop, deletions with Undo; the list in review order (overdue first) with tag filters, each target and stop read in its own column (on phones in the labelled line under the thesis) with its distance from the quotes the page reads. |
+| `alerts.spec.ts` | Local alerts: a rule of each of the six kinds created in the editor, with day moves up and down and P&L rules for a gain and a loss, and which ones trigger computed from the quotes, positions and report date (the bell's name and badge, rules table, history, alert center); pause, edit (a new level re-arms, also a rule that already fired; a new note does not) and delete with Undo across a reload; a price level crossed on several sessions while no tab was open, replayed from daily bars (the first session and the count); the notification permission asked for only from a click; the alert editor on phones under the toasts (fixme, a known app bug). |
+| `settings.spec.ts` | Display preferences from the server's first paint, on the desktop: theme (dark, light, system following the browser's color scheme), language (`<html lang>`, the interface, price colors kept), price colors (the computed colors of an up and a down change against the design tokens) and density (a table's row height), each in its cookie and in the `<html>` of the next document. |
+| `ai-chat.spec.ts` | The research assistant: opened from the navigation, a quote page's "Why is it moving?" and the command bar's `?`; what requests to `/api/ai/chat` carry with "Include my positions" on and off; a suggested question, Copy to the clipboard, Retry; at most 20 saved conversations, reopened from the history after a reload; the chat footer under the Copy toast (fixme, a known app bug). |
+
+### Functional specs
+
+The specs after the first four check what each page does with the fixture data, not only that it loads. They share one
+rule: a figure a spec expects is computed from the app's own API answers (requested again with the test's `request`,
+which carries the same client address) or from the committed data files, and written as the English interface writes
+it, with the app's formatters and `MESSAGES.en`. A number is written down only where the fixture data guarantees it (the
+default watchlist's scheduled events, the seeded positions) or where it states a product rule (the chart's level reach,
+what a screener preset keeps). Those checks require their data at the default `E2E_NOW` and skip, or take their data
+from the feed, at another one. The rules a page applies (the order of a day's events, what a filter keeps, how a sort
+orders) are written out in the spec or its helper module rather than imported, so a change to the app cannot carry a
+spec's expectation along with it.
+
+Each area has a helper module in `e2e/support/`:
+
+- `shell.ts`: a returning investor (`SHELL_DATA`: the default watchlist and eight positions weighted so the session's
+  net move shows which value the day ratio divides by), `panel(page, title)`, `apiJson`, `commandBar` and
+  `typeCommand`, and `hashLanding`/`expectLanded`, which check that the element a URL hash names sits at its scroll
+  margin below the top of `main`. Start such a check where the target has not landed yet, or it cannot fail.
+- `quote.ts`: the quote page's figures in the English UI's format. Figures whose decimals depend on the instrument are
+  matched at any precision. The chart is read through its text summary, legend, marker key, controls and the size of
+  its drawing area, never its canvas.
+- `personal.ts`: positions valued at `/api/quotes` (base-currency totals and weights, day and extended-hours P&L), and
+  the portfolio page's risk figures computed from a year of `/api/history` closes by the definitions its "How these are
+  computed" panel states. `expectCells` checks a table row's cells by column head in one retrying assertion,
+  `expectFigure` compares a computed figure at its displayed precision, and `expectSumOf100` adds up percentages as the
+  page shows them. Uploaded files come from `e2e/fixtures/personal`.
+- `research.ts`: the calendar's order within a day (`minuteInDay`, `eventOrder`), the screener presets' rules written
+  from their hints, and `parseCsv`. Long lists and tables are read in one page call and compared in one polled
+  assertion, which keeps these tests within their time limit on a busy machine.
+- `notes.ts`: `seedLocal` for the storage `app.seedStorage` does not cover (alerts and their log, AI chats and AI
+  settings), `watchNotificationRequests`, `cellUnder(table, row, header)` and `hitAtCenter(locator)`, which says what a
+  tap at the middle of an element reaches (a toast in the way, for example).
+
+A test that depends on time moves the browser clock instead of waiting: the late `g` key pauses the clock
+(`page.clock.pauseAt`) and runs it past the 1.5-second timeout (`runFor`). Playwright cannot read a streamed response
+body, so the AI specs read the request body and wait for the answer on screen. Keep `E2E_LLM_PORT` off the ports
+`fetch` refuses (3659 is one). On Windows the clipboard returns CR LF. Journeys through a dozen pages are marked
+`test.slow()`. Where the committed data cannot show a rule (no reading of the factor lab is concentrated), a component
+test covers it and the spec adds an annotation. A `test.fixme` marks a known app bug ([Current state](#current-state)):
+the test states the right behavior and passes once the bug is fixed.
 
 ### The route sweep
 
@@ -332,8 +391,9 @@ Color contrast passes in both themes on every page checked; `npx tsx scripts/che
 
 All wave 2 branches are merged and the suite covers them: the pages the navigation links to exist (no prefetch
 allowance is left), the Treasury curve is served from the fixture CSV by default, the getters wave 2 added are covered
-in `lib/server/fixtures/app-data.test.ts` behind its network stub, every page route is swept on both projects, and axe
-runs on every page of the sweep in both themes.
+in `lib/server/fixtures/app-data.test.ts` behind its network stub, every page route is swept on both projects, axe
+runs on every page of the sweep in both themes, and the functional specs check what each page does with the fixture
+data.
 
 Nothing is accepted: no case of the sweep has a `knownStatus` and `KNOWN` in `a11y.spec.ts` is empty, so every page
 answers the status it should and shows no serious or critical axe finding in either theme on either project. That
@@ -353,6 +413,18 @@ could answer 400 itself. The two issues listed before are fixed: `priceDigits` i
 pairs and the world board's instruments their decimals on the quote page too (four for EUR/USD, as on the world board),
 and a value that rounds to zero at the shown decimals prints without a sign, in the flat tone and without an arrow
 (`displayedSign` in `lib/format.ts`, behind `Delta` and the other direction colors).
+
+Known app bugs the specs mark with `test.fixme`. Each test states the right behavior and fails today; once the bug is
+fixed it passes, and its `test.fixme` line goes.
+
+| Test | Bug | Where |
+|---|---|---|
+| `ai-chat.spec.ts` › the chat footer › stays within reach while the Copy toast shows | For five seconds after Copy, the toast covers the chat's question box (desktop and phone) and Send (desktop). | `components/ui/Toast.tsx`: the toasts (z-60) sit over `components/ui/Drawer.tsx` (z-50) |
+| `alerts.spec.ts` › on a phone › the toasts of a saved alert leave the editor's buttons clear | On a phone, the toasts of an alert that triggers when saved cover the next editor's Save alert and Cancel. | As above |
+| `chart.spec.ts` › tells assistive technology where the cost, target and stop lines drawn on the chart are | Lines within the visible prices are drawn on the canvas only, which is hidden from assistive technology; the legend names only the levels beyond the visible span. | `components/stock/PriceChart.tsx` |
+| `portfolio.spec.ts` › counts a single position in the singular | One position reads "1 positions" and "of 1 positions"; "{n} symbols" has no singular either. | `watchlist.positionsCount` in `lib/i18n/messages.ts`, `kpi.effectiveSub` in `lib/i18n/port.ts` |
+| `screener.spec.ts` › a 1440px screen fits the ETF overview beside the filter rail | Beside the 208px nav and the filter rail the table gets 61.8rem, the ETF overview needs 62.25rem, so its 1M column drops. | Column widths in `lib/screens.ts`; `components/screener/widths.test.ts` assumes a 192px nav |
+| `watchlist.spec.ts` › refuses an unknown symbol typed in the add form | The add form checks only the format, so ZZZZ is saved and listed as a row of dashes under the "Not found" notice. | `components/watchlist/AddSymbolForm.tsx`, `addSymbol` in `hooks/useWatchlist.ts` |
 
 ## Screenshots
 
