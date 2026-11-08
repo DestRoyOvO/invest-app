@@ -42,9 +42,10 @@ export const MAX_THESIS_CHARS = 2000;
 export const MAX_ENTRY_CHARS = 4000;
 export const MAX_ENTRIES = 100;
 export const MAX_TAGS = 8;
-const MAX_TAG_CHARS = 24;
+export const MAX_TAG_CHARS = 24;
 
 const EMPTY: NotesBook = {};
+const DAY_MS = 86_400_000;
 
 function isPositive(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
@@ -62,6 +63,14 @@ function text(value: unknown, max: number): string {
   return typeof value === "string" ? value.slice(0, max) : "";
 }
 
+/**
+ * A tag as stored: trimmed, inner whitespace collapsed, lower case (so "AI" and "ai" are one tag) and at most
+ * MAX_TAG_CHARS long. Commas separate tags in the editor, so they are removed. Empty input gives "".
+ */
+export function normalizeTag(value: string): string {
+  return value.replace(/[,，]/g, " ").replace(/\s+/g, " ").trim().toLowerCase().slice(0, MAX_TAG_CHARS).trim();
+}
+
 function sanitizeEntry(raw: unknown): NoteEntry | null {
   if (!raw || typeof raw !== "object") return null;
   const { at, price, text: body, kind } = raw as Record<string, unknown>;
@@ -74,9 +83,7 @@ function sanitizeNote(raw: unknown): SymbolNote | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
   const conviction = typeof r.conviction === "number" && [1, 2, 3, 4, 5].includes(r.conviction) ? (r.conviction as Conviction) : null;
-  const tags = Array.isArray(r.tags)
-    ? [...new Set(r.tags.filter((t): t is string => typeof t === "string").map((t) => t.trim().slice(0, MAX_TAG_CHARS)).filter(Boolean))].slice(0, MAX_TAGS)
-    : [];
+  const tags = Array.isArray(r.tags) ? [...new Set(r.tags.filter((t): t is string => typeof t === "string").map(normalizeTag).filter(Boolean))].slice(0, MAX_TAGS) : [];
   const entries = Array.isArray(r.entries)
     ? r.entries
         .map(sanitizeEntry)
@@ -142,6 +149,16 @@ export function addNoteEntry(symbol: string, entry: { text: string; price: numbe
   });
 }
 
+/** Puts back an entry removed a moment ago (the Undo of removeNoteEntry), keeping the newest-first order. */
+export function restoreNoteEntry(symbol: string, entry: NoteEntry, now = new Date()): void {
+  notesStore.update((book) => {
+    const current = book[symbol] ?? emptyNote(now);
+    if (current.entries.some((e) => e.at === entry.at)) return book;
+    const entries = [...current.entries, entry].sort((a, b) => b.at.localeCompare(a.at)).slice(0, MAX_ENTRIES);
+    return { ...book, [symbol]: { ...current, entries, updatedAt: now.toISOString() } };
+  });
+}
+
 /** Removes one entry, identified by its time stamp. */
 export function removeNoteEntry(symbol: string, at: string, now = new Date()): void {
   notesStore.update((book) => {
@@ -162,4 +179,104 @@ export function removeNote(symbol: string): void {
     delete copy[symbol];
     return copy;
   });
+}
+
+/** Puts back a whole note (the Undo of removeNote). */
+export function restoreNote(symbol: string, note: SymbolNote): void {
+  notesStore.update((book) => {
+    const clean = sanitizeNote(note);
+    return clean && !isEmptyNote(clean) ? { ...book, [symbol]: clean } : book;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Reading notes: levels, review dates, tags
+// ---------------------------------------------------------------------------
+
+/**
+ * Signed distance of a level from the price, in percent of the price: +28.6 means the level sits 28.6% above the
+ * price, -8.9 that it sits 8.9% below. Null when either number is missing or not positive.
+ */
+export function levelDistance(level: number | null | undefined, price: number | null | undefined): number | null {
+  if (!isPositive(level) || !isPositive(price)) return null;
+  return (level / price - 1) * 100;
+}
+
+/**
+ * Calendar days from today to the review date in the investor's own calendar: 0 on the day, negative once it has
+ * passed (-3 = three days overdue). Null without a valid date.
+ */
+export function reviewDaysLeft(reviewBy: string | null | undefined, now: Date): number | null {
+  if (!isIsoDate(reviewBy)) return null;
+  const [y, m, d] = reviewBy.split("-").map(Number);
+  const due = Date.UTC(y, m - 1, d);
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((due - today) / DAY_MS);
+}
+
+/** The range a review date can be picked from (the date field's min and max). */
+export const REVIEW_MIN_DATE = "1970-01-01";
+export const REVIEW_MAX_DATE = "2100-12-31";
+
+/**
+ * True for a whole calendar date (YYYY-MM-DD) from REVIEW_MIN_DATE to REVIEW_MAX_DATE. A date field reports every
+ * keystroke, so typing a year passes through "0002", "0020" and "0202" first; those are never stored.
+ */
+export function isPlausibleReviewDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value < REVIEW_MIN_DATE || value > REVIEW_MAX_DATE) return false;
+  const [y, m, d] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+}
+
+/** Review state of a note for lists and badges; "soon" is within the next 7 days. */
+export type ReviewStatus = "none" | "overdue" | "today" | "soon" | "later";
+
+export function reviewStatus(reviewBy: string | null | undefined, now: Date): ReviewStatus {
+  const days = reviewDaysLeft(reviewBy, now);
+  if (days === null) return "none";
+  if (days < 0) return "overdue";
+  if (days === 0) return "today";
+  return days <= 7 ? "soon" : "later";
+}
+
+/** Symbols whose review date is today or has passed, most overdue first. */
+export function notesDueForReview(book: NotesBook, now: Date): string[] {
+  return Object.entries(book)
+    .map(([symbol, note]) => ({ symbol, days: reviewDaysLeft(note.reviewBy, now) }))
+    .filter((row): row is { symbol: string; days: number } => row.days !== null && row.days <= 0)
+    .sort((a, b) => a.days - b.days || a.symbol.localeCompare(b.symbol))
+    .map((row) => row.symbol);
+}
+
+/** Order for the notes list: overdue first (most overdue first), then the nearest review, then notes without a date. */
+export function compareByReview(a: Pick<SymbolNote, "reviewBy">, b: Pick<SymbolNote, "reviewBy">, now: Date): number {
+  const da = reviewDaysLeft(a.reviewBy, now);
+  const db = reviewDaysLeft(b.reviewBy, now);
+  if (da === null && db === null) return 0;
+  if (da === null) return 1;
+  if (db === null) return -1;
+  return da - db;
+}
+
+/** Every tag in the book with the number of notes carrying it, most used first, then alphabetically. */
+export function tagCounts(book: NotesBook): Array<{ tag: string; count: number }> {
+  const counts = new Map<string, number>();
+  for (const note of Object.values(book)) for (const tag of note.tags) counts.set(tag, (counts.get(tag) ?? 0) + 1);
+  return [...counts.entries()].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+}
+
+/** Adds tags typed in the editor (comma separated) to a tag list: normalized, without duplicates, capped at MAX_TAGS. */
+export function mergeTags(current: readonly string[], input: string): string[] {
+  const added = input.split(/[,，]/).map(normalizeTag).filter(Boolean);
+  return [...new Set([...current, ...added])].slice(0, MAX_TAGS);
+}
+
+/** The first line of a thesis, shortened to about `max` characters on a word boundary, with an ellipsis when cut. */
+export function thesisExcerpt(thesis: string, max = 140): string {
+  const firstLine = thesis.trim().split(/\r?\n/).find((line) => line.trim())?.trim() ?? "";
+  if (firstLine.length <= max) return firstLine;
+  const cut = firstLine.slice(0, max);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > max * 0.6 ? cut.slice(0, space) : cut).trimEnd()}…`;
 }

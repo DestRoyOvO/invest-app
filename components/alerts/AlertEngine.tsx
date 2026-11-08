@@ -1,7 +1,13 @@
 "use client";
 
-// Evaluates the investor's local alert rules against live quotes while the app is open (mounted once in the shell).
-// Placeholder mounted by its host page; implemented by the notes and alerts work package. Renders nothing until then.
+import { useAlertEngine, useAlertToasts } from "@/hooks/useAlertEngine";
+
+/**
+ * Evaluates the investor's local alert rules against live quotes while the app is open (mounted once in the shell).
+ * One tab checks and sends system notifications (hooks/useAlertEngine.ts); every tab shows new triggers as toasts.
+ */
 export function AlertEngine() {
+  useAlertEngine();
+  useAlertToasts();
   return null;
 }
