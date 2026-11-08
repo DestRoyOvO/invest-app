@@ -99,6 +99,16 @@ describe("displayName", () => {
     expect(displayName("Taiwan Semiconductor Manufactur", "Taiwan Semiconductor Manufacturing Company Limited")).toBe("Taiwan Semiconductor Manufacturing Company Limited");
   });
 
+  it("takes the shorter long name when the cut short name runs past it", () => {
+    expect(displayName("Booking Holdings Inc. Common St", "Booking Holdings Inc.")).toBe("Booking Holdings Inc.");
+    expect(displayName("Duke Energy Corporation (Holdin", "Duke Energy Corporation")).toBe("Duke Energy Corporation");
+    expect(displayName("American Tower Corporation (REI", "American Tower Corporation")).toBe("American Tower Corporation");
+    // Short names under the cut stay, even when they extend the long name.
+    expect(displayName("Invesco QQQ Trust, Series 1", "Invesco QQQ Trust")).toBe("Invesco QQQ Trust, Series 1");
+    // A long name that ends inside a word of the short one is a different name.
+    expect(displayName("Exampleco Worldwide Holdings Co", "Example")).toBe("Exampleco Worldwide Holdings Co");
+  });
+
   it("drops a trailing New share-class marker the long name does not have", () => {
     expect(displayName("Berkshire Hathaway Inc. New", "Berkshire Hathaway Inc.")).toBe("Berkshire Hathaway Inc.");
     expect(displayName("Example Holdings New", "Example Holdings New")).toBe("Example Holdings New");
@@ -121,6 +131,7 @@ describe("mapQuote", () => {
       "State Street SPDR S&P 500 ETF Trust",
     );
     expect(mapQuote({ symbol: "BRK-B", shortName: "Berkshire Hathaway Inc. New", longName: "Berkshire Hathaway Inc." }).name).toBe("Berkshire Hathaway Inc.");
+    expect(mapQuote({ symbol: "BKNG", shortName: "Booking Holdings Inc. Common St", longName: "Booking Holdings Inc." }).name).toBe("Booking Holdings Inc.");
     expect(mapQuote({ symbol: "ES=F", displayName: "E-Mini S&P 500" }).name).toBe("E-Mini S&P 500");
     expect(mapQuote({ symbol: "XYZ" }).name).toBe("XYZ");
   });
