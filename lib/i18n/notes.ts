@@ -65,7 +65,6 @@ export const notesMessages = defineMessages(
     allTags: "All",
     emptyAll: "No notes yet. Open a quote and write why you hold or watch it.",
     emptyChips: "Open a quote",
-    emptyFilter: "No notes carry the tag {tag}.",
     noThesis: "No thesis written",
 
     dueBadge: "Due today",
@@ -145,7 +144,6 @@ export const notesMessages = defineMessages(
     allTags: "全部",
     emptyAll: "还没有笔记。打开任一行情页，写下你持有或关注它的理由。",
     emptyChips: "打开行情",
-    emptyFilter: "没有带「{tag}」标签的笔记。",
     noThesis: "未写论点",
 
     dueBadge: "今天复盘",

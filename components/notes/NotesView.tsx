@@ -31,14 +31,53 @@ interface NoteRow {
 const chipClass =
   "inline-flex h-7 items-center gap-1.5 rounded-xs border px-2 text-xs transition-colors max-sm:h-10 max-sm:px-3 aria-pressed:border-accent aria-pressed:text-fg";
 
-function LevelCell({ level, price }: { level: number | null; price: number | null | undefined }) {
+/** A target or stop with its signed distance from the price, e.g. "240.00 +28.6%". Neutral: a level is not a move. */
+function LevelText({ level, price, className }: { level: number; price: number | null | undefined; className?: string }) {
   const { lang } = usePrefs();
-  if (level === null) return <span className="text-fg-3">—</span>;
   const distance = levelDistance(level, price);
   return (
-    <span className="num whitespace-nowrap">
-      <span className="text-fg">{formatPrice(level, lang)}</span>
+    <span className={cn("num whitespace-nowrap", className)}>
+      {formatPrice(level, lang)}
       {distance !== null ? <span className="ml-1.5 text-fg-3">{withTrueMinus(formatPercent(distance, { digits: 1 }))}</span> : null}
+    </span>
+  );
+}
+
+function LevelCell({ level, price }: { level: number | null; price: number | null | undefined }) {
+  if (level === null) return <span className="text-fg-3">—</span>;
+  return <LevelText level={level} price={price} className="text-fg" />;
+}
+
+/**
+ * Below 1024px, where the target and stop columns are hidden, the thesis cell gets a second line with them (and the
+ * last price on phones, where that column is hidden too), so "price vs target and stop" stays on every screen.
+ */
+function CompactLevels({ row }: { row: NoteRow }) {
+  const { t, lang } = usePrefs();
+  const words = t.notes.columns;
+  const price = row.quote?.price;
+  const { target, stop } = row.note;
+  if (target === null && stop === null && !price) return null;
+  return (
+    <span className="mt-0.5 flex flex-wrap gap-x-3 text-xs whitespace-nowrap text-fg-3 lg:hidden">
+      {price ? (
+        <span className="sm:hidden">
+          {words.last}{" "}
+          <TickNumber value={price} className="text-fg-2">
+            {formatPrice(price, lang)}
+          </TickNumber>
+        </span>
+      ) : null}
+      {target !== null ? (
+        <span>
+          {words.target} <LevelText level={target} price={price} className="text-fg-2" />
+        </span>
+      ) : null}
+      {stop !== null ? (
+        <span>
+          {words.stop} <LevelText level={stop} price={price} className="text-fg-2" />
+        </span>
+      ) : null}
     </span>
   );
 }
@@ -91,16 +130,22 @@ export function NotesView() {
     {
       key: "thesis",
       header: words.columns.thesis,
-      // Two lines on phones, where the column is narrow; one truncated line from sm up.
-      className: "max-sm:whitespace-normal max-sm:py-1.5",
+      // Two lines of thesis on phones, where the column is narrow, one truncated line from sm up; below lg a second
+      // line carries the levels whose columns are hidden.
+      className: "max-lg:py-1.5 max-sm:whitespace-normal",
       render: (row) => {
         const excerpt = thesisExcerpt(row.note.thesis, 160);
-        return excerpt ? (
-          <span className="text-fg-2 max-sm:line-clamp-2" title={row.note.thesis.slice(0, 600)}>
-            {excerpt}
-          </span>
-        ) : (
-          <span className="text-fg-3">{words.noThesis}</span>
+        return (
+          <>
+            {excerpt ? (
+              <span className="block truncate text-fg-2 max-sm:line-clamp-2 max-sm:whitespace-normal" title={row.note.thesis.slice(0, 600)}>
+                {excerpt}
+              </span>
+            ) : (
+              <span className="block truncate text-fg-3">{words.noThesis}</span>
+            )}
+            <CompactLevels row={row} />
+          </>
         );
       },
     },
@@ -189,14 +234,11 @@ export function NotesView() {
           rowHref={(row) => `${stockPath(row.symbol)}#notes`}
           loading={!hydrated}
           loadingRows={4}
+          // A tag filter only lists tags some note carries, so the table is empty only when there are no notes.
           empty={
-            activeTag ? (
-              tpl(words.emptyFilter, { tag: activeTag })
-            ) : (
-              <EmptyState chips={starters} chipsLabel={words.emptyChips}>
-                {words.emptyAll}
-              </EmptyState>
-            )
+            <EmptyState chips={starters} chipsLabel={words.emptyChips}>
+              {words.emptyAll}
+            </EmptyState>
           }
         />
         <p className="border-t border-line px-3 py-2 text-xs text-fg-3">
