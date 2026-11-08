@@ -82,7 +82,8 @@ What the mode guarantees:
 - **Calendars.** Daily bars exist on NYSE sessions only (holidays 2000 to 2030, from the exchange rules plus the special
   closures), on weekdays for other exchanges and FX, every day for crypto. Weekly and monthly bars aggregate the dailies;
   1-minute to 1-hour bars exist for completed sessions, open at the daily open, close at the daily close and touch its
-  high and low, with pre- and after-market bars for US listings.
+  high and low, with pre- and after-market bars for US stocks and funds (indices, yields and the VIX have none, as on
+  Yahoo).
 - **Extended hours.** US stocks and funds carry the after-hours trade of the latest session from its close until the next
   pre-market (as Yahoo keeps it over a weekend) and, while it trades, the next session's pre-market trade, from the same
   minute paths as the intraday bars.

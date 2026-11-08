@@ -10,7 +10,7 @@ import {
   trailingEps,
   type DividendPayment,
 } from "./company";
-import { closeBefore, dailyRows, extendedPath, lastDayOfPreviousYear, priceDigits, type DailyRow } from "./prices";
+import { closeBefore, dailyRows, extendedPath, hasExtendedHours, lastDayOfPreviousYear, priceDigits, type DailyRow } from "./prices";
 import { round } from "./random";
 import type { Security } from "./securities";
 import {
@@ -140,7 +140,7 @@ export function buildQuote(security: Security, now: number): RawQuote | null {
     exchangeDataDelayedBy: security.market === "us_market" ? 0 : 15,
     firstTradeDateMilliseconds: new Date(dailyStamp(profile, profile.epoch)),
     priceHint: digits,
-    hasPrePostMarketData: profile.pre !== null,
+    hasPrePostMarketData: hasExtendedHours(security),
     regularMarketChange: change,
     regularMarketChangePercent: changePercent,
     regularMarketTime,
@@ -244,7 +244,7 @@ const MINUTE_MS = 60_000;
  */
 function addExtendedHours(quote: RawQuote, security: Security, last: DailyRow, digits: number, now: number): void {
   const profile = security.profile;
-  if (profile.pre === null || profile.post === null || (security.type !== "EQUITY" && security.type !== "ETF")) return;
+  if (!hasExtendedHours(security) || profile.pre === null || profile.post === null) return;
   const fields = (prefix: "preMarket" | "postMarket", path: Float64Array, start: number) => {
     const minute = Math.min(path.length - 1, Math.floor((now - start) / MINUTE_MS));
     if (minute < 1) return;

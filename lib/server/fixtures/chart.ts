@@ -1,7 +1,7 @@
 import "server-only";
 
 import { dividendSchedule } from "./company";
-import { aggregateRows, closeBefore, dailyRows, intradayRows, priceDigits, type DailyRow, type IntradayRow, type Period } from "./prices";
+import { aggregateRows, closeBefore, dailyRows, hasExtendedHours, intradayRows, priceDigits, type DailyRow, type IntradayRow, type Period } from "./prices";
 import { recentRows } from "./quote";
 import { securityOf, type Security } from "./securities";
 import {
@@ -22,8 +22,8 @@ import {
 
 // chart() of the fixture data, shaped like yahoo-finance2's default "array" result: { meta, quotes, events } with
 // Date objects for every time. Daily bars end at the latest completed session; weekly and monthly bars aggregate them;
-// intraday bars (1m to 1h) exist for completed sessions only and include pre- and after-market bars when
-// includePrePost is on (the library's default). An unknown symbol fails with Yahoo's own message.
+// intraday bars (1m to 1h) exist for completed sessions only and, for US stocks and funds, include pre- and
+// after-market bars when includePrePost is on (the library's default). An unknown symbol fails with Yahoo's own message.
 
 export interface FixtureChartOptions {
   period1: Date | string | number;
@@ -165,7 +165,7 @@ export function buildChart(symbol: string, options: FixtureChartOptions, now: nu
     instrumentType: security.type,
     firstTradeDate: new Date(dailyStamp(profile, profile.epoch)),
     regularMarketTime: new Date(sessionClose(profile, latest)),
-    hasPrePostMarketData: profile.pre !== null,
+    hasPrePostMarketData: hasExtendedHours(security),
     gmtoffset: zoneOffsetMinutes(tz, now) * 60,
     timezone: zoneShortName(tz, now),
     exchangeTimezoneName: tz,

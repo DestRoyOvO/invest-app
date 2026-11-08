@@ -385,6 +385,14 @@ function regularMinutes(security: Security, bar: DailyRow, minutes: number): Min
 export type ExtendedSession = "pre" | "post";
 
 /**
+ * True for listings that trade before and after the session: US stocks and funds. Indices, yields and the VIX follow
+ * the US calendar but have no extended-hours prices, as on Yahoo (hasPrePostMarketData false).
+ */
+export function hasExtendedHours(security: Security): boolean {
+  return security.profile.pre !== null && security.profile.post !== null && (security.type === "EQUITY" || security.type === "ETF");
+}
+
+/**
  * Thin extended-hours trading of a US listing on the day of `bar`: a quiet bridge from the previous close to the open
  * (pre-market) or a quiet walk from the close (after hours), one point per minute, plus the generator that continues
  * with the minutes' volumes.
@@ -444,8 +452,8 @@ function aggregateMinutes(security: Security, minutes: readonly MinuteBar[], ste
 
 /**
  * Intraday bars of one session at `stepMinutes`, stamped at their start: the regular session (consistent with the
- * daily bar) and, for US listings with `includePrePost`, the pre-market from the previous close to the open and the
- * after-hours session.
+ * daily bar) and, for US stocks and funds with `includePrePost`, the pre-market from the previous close to the open and
+ * the after-hours session.
  */
 export function intradayRows(security: Security, bar: DailyRow, previousClose: number, stepMinutes: number, includePrePost: boolean): IntradayRow[] {
   const profile = security.profile;
@@ -453,7 +461,7 @@ export function intradayRows(security: Security, bar: DailyRow, previousClose: n
   const digits = priceDigits(security, bar.c);
   const length = profile.close - profile.open;
   const regular = aggregateMinutes(security, regularMinutes(security, bar, length), stepMinutes, localToUtc(tz, bar.day, profile.open), digits);
-  if (!includePrePost || profile.pre === null || profile.post === null) return regular;
+  if (!includePrePost || !hasExtendedHours(security) || profile.pre === null || profile.post === null) return regular;
   const pre = extendedMinutes(security, bar, "pre", previousClose, bar.v * 0.04);
   const post = extendedMinutes(security, bar, "post", previousClose, bar.v * 0.03);
   return [

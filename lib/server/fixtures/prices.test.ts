@@ -142,6 +142,19 @@ describe("weekly, monthly and intraday bars", () => {
     expect(meta.tradingPeriods).toMatchObject({ regular: expect.any(Array), pre: expect.any(Array), post: expect.any(Array) });
   });
 
+  it("leave out extended hours for indices, as Yahoo does", () => {
+    const options = { period1: new Date(SATURDAY - 7 * DAY), interval: "5m", includePrePost: true };
+    for (const symbol of ["^GSPC", "^VIX", "^TNX"]) {
+      const chart = buildChart(symbol, options, SATURDAY);
+      // Five sessions of regular five-minute bars only.
+      expect((chart.quotes as unknown[]).length, symbol).toBe(5 * 78);
+      expect((chart.meta as Record<string, unknown>).hasPrePostMarketData, symbol).toBe(false);
+      expect(buildQuote(security(symbol), SATURDAY)?.hasPrePostMarketData, symbol).toBe(false);
+    }
+    expect((buildChart("SPY", options, SATURDAY).meta as Record<string, unknown>).hasPrePostMarketData).toBe(true);
+    expect(buildQuote(security("AAPL"), SATURDAY)?.hasPrePostMarketData).toBe(true);
+  });
+
   it("agree with the quote on the latest close", () => {
     const quote = buildQuote(security("MSFT"), SATURDAY);
     const chart = buildChart("MSFT", { period1: new Date(SATURDAY - 35 * DAY), interval: "1d" }, SATURDAY);
