@@ -7,13 +7,16 @@ vi.mock("server-only", () => ({}));
 
 const yahoo = vi.hoisted(() => ({
   getQuotes: vi.fn<(symbols: string[]) => Promise<Map<string, Quote>>>(),
+  /** The quote-cache probe behind the route's charging (lib/server/charging.ts). */
+  hasFreshQuote: vi.fn<(symbol: string) => boolean>(() => false),
 }));
 vi.mock("./yahoo", () => yahoo);
 
 import { GET as calendarRoute } from "@/app/api/calendar/route";
 
 import { earningsTiming, getCalendar, macroCalendarEvents, quoteEvents } from "./calendar";
-import { resetRateLimits } from "./rate-limit";
+import { clientIp } from "./http";
+import { clientKey, consumeRateLimit, RATE_LIMITS, resetRateLimits } from "./rate-limit";
 
 const NOW = Date.parse("2026-11-07T15:00:00Z");
 const DAY = 24 * 60 * 60 * 1000;
@@ -196,5 +199,42 @@ describe("GET /api/calendar", () => {
     expect(requested[0]).toBe("SHOP");
     expect(requested).toHaveLength(UNIVERSE_STOCKS.length + 1);
     expect(((await res.json()) as CalendarResponse).missing).toContain("SHOP");
+  });
+
+  describe("charging", () => {
+    // 100 symbols outside the stock universe: with scope=universe the list passes 100 and getQuotes sends two batches.
+    const LIST = Array.from({ length: 100 }, (_, i) => `ZQ${i}`).join(",");
+    /** Units left in this client's market budget (reading it costs one more). */
+    const remaining = () => {
+      const result = consumeRateLimit(RATE_LIMITS.market, clientKey(clientIp(new Request("http://localhost/api/calendar"))));
+      return result.ok ? result.remaining : 0;
+    };
+
+    beforeEach(() => {
+      yahoo.hasFreshQuote.mockReset();
+      yahoo.hasFreshQuote.mockReturnValue(false);
+    });
+
+    it("charges one unit for the second quote batch when the universe takes the list past 100 symbols", async () => {
+      expect((await call(`?symbols=${LIST}&scope=universe`)).status).toBe(200);
+      expect(yahoo.getQuotes.mock.calls[0][0]).toHaveLength(100 + UNIVERSE_STOCKS.length);
+      expect(remaining()).toBe(RATE_LIMITS.market.limit - 1 - 1 - 1);
+    });
+
+    it("charges nothing extra for one batch or when the quotes are cached", async () => {
+      await call(`?symbols=${LIST}`);
+      expect(remaining()).toBe(RATE_LIMITS.market.limit - 1 - 1);
+      resetRateLimits();
+      yahoo.hasFreshQuote.mockReturnValue(true);
+      await call(`?symbols=${LIST}&scope=universe`);
+      expect(remaining()).toBe(RATE_LIMITS.market.limit - 1 - 1);
+    });
+
+    it("answers 429 without calling Yahoo when the budget cannot cover the second batch", async () => {
+      for (let i = 0; i < RATE_LIMITS.market.limit - 1; i++) remaining();
+      const res = await call(`?symbols=${LIST}&scope=universe`);
+      expect(res.status).toBe(429);
+      expect(yahoo.getQuotes).not.toHaveBeenCalled();
+    });
   });
 });

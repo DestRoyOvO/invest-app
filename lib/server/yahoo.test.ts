@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { clearCache } from "./cache";
+import { uncachedQuoteCalls } from "./charging";
 import {
   analystRating,
   announcedDividend,
@@ -310,6 +311,18 @@ describe("cache probes for rate-limit charging", () => {
     vi.setSystemTime(new Date("2026-11-07T15:06:00Z"));
     expect(hasFreshQuote("PROBE1")).toBe(false);
     expect(peekQuote("PROBE1")?.name).toBe("Probe Inc.");
+  });
+
+  it("predicts the batched quote requests getQuotes sends, 100 symbols at a time", async () => {
+    const symbols = Array.from({ length: 178 }, (_, i) => `BATCH${i}`);
+    const quote = vi
+      .spyOn(yf, "quote")
+      .mockImplementation((async (batch: string[]) => batch.map((symbol) => ({ symbol, regularMarketPrice: 1, marketState: "CLOSED" }))) as never);
+    expect(uncachedQuoteCalls(symbols)).toBe(2);
+    await getQuotes(symbols);
+    expect(quote).toHaveBeenCalledTimes(2);
+    expect(uncachedQuoteCalls(symbols)).toBe(0);
+    expect(uncachedQuoteCalls([...symbols.slice(0, 3), "BATCHNEW", "BATCHNEW"])).toBe(1);
   });
 
   it("keeps Yahoo's answer that it does not know a symbol as a fresh null", async () => {
