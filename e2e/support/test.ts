@@ -1,7 +1,11 @@
 import { randomInt } from "node:crypto";
 
 import AxeBuilder from "@axe-core/playwright";
-import { test as base, expect, type APIRequestContext, type BrowserContext, type Locator, type Page } from "@playwright/test";
+import { test as base, expect, type APIRequestContext, type BrowserContext, type Locator, type Page, type Response } from "@playwright/test";
+
+import { HOLDINGS_STORAGE_KEY } from "@/hooks/useHoldings";
+import { WATCHLIST_STORAGE_KEY } from "@/hooks/useWatchlist";
+import { NOTES_STORAGE_KEY, type NotesBook } from "@/lib/notes";
 
 import { BASE_URL, PINNED_NOW } from "./env";
 
@@ -13,7 +17,8 @@ import { BASE_URL, PINNED_NOW } from "./env";
 // - consoleErrors (automatic): fails a test on any console error or uncaught page error (CSP violations and failed
 //   requests show up as console errors), unless the test allows that message explicitly;
 // - axe: runs axe-core and fails on serious or critical WCAG violations, with readable details;
-// - app: navigation that waits for the app to settle, and the stored display preferences (theme, language).
+// - app: navigation that waits for the app to settle, the stored display preferences (theme, language) and the data
+//   the app keeps in the browser (watchlist, positions, notes).
 
 export interface ConsoleErrors {
   /**
@@ -50,13 +55,31 @@ export interface Axe {
 export type Theme = "dark" | "light";
 export type Lang = "en" | "zh";
 
+/**
+ * What the app keeps in this browser's localStorage, in the stores' own formats: the watchlist (symbols in the
+ * investor's order), positions (shares and average cost per symbol) and thesis notes (lib/notes.ts).
+ */
+export interface StoredData {
+  watchlist?: readonly string[];
+  holdings?: Readonly<Record<string, { shares: number; cost: number }>>;
+  notes?: NotesBook;
+}
+
 export interface App {
-  /** Opens a path and waits until the shell has rendered, the network is quiet and fonts are loaded. */
-  goto(path: string): Promise<void>;
+  /**
+   * Opens a path and waits until the shell has rendered, the network is quiet and fonts are loaded. Resolves to the
+   * document response (after redirects).
+   */
+  goto(path: string): Promise<Response | null>;
   /** Waits until the network is quiet and fonts are loaded. */
   settle(): Promise<void>;
   /** Stores display preferences the way the app does (cookies read on the server for the first paint). */
   setPrefs(prefs: { theme?: Theme; lang?: Lang }): Promise<void>;
+  /**
+   * Puts data in localStorage before the test's first page load, as if the investor had entered it: every page of the
+   * test starts from it, and what the page changes afterwards is kept across reloads. Call it before `goto`.
+   */
+  seedStorage(data: StoredData): Promise<void>;
   /** True in the phone project. */
   isPhone: boolean;
 }
@@ -114,6 +137,27 @@ async function settle(page: Page, api: ReturnType<typeof trackApiRequests>): Pro
     await page.waitForTimeout(100);
   }
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
+}
+
+/**
+ * Writes the stores' keys before any script of the first page load runs. A sessionStorage marker (per tab) keeps later
+ * loads from writing them again, so a test can change the data and reload.
+ */
+async function seedStorage(context: BrowserContext, data: StoredData): Promise<void> {
+  const entries: Array<[string, string]> = [];
+  if (data.watchlist) entries.push([WATCHLIST_STORAGE_KEY, JSON.stringify(data.watchlist)]);
+  if (data.holdings) entries.push([HOLDINGS_STORAGE_KEY, JSON.stringify(data.holdings)]);
+  if (data.notes) entries.push([NOTES_STORAGE_KEY, JSON.stringify(data.notes)]);
+  await context.addInitScript((items: Array<[string, string]>) => {
+    const marker = "e2e:storage-seeded";
+    try {
+      if (window.sessionStorage.getItem(marker)) return;
+      for (const [key, value] of items) window.localStorage.setItem(key, value);
+      window.sessionStorage.setItem(marker, "1");
+    } catch {
+      // Storage unavailable (an opaque origin such as about:blank): nothing to seed there.
+    }
+  }, entries);
 }
 
 async function setPrefs(context: BrowserContext, prefs: { theme?: Theme; lang?: Lang }): Promise<void> {
@@ -223,16 +267,18 @@ export const test = base.extend<{ consoleErrors: ConsoleErrors; axe: Axe; app: A
     const api = trackApiRequests(page);
     await provide({
       async goto(path: string) {
-        await page.goto(path);
+        const response = await page.goto(path);
         await expect(page.locator("main#main, main").first()).toBeVisible();
         await settle(page, api);
+        return response;
       },
       settle: () => settle(page, api),
       setPrefs: (prefs) => setPrefs(context, prefs),
+      seedStorage: (data) => seedStorage(context, data),
       isPhone: testInfo.project.name === "phone",
     });
   },
 });
 
 export { expect };
-export type { Locator, Page };
+export type { Locator, Page, Response };
