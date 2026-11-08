@@ -15,19 +15,23 @@ every token pair; `lib/design-tokens.test.ts` fails when a pair drops below its 
   Plex Mono（`.mono`）。面板标题 `.panel-title`（12px 600 大写），表头 `.col-head`（11px 500 大写，中文 12px）；
   `.label` 只留给键盘提示和代码。
 - **布局**：页面用"列式"网格：`grid gap-px bg-line p-px xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]`，里面两个
-  `flex flex-col gap-px` 的列，面板按内容自然高度排列，不再整行拉伸留白。
-- **组件**：Panel（可带琥珀色功能代码）、DataTable（排序、aria-sort、行链接、悬停操作、加载/空状态，可关闭行悬停高亮）、
+  `flex flex-col gap-px` 的列，面板按内容自然高度排列，不再整行拉伸留白。DOM 顺序就是手机上的顺序；唯一的例外是报价页：
+  640px 以下用 `order` 在视觉上重排面板，DOM 保持桌面顺序。各面板相互独立，含义和操作不依赖先后顺序（WCAG 1.3.2、
+  2.4.3），而把面板挂载两次更糟，所以接受这种做法。
+- **组件**：Panel（可带琥珀色功能代码）、DataTable（排序、aria-sort、行链接、悬停操作、加载/空状态，可关闭行悬停高亮，
+  列可按视口隐藏，也可按表格自身宽度隐藏：`hideBelowContainer`，容器查询）、
   Segmented、Select、Switch、Field/Input、Checkbox、Badge/AiChip、Sparkline（中性线条 + 按当日涨跌着色的端点）、Delta 与
   热力图分档（heatStep/heatStyle）、TickNumber（只闪变化的那个数字）、Whisker（置信区间须线，`neutral` 时整体变灰）、
   Meter（当前标记带 1px 面板色描边）、StatTile、HoverCard/Tooltip、Toast（可撤销）、Drawer（右侧或底部）、EmptyState
   （左对齐 + 快捷代码按钮）、Wordmark。
-- **无障碍**：文字对比度 ≥ 4.5:1、图形 ≥ 3:1（两套主题、三种配色全部实测通过，含悬停状态）；`--fg-3` 只用在面板上，
-  直接放在画布上的文字用 `--fg-2`；桌面点击区 ≥ 24px、手机 ≥ 40px：Button、IconButton、Segmented、Select、Tabs、Input
-  在手机上自带 40px 高度，页面无需再加覆盖（可排序表头整格可点）；面板标题栏最少 36px，在手机上随 40px 控件长高；
-  紧凑密度下行内小图标按钮为 24px，带操作的行也保持约 24px；可排序表头带 aria-sort；表格横向或纵向放不下时，滚动框
-  成为以表格标题命名、可用 Tab 聚焦的区域，方向键即可滚动，所以表格标题不要与面板标题相同；Esc 只关闭最内层（先关
-  悬停卡片，再关抽屉）；提示条在悬停或键盘焦点时暂停，键盘关闭后焦点移到下一条或回到原处；实时更新用礼貌型 live
-  region；尊重"减少动态效果"。
+- **无障碍**：文字对比度 ≥ 4.5:1、图形 ≥ 3:1（两套主题、三种配色全部实测通过，含悬停状态；带透明度的颜色先按透明度
+  叠加到底色上再测，如评级色阶 `bg-fg/85` 到 `/50`）；`--fg-3` 只用在面板上，直接放在画布上的文字用 `--fg-2`；桌面点击区
+  ≥ 24px、手机 ≥ 40px：Button、IconButton、Segmented、Select、Tabs、Input 在手机上自带 40px 高度，页面不再加覆盖
+  （conventions.test.ts 会拦下这类覆盖；可排序表头整格可点）；面板标题栏最少 36px，在手机上随 40px 控件长高，所以标题栏里的
+  控件在手机上也留在标题栏；紧凑密度下行内小图标按钮为 24px，带操作的行也保持约 24px；可排序表头带 aria-sort；表格横向或
+  纵向放不下时，滚动框成为以表格标题命名、可用 Tab 聚焦的区域，方向键即可滚动，所以表格标题要描述表格内容，不能与所在
+  面板或分区的名称相同（lib/i18n/captions.test.ts 检查）；Esc 只关闭最内层（先关悬停卡片，再关抽屉）；提示条在悬停或
+  键盘焦点时暂停，键盘关闭后焦点移到下一条或回到原处；实时更新用礼貌型 live region；尊重"减少动态效果"。
 - **缺失值**：一律显示 `lib/format.ts` 的 `DASH`（U+2014），格式化函数遇到 null 也返回它；不用 U+2013、连字符或
   "N/A"。它只是数据占位符，文案里仍然不用破折号。
 - **非价格的正负读数**（相关系数、z 分数、因子倾向）：只按绝对值深浅着色，用一种中性色阶并标出带符号的数字，不用红绿或
@@ -223,6 +227,13 @@ tallest one in its row.
 ```
 
 - DOM order is the phone order (one column below xl): put what a phone user needs first first.
+- The quote page is the one exception (decision Q-3). Below 640px its overview panels are reordered visually
+  (`max-sm:order-*` in `StockView.tsx`: chart, news, AI note, key statistics, risk, earnings, signal, factors, analysts,
+  notes, company) while the DOM keeps the desktop order (the chart, signal, risk, factors, AI note and notes column, then
+  key statistics, earnings, analysts, news and company). This is accepted because the panels are independent: none
+  refers to another or needs another read first, and each panel's own content and focus order are untouched, so meaning
+  (WCAG 1.3.2) and operation (2.4.3) do not depend on the order. Mounting the panels twice, once per order, would be
+  worse: twice the requests, the live regions and the focusable controls. Do not copy it elsewhere; order the DOM.
 - No `row-span`, no `h-full` on panels. A panel that should fill space (the heatmap) gets `bodyClassName="flex flex-col"`
   and a `min-h-[420px] flex-1` child.
 - Cap long or streaming bodies: `max-h-[min(70vh,720px)] overflow-y-auto`.
@@ -269,8 +280,11 @@ snippets (for example `t.common.undo`) are placeholders: use the feature's own k
 
 **Phone sizes.** The controls bring their own 40px phone target: below `sm`, Button (both sizes), Segmented, Select,
 Tabs and Input take a 40px minimum height (`PHONE_TARGET` in `Button.tsx`) and IconButton is 40px square; from `sm` up
-they keep their desktop sizes. Pages need no `max-sm:h-10` overrides on them; older local overrides are harmless no-ops.
-A Panel header grows to fit them.
+they keep their desktop sizes. Pages add no `max-sm:h-10` (or `[&_[role=radio]]:max-sm:h-10`, `[&>select]:...`) to
+them: `conventions.test.ts` fails on such an override. Elements that are not these primitives keep their own phone
+height: a raw element styled as a control (filter and tag chips, a link styled as a button, the chart's range picker)
+and Switch and Checkbox rows, which have no built-in target. A Panel header grows to fit them, so header controls stay in
+the header on phones too.
 
 ### Panel, PanelMeta, PanelCode
 
@@ -410,7 +424,7 @@ const columns: DataTableColumn<Quote>[] = [
   rows={quotes}
   columns={columns}
   rowKey={(q) => q.symbol}
-  caption={t.watchlist.title}
+  caption={t.watchlist.quotesCaption}
   rowHref={(q) => stockPath(q.symbol)}
   rowActions={(q) => <IconButton size="sm" label={tpl(t.watchlist.remove, { symbol: q.symbol })} icon={<X className="size-3.5" />} onClick={() => remove(q.symbol)} />}
   loading={!data}
@@ -420,6 +434,14 @@ const columns: DataTableColumn<Quote>[] = [
 
 - Widths come from a `<colgroup>`; give number columns fixed widths (last 5.5rem, change 4.5rem, change % 5rem, volume
   5.5rem, market cap 5.25rem, P/E 3.75rem, trend 6.5rem) and leave the name column free so it takes the rest.
+- Columns hide below a viewport breakpoint (`hideBelow: "sm"`) or while the table's own box is narrower than a container
+  size (`hideBelowContainer: "md"`; Tailwind's `@` sizes: xs 20rem, sm 24rem, md 28rem, lg 32rem, xl 36rem, 2xl 42rem).
+  Use the container size for a table that can sit in the 22rem right-hand column at xl, a box of 356px at 1280px and
+  410px at 1440px, where `hideBelow` only sees a wide viewport: the overview's watchlist drops its 1M line below `sm`
+  (its four columns need 360px), Trending drops the price below `md` so the names keep room, and the analyst actions hide
+  their date column below `md`. The container size takes the place of `hideBelow`. When a column uses it, the scroll box
+  becomes the query container (`@container`), so cells can carry container classes too: the analyst actions show the
+  date under the firm with `@md:hidden`. A footer row a caller builds hides its cells with `hideClass(column)`.
 - Sorting: a header click cycles the column's first direction (descending for right-aligned columns), the opposite, then
   the natural order. `aria-sort` marks the sorted header. Missing values sort last both ways; equal values keep their
   `tieBreak` order, then their original order. Pass `sort`/`onSortChange` to control it, for example to keep a
@@ -430,7 +452,7 @@ const columns: DataTableColumn<Quote>[] = [
   `actionsWidth` wide (4.5rem) and `actionsTouchWidth` (5.5rem) below `sm`, where icon buttons grow to 40px. Its head
   is an empty `aria-hidden` cell: each action names its row ("Remove AAPL").
 - Rows highlight on hover. `rowHover={false}` turns that off for rows that are not links and carry status colors
-  measured on `--panel` (the data import review); `rowClassName` still adds classes per row.
+  measured on `--panel` (the data import review and the restore diff); `rowClassName` still adds classes per row.
 - `stickyHeader` with `maxHeight` keeps the header visible while the body scrolls; `minWidth` scrolls horizontally on
   phones instead of squeezing.
 - The scroll box is positioned (`relative`), so the rows' absolutely positioned sr-only text stays inside it: rows
@@ -440,8 +462,13 @@ const columns: DataTableColumn<Quote>[] = [
   no tab stop. Its focus ring sits inside the box, or just outside it with `stickyHeader`, whose cells would cover the
   top of an inset ring. A caller that scrolls the table in its own wrapper turns the box off with
   `className="overflow-x-visible!"`, and the box then never becomes a region. The caption names that region, so it
-  must not repeat the panel title word for word where the table can overflow: the alerts page captions its tables
-  "Alert rules" and "Alert history" inside the Rules and History panels.
+  describes the table and never repeats the name of the panel or section around it, in either language: two regions of
+  one name are an axe landmark-unique violation. Give the caption its own key next to the title: the alerts page
+  captions its tables "Alert rules" and "Alert history" inside the Rules and History panels, the watchlist page "Watchlist
+  quotes" and "Positions with value and P&L", world markets "Benchmarks in the Americas" under the Americas heading and
+  "Currency rates" in the Currencies panel, and the sector page "Information Technology constituents".
+  `lib/i18n/captions.test.ts` keeps each caption apart from its panel title. To check a page, force every table to
+  overflow (`table.table-fixed { min-width: 1600px }` or a 360px viewport) and run axe: landmark-unique must not fire.
 
 ### HoverCard and Tooltip
 
@@ -517,10 +544,15 @@ unless `alwaysShowName` is set (the unlock page). `<BrandMark className="size-5 
 ## Accessibility
 
 - **Contrast**: text 4.5:1, large text and non-text marks (input borders, focus rings, chart lines, meter fills) 3:1.
-  All 55 promised pairs pass in both themes and all three conventions (`scripts/check-contrast.ts`, 330 checks),
+  All 59 promised pairs pass in both themes and all three conventions (`scripts/check-contrast.ts`, 354 checks),
   hover states included. A pair a component starts to use goes into `CONTRAST_PAIRS` in `lib/design-tokens.ts`, once:
   the script and the token test fail on a pair listed twice, so a new role for an existing pair joins its entry.
-  Selected results:
+  A color drawn at an opacity (a Tailwind `/NN` modifier) is a pair too: `fgAlpha` for a foreground or a fill
+  (`{ fg: "fg", fgAlpha: 0.6, bg: "panel" }`, named "fg/60 on panel"), or `bgAlpha` with the surface under it (`over`)
+  for a translucent background with text on it. The checker composites the color at that opacity over the surface in
+  each theme before it measures. The analyst rating shades (`RATING_SHADES` in the earnings model: bg-fg, bg-fg/85, /72,
+  /60 and /50 on the panel) are checked this way as marks; no text is drawn on them, the legend sets each label beside
+  its swatch. Selected results:
 
   | Pair | Dark | Light |
   | --- | --- | --- |
@@ -532,13 +564,15 @@ unless `alwaysShowName` is set (the unlock page). `<BrandMark className="size-5 
   | `--accent` on line-2 (the current marker on a track) | 6.29 | 3.55 |
   | Heatmap tile text, weakest tile | 4.88 | 5.21 |
   | `--input-border` on panel / panel-2 | 3.50 / 3.34 | 3.66 / 3.41 |
+  | Rating shades `fg/85`, `/72`, `/60`, `/50` on panel | 11.48 / 8.42 / 6.13 / 4.58 | 12.11 / 7.50 / 4.88 / 3.51 |
 
 - **Focus**: every interactive element shows the 2px accent outline (`:focus-visible`), or an accent border and ring on
   fields. Never remove it without a replacement.
 - **Targets**: at least 24px on desktop and 40px below `sm`. Button, IconButton, Segmented, Select, Tabs, Input, toast
   actions, empty-state chips and DataTable sort heads do this by themselves; compact icon buttons stop at 24px.
 - **Tables**: a caption (visually hidden), `scope="col"` heads, `aria-sort` on the sorted head, one link per row. A
-  table that overflows its scroll box makes the box a focusable region named by the caption (DataTable does this).
+  table that overflows its scroll box makes the box a focusable region named by the caption (DataTable does this), so
+  the caption never repeats the name of the panel around it.
 - **Escape**: closes the innermost layer only (a hover card before the drawer it sits in).
 - **Live regions**: toasts and the stale banner are polite; errors use `role="alert"`. Ticking prices are not announced.
 - **Motion**: flashes and pulses are off with `prefers-reduced-motion`.
