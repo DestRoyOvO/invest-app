@@ -171,8 +171,18 @@ test.describe("desktop", () => {
 
 test("? and a question asks the assistant, which answers in the chat (the bar opens with / or, on phones, its button)", async ({ page, app }) => {
   await app.goto("/");
-  if (app.isPhone) await page.getByRole("navigation", { name: en.nav.primary }).getByRole("button", { name: en.nav.search, exact: true }).click();
-  else await page.keyboard.press("/");
+  // Where the focus is when the bar opens, and returns to once the chat closes: the phone's Search button, which opens the
+  // bar, or on the desktop a link of the nav rail.
+  const nav = page.getByRole("navigation", { name: en.nav.primary });
+  const mkt = functionByKey("mkt");
+  const opener = app.isPhone
+    ? nav.getByRole("button", { name: en.nav.search, exact: true })
+    : nav.getByRole("link", { name: `${functionLabel(mkt)} ${mkt.code}`, exact: true });
+  if (app.isPhone) await opener.click();
+  else {
+    await opener.focus();
+    await page.keyboard.press("/");
+  }
   const bar = commandBar(page);
   await expect(bar.dialog).toBeVisible();
   await expect(bar.input).toBeFocused();
@@ -183,9 +193,16 @@ test("? and a question asks the assistant, which answers in the chat (the bar op
   await expect(bar.selected).toHaveAccessibleName(tpl(en.command.ask, { q: question }));
   await page.keyboard.press("Enter");
   await expect(bar.dialog).toBeHidden();
-  const chat = page.getByRole("dialog", { name: en.ai.chat.title }).getByRole("log", { name: en.ai.chat.title });
+  const drawer = page.getByRole("dialog", { name: en.ai.chat.title });
+  const chat = drawer.getByRole("log", { name: en.ai.chat.title });
   await expect(chat).toContainText(question);
   // The mock model names the ticker of the question and ends its chat answers so.
   await expect(chat).toContainText("NVDA: this is a mock answer from the end-to-end test model");
   await expect(chat).toContainText("Ask a follow-up question to see the conversation continue.");
+
+  // Escape closes the chat (phones have no Escape key: its Close button), and the focus goes back to where it was.
+  if (app.isPhone) await drawer.getByRole("button", { name: en.common.close, exact: true }).click();
+  else await page.keyboard.press("Escape");
+  await expect(drawer).toBeHidden();
+  await expect(opener).toBeFocused();
 });
