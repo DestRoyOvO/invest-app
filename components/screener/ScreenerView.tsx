@@ -102,7 +102,7 @@ export function ScreenerView() {
                 value={capParam(state.cap)}
                 onChange={(value) => setCap(parseCapParam(value))}
                 options={DISCOVER_CAPS.map((cap) => ({ value: capParam(cap), label: capLabel(cap) }))}
-                className="w-56"
+                className="w-56 [&_[role=radio]]:max-sm:h-10"
               />
             </>
           ) : (

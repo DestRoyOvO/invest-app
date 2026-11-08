@@ -31,6 +31,8 @@ type IdeaScreen = (typeof IDEA_SCREENS)[number];
 type ColumnKey = "symbol" | "name" | "last" | "chg" | "relVol" | "cap" | "pe" | "earnings" | "rating" | "star";
 
 const TABLE_HEIGHT = "min(65vh, 600px)";
+/** Panel tabs are 36px; phones get 40px touch targets. */
+const PHONE_TABS = "[&_[role=tab]]:max-sm:h-10";
 
 const missing = <span className="text-fg-3">{DASH}</span>;
 
@@ -197,7 +199,7 @@ function QuoteList({ data, screen, error, onRetry, keys, caption, cap, onCapChan
           <EmptyState
             actions={
               lower.length > 0 ? (
-                <Button size="sm" onClick={() => onCapChange(lower[0])}>
+                <Button size="sm" onClick={() => onCapChange(lower[0])} className="max-sm:h-10">
                   {tpl(t.discover.lowerCap, { cap: capLabel(lower[0]) })}
                 </Button>
               ) : undefined
@@ -234,9 +236,15 @@ function MoversPanel({ cap, onCapChange }: { cap: DiscoverCap; onCapChange: (cap
     <Panel title={t.discover.movers} code="MOV">
       <div className="flex flex-wrap items-end justify-between gap-x-3 border-b border-line pl-1">
         <div className="no-scrollbar min-w-0 overflow-x-auto">
-          <Tabs label={t.discover.moverTabs.label} value={screen} onChange={setScreen} options={MOVER_SCREENS.map((s) => ({ value: s, label: t.discover.moverTabs[s] }))} />
+          <Tabs
+            label={t.discover.moverTabs.label}
+            value={screen}
+            onChange={setScreen}
+            options={MOVER_SCREENS.map((s) => ({ value: s, label: t.discover.moverTabs[s] }))}
+            className={PHONE_TABS}
+          />
         </div>
-        <div className="min-w-0 pr-3 pb-2.5">
+        <div className="min-w-0 pr-3 pb-2.5 pl-2">
           <ListMeta data={data} screen={screen} cap={cap} />
         </div>
       </div>
@@ -262,9 +270,15 @@ function IdeasPanel({ cap, onCapChange }: { cap: DiscoverCap; onCapChange: (cap:
     <Panel title={t.discover.ideas}>
       <div className="flex flex-wrap items-end justify-between gap-x-3 border-b border-line pl-1">
         <div className="no-scrollbar min-w-0 overflow-x-auto">
-          <Tabs label={t.discover.ideaTabs.label} value={screen} onChange={setScreen} options={IDEA_SCREENS.map((s) => ({ value: s, label: t.discover.ideaTabs[s] }))} />
+          <Tabs
+            label={t.discover.ideaTabs.label}
+            value={screen}
+            onChange={setScreen}
+            options={IDEA_SCREENS.map((s) => ({ value: s, label: t.discover.ideaTabs[s] }))}
+            className={PHONE_TABS}
+          />
         </div>
-        <div className="min-w-0 pr-3 pb-2.5">
+        <div className="min-w-0 pr-3 pb-2.5 pl-2">
           <ListMeta data={data} screen={screen} cap={cap} />
         </div>
       </div>

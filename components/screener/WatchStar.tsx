@@ -16,6 +16,8 @@ export function WatchStar({ symbol, active, onToggle }: { symbol: string; active
       label={tpl(active ? t.screener.star.remove : t.screener.star.add, { symbol })}
       icon={<Star aria-hidden className={cn("size-3.5", active ? "text-fg" : "text-fg-3")} strokeWidth={1.75} fill={active ? "currentColor" : "none"} />}
       onClick={() => onToggle(symbol)}
+      // An inset ring: the 28px button nearly fills a 32px row, and the cell clips anything drawn outside it.
+      className="focus-visible:outline-offset-[-2px]"
     />
   );
 }

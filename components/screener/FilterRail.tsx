@@ -26,6 +26,10 @@ import type { SectorKey } from "@/types/api";
 
 import { RangeField } from "./RangeField";
 
+// The small controls of a desktop rail, grown to 40px touch targets in the phone sheet.
+const PHONE_SEGMENTED = "[&_[role=radio]]:max-sm:h-10";
+const PHONE_SELECT = "w-full [&>select]:max-sm:h-10 [&>select]:max-sm:text-sm";
+
 type RangeGroupKey = "size" | "performance" | "risk" | "analysts" | "factors";
 
 const RANGE_GROUPS: ReadonlyArray<{ key: RangeGroupKey; metrics: readonly MetricKey[] }> = [
@@ -144,6 +148,7 @@ export function FilterRail({ screen, onFiltersChange, sectorCounts, resetToken }
           value={filters.ma50 ?? "any"}
           options={trendOptions}
           onChange={(value) => update({ ma50: toTrend(value) })}
+          className={PHONE_SEGMENTED}
         />
         <Segmented
           label={t.screener.filters.ma200}
@@ -151,6 +156,7 @@ export function FilterRail({ screen, onFiltersChange, sectorCounts, resetToken }
           value={filters.ma200 ?? "any"}
           options={trendOptions}
           onChange={(value) => update({ ma200: toTrend(value) })}
+          className={PHONE_SEGMENTED}
         />
       </Section>
 
@@ -158,7 +164,7 @@ export function FilterRail({ screen, onFiltersChange, sectorCounts, resetToken }
         <Section title={t.screener.filters.events}>
           <Field label={t.screener.filters.earnings}>
             <Select
-              className="w-full"
+              className={PHONE_SELECT}
               size="sm"
               value={filters.earningsWithinDays === null ? "" : String(filters.earningsWithinDays)}
               onChange={(event) => update({ earningsWithinDays: event.target.value === "" ? null : Number(event.target.value) })}
@@ -177,7 +183,7 @@ export function FilterRail({ screen, onFiltersChange, sectorCounts, resetToken }
       <Section title={t.screener.filters.lists}>
         <Field label={t.screener.filters.list}>
           <Select
-            className="w-full"
+            className={PHONE_SELECT}
             size="sm"
             value={filters.list ?? ""}
             onChange={(event) => update({ list: event.target.value === "" ? null : (event.target.value as ListFilter) })}

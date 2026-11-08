@@ -63,6 +63,12 @@ const NAME_MIN_REM = 6.5;
 const SELECT_REM = 3;
 const STAR_REM = 3.25;
 
+/**
+ * Narrower columns below sm, set on the table: the checkbox and star cells drop their padding there and hold a 40px
+ * control, and factor columns cap at 6rem with a shorter meter, so the symbol and two columns fit a 360px screen.
+ */
+export const PHONE_WIDTHS = "max-sm:[--eqs-select:2.5rem] max-sm:[--eqs-star:2.5rem] max-sm:[--eqs-pct-max:6rem]";
+
 /** Returns and today's change are price moves, so they take the up and down colors; every other number is neutral. */
 const PRICE_MOVES: ReadonlySet<MetricKey> = new Set(["chg", "ytd", "r1m", "r3m", "r6m"]);
 
@@ -145,7 +151,12 @@ function MetricCell({ metric, row, context }: { metric: MetricKey; row: ScreenRo
   if (metricUnit(metric) === "percentile" && typeof value === "number") {
     return (
       <span className="flex items-center justify-end gap-2">
-        <Meter value={value} label={t.screener.metricNames[metric]} valueText={tpl(t.screener.percentile, { n: Math.round(value) })} className="w-12" />
+        <Meter
+          value={value}
+          label={t.screener.metricNames[metric]}
+          valueText={tpl(t.screener.percentile, { n: Math.round(value) })}
+          className="w-12 max-sm:w-8 max-sm:min-w-8"
+        />
         <span aria-hidden className="num w-7 text-right text-fg">
           {Math.round(value)}
         </span>
@@ -164,7 +175,7 @@ function metricColumn(metric: MetricKey, context: ScreenColumnContext): DataTabl
     header: context.t.screener.metrics[metric],
     title: context.t.screener.metricNames[metric],
     align: numeric ? "right" : "left",
-    width: width === null ? undefined : `${width}rem`,
+    width: width === null ? undefined : metricUnit(metric) === "percentile" ? `min(${width}rem, var(--eqs-pct-max, ${width}rem))` : `${width}rem`,
     render: (row) => <MetricCell metric={metric} row={row} context={context} />,
     sortValue: (row) => metricValue(metric, row),
     firstSort: firstSortDirection(metric),
@@ -190,7 +201,7 @@ export function screenColumns(metrics: readonly MetricKey[], context: ScreenColu
         className="align-middle max-sm:-mx-3 max-sm:size-10 max-sm:items-center max-sm:justify-center"
       />
     ),
-    width: `${SELECT_REM}rem`,
+    width: `var(--eqs-select, ${SELECT_REM}rem)`,
     align: "center",
     className: TOUCH_CELL,
     render: (row) => (
@@ -205,7 +216,7 @@ export function screenColumns(metrics: readonly MetricKey[], context: ScreenColu
   const star: DataTableColumn<ScreenRow> = {
     key: "_star",
     header: <span className="sr-only">{t.screener.star.column}</span>,
-    width: `${STAR_REM}rem`,
+    width: `var(--eqs-star, ${STAR_REM}rem)`,
     align: "center",
     className: cn(TOUCH_CELL, "py-0"),
     render: (row) => <WatchStar symbol={row.symbol} active={context.watchlist.has(row.symbol)} onToggle={context.onToggleWatch} />,

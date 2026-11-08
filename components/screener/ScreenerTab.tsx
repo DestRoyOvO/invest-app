@@ -50,10 +50,10 @@ import { getSector, MAX_WATCHLIST } from "@/lib/universe";
 import type { ScreenerUniverse, SectorKey } from "@/types/api";
 import type { ScreenRow } from "@/types/screener";
 
-import { screenColumns, tableMinWidthRem } from "./columns";
+import { PHONE_WIDTHS, screenColumns, tableMinWidthRem } from "./columns";
 import { chipLabel } from "./display";
 import { FilterRail } from "./FilterRail";
-import { firstFocusable, focusFirst } from "./focus";
+import { firstFocusable, focusFirst, revealInStrip } from "./focus";
 import { SavedScreens } from "./SavedScreens";
 import { useWatchToggle } from "./useWatchToggle";
 
@@ -117,6 +117,14 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
   const chipsRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLDivElement>(null);
   const showResultsRef = useRef<HTMLButtonElement>(null);
+  const columnTabsRef = useRef<HTMLDivElement>(null);
+
+  // On a phone the column-set tabs scroll sideways: keep the chosen one in view (a link or a preset can pick Factors).
+  useEffect(() => {
+    const strip = columnTabsRef.current;
+    const tab = strip?.querySelector<HTMLElement>("[role=tab][aria-selected=true]");
+    if (strip && tab) revealInStrip(strip, tab);
+  }, [screen.columns]);
 
   // SWR keeps the previous key's data while a new one loads: never show stocks under the ETF switch.
   const snapshot = data && data.universe === screen.universe ? data : undefined;
@@ -334,7 +342,7 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
                 { value: "stocks", label: tpl(t.screener.universe.stocks, { n: universeSymbols("stocks").length }) },
                 { value: "etfs", label: tpl(t.screener.universe.etfs, { n: universeSymbols("etfs").length }) },
               ]}
-              className="w-full sm:w-44"
+              className="w-full sm:w-44 [&_[role=radio]]:max-sm:h-10"
             />
             <ul ref={presetsRef} aria-label={t.screener.presets.label} className="no-scrollbar flex w-full min-w-0 gap-1.5 overflow-x-auto sm:w-auto sm:flex-1 sm:flex-wrap sm:overflow-visible">
               {presetsFor(screen.universe).map((p) => {
@@ -382,12 +390,13 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
           ) : null}
 
           <div className="flex items-end justify-between gap-3 border-b border-line pl-1">
-            <div className="no-scrollbar min-w-0 overflow-x-auto">
+            <div ref={columnTabsRef} className="no-scrollbar min-w-0 overflow-x-auto">
               <Tabs
                 label={t.screener.columnSets.label}
                 value={screen.columns}
                 onChange={setColumns}
                 options={COLUMN_SET_KEYS.map((key) => ({ value: key, label: t.screener.columnSets[key] }))}
+                className="[&_[role=tab]]:max-sm:h-10"
               />
             </div>
             {sortedHidden ? (
@@ -451,12 +460,12 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
                 stickyHeader
                 maxHeight="var(--eqs-max-h)"
                 minWidth="var(--eqs-min)"
-                className="[--eqs-min:0px] sm:[--eqs-min:var(--eqs-wide)] lg:absolute lg:inset-0"
+                className={cn("[--eqs-min:0px] sm:[--eqs-min:var(--eqs-wide)] lg:absolute lg:inset-0", PHONE_WIDTHS)}
                 empty={
                   <EmptyState
                     actions={
                       activeCount > 0 ? (
-                        <Button size="sm" onClick={() => clearFilters(firstPreset)}>
+                        <Button size="sm" onClick={() => clearFilters(firstPreset)} className="max-sm:h-10">
                           {t.screener.filters.clear}
                         </Button>
                       ) : undefined
