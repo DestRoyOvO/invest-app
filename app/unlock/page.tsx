@@ -1,9 +1,7 @@
 import type { Metadata } from "next";
-import { cookies, headers } from "next/headers";
 
 import { Wordmark } from "@/components/ui/Wordmark";
-import { MESSAGES } from "@/lib/i18n/messages";
-import { resolvePrefs } from "@/lib/prefs";
+import { requestMessages } from "@/lib/i18n/request";
 import { MAX_ACCESS_PASSWORD_LENGTH } from "@/lib/server/env";
 import { safeNextPath } from "@/lib/server/site-access";
 
@@ -16,18 +14,14 @@ interface Props {
   searchParams: Promise<{ next?: string | string[] }>;
 }
 
-async function messages() {
-  const cookieStore = await cookies();
-  const headerStore = await headers();
-  return MESSAGES[resolvePrefs((name) => cookieStore.get(name)?.value, headerStore.get("accept-language")).lang];
-}
-
+/** Titled in the reader's language, resolved the way the layout resolves it (the cookie, then Accept-Language). */
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: (await messages()).access.pageTitle, robots: { index: false, follow: false } };
+  const { t } = await requestMessages();
+  return { title: t.access.pageTitle, robots: { index: false, follow: false } };
 }
 
 export default async function UnlockPage({ searchParams }: Props) {
-  const t = await messages();
+  const { t } = await requestMessages();
   const { next } = await searchParams;
   return (
     <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 py-10">
