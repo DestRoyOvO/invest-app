@@ -27,6 +27,7 @@ import {
   COLUMN_SET_KEYS,
   countActiveFilters,
   csvFileName,
+  daysUntil,
   EMPTY_FILTERS,
   filterRows,
   isMetricKey,
@@ -151,6 +152,11 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
   const sectorLabel = (key: SectorKey) => getSector(key)?.label[lang] ?? key;
   const showFactorNote = metrics.some((key) => metricUnit(key) === "percentile");
   const sortedHidden = screen.sort && isMetricKey(screen.sort.key) && !metrics.includes(screen.sort.key) ? screen.sort.key : null;
+  const estimatesShown = metrics.includes("earnings") && matches.some((row) => row.earningsDateEstimated === true && (daysUntil(row.nextEarningsDate, now) ?? -1) >= 0);
+  /** Notes beside the column-set tabs: a sort by a column that is not on screen, and what "~" means in Earnings. */
+  const tableNotes = [sortedHidden ? tpl(t.screener.sortedBy, { metric: t.screener.metricNames[sortedHidden] }) : null, estimatesShown ? t.screener.estimatedNote : null]
+    .filter(Boolean)
+    .join(" · ");
 
   const setFilters = (filters: ScreenFilters) => onScreenChange({ ...screen, filters });
   /** Replaces the filters as a whole (a preset, a saved screen): bounds still being typed in the rail go too. */
@@ -393,7 +399,7 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
           ) : null}
 
           <div className="flex items-end justify-between gap-3 border-b border-line pl-1">
-            <div ref={columnTabsRef} className="no-scrollbar min-w-0 overflow-x-auto">
+            <div ref={columnTabsRef} className="no-scrollbar min-w-0 overflow-x-auto sm:shrink-0">
               <Tabs
                 label={t.screener.columnSets.label}
                 value={screen.columns}
@@ -402,8 +408,10 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
                 className="[&_[role=tab]]:max-sm:h-10"
               />
             </div>
-            {sortedHidden ? (
-              <span className="hidden shrink-0 pr-3 pb-2.5 text-micro text-fg-3 sm:inline">{tpl(t.screener.sortedBy, { metric: t.screener.metricNames[sortedHidden] })}</span>
+            {tableNotes ? (
+              <p className="hidden min-w-0 truncate pr-3 pb-2.5 text-micro text-fg-3 sm:block" title={tableNotes}>
+                {tableNotes}
+              </p>
             ) : null}
           </div>
 

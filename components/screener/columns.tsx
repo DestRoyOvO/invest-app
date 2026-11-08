@@ -125,7 +125,8 @@ function metricColumn(metric: MetricKey, context: ScreenColumnContext): DataTabl
   return {
     key: metric,
     header: context.t.screener.metrics[metric],
-    title: context.t.screener.metricNames[metric],
+    // Touch screens never show a title, so the column-set row also shows the ~ note while the column is on screen.
+    title: metric === "earnings" ? `${context.t.screener.metricNames.earnings}. ${context.t.screener.estimatedNote}` : context.t.screener.metricNames[metric],
     align: numeric ? "right" : "left",
     width: width === null ? undefined : metricUnit(metric) === "percentile" ? `min(${width}rem, var(--eqs-pct-max, ${width}rem))` : `${width}rem`,
     render: (row) => <MetricCell metric={metric} row={row} context={context} />,

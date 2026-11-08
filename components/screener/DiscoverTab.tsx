@@ -333,6 +333,7 @@ function AboutPanel({ cap }: { cap: DiscoverCap }) {
         <Info aria-hidden className="mt-0.5 size-3.5 shrink-0 text-fg-3" strokeWidth={1.75} />
         <div className="space-y-2">
           <p>{tpl(t.discover.sourceNote, { cap: capLabel(cap) })}</p>
+          <p>{t.discover.moversFloor}</p>
           <p className="text-fg-3">{t.discover.notAdvice}</p>
         </div>
       </div>

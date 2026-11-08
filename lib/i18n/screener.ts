@@ -192,9 +192,7 @@ export const screenerMessages = defineMessages(
       remove: "Remove {symbol} from watchlist",
     },
     actions: {
-      exportCsv: "Export CSV",
       exportHint: "Download the {n} results as CSV",
-      copyLink: "Copy link",
       copyHint: "Copy a link to this screen",
       copied: "Link to this screen copied",
       copyFailed: "Could not copy. The address bar holds the same link.",
@@ -425,9 +423,7 @@ export const screenerMessages = defineMessages(
       remove: "将 {symbol} 移出自选",
     },
     actions: {
-      exportCsv: "导出 CSV",
       exportHint: "将 {n} 个结果下载为 CSV",
-      copyLink: "复制链接",
       copyHint: "复制本筛选方案的链接",
       copied: "已复制本筛选方案的链接",
       copyFailed: "无法复制，地址栏中就是同样的链接。",

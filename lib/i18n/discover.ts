@@ -33,6 +33,7 @@ export const discoverMessages = defineMessages(
     source: "About these lists",
     sourceNote:
       "Lists come from Yahoo Finance predefined screens and Yahoo's trending symbols, so the definitions are Yahoo's, not ours. Shown: US-listed stocks priced at $2 or more with a market cap of at least {cap}. Quotes are delayed and the lists refresh about every 2 minutes.",
+    moversFloor: "Yahoo's gainers, losers and most active lists only include companies worth about $2B or more, so a lower floor adds no smaller names to them.",
     notAdvice: "A starting point for research, not a recommendation.",
     updated: "Updated {time} ET",
   },
@@ -67,6 +68,7 @@ export const discoverMessages = defineMessages(
     source: "关于这些清单",
     sourceNote:
       "清单来自雅虎财经的预设筛选和雅虎热门代码，定义是雅虎的，不是我们的。只显示在美国上市、股价不低于 2 美元且市值不低于 {cap} 的股票。报价有延迟，清单大约每 2 分钟刷新一次。",
+    moversFloor: "雅虎的涨幅榜、跌幅榜和成交活跃榜只收录市值约 20 亿美元以上的公司，所以更低的门槛不会给这些榜单增加更小的公司。",
     notAdvice: "仅作研究起点，不构成推荐。",
     updated: "更新于 {time}（纽约时间）",
   },
