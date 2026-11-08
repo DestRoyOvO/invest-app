@@ -94,12 +94,13 @@ export function Drawer({ open, onClose, title, children, footer, side = "right",
         aria-labelledby={titleId}
         className={cn("relative flex w-full flex-col border-line bg-panel shadow-2xl", PANEL[side], side !== "bottom" && widthClassName)}
       >
-        <header className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-line bg-panel-2 px-3">
+        {/* A div, not a <header>: inside role=dialog a header is a second banner landmark next to the top bar's. */}
+        <div className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-line bg-panel-2 px-3">
           <h2 id={titleId} className="panel-title truncate">
             {title}
           </h2>
           <IconButton label={t.common.close} icon={<X className="size-4" strokeWidth={1.75} />} onClick={onClose} size="sm" />
-        </header>
+        </div>
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
         {footer ? <div className="shrink-0 border-t border-line">{footer}</div> : null}
       </div>
