@@ -56,7 +56,9 @@ export function formatPercent(value: number | null | undefined, options: { digit
   const digits = options.digits ?? 2;
   const sign = options.sign ?? true;
   const fixed = Math.abs(value).toFixed(digits);
-  const prefix = sign ? (value > 0 ? "+" : value < 0 ? "-" : "") : value < 0 ? "-" : "";
+  // The sign of the number shown: a change that rounds to zero reads "0.00%", not "-0.00%".
+  const shown = Number(fixed) === 0 ? 0 : value;
+  const prefix = sign ? (shown > 0 ? "+" : shown < 0 ? "-" : "") : shown < 0 ? "-" : "";
   return `${prefix}${fixed}%`;
 }
 
