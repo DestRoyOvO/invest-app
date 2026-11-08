@@ -3,11 +3,12 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { useMemo, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode } from "react";
 
 import { useT } from "@/components/providers/PrefsProvider";
 import { cn } from "@/lib/cn";
 
+import { useScrollRegion } from "./scroll-region";
 import { EmptyState, SkeletonRows } from "./States";
 import { ariaSort, nextSort, sortRows, type SortDirection, type SortState, type SortValue } from "./table-sort";
 
@@ -72,6 +73,11 @@ interface DataTableProps<Row> {
   /** Width below sm, where icon buttons grow to 40px (default fits two). */
   actionsTouchWidth?: string;
   rowClassName?: (row: Row) => string | undefined;
+  /**
+   * Highlights the row under the pointer (default). Turn it off for rows that are not links and carry status colors
+   * that were measured on --panel, so the text always sits on the panel color.
+   */
+  rowHover?: boolean;
   /** Shows skeleton rows under the header while there are no rows yet. */
   loading?: boolean;
   loadingRows?: number;
@@ -81,7 +87,10 @@ interface DataTableProps<Row> {
   stickyHeader?: boolean;
   /** Scrolls the table inside this height (e.g. "min(70vh, 720px)"). */
   maxHeight?: string;
-  /** Scrolls horizontally below this width instead of squeezing columns. */
+  /**
+   * Scrolls horizontally below this width instead of squeezing columns. While the table overflows its box (either
+   * way), the box is a focusable region named by the caption, so the arrow keys scroll it.
+   */
   minWidth?: string;
   /** <tr> rows for a <tfoot>, e.g. totals. */
   footer?: ReactNode;
@@ -93,6 +102,7 @@ const INTERACTIVE = "a,button,input,select,textarea,label,[role='button'],[role=
 /**
  * Typed, sortable data table: fixed column widths from a colgroup, rows at --row-h (the density setting), sortable
  * headers with aria-sort and a stable sort, optional row links, hover-revealed row actions, loading and empty states.
+ * Its scroll box is positioned (relative) and becomes a focusable region named by the caption while it overflows.
  */
 export function DataTable<Row>({
   rows,
@@ -108,6 +118,7 @@ export function DataTable<Row>({
   actionsWidth = "4.5rem",
   actionsTouchWidth = "5.5rem",
   rowClassName,
+  rowHover = true,
   loading = false,
   loadingRows = 6,
   empty,
@@ -119,6 +130,8 @@ export function DataTable<Row>({
 }: DataTableProps<Row>) {
   const t = useT();
   const router = useRouter();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const region = useScrollRegion(scrollRef, caption);
   const [ownSort, setOwnSort] = useState<SortState | null>(defaultSort);
   const activeSort = sort !== undefined ? sort : ownSort;
 
@@ -170,7 +183,7 @@ export function DataTable<Row>({
         <tr
           key={rowKey(row)}
           onClick={href ? (event) => onRowClick(event, href) : undefined}
-          className={cn("group/row h-row border-b border-line/70 transition-colors last:border-b-0 hover:bg-hover", href && "cursor-pointer", rowClassName?.(row))}
+          className={cn("group/row h-row border-b border-line/70 transition-colors last:border-b-0", rowHover && "hover:bg-hover", href && "cursor-pointer", rowClassName?.(row))}
         >
           {columns.map((column, columnIndex) => {
             const content = column.render(row, index);
@@ -202,7 +215,20 @@ export function DataTable<Row>({
   }
 
   return (
-    <div className={cn(maxHeight ? "overflow-auto" : "overflow-x-auto", className)} style={maxHeight ? { maxHeight } : undefined}>
+    // relative: the scroll box is the containing block of the rows' absolutely positioned sr-only text, so rows scrolled
+    // out of a maxHeight box cannot stretch the page with blank space. The focus ring of the region sits inside the box,
+    // except under a sticky header: its cells (z-10) paint over the top of an inset ring, so the ring goes just outside.
+    <div
+      ref={scrollRef}
+      {...region}
+      className={cn(
+        "relative",
+        stickyHeader ? "focus-visible:outline-offset-0" : "focus-visible:outline-offset-[-2px]",
+        maxHeight ? "overflow-auto" : "overflow-x-auto",
+        className,
+      )}
+      style={maxHeight ? { maxHeight } : undefined}
+    >
       <table className="w-full table-fixed border-collapse text-data" style={minWidth ? { minWidth } : undefined}>
         <caption className="sr-only">{caption}</caption>
         <colgroup>

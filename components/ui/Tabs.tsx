@@ -4,6 +4,7 @@ import { useRef, type KeyboardEvent } from "react";
 
 import { cn } from "@/lib/cn";
 
+import { PHONE_TARGET } from "./Button";
 import { rovingIndex } from "./keys";
 
 interface TabsProps<T extends string> {
@@ -15,7 +16,10 @@ interface TabsProps<T extends string> {
   size?: "sm" | "md";
 }
 
-/** Compact terminal-style tabs (role=tablist) with arrow-key, Home and End navigation. Sans 500, 12px caps. */
+/**
+ * Compact terminal-style tabs (role=tablist) with arrow-key, Home and End navigation. Sans 500, 12px caps. 36px (sm)
+ * or 40px (md) tall on desktop, at least 40px below the sm breakpoint.
+ */
 export function Tabs<T extends string>({ value, onChange, options, label, className, size = "sm" }: TabsProps<T>) {
   const refs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -46,6 +50,7 @@ export function Tabs<T extends string>({ value, onChange, options, label, classN
             className={cn(
               "-mb-px border-b-2 text-xs font-medium tracking-[0.04em] whitespace-nowrap uppercase transition-colors",
               size === "sm" ? "h-9 px-2" : "h-10 px-3",
+              PHONE_TARGET,
               selected ? "border-accent text-fg" : "border-transparent text-fg-3 hover:text-fg-2",
             )}
           >

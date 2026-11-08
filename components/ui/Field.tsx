@@ -4,6 +4,8 @@ import { createContext, forwardRef, useContext, useId, type AriaAttributes, type
 
 import { cn } from "@/lib/cn";
 
+import { PHONE_TARGET } from "./Button";
+
 interface FieldContextValue {
   id: string;
   describedBy: string | undefined;
@@ -77,10 +79,13 @@ export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 
   size?: ControlSize;
 }
 
-/** Text input. Full width by default; inside a Field it is labelled and described automatically. */
+/**
+ * Text input. Full width by default; inside a Field it is labelled and described automatically. 28px (sm) or 32px (md)
+ * on desktop, at least 40px tall below the sm breakpoint.
+ */
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input({ size = "md", className, ...props }, ref) {
   const wiring = useFieldControl(props);
-  return <input ref={ref} {...props} {...wiring} className={cn(controlClass, "w-full min-w-0", INPUT_SIZES[size], className)} />;
+  return <input ref={ref} {...props} {...wiring} className={cn(controlClass, "w-full min-w-0", INPUT_SIZES[size], PHONE_TARGET, className)} />;
 });
 
 /** Multi-line text input with the same look; resizes vertically only. */

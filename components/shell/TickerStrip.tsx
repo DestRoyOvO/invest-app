@@ -67,7 +67,7 @@ export function TickerStrip() {
       <li className="flex h-full shrink-0 items-center gap-2 px-3 text-xs">
         <AlertTriangle aria-hidden className="size-3.5 shrink-0 text-warn" strokeWidth={1.75} />
         <span className="text-warn">{notice.text}</span>
-        <Button size="sm" className="ml-1 h-6" onClick={() => void mutate()}>
+        <Button size="sm" touchTarget={false} className="ml-1 h-6" onClick={() => void mutate()}>
           {t.common.retry}
         </Button>
       </li>

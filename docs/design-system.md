@@ -2,7 +2,7 @@
 
 Source of truth: `app/globals.css` (tokens and text roles), `components/ui/**` (primitives) and this file. If they
 disagree, the code wins and this file is the bug. `npx tsx scripts/check-contrast.ts` prints the measured contrast of
-every token pair; `lib/design-tokens.test.ts` fails when a pair drops below its minimum.
+every token pair; `lib/design-tokens.test.ts` fails when a pair drops below its minimum or is listed twice.
 
 ## 中文摘要
 
@@ -16,14 +16,20 @@ every token pair; `lib/design-tokens.test.ts` fails when a pair drops below its 
   `.label` 只留给键盘提示和代码。
 - **布局**：页面用"列式"网格：`grid gap-px bg-line p-px xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]`，里面两个
   `flex flex-col gap-px` 的列，面板按内容自然高度排列，不再整行拉伸留白。
-- **组件**：Panel（可带琥珀色功能代码）、DataTable（排序、aria-sort、行链接、悬停操作、加载/空状态）、Segmented、Select、
-  Switch、Field/Input、Checkbox、Badge/AiChip、Sparkline（中性线条 + 按当日涨跌着色的端点）、Delta 与热力图分档
-  （heatStep/heatStyle）、TickNumber（只闪变化的那个数字）、Whisker（置信区间须线）、Meter、StatTile、HoverCard/Tooltip、
-  Toast（可撤销）、Drawer（右侧或底部）、EmptyState（左对齐 + 快捷代码按钮）、Wordmark。
+- **组件**：Panel（可带琥珀色功能代码）、DataTable（排序、aria-sort、行链接、悬停操作、加载/空状态，可关闭行悬停高亮）、
+  Segmented、Select、Switch、Field/Input、Checkbox、Badge/AiChip、Sparkline（中性线条 + 按当日涨跌着色的端点）、Delta 与
+  热力图分档（heatStep/heatStyle）、TickNumber（只闪变化的那个数字）、Whisker（置信区间须线，`neutral` 时整体变灰）、
+  Meter（当前标记带 1px 面板色描边）、StatTile、HoverCard/Tooltip、Toast（可撤销）、Drawer（右侧或底部）、EmptyState
+  （左对齐 + 快捷代码按钮）、Wordmark。
 - **无障碍**：文字对比度 ≥ 4.5:1、图形 ≥ 3:1（两套主题、三种配色全部实测通过，含悬停状态）；`--fg-3` 只用在面板上，
-  直接放在画布上的文字用 `--fg-2`；桌面点击区 ≥ 24px、手机 ≥ 40px（可排序表头整格可点）；紧凑密度下行内小图标按钮为
-  24px，带操作的行也保持约 24px；可排序表头带 aria-sort；Esc 只关闭最内层（先关悬停卡片，再关抽屉）；提示条在悬停或
-  键盘焦点时暂停，键盘关闭后焦点移到下一条或回到原处；实时更新用礼貌型 live region；尊重"减少动态效果"。
+  直接放在画布上的文字用 `--fg-2`；桌面点击区 ≥ 24px、手机 ≥ 40px：Button、IconButton、Segmented、Select、Tabs、Input
+  在手机上自带 40px 高度，页面无需再加覆盖（可排序表头整格可点）；面板标题栏最少 36px，在手机上随 40px 控件长高；
+  紧凑密度下行内小图标按钮为 24px，带操作的行也保持约 24px；可排序表头带 aria-sort；表格横向或纵向放不下时，滚动框
+  成为以表格标题命名、可用 Tab 聚焦的区域，方向键即可滚动，所以表格标题不要与面板标题相同；Esc 只关闭最内层（先关
+  悬停卡片，再关抽屉）；提示条在悬停或键盘焦点时暂停，键盘关闭后焦点移到下一条或回到原处；实时更新用礼貌型 live
+  region；尊重"减少动态效果"。
+- **缺失值**：一律显示 `lib/format.ts` 的 `DASH`（U+2014），格式化函数遇到 null 也返回它；不用 U+2013、连字符或
+  "N/A"。它只是数据占位符，文案里仍然不用破折号。
 - **非价格的正负读数**（相关系数、z 分数、因子倾向）：只按绝对值深浅着色，用一种中性色阶并标出带符号的数字，不用红绿或
   热力图分档。
 
@@ -43,12 +49,13 @@ Three attributes on `<html>` switch everything at runtime, without a reload:
 
 | Attribute | Values | Effect |
 | --- | --- | --- |
-| `data-theme` | `dark` (default), `light`, `system` | Surfaces, text, accent and every ramp. `system` follows `prefers-color-scheme` in pure CSS. |
+| `data-theme` | `dark`, `light`, `system` | Surfaces, text, accent and every ramp. `system` follows `prefers-color-scheme` in pure CSS. The `:root` values are dark. |
 | `data-updown` | `intl` (green up), `cn` (red up), `cb` (blue up, orange down) | `--up`, `--down`, the heatmap steps, and `--series-1` in `cb`. |
-| `data-density` | comfortable (default, no attribute), `compact` | `--row-h` 32px to 24px, `--text-data` 13px to 12px, small icon buttons 28px to 24px (from `sm` up). |
+| `data-density` | `comfortable`, `compact` | `--row-h` 32px to 24px, `--text-data` 13px to 12px, small icon buttons 28px to 24px (from `sm` up). |
 
-`lib/prefs.ts` currently stores `dark | light` and `intl | cn`; the shell work package adds `system`, `cb` and the
-density setting to the settings menu. The tokens already support them.
+`lib/prefs.ts` keeps all three in cookies, so the server renders the attributes on the first paint (no flash), and the
+settings menu (`components/shell/SettingsMenu.tsx`) switches them at runtime. Without cookies a visitor gets the
+`system` theme, the price colors of their language (`cn` in Chinese, `intl` otherwise) and the `comfortable` density.
 
 To add a token: declare the dark value on `:root` and the light value inside the `@variant theme-light` block right below
 it, then expose it to Tailwind in `@theme inline` if components need a utility. The variant writes the light value once
@@ -83,10 +90,10 @@ All colors are CSS variables with a Tailwind utility of the same name (`bg-panel
 The light `--fg-3` is `#646d7b` rather than the audit's `#687180`: the latter measured 4.35:1 on the hover row. It is
 4.6:1 on `--hover`, 4.9:1 on `--panel-2` and still 1.95:1 apart from `--fg-2`, so the two stay distinct.
 
-### Accent and status
-
 `--fg-3` is for text on panels. It is only 4.25:1 on the light `--canvas`, so text placed straight on the canvas (the
 404 page, anything outside a panel) uses `--fg-2` (8.3:1) or `--fg`.
+
+### Accent and status
 
 | Token | Dark | Light | Role |
 | --- | --- | --- | --- |
@@ -97,10 +104,10 @@ The light `--fg-3` is `#646d7b` rather than the audit's `#687180`: the latter me
 | `--warn` | `#e3b341` | `#8a5f00` | Stale data, caveats such as "No reliable edge" |
 | `--danger` | red | red | Errors. Stays red in every price convention |
 
-### Price direction
-
 The light accent is dark enough for accent text on every surface it meets: 5.0:1 on a hovered row (ticker links turn
 accent there), 4.8:1 for an accent badge in a panel header and 4.6:1 for one on a hovered row.
+
+### Price direction
 
 | Token | intl | cn | cb dark / light |
 | --- | --- | --- | --- |
@@ -164,16 +171,21 @@ uses both, so tables follow the setting with no extra code. Use `h-row` for any 
 | `.mono` | Plex Mono, tabular | Tickers, function codes, the command line, the OHLC legend, currency codes |
 | `.panel-title` | Plex Sans 600, 12px caps, 0.04em, `--fg` | Panel and drawer titles (Panel and Drawer apply it) |
 | `.col-head` | Plex Sans 500, 11px caps, 0.04em, `--fg-3` | Table column heads, stat and KPI labels. 12px without tracking in Chinese |
-Row actions must fit the row too: `IconButton size="sm"` is 28px, and 24px from `sm` up in the compact density, so a
-compact row with actions measures 24.5 to 25px (the button plus half of each collapsed hairline) instead of 29px.
-Keep larger controls out of table rows. For other density-specific styles use the `compact:` variant, for example
-`sm:compact:size-6`; keep phone touch targets at 40px.
-
 | `.label` | Plex Mono 12px caps, `--fg-3` | Keyboard hints and codes only (G W, SPX). Not for titles or headers |
 
 Plex Sans figures are fixed width, so columns still align, and they set 11 to 14% narrower than Plex Mono. Tickers stay
 mono as visual anchors. Display negatives with the true minus (U+2212): `Delta` does it, and `withTrueMinus(text)` does it
 for text you format yourself.
+
+**Missing values.** A value that is missing (null, not a number, not loaded or not reported) shows `DASH` from
+`lib/format.ts`: U+2014, the em dash. The formatters in `lib/format.ts` already return it for null, and `TickNumber`
+falls back to it, so import `DASH` rather than typing the character. A missing value is never U+2013 (en dash), a
+hyphen, "N/A" or an empty cell. The em dash is a data placeholder only: copy never uses dashes (CONTRIBUTING).
+
+Row actions must fit the row too: `IconButton size="sm"` is 28px, and 24px from `sm` up in the compact density, so a
+compact row with actions measures 24.5 to 25px (the button plus half of each collapsed hairline) instead of 29px.
+Keep larger controls out of table rows. For other density-specific styles use the `compact:` variant, for example
+`sm:compact:size-6`; keep phone touch targets at 40px.
 
 ## Color rules
 
@@ -205,7 +217,7 @@ tallest one in its row.
   </div>
   <div className="flex min-w-0 flex-col gap-px">
     <KeyStats stats={stats} quote={quote} />
-    <Panel title={t.stock.news} code="CN">...</Panel>
+    <Panel title={t.stock.news} code="NEWS">...</Panel>
   </div>
 </div>
 ```
@@ -219,27 +231,46 @@ tallest one in its row.
 ## Panel codes
 
 `<Panel code="GP">` shows a Bloomberg-style function code as a small amber mono chip before the title. Codes are 2 to 4
-capital letters, decorative for screen readers, and match what the command bar accepts (the shell package's function
-registry is the source of truth once it exists). Suggested codes:
+capital letters and decorative for screen readers. The function registry in `lib/functions.ts` is the source of truth:
+a panel shows the code of the function that covers its subject, which the command bar accepts (the overview's My day
+panel shows PORT, the watchlist page's Upcoming panel EVTS). These are the codes in use:
 
 | Panel | Code | Panel | Code |
 | --- | --- | --- | --- |
-| Markets board | WEI | Price chart | GP |
-| Sector heatmap | HMAP | Key statistics | FA |
+| Markets board (overview, world markets) | WEI | Price chart | GP |
+| Rates and curve | GC | Key statistics, financials | FA |
 | Sector performance | SECT | Company profile | DES |
-| Movers, market-wide discover | MOV, MOST | Model signal | SIG |
-| Headlines, company news | NEWS, CN | Risk forecast | RISK |
-| Watchlist | WL | Factor profile | FCTR |
-| Positions, portfolio | PORT | Earnings | ERN |
-| Correlation | CORR | Analysts | ANR |
-| Events calendar, week ahead | EVTS | Notes | NOTE |
-| Screener | EQS | Alerts | ALRT |
-| Rates and curve | GC | AI note, scan or brief | AI |
+| Screener | EQS | Earnings | ERN |
+| Market-wide discover | MOST | Analysts | ANR |
+| Watchlist | WL | Dividends | DVD |
+| Positions, my day, portfolio analytics | PORT | Ownership | HDS |
+| Correlation | CORR | Risk forecast | RISK |
+| Events calendar, week ahead, upcoming | EVTS | Factor lab | LAB |
+| Alerts | ALRT | Your data | DATA |
+| Notes | NOTE | Help | HELP |
+
+Panels whose subject has no function carry a label-only code, which the command bar does not accept:
+
+| Panel | Code | Panel | Code |
+| --- | --- | --- | --- |
+| Sector heatmap | HMAP | Model signal | SIG |
+| Movers | MOV | Factor profile | FCT |
+| Headlines, company and sector news | NEWS | Sector constituents | MEMB |
+| Breadth | BRTH | Sector ETF returns | ETF |
+| Currencies, commodities, crypto | FX, CMDT, CRYP | AI note, scan or brief | AI |
+
+A new panel reuses the code of the function that covers its subject; a new label-only code must not collide with a
+registry code or alias.
 
 ## Primitives
 
-All live in `components/ui`. Each has a doc comment; the snippets show the common case. Message keys in the snippets
-that do not exist yet (for example `t.common.undo`) are placeholders for the strings each feature package adds.
+All live in `components/ui`. Each has a doc comment; the snippets show the common case. Some message keys in the
+snippets (for example `t.common.undo`) are placeholders: use the feature's own key.
+
+**Phone sizes.** The controls bring their own 40px phone target: below `sm`, Button (both sizes), Segmented, Select,
+Tabs and Input take a 40px minimum height (`PHONE_TARGET` in `Button.tsx`) and IconButton is 40px square; from `sm` up
+they keep their desktop sizes. Pages need no `max-sm:h-10` overrides on them; older local overrides are harmless no-ops.
+A Panel header grows to fit them.
 
 ### Panel, PanelMeta, PanelCode
 
@@ -250,7 +281,8 @@ that do not exist yet (for example `t.common.undo`) are placeholders for the str
 <Panel title={t.watchlist.title} code="WL" actions={<PanelMeta>{tpl(t.watchlist.count, { n })}</PanelMeta>}>...</Panel>
 ```
 
-The header is 36px on `--panel-2` with a hairline under it. `title` may be omitted for headless panels.
+The header is 36px on `--panel-2` with a hairline under it. The 36px is a minimum: on phones a header that holds a 40px
+control grows to fit it instead of letting the control cover the hairline. `title` may be omitted for headless panels.
 
 ### Button, IconButton
 
@@ -261,8 +293,10 @@ The header is 36px on `--panel-2` with a hairline under it. `title` may be omitt
 ```
 
 One primary button per view. A disabled primary turns gray (`--fg-3` on `--panel-2`), never half-transparent amber.
-IconButton is 28 or 32px on desktop and 40px below `sm`; `size="sm"` drops to 24px from `sm` up in the compact
-density. `active` marks an open menu or a pressed toggle.
+Button is 28px (`sm`) or 32px (`md`) on desktop and at least 40px tall below `sm`; `touchTarget={false}` keeps the
+desktop height on phones and is only for a container that cannot fit 40px (the 32px ticker strip). IconButton is 28
+or 32px on desktop and 40px below `sm`; `size="sm"` drops to 24px from `sm` up in the compact density. `active` marks
+an open menu or a pressed toggle.
 
 ### Badge, Kbd, AiChip
 
@@ -283,8 +317,9 @@ drops the word ("[AI] ready", not "[AI] AI ready"); the accessible name then sti
 <Segmented label={t.settings.colors} value={updown} onChange={setUpdown} options={[...]} size="sm" />
 ```
 
-Tabs switch views inside a panel header. Segmented picks one of two to four settings (radiogroup, one tab stop,
-arrows, Home and End). Use `hideLabel` inside headers.
+Tabs switch views inside a panel (in a hairline bar under its header) or a page; they are 36px (`sm`) or 40px (`md`)
+tall. Segmented picks one of two to four settings (radiogroup, one tab stop, arrows, Home and End); segments are 28px
+(`sm`) or 32px (`md`). Use `hideLabel` inside headers. Both are at least 40px tall below `sm`.
 
 ### Field, Input, Textarea, Select, Checkbox, Switch
 
@@ -301,7 +336,8 @@ arrows, Home and End). Use `hideLabel` inside headers.
 
 Field wires the label, `aria-describedby` (hint and error) and `aria-invalid` into its control. Controls use
 `--input-bg` and `--input-border`; focus adds an accent border and ring; an invalid control has a red border and the
-error text below. Switch applies at once; Checkbox is for forms that submit.
+error text below. Input and Select are 28px (`sm`) or 32px (`md`) on desktop and at least 40px tall below `sm`. Switch
+applies at once; Checkbox is for forms that submit.
 
 ### Delta, heatStep, heatStyle, HeatLegend
 
@@ -342,8 +378,9 @@ values, off with reduced motion. Use it for last price, change and P&L cells.
 ```
 
 72x12 interval glyph: track, 1px base-rate tick, 1px interval line and an estimate dot (radius 3). The dot turns accent
-only when the interval excludes the base rate. `label` (the exact numbers in words) is required. Narrow `min`/`max` so the interval is
-visible.
+only when the interval excludes the base rate. `label` (the exact numbers in words) is required. Narrow `min`/`max` so
+the interval is visible. `neutral` greys the whole glyph (interval and dot in `--fg-3`, never accent) for a row the color
+rules grey out, such as a reading concentrated in too few episodes: pass it wherever the row text turns `--fg-3`.
 
 ### Meter and StatTile
 
@@ -354,8 +391,10 @@ visible.
 </div>
 ```
 
-Meter is a neutral 0 to 100 bar with a midline and an optional accent marker (role="meter"). StatTile is one KPI:
-column-head label, 20px figure (30px with `size="lg"`), optional delta and sub-line.
+Meter is a neutral 0 to 100 bar with a midline and an optional accent marker (role="meter"). The marker has a 1px
+`--panel` halo (`shadow-[0_0_0_1px_var(--panel)]`, as on the risk band), so it stays visible where it sits on the
+`--fg-3` fill: accent on `--fg-3` is about 1.1:1 in the light theme. StatTile is one KPI: column-head label, 20px
+figure (30px with `size="lg"`), optional delta and sub-line.
 
 ### DataTable
 
@@ -388,9 +427,21 @@ const columns: DataTableColumn<Quote>[] = [
   `sm`), so even a narrow "P/E" head is an easy target.
 - `rowHref` makes the row clickable (Ctrl or Cmd opens a new tab) and renders the first cell as a real link.
 - `rowActions` are revealed on hover and keyboard focus and always shown on touch screens. The column is
-  `actionsWidth` wide (4.5rem) and `actionsTouchWidth` (5.5rem) below `sm`, where icon buttons grow to 40px.
+  `actionsWidth` wide (4.5rem) and `actionsTouchWidth` (5.5rem) below `sm`, where icon buttons grow to 40px. Its head
+  is an empty `aria-hidden` cell: each action names its row ("Remove AAPL").
+- Rows highlight on hover. `rowHover={false}` turns that off for rows that are not links and carry status colors
+  measured on `--panel` (the data import review); `rowClassName` still adds classes per row.
 - `stickyHeader` with `maxHeight` keeps the header visible while the body scrolls; `minWidth` scrolls horizontally on
   phones instead of squeezing.
+- The scroll box is positioned (`relative`), so the rows' absolutely positioned sr-only text stays inside it: rows
+  scrolled out of a `maxHeight` box no longer stretch the page with blank space. While the table overflows the box
+  (wider than `minWidth` allows, or taller than `maxHeight`), the box is a focusable region named by the caption
+  (`role="region"`, `tabIndex={0}`), so keyboard users can scroll it with the arrow keys; when everything fits it adds
+  no tab stop. Its focus ring sits inside the box, or just outside it with `stickyHeader`, whose cells would cover the
+  top of an inset ring. A caller that scrolls the table in its own wrapper turns the box off with
+  `className="overflow-x-visible!"`, and the box then never becomes a region. The caption names that region, so it
+  must not repeat the panel title word for word where the table can overflow: the alerts page captions its tables
+  "Alert rules" and "Alert history" inside the Rules and History panels.
 
 ### HoverCard and Tooltip
 
@@ -428,7 +479,9 @@ tested).
 ```
 
 `side="right"` (default) is a side panel, `"bottom"` a sheet, `"auto"` a sheet on phones and a side panel from `sm`.
-Focus moves in, Tab is trapped, Escape closes and focus returns. Mark the first field with `data-autofocus`.
+Focus moves in, Tab is trapped, Escape closes and focus returns. Mark the first field with `data-autofocus`. The title
+bar is a `div` with the `h2` that labels the dialog, not a `<header>`: inside `role="dialog"` a header would be a
+second banner landmark next to the top bar's.
 
 ### States
 
@@ -442,10 +495,12 @@ Focus moves in, Tab is trapped, Escape closes and focus returns. Mark the first 
 <StaleBanner show={Boolean(error && data)} since={data?.asOf} />
 ```
 
+ErrorState's Retry is a small Button: 28px on desktop, 40px on phones.
+
 ### Wordmark and BrandMark
 
-`<Wordmark />` is the mark plus "InvestSeek" (Plex Sans 600, 15px, "Seek" in `--fg-2`); the name hides below `sm`.
-`<BrandMark className="size-5 text-accent" />` is the glyph alone.
+`<Wordmark />` is the mark plus "InvestSeek" (Plex Sans 600, 15px, "Seek" in `--fg-2`); the name hides below `sm`
+unless `alwaysShowName` is set (the unlock page). `<BrandMark className="size-5 text-accent" />` is the glyph alone.
 
 ## Loading, empty and error patterns
 
@@ -462,24 +517,29 @@ Focus moves in, Tab is trapped, Escape closes and focus returns. Mark the first 
 ## Accessibility
 
 - **Contrast**: text 4.5:1, large text and non-text marks (input borders, focus rings, chart lines, meter fills) 3:1.
-  All 49 promised pairs pass in both themes and all three conventions (`scripts/check-contrast.ts`, 294 checks),
-  hover states included. A pair a component starts to use goes into `CONTRAST_PAIRS` in `lib/design-tokens.ts`.
+  All 55 promised pairs pass in both themes and all three conventions (`scripts/check-contrast.ts`, 330 checks),
+  hover states included. A pair a component starts to use goes into `CONTRAST_PAIRS` in `lib/design-tokens.ts`, once:
+  the script and the token test fail on a pair listed twice, so a new role for an existing pair joins its entry.
   Selected results:
 
   | Pair | Dark | Light |
   | --- | --- | --- |
   | `--fg-3` on panel / panel-2 / hover | 5.34 / 5.10 / 4.82 | 5.23 / 4.87 / 4.61 |
+  | `--fg-2` on the bare canvas | 9.36 | 8.28 |
   | `--up` on hover (intl / cn / cb) | 7.27 / 5.00 / 6.49 | 4.60 / 5.07 / 5.36 |
   | `--accent` on panel-2 / hover (code chips, hovered links) | 8.79 / 8.31 | 5.30 / 5.02 |
   | `--accent` on accent-soft over panel-2 / hover (badges) | 7.03 / 6.56 | 4.82 / 4.57 |
-  | Heatmap text, weakest step | 4.88 | 6.23 |
+  | `--accent` on line-2 (the current marker on a track) | 6.29 | 3.55 |
+  | Heatmap tile text, weakest tile | 4.88 | 5.21 |
   | `--input-border` on panel / panel-2 | 3.50 / 3.34 | 3.66 / 3.41 |
 
 - **Focus**: every interactive element shows the 2px accent outline (`:focus-visible`), or an accent border and ring on
   fields. Never remove it without a replacement.
-- **Targets**: at least 24px on desktop and 40px below `sm` (IconButton, toast actions, empty-state chips and DataTable
-  sort heads do this; compact icon buttons stop at 24px).
-- **Tables**: a caption (visually hidden), `scope="col"` heads, `aria-sort` on the sorted head, one link per row.
+- **Targets**: at least 24px on desktop and 40px below `sm`. Button, IconButton, Segmented, Select, Tabs, Input, toast
+  actions, empty-state chips and DataTable sort heads do this by themselves; compact icon buttons stop at 24px.
+- **Tables**: a caption (visually hidden), `scope="col"` heads, `aria-sort` on the sorted head, one link per row. A
+  table that overflows its scroll box makes the box a focusable region named by the caption (DataTable does this).
+- **Escape**: closes the innermost layer only (a hover card before the drawer it sits in).
 - **Live regions**: toasts and the stale banner are polite; errors use `role="alert"`. Ticking prices are not announced.
 - **Motion**: flashes and pulses are off with `prefers-reduced-motion`.
 - **Language**: CJK column heads are 12px; never letter-space Chinese prose; keep the CJK fallbacks in `--font-sans`.
@@ -487,7 +547,6 @@ Focus moves in, Tab is trapped, Escape closes and focus returns. Mark the first 
 
 ## Brand
 
-  | `--fg-2` on the bare canvas | 9.36 | 8.28 |
 - The mark ("prompt-candle") is a command-line chevron followed by a candlestick, defined once in
   `components/ui/brand.ts`. `app/icon.svg` is generated from it (a test fails if they drift): regenerate with
   `markSvg({ size: 32, background: BRAND_COLORS.background, radius: 6, padding: 3 })`.
@@ -500,8 +559,9 @@ Focus moves in, Tab is trapped, Escape closes and focus returns. Mark the first 
 
 1. Replace `.label` on headings and table heads with `.panel-title` (through Panel) or `.col-head`.
 2. Put tickers in `.mono`; leave numbers in `.num`.
-- **Escape**: closes the innermost layer only (a hover card before the drawer it sits in).
 3. Move tables to DataTable with colgroup widths; drop `table-fixed` equal columns.
 4. Replace red/green on readings with neutral Meter or text; keep Delta for prices and P&L.
 5. Rebuild the grid as two column stacks; remove `row-span` and stretched panels.
 6. Add a panel `code`, a StaleBanner with `since`, a left-aligned EmptyState and TickNumber on live values.
+7. Drop `max-sm:h-10` overrides on Button, Segmented, Select, Tabs and Input (they are 40px on phones by themselves),
+   and show missing values with `DASH`.

@@ -4,6 +4,7 @@ import { useId, useRef, type KeyboardEvent } from "react";
 
 import { cn } from "@/lib/cn";
 
+import { PHONE_TARGET } from "./Button";
 import { rovingIndex } from "./keys";
 
 export interface SegmentedOption<T extends string> {
@@ -25,7 +26,8 @@ interface SegmentedProps<T extends string> {
 
 /**
  * A single choice among two to four short options (radiogroup). One tab stop: arrows, Home and End move the choice.
- * Equal-width segments on a hairline grid; the chosen one gets an opaque panel and an accent underline.
+ * Equal-width segments on a hairline grid; the chosen one gets an opaque panel and an accent underline. Segments are
+ * 28px (sm) or 32px (md) on desktop and at least 40px tall below the sm breakpoint.
  */
 export function Segmented<T extends string>({ label, hideLabel = false, value, options, onChange, size = "md", className }: SegmentedProps<T>) {
   const id = useId();
@@ -71,6 +73,7 @@ export function Segmented<T extends string>({ label, hideLabel = false, value, o
               className={cn(
                 "truncate px-2 text-xs transition-colors",
                 size === "sm" ? "h-7" : "h-8",
+                PHONE_TARGET,
                 // Opaque background: a translucent accent over the hairline color fails contrast in the light theme.
                 checked ? "bg-panel-2 font-medium text-fg shadow-[inset_0_-2px_0_var(--accent)]" : "bg-panel text-fg-2 hover:bg-hover hover:text-fg",
               )}

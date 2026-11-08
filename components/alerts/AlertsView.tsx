@@ -266,7 +266,7 @@ function RulesPanel() {
         rows={hydrated ? rows : []}
         columns={columns}
         rowKey={(row) => row.rule.id}
-        caption={words.rules}
+        caption={words.rulesCaption}
         rowActions={actions}
         actionsWidth="6.5rem"
         actionsTouchWidth="8rem"
@@ -368,7 +368,7 @@ function HistoryPanel() {
         rows={hydrated ? log : []}
         columns={columns}
         rowKey={(event) => event.id}
-        caption={words.history}
+        caption={words.historyCaption}
         loading={!hydrated}
         loadingRows={3}
         empty={words.historyEmpty}

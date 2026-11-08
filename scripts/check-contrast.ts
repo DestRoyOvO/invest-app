@@ -1,7 +1,7 @@
 // WCAG contrast report for the design tokens in app/globals.css: every pair in lib/design-tokens.ts, in both themes and
 // all three price conventions, plus the OKLab distance between neighbouring heatmap steps.
 //
-//   npx tsx scripts/check-contrast.ts            (exits 1 when a pair is below its minimum)
+//   npx tsx scripts/check-contrast.ts            (exits 1 when a pair is below its minimum or listed twice)
 //   npx tsx scripts/check-contrast.ts --markdown (the same report as a Markdown table)
 
 import { readFileSync } from "node:fs";
@@ -12,8 +12,10 @@ import {
   CONVENTIONS,
   THEMES,
   checkContrast,
+  duplicatePairs,
   extractTokenSources,
   oklabDistance,
+  pairName,
   parseColor,
   resolveTokens,
   type ContrastResult,
@@ -31,10 +33,7 @@ for (const { theme, convention } of scenarios) {
 
 const columns = scenarios.map(({ theme, convention }) => `${theme}/${convention}`);
 const cell = (r: ContrastResult) => `${r.ratio.toFixed(2)}${r.pass ? "" : " FAIL"}`;
-const rows = CONTRAST_PAIRS.map((pair, i) => {
-  const name = `${pair.fg} on ${pair.over ? `${pair.bg} over ${pair.over}` : pair.bg}`;
-  return [name, pair.role, `${pair.min}`, ...columns.map((key) => cell(results.get(key)![i]))];
-});
+const rows = CONTRAST_PAIRS.map((pair, i) => [pairName(pair), pair.role, `${pair.min}`, ...columns.map((key) => cell(results.get(key)![i]))]);
 const header = ["Pair", "Role", "Min", ...columns];
 
 if (markdown) {
@@ -63,6 +62,10 @@ for (const theme of THEMES) {
 }
 
 const failures = [...results.values()].flat().filter((r) => !r.pass);
-console.log(`\n${failures.length === 0 ? "All" : `${CONTRAST_PAIRS.length * scenarios.length - failures.length} of`} ${CONTRAST_PAIRS.length * scenarios.length} checks pass.`);
-for (const f of failures) console.log(`  FAIL ${f.theme}/${f.convention}: ${f.fg} on ${f.bg} ${f.ratio.toFixed(2)} < ${f.min} (${f.role})`);
-process.exit(failures.length === 0 ? 0 : 1);
+const duplicates = duplicatePairs();
+console.log(
+  `\n${failures.length === 0 ? "All" : `${CONTRAST_PAIRS.length * scenarios.length - failures.length} of`} ${CONTRAST_PAIRS.length * scenarios.length} checks pass (${CONTRAST_PAIRS.length} pairs x ${scenarios.length} scenarios).`,
+);
+for (const f of failures) console.log(`  FAIL ${f.theme}/${f.convention}: ${pairName(f)} ${f.ratio.toFixed(2)} < ${f.min} (${f.role})`);
+for (const name of duplicates) console.log(`  DUPLICATE ${name}: listed more than once; merge the roles into one entry`);
+process.exit(failures.length === 0 && duplicates.length === 0 ? 0 : 1);
