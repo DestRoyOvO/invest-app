@@ -226,7 +226,8 @@ fund and a stock outside the heatmap universe, and a thesis note) and checks:
 - no console error and no uncaught page error (the suite's collector), and no same-origin response with a status of
   400 or more;
 - the page's main panel with its data: one web-first assertion on a region named by its panel title and something in it
-  that only data can fill (a price, a table row, a chart summary);
+  that only data can fill (a price, a chart summary, a data row of a table: the loading skeleton and the empty state of
+  a table are one full-width cell, which does not count; discover also needs a non-zero count in the table's caption);
 - once the page has settled, no error state on screen: no visible `role="alert"` (ErrorState, the error boundary, a
   failed AI note; Next.js's empty route announcer aside) and no stale-data banner;
 - the API routes the case names answered 200: every panel route of the AAPL quote page and its tabs (`chart`, `signal`,

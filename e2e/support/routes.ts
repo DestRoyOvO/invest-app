@@ -89,10 +89,18 @@ async function quoteReady(page: Page, symbol: string): Promise<void> {
   await expect(region(page, "Price").getByText(new RegExp(`^${escapeRegExp(symbol)} \\S+: low [\\d,.]+, high [\\d,.]+, last [\\d,.]+ on `))).toBeAttached();
 }
 
-/** The first data row of a table inside a panel (row 0 is the header). */
+/**
+ * The first data row of a table inside a panel: a row of cells (the header row has column headers), and not the one
+ * full-width cell (td colspan) that DataTable shows while it loads (the skeleton) or when it has no rows (the empty
+ * state). Data rows never span columns.
+ */
 async function firstRow(page: Page, panel: string, table?: string | RegExp): Promise<void> {
   const scope = table === undefined ? region(page, panel) : region(page, panel).getByRole("table", { name: table });
-  await expect(scope.getByRole("row").nth(1)).toBeVisible();
+  const dataRows = scope
+    .getByRole("row")
+    .filter({ has: page.getByRole("cell") })
+    .filter({ hasNot: page.locator("td[colspan]") });
+  await expect(dataRows.first()).toBeVisible();
 }
 
 const overviewReady = async (page: Page) => {
@@ -128,7 +136,8 @@ export const ROUTES: readonly RouteCase[] = [
     },
     apis: ["/api/screener"],
   },
-  { path: "/screener?tab=discover", ready: (page) => firstRow(page, "Market movers", /^Gainers/), apis: ["/api/discover"] },
+  // The caption counts the rows: "Gainers: 0 stocks" while the list loads.
+  { path: "/screener?tab=discover", ready: (page) => firstRow(page, "Market movers", /^Gainers: [1-9]\d* stocks?$/), apis: ["/api/discover"] },
 
   // Portfolio
   {
