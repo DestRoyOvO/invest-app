@@ -1,5 +1,4 @@
 import { ALERT_LOG_STORAGE_KEY, ALERTS_STORAGE_KEY, createRule, type AlertEvent, type AlertKind, type AlertRule } from "@/lib/alerts";
-import type { Quote } from "@/types/api";
 
 import {
   dailyBars,
@@ -76,12 +75,12 @@ function bell(page: Page) {
 }
 
 /** Creates a rule through the editor opened from the rules panel, after checking what the editor says about it. */
-async function createInEditor(page: Page, symbol: string, quote: Quote, plan: Planned): Promise<void> {
+async function createInEditor(page: Page, symbol: string, last: number, plan: Planned): Promise<void> {
   await panel(page, "Rules").getByRole("button", { name: "New alert" }).click();
   const editor = page.getByRole("dialog", { name: "New alert" });
   await editor.getByRole("combobox", { name: "Symbol" }).fill(symbol);
   // The quote of the symbol, once typing pauses.
-  await expect(editor.getByText(`Last ${price(quote.price ?? 0)}`, { exact: true })).toBeVisible();
+  await expect(editor.getByText(`Last ${price(last)}`, { exact: true })).toBeVisible();
   await editor.getByRole("combobox", { name: "Condition" }).selectOption({ label: KIND_LABEL[plan.kind] });
   if (plan.kind !== "cross_ma200") await editor.getByRole("textbox", { name: VALUE_LABEL[plan.kind] }).fill(String(plan.value));
   await expect(editor.getByText(plan.context, { exact: true })).toBeVisible();
@@ -96,6 +95,8 @@ async function createInEditor(page: Page, symbol: string, quote: Quote, plan: Pl
 test.describe("rules of every kind", () => {
   test("the editor creates each kind; the rules the quotes meet trigger, the others keep watching", async ({ page, app, request, context }) => {
     test.skip(app.isPhone, "One project is enough for the rule logic; the drawer and the bell are the same on phones.");
+    // Six round trips through the editor: on a busy machine this takes longer than the suite's 60 seconds.
+    test.slow();
     await watchNotificationRequests(context);
     await app.seedStorage(SAMPLE_DATA);
     const now = await serverNow(request);
@@ -155,7 +156,7 @@ test.describe("rules of every kind", () => {
     await app.goto("/alerts");
     await expect(bell(page)).toHaveAccessibleName("Alerts");
     for (const [index, plan] of plans.entries()) {
-      await createInEditor(page, "AAPL", quote, plan);
+      await createInEditor(page, "AAPL", last, plan);
       // The permission is asked for once, from the click that saves the first rule; never again.
       expect((await notificationState(page)).requests).toBe(1);
       await expect(dataRows(rulesTable(page))).toHaveCount(index + 1);
@@ -269,6 +270,42 @@ test.describe("managing rules", () => {
     // Resuming starts a fresh watch.
     await page.getByRole("button", { name: "Resume the alert for NVDA" }).click();
     await expect(row("NVDA")).toContainText("Watching");
+  });
+});
+
+test.describe("on a phone", () => {
+  test("the toasts of a saved alert leave the editor's buttons clear", async ({ page, app, request }) => {
+    test.skip(!app.isPhone, "Wider screens show the editor at the side, clear of the toasts.");
+    test.fixme(true, "components/ui/Toast.tsx: on phones the toasts (z-60, 4rem above the bottom) cover an open bottom sheet's footer, here Save alert and Cancel, for 5 to 10 s");
+    await app.seedStorage(SAMPLE_DATA);
+    const last = (await listQuotes(request, ["AAPL"])).get("AAPL")?.price;
+    if (!last) throw new Error("No AAPL quote");
+    const level = Math.floor(last * 0.98);
+    await app.goto("/alerts");
+    await createInEditor(page, "AAPL", last, {
+      kind: "above",
+      value: level,
+      rule: `At or above ${price(level)}`,
+      context: `The level is ${Math.abs((level / last - 1) * 100).toFixed(1)}% below the last price.`,
+      met: true,
+    });
+    // Saved, and triggered at once: two toasts, for 5 and 10 seconds. The next rule is started meanwhile.
+    const trigger = page.locator("[data-toast]").filter({ hasText: "AAPL traded at" });
+    await expect(trigger).toBeVisible();
+    await panel(page, "Rules").getByRole("button", { name: "New alert" }).click();
+    const editor = page.getByRole("dialog", { name: "New alert" });
+    for (const name of ["Save alert", "Cancel"]) {
+      const button = editor.getByRole("button", { name, exact: true });
+      await expect(button).toBeVisible();
+      await expect(trigger).toBeVisible();
+      // What a tap at the middle of the button reaches.
+      const reached = await button.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+        return hit && element.contains(hit) ? "button" : (hit?.closest("[data-toast]")?.textContent ?? hit?.tagName ?? "nothing");
+      });
+      expect(reached, `a tap on ${name}`).toBe("button");
+    }
   });
 });
 
