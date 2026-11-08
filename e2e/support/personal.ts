@@ -100,21 +100,36 @@ export function parseFigure(text: string): number {
 export const FIGURE = /^[+−]?\d{1,3}(?:,\d{3})*(?:\.\d+)?%?$/;
 
 /**
- * Passes once the element (or the text `source` reads) shows `expected` to its displayed precision (`digits`
- * decimals, in percent units for a percentage) and in the app's number format: for figures computed from price
- * history, where the last binary digit of a sum may differ from the app's while the rounded figure is the same.
+ * "ok" when `text` shows `expected` to its displayed precision (`digits` decimals, in percent units for a percentage)
+ * and in the app's number format, else what is wrong: for figures computed from price history, where the last binary
+ * digit of a sum may differ from the app's while the rounded figure is the same.
  */
+export function figureCheck(text: string, expected: number, digits: number): string {
+  const shown = text.trim();
+  if (!FIGURE.test(shown) || (shown.split(".")[1] ?? "").replace("%", "").length !== digits) return `"${shown}" is not a figure with ${digits} decimals`;
+  return Math.abs(parseFigure(shown) - expected) <= 0.5 * 10 ** -digits + 1e-9 ? "ok" : `"${shown}" is not ${expected} to ${digits} decimals`;
+}
+
+/** Passes once the element (or the text `source` reads) shows `expected` to its displayed precision (figureCheck). */
 export async function expectFigure(source: Locator | (() => Promise<string>), expected: number, digits: number): Promise<void> {
-  const tolerance = 0.5 * 10 ** -digits + 1e-9;
-  const read = typeof source === "function" ? source : async () => (await source.innerText()).trim();
-  await expect
-    .poll(async () => {
-      const text = (await read()).trim();
-      if (!FIGURE.test(text) || (text.split(".")[1] ?? "").replace("%", "").length !== digits) return `"${text}" is not a figure with ${digits} decimals`;
-      const shown = parseFigure(text);
-      return Math.abs(shown - expected) <= tolerance ? "ok" : `"${text}" is not ${expected} to ${digits} decimals`;
-    })
-    .toBe("ok");
+  const read = typeof source === "function" ? source : async () => source.innerText();
+  await expect.poll(async () => figureCheck(await read(), expected, digits)).toBe("ok");
+}
+
+/**
+ * Shown percentages ("30.8%", "+1.2%") that add up to 100% within their rounding: half a unit of the last decimal
+ * each. Give it what the page shows, not figures the test computed, so the sum is a check of the page.
+ */
+export function expectSumOf100(shown: readonly string[]): void {
+  const sum = shown.reduce((total, text) => total + parseFigure(text), 0);
+  const decimals = Math.max(0, ...shown.map((text) => (text.split(".")[1] ?? "").replace("%", "").length));
+  expect(shown.every((text) => FIGURE.test(text.trim()) && text.trim().endsWith("%")), `percentages: ${shown.join(" + ")}`).toBe(true);
+  expect(Math.abs(sum - 100), `${shown.join(" + ")} = ${sum}`).toBeLessThanOrEqual(0.5 * 10 ** -decimals * shown.length + 1e-9);
+}
+
+/** The percentage that ends a line of text ("Information Technology 7,898 78.5%" gives "78.5%"). */
+export function trailingPercent(text: string): string {
+  return /([+−]?\d[\d,]*(?:\.\d+)?%)\s*$/.exec(text)?.[1] ?? `(no percentage in "${text}")`;
 }
 
 // ---------------------------------------------------------------------------
@@ -395,6 +410,24 @@ export function dataRows(table: Locator): Locator {
   return table.getByRole("row").filter({ has: table.page().getByRole("cell") });
 }
 
+/** Text as it reads on screen: runs of white space as one space, trimmed. */
+function squash(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * A row's cells by their column heads, read together in one round trip, with what went wrong if the row cannot be read
+ * (no row, or more than one). Only the columns shown at this width count: a hidden column drops out of the heads and
+ * the cells alike, so the positions line up on phones too. Heads are read as written (their CSS upper case aside),
+ * cells as rendered (innerText, white space squashed).
+ */
+export async function rowCells(table: Locator, row: Locator): Promise<{ cells: Record<string, string>; problem: string | null }> {
+  const [count, heads, cells] = await Promise.all([row.count(), table.getByRole("columnheader").allTextContents(), row.getByRole("cell").allInnerTexts()]);
+  const names = heads.map((head) => head.trim());
+  const problem = count === 1 ? null : `${count} rows match ${row}`;
+  return { cells: Object.fromEntries(names.map((name, index) => [name, squash(cells[index] ?? "")])), problem };
+}
+
 /**
  * The cell of a row under a column head, among the columns shown at this width: hidden columns drop out of the heads
  * and the cells alike, so the positions line up on phones too. Throws when the column is not shown.
@@ -407,7 +440,55 @@ export async function cellOf(table: Locator, row: Locator, column: string): Prom
   return row.getByRole("cell").nth(index);
 }
 
-/** A KPI tile by its label: the label's own element and the figure, delta and sub-line beside it. */
+/**
+ * What a cell should show: its whole text, a pattern, or a check that returns "ok" or what is wrong (`figure` compares a
+ * computed number at the precision shown).
+ */
+export type CellExpectation = string | RegExp | ((text: string) => string);
+
+/** A cell check: the cell shows `expected` to its displayed precision (figureCheck). */
+export function figure(expected: number, digits: number): (text: string) => string {
+  return (text) => figureCheck(text, expected, digits);
+}
+
+/**
+ * Passes once the row shows what is expected under each column head. One retrying assertion per row (rather than one
+ * per cell), which reads the heads and the cells together on each try; a column that is not shown fails with the heads
+ * that are. Resolves to the cells as they were read when it passed.
+ */
+export async function expectCells(table: Locator, row: Locator, expected: Readonly<Record<string, CellExpectation>>): Promise<Record<string, string>> {
+  const columns = Object.keys(expected);
+  let read: Record<string, string> = {};
+  await expect
+    .poll(async () => {
+      const { cells, problem } = await rowCells(table, row);
+      read = cells;
+      if (problem) return { problem };
+      return Object.fromEntries(
+        columns.map((column) => {
+          const text = cells[column];
+          const want = expected[column];
+          if (text === undefined) return [column, `(no column "${column}"; the heads are ${Object.keys(cells).join(" | ")})`];
+          return [column, typeof want === "function" ? want(text) : text];
+        }),
+      );
+    })
+    .toEqual(
+      Object.fromEntries(
+        columns.map((column) => {
+          const want = expected[column];
+          return [column, typeof want === "function" ? "ok" : typeof want === "string" ? want : expect.stringMatching(want)];
+        }),
+      ),
+    );
+  return read;
+}
+
+/**
+ * A KPI tile by its label: the label's own element and the figure, delta and sub-line beside it. StatTile has no role
+ * or name to find it by, so this relies on its markup: the label is a direct child of the tile's root element (a
+ * wrapper around the label would break every tile read). A labelled group on StatTile would remove the coupling.
+ */
 export function tile(page: Page, label: string): Locator {
   // The tiles come first in the page, before any panel that may use the same words.
   return page.locator("main").getByText(label, { exact: true }).first().locator("xpath=..");
@@ -423,7 +504,10 @@ export async function tileLines(page: Page, label: string): Promise<string[]> {
     .slice(1);
 }
 
-/** The toast that says `message` (its Undo and Close buttons are inside it). */
+/**
+ * The toast that says `message` (its Undo and Close buttons are inside it). Toasts have no role of their own (they sit
+ * in a polite live region without one), so they are found by the data-toast attribute components/ui/Toast.tsx sets.
+ */
 export function toast(page: Page, message: string | RegExp): Locator {
   return page.locator("[data-toast]").filter({ hasText: message });
 }
@@ -442,13 +526,16 @@ export async function chooseFile(page: Page, button: Locator, file: string): Pro
   await chooser.setFiles(file);
 }
 
+/** The byte order mark (U+FEFF) the app puts before CSV files so that Excel reads them as UTF-8. */
+export const BOM = "\uFEFF";
+
 /** Rows of a CSV text (quoted fields, doubled quotes, CRLF), without the byte order mark the app writes for Excel. */
 export function parseCsvText(text: string): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
   let quoted = false;
-  const body = text.replace(/^﻿/, "");
+  const body = text.startsWith(BOM) ? text.slice(BOM.length) : text;
   for (let i = 0; i < body.length; i++) {
     const char = body[i];
     if (quoted) {
