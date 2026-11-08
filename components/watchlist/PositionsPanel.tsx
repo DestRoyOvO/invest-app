@@ -235,6 +235,8 @@ export function PositionsPanel({ portfolio, quotes, loading, className }: Positi
         <td />
       </tr>
     ) : null;
+  // Without positions the empty state offers Add position: on phones it is the only one, from sm up the header keeps its own.
+  const showEmpty = count === 0 && !loading;
 
   return (
     <Panel
@@ -249,14 +251,14 @@ export function PositionsPanel({ portfolio, quotes, loading, className }: Positi
               <ArrowRight aria-hidden className="size-3.5" strokeWidth={1.75} />
             </Link>
           ) : null}
-          <Button size="sm" onClick={() => openPositionEditor("")}>
+          <Button size="sm" onClick={() => openPositionEditor("")} className={showEmpty ? "max-sm:hidden" : undefined}>
             <Plus aria-hidden className="size-3.5" strokeWidth={1.75} />
             {p.addPosition}
           </Button>
         </span>
       }
     >
-      {count === 0 && !loading ? (
+      {showEmpty ? (
         <EmptyState
           actions={
             <>
