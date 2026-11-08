@@ -242,10 +242,9 @@ export function PositionsPanel({ portfolio, quotes, loading, className }: Positi
       code="PORT"
       className={className}
       actions={
-        // On phones these are 40px controls under the table instead, since the header is 36px tall.
-        <span className="hidden items-center gap-1 sm:inline-flex">
+        <span className="inline-flex items-center gap-1">
           {count > 0 ? (
-            <Link href="/portfolio" className="inline-flex items-center gap-1 px-1 text-xs text-fg-2 hover:text-fg">
+            <Link href="/portfolio" className="inline-flex items-center gap-1 px-1 text-xs text-fg-2 hover:text-fg max-sm:min-h-10">
               {p.analytics}
               <ArrowRight aria-hidden className="size-3.5" strokeWidth={1.75} />
             </Link>
@@ -289,16 +288,6 @@ export function PositionsPanel({ portfolio, quotes, loading, className }: Positi
             footer={footer}
             className={WIDTH_VARS}
           />
-          <div className="flex flex-wrap items-center gap-2 border-t border-line px-3 py-2 sm:hidden">
-            <Button onClick={() => openPositionEditor("")} className="h-10">
-              <Plus aria-hidden className="size-4" strokeWidth={1.75} />
-              {p.addPosition}
-            </Button>
-            <Link href="/portfolio" className={LINK_BUTTON}>
-              {p.analytics}
-              <ArrowRight aria-hidden className="size-3.5" strokeWidth={1.75} />
-            </Link>
-          </div>
         </>
       )}
       <div className="space-y-1 border-t border-line px-3 py-2 text-xs text-fg-3">

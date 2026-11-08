@@ -8,7 +8,7 @@ import { dayFigures, dayTileCount } from "@/components/portfolio/day-figures";
 import { DayTiles } from "@/components/portfolio/DayTiles";
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Kbd } from "@/components/ui/Badge";
-import { Button, IconButton } from "@/components/ui/Button";
+import { IconButton } from "@/components/ui/Button";
 import { Delta } from "@/components/ui/Delta";
 import { Panel, PanelMeta } from "@/components/ui/Panel";
 import { EmptyState, ErrorState, StaleBanner } from "@/components/ui/States";
@@ -151,16 +151,13 @@ export function WatchlistView() {
           code="WL"
           actions={
             <>
-              <span className="hidden sm:inline">
-                <PanelMeta>{view.sort ? tpl(t.watchlist.sortedBy, { column: columnLabel(view.sort.key, t) }) : tpl(t.watchlist.count, { n: watchlist.length })}</PanelMeta>
-              </span>
-              {/* On phones the 36px header has no room for a 40px target: a strip under the form offers it while sorted. */}
+              <PanelMeta>{view.sort ? tpl(t.watchlist.sortedBy, { column: columnLabel(view.sort.key, t) }) : tpl(t.watchlist.count, { n: watchlist.length })}</PanelMeta>
               <button
                 type="button"
                 aria-pressed={view.sort === null}
                 onClick={() => watchlistViewStore.write({ sort: null })}
                 className={cn(
-                  "-mb-px h-9 border-b-2 px-2 text-xs font-medium tracking-[0.04em] whitespace-nowrap uppercase transition-colors max-sm:hidden",
+                  "-mb-px h-9 border-b-2 px-2 text-xs font-medium tracking-[0.04em] whitespace-nowrap uppercase transition-colors max-sm:h-10",
                   view.sort === null ? "border-accent text-fg" : "border-transparent text-fg-3 hover:text-fg-2",
                 )}
               >
@@ -170,14 +167,6 @@ export function WatchlistView() {
           }
         >
           <AddSymbolForm onAdd={add} inputId={ADD_INPUT_ID} />
-          {view.sort ? (
-            <div className="flex items-center justify-between gap-3 border-t border-line px-3 py-1 sm:hidden">
-              <span className="min-w-0 truncate text-xs text-fg-2">{tpl(t.watchlist.sortedBy, { column: columnLabel(view.sort.key, t) })}</span>
-              <Button onClick={() => watchlistViewStore.write({ sort: null })} className="h-10">
-                {t.watchlist.sortCustom}
-              </Button>
-            </div>
-          ) : null}
           <StaleBanner show={stale} since={staleSince} />
           {missingHere.length > 0 ? (
             <div role="status" className="flex flex-wrap items-center gap-2 border-t border-line bg-panel-2 px-3 py-1.5 text-xs text-warn">
