@@ -89,7 +89,9 @@ export function NotFoundView() {
                   openCommand();
                 }
               }}
-              className="mono h-full min-w-0 flex-1 bg-transparent text-sm text-fg placeholder:text-fg-3 focus:outline-none max-sm:text-base"
+              // As tall as the field's border box (40px), over its 1px top and bottom borders: the input itself is the
+              // 40px phone target, and the transparent input leaves the field looking as it did.
+              className="mono -my-px h-[calc(100%+2px)] min-w-0 flex-1 bg-transparent text-sm text-fg placeholder:text-fg-3 focus:outline-none max-sm:text-base"
             />
             <span aria-hidden className="hidden sm:inline-flex">
               <Kbd>/</Kbd>
