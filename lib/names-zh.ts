@@ -142,13 +142,14 @@ export const CHINESE_NAMES: readonly ChineseName[] = [
   { symbol: "EDU", names: ["新东方"] },
   { symbol: "VIPS", names: ["唯品会"] },
 
-  // Hong Kong
+  // Hong Kong: the exchange's Chinese short name without its share-class suffix (阿里巴巴 for 阿里巴巴-W). Alibaba keeps
+  // one name on both of its listings; the symbol tells them apart, and "港股" finds the Hong Kong one.
   { symbol: "0700.HK", names: ["腾讯控股", "腾讯"] },
-  { symbol: "9988.HK", names: ["阿里巴巴港股"] },
+  { symbol: "9988.HK", names: ["阿里巴巴", "阿里巴巴港股"] },
   { symbol: "3690.HK", names: ["美团"] },
   { symbol: "1810.HK", names: ["小米集团", "小米"] },
   { symbol: "1211.HK", names: ["比亚迪股份", "比亚迪"] },
-  { symbol: "9618.HK", names: ["京东集团港股"] },
+  { symbol: "9618.HK", names: ["京东集团", "京东集团港股"] },
   { symbol: "2318.HK", names: ["中国平安"] },
   { symbol: "0005.HK", names: ["汇丰控股", "汇丰"] },
 

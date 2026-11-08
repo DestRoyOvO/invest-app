@@ -19,8 +19,14 @@ const WITHOUT_CHINESE_NAME: readonly string[] = [];
 /** Universe symbols that Chinese financial media call by a Latin name; Chinese pages show that name. */
 const LATIN_NAMES: readonly string[] = ["META", "TMUS", "BKNG"];
 
+/** One company's listings on two exchanges, which may share its name: the symbol tells the listings apart. */
+const SAME_COMPANY: readonly (readonly string[])[] = [["BABA", "9988.HK"]];
+
 /** Names compare the way search matches them: case and spaces ignored. */
 const nameKey = (name: string) => name.toLowerCase().replace(/\s+/g, "");
+
+/** The company behind a symbol: its first listing for one listed twice, the symbol itself otherwise. */
+const companyOf = (symbol: string) => SAME_COMPANY.find((listings) => listings.includes(symbol))?.[0] ?? symbol;
 
 describe("Chinese names", () => {
   it("lists valid, unique symbols", () => {
@@ -35,16 +41,25 @@ describe("Chinese names", () => {
     expect(APP_UNIVERSE.filter((symbol) => !hasCjk(chineseNameOf(symbol) ?? "中"))).toEqual(LATIN_NAMES);
   });
 
-  it("never uses one name for two different symbols", () => {
+  it("never uses one name for two different companies", () => {
     const owners = new Map<string, Set<string>>();
     for (const entry of CHINESE_NAMES) {
       for (const name of entry.names) {
         const key = nameKey(name);
-        owners.set(key, (owners.get(key) ?? new Set()).add(entry.symbol));
+        owners.set(key, (owners.get(key) ?? new Set()).add(companyOf(entry.symbol)));
       }
     }
-    const shared = [...owners].filter(([, symbols]) => symbols.size > 1).map(([name, symbols]) => `${name}: ${[...symbols].join(", ")}`);
+    const shared = [...owners].filter(([, companies]) => companies.size > 1).map(([name, companies]) => `${name}: ${[...companies].join(", ")}`);
     expect(shared).toEqual([]);
+    for (const listings of SAME_COMPANY) expect(new Set(listings.map(chineseNameOf)).size, listings.join(", ")).toBe(1);
+  });
+
+  it("names a Hong Kong listing as the company, and finds the US listing first", () => {
+    expect(chineseNameOf("9988.HK")).toBe("阿里巴巴");
+    expect(chineseNameOf("9618.HK")).toBe("京东集团");
+    expect(searchChineseNames("阿里巴巴").map((r) => r.symbol)).toEqual(["BABA", "9988.HK"]);
+    expect(searchChineseNames("阿里巴巴港股")).toEqual([{ symbol: "9988.HK", name: "阿里巴巴" }]);
+    expect(searchChineseNames("京东").map((r) => r.symbol)).toEqual(["JD", "9618.HK"]);
   });
 
   it("keeps the names themselves tidy", () => {
