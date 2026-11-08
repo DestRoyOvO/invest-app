@@ -91,7 +91,8 @@ What the mode guarantees:
 - **Names are facts, figures are not.** A table covers the app's universe (`lib/universe.ts`, `lib/names-zh.ts`, the sector
   and broad ETFs, the world board) with real names, sectors, approximate sizes and first trading days. Every other
   well-formed symbol is known too, with a stable made-up name. People, analyst firms and institutions in the ownership and
-  analyst modules are made up, and every description says it is synthetic. Rating actions come out on trading days
+  analyst modules are made up, and every description says it is synthetic. Insider trades are those of the company's
+  officers, each under one title, on trading days of the listing. Rating actions come out on trading days
   during New York business hours, each firm on its own rating scale and starting from its previous grade. Headlines are made up as well: a stock's
   ticker brings stories about the company, the ticker of a fund, index, yield, crypto pair, currency pair or future
   market stories about that instrument (flows, levels, rates), other searches stories about the topic.

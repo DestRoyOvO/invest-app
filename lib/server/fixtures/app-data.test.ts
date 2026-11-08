@@ -37,6 +37,7 @@ import { getSignalReport } from "../signal-service";
 import { getWorldMarkets } from "../world";
 import { getDailyBars, getQuotes, getSparkline, getSummary, searchNews, searchSymbols } from "../yahoo";
 
+import { fixtureClient } from "./client";
 import { isNyseSession, parseDayKey } from "./sessions";
 import { treasuryFetch } from "./treasury";
 
@@ -489,6 +490,22 @@ describe("quote page research", () => {
       expect(holder.pctHeld!, `holder ${i}`).toBeGreaterThan(0);
       expect(holder.shares!, `holder ${i}`).toBeGreaterThan(0);
       if (i > 0) expect(holder.pctHeld!, `holder ${i} is largest first`).toBeLessThanOrEqual(institutions[i - 1].pctHeld!);
+    }
+  });
+
+  it("list the trades of the company's own officers, one title each, on trading days", async () => {
+    for (const symbol of ["AAPL", "MSFT", "SHOP", "0700.HK"]) {
+      const profile = (await fixtureClient.quoteSummary(symbol, { modules: ["assetProfile"] })) as { assetProfile: { companyOfficers: Array<{ name: string; title: string }> } };
+      const officers = new Map(profile.assetProfile.companyOfficers.map((officer) => [officer.name.toUpperCase(), officer.title.replace(" & Director", "")]));
+      expect(officers.size, `${symbol}: officers with distinct names`).toBe(profile.assetProfile.companyOfficers.length);
+      const trades = (await getOwnership(symbol))!.insiderTrades;
+      expect(trades.length, symbol).toBeGreaterThan(4);
+      for (const trade of trades) {
+        const label = `${symbol} ${trade.date} ${trade.name}`;
+        expect(officers.get(trade.name.toUpperCase()), label).toBe(trade.relation);
+        const day = parseDayKey(trade.date!);
+        expect(symbol.endsWith(".HK") ? [1, 2, 3, 4, 5].includes(new Date(day * DAY_MS).getUTCDay()) : isNyseSession(day), label).toBe(true);
+      }
     }
   });
 

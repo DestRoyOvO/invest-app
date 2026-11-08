@@ -411,8 +411,14 @@ const FIRST_NAMES = ["Alex", "Jordan", "Taylor", "Morgan", "Casey", "Riley", "Ja
 const LAST_NAMES = ["Rivera", "Chen", "Patel", "Novak", "Okafor", "Lindqvist", "Moreau", "Tanaka", "Silva", "Kowalski", "Haddad", "Brennan"];
 const OFFICER_TITLES = ["Chief Executive Officer & Director", "Chief Financial Officer", "Chief Operating Officer", "General Counsel & Secretary", "Chief Technology Officer"];
 
-function personName(...parts: Array<string | number>): string {
-  return `${FIRST_NAMES[pick(FIRST_NAMES.length, ...parts, "first")]} ${LAST_NAMES[pick(LAST_NAMES.length, ...parts, "last")]}`;
+/**
+ * The name of a company's officer with OFFICER_TITLES[index]. The first and last names step through their lists from a
+ * start seeded by the symbol (by 5 and 7 of 12), so the officers of a company never share a name.
+ */
+function officerName(symbol: string, index: number): string {
+  const first = FIRST_NAMES[(pick(FIRST_NAMES.length, symbol, "officer-first") + index * 5) % FIRST_NAMES.length];
+  const last = LAST_NAMES[(pick(LAST_NAMES.length, symbol, "officer-last") + index * 7) % LAST_NAMES.length];
+  return `${first} ${last}`;
 }
 
 function slug(symbol: string): string {
@@ -471,7 +477,7 @@ function assetProfileModule(ctx: Context): Module {
     fullTimeEmployees: figures.employees,
     companyOfficers: OFFICER_TITLES.map((title, i) => ({
       maxAge: 1,
-      name: personName(security.symbol, "officer", i),
+      name: officerName(security.symbol, i),
       age: 45 + pick(20, security.symbol, "age", i),
       title,
       yearBorn: yearOf(ctx.latest) - 46 - pick(20, security.symbol, "age", i),
@@ -716,6 +722,7 @@ function upgradeDowngradeModule(ctx: Context): Module {
   return { history, maxAge: 86400 };
 }
 
+/** Eight trades of the company's officers (assetProfile's), newest first, each on a trading day of the listing. */
 function insiderTransactionsModule(ctx: Context): Module {
   const s = ctx.security.symbol;
   const transactions = Array.from({ length: 8 }, (_, i) => {
@@ -724,15 +731,16 @@ function insiderTransactionsModule(ctx: Context): Module {
     const price = round(ctx.price * between(0.9, 1.05, s, "insider-price", i), 2);
     const sale = kind <= 2;
     const text = sale ? `Sale at price ${price.toFixed(2)} per share.` : kind === 3 ? "Stock Award(Grant) at price 0.00 per share." : `Purchase at price ${price.toFixed(2)} per share.`;
+    const officer = i % OFFICER_TITLES.length;
     return {
       maxAge: 1,
       shares,
       filerUrl: "",
       transactionText: text,
-      filerName: personName(s, "insider", i % 4).toUpperCase(),
-      filerRelation: OFFICER_TITLES[i % OFFICER_TITLES.length].replace(" & Director", ""),
+      filerName: officerName(s, officer).toUpperCase(),
+      filerRelation: OFFICER_TITLES[officer].replace(" & Director", ""),
       moneyText: "",
-      startDate: midnight(ctx.latest - 4 - i * 9),
+      startDate: midnight(tradingDayOnOrBefore(ctx.security.profile, ctx.latest - 4 - i * 9)),
       ownership: i % 3 === 2 ? "I" : "D",
       value: kind === 3 ? 0 : Math.round(shares * price),
     };
