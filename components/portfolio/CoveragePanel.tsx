@@ -42,7 +42,7 @@ export function CoveragePanel({ portfolio, report, beyond, failed, loading }: Co
       <ul className="px-3 py-2 text-data">
         {analyzed.map((row) => (
           <li key={row.symbol} className="flex h-7 items-center justify-between gap-3 max-sm:h-10">
-            <Link href={stockPath(row.symbol)} className="mono font-medium text-fg hover:text-accent">
+            <Link href={stockPath(row.symbol)} className="mono font-medium text-fg hover:text-accent max-sm:inline-flex max-sm:h-10 max-sm:items-center">
               {row.symbol}
             </Link>
             <span className="num text-fg-2">{formatRatio(row.weight)}</span>

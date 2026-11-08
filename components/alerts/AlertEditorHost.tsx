@@ -141,7 +141,7 @@ function EditorForm({ rule, initialSymbol, onClose }: EditorFormProps) {
 
         <Field label={editor.condition}>
           <Select
-            className="w-full [&_select]:max-sm:h-10"
+            className="w-full"
             value={kind}
             onChange={(event) => {
               const next = event.target.value as AlertKind;
@@ -165,7 +165,7 @@ function EditorForm({ rule, initialSymbol, onClose }: EditorFormProps) {
                 value={value}
                 onChange={(event) => setValue(event.target.value)}
                 data-autofocus={!rule && initialSymbol ? true : undefined}
-                className="num max-sm:h-10"
+                className="num"
               />
               {unit ? <span className="mono shrink-0 text-xs text-fg-3">{unit}</span> : null}
             </div>
@@ -182,25 +182,24 @@ function EditorForm({ rule, initialSymbol, onClose }: EditorFormProps) {
             { value: "once", label: t.alerts.repeat.once },
             { value: "daily", label: t.alerts.repeat.daily },
           ]}
-          className="[&_[role=radio]]:max-sm:h-10"
         />
         <p className="-mt-2 text-xs text-fg-3">{t.alerts.repeatHint[repeat]}</p>
 
         <Field label={editor.note}>
-          <Input value={note} maxLength={MAX_ALERT_NOTE_CHARS} onChange={(event) => setNote(event.target.value)} placeholder={editor.notePlaceholder} className="max-sm:h-10" />
+          <Input value={note} maxLength={MAX_ALERT_NOTE_CHARS} onChange={(event) => setNote(event.target.value)} placeholder={editor.notePlaceholder} />
         </Field>
       </div>
 
       <div className="space-y-2 border-t border-line px-4 py-3">
         <div className="flex items-center gap-2">
-          <Button type="submit" variant="primary" className="max-sm:h-10">
+          <Button type="submit" variant="primary">
             {rule ? editor.saveChanges : editor.save}
           </Button>
-          <Button onClick={onClose} className="max-sm:h-10">
+          <Button onClick={onClose}>
             {t.common.cancel}
           </Button>
           {rule ? (
-            <Button variant="ghost" onClick={remove} className="ml-auto max-sm:h-10">
+            <Button variant="ghost" onClick={remove} className="ml-auto">
               {editor.delete}
             </Button>
           ) : null}

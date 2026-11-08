@@ -79,7 +79,7 @@ function NotificationStatus() {
       <div className="col-head">{t.alerts.page.notifications}</div>
       <p className="text-sm text-fg-2">{words[permission]}</p>
       {permission === "default" ? (
-        <Button size="sm" className="max-sm:h-10" onClick={() => void requestNotificationPermission()}>
+        <Button size="sm" onClick={() => void requestNotificationPermission()}>
           {words.enable}
         </Button>
       ) : null}
@@ -253,7 +253,7 @@ function RulesPanel() {
       actions={
         <>
           {hydrated ? <PanelMeta>{tpl(words.count, { n: rules.length, max: MAX_ALERT_RULES })}</PanelMeta> : null}
-          <Button size="sm" variant="primary" className="max-sm:h-10" onClick={() => openAlertEditor()}>
+          <Button size="sm" variant="primary" onClick={() => openAlertEditor()}>
             {words.newAlert}
           </Button>
         </>
@@ -353,11 +353,11 @@ function HistoryPanel() {
         hydrated && log.length > 0 ? (
           <>
             {unseen > 0 ? (
-              <Button size="sm" variant="ghost" className="max-sm:h-10" onClick={() => markAlertEventsSeen()}>
+              <Button size="sm" variant="ghost" onClick={() => markAlertEventsSeen()}>
                 {t.alerts.bell.markAllSeen}
               </Button>
             ) : null}
-            <Button size="sm" variant="ghost" className="max-sm:h-10" onClick={clear}>
+            <Button size="sm" variant="ghost" onClick={clear}>
               {words.clearHistory}
             </Button>
           </>

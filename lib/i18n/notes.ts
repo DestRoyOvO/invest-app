@@ -4,6 +4,8 @@ import { defineMessages } from "./define";
 export const notesMessages = defineMessages(
   {
     title: "Notes",
+    // Caption of the notes table; it names the table's scroll region, so it differs from the panel title.
+    caption: "Notes by symbol",
     allNotes: "All notes",
     // Quote page panel
     emptyPrompt: "No thesis for {symbol} yet. Write down why you hold or watch it, the levels that would change your mind and when to look again.",
@@ -85,6 +87,7 @@ export const notesMessages = defineMessages(
   },
   {
     title: "笔记",
+    caption: "各代码的笔记",
     allNotes: "全部笔记",
     emptyPrompt: "还没有 {symbol} 的投资论点。写下你持有或关注它的理由、会让你改变看法的价位，以及何时再回顾。",
     write: "写下论点",

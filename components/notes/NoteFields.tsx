@@ -27,7 +27,6 @@ export function ConvictionField({ value, onChange }: { value: Conviction | null;
         value={value === null ? "" : String(value)}
         onChange={(next) => onChange(Number(next) as Conviction)}
         options={CONVICTIONS.map((n) => ({ value: n, label: n }))}
-        className="[&_[role=radio]]:max-sm:h-10"
       />
       <div className="flex h-5 items-center justify-between text-xs text-fg-3">
         <span>{value === null ? "" : tpl(t.notes.convictionOf, { n: value })}</span>
@@ -86,7 +85,7 @@ export function LevelField({ kind, value, price, onSave }: LevelFieldProps) {
             flush();
           }
         }}
-        className="num max-sm:h-10"
+        className="num"
       />
     </Field>
   );
@@ -132,7 +131,7 @@ export function ReviewField({ value, days, onChange }: { value: string | null; d
         onKeyDown={(event) => {
           if (event.key === "Enter") finish();
         }}
-        className="num max-sm:h-10"
+        className="num"
       />
     </Field>
   );
@@ -200,10 +199,10 @@ export function TagsField({ tags, onChange }: { tags: readonly string[]; onChang
                 if (text.trim()) add();
               }}
               placeholder={t.notes.tagPlaceholder}
-              className="w-32 max-sm:h-10"
+              className="w-32"
             />
             {text.trim() ? (
-              <Button size="sm" onClick={add} className="max-sm:h-10">
+              <Button size="sm" onClick={add}>
                 {t.notes.addTag}
               </Button>
             ) : null}

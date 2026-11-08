@@ -1,5 +1,6 @@
 // WCAG contrast report for the design tokens in app/globals.css: every pair in lib/design-tokens.ts, in both themes and
-// all three price conventions, plus the OKLab distance between neighbouring heatmap steps.
+// all three price conventions, plus the OKLab distance between neighbouring heatmap steps. A color drawn at an opacity
+// ("fg/60 on panel", a bg-fg/60 fill) is composited at that opacity over its surface in each theme before it is measured.
 //
 //   npx tsx scripts/check-contrast.ts            (exits 1 when a pair is below its minimum or listed twice)
 //   npx tsx scripts/check-contrast.ts --markdown (the same report as a Markdown table)

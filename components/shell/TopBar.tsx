@@ -23,7 +23,7 @@ export function TopBar() {
   return (
     <>
       <header className="flex h-11 shrink-0 items-center gap-2 bg-panel px-3 sm:gap-3">
-        <Link href="/" aria-label="InvestSeek" className="shrink-0">
+        <Link href="/" aria-label="InvestSeek" className="shrink-0 max-sm:-mr-2 max-sm:-ml-2.5 max-sm:flex max-sm:size-10 max-sm:items-center max-sm:justify-center max-sm:focus-visible:outline-offset-[-2px]">
           <Wordmark />
         </Link>
 

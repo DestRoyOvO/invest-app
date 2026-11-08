@@ -232,12 +232,12 @@ export function ChatDrawer() {
         {available ? (
           <div className="flex shrink-0 items-center gap-1 border-b border-line px-2 py-1.5">
             <HistoryMenu conversations={chat.conversations} currentId={chat.conversationId} onOpen={chat.openConversation} onClear={clearHistory} />
-            <Button size="sm" variant="ghost" onClick={chat.newChat} disabled={busy || turns.length === 0} className="max-sm:h-10">
+            <Button size="sm" variant="ghost" onClick={chat.newChat} disabled={busy || turns.length === 0}>
               <Plus aria-hidden className="size-3.5" strokeWidth={1.75} />
               {t.ai.chat.clear}
             </Button>
             {canLock ? (
-              <Button size="sm" variant="ghost" onClick={() => void lock()} className="ml-auto max-sm:h-10">
+              <Button size="sm" variant="ghost" onClick={() => void lock()} className="ml-auto">
                 <Lock aria-hidden className="size-3.5" strokeWidth={1.75} />
                 {t.ai.lock}
               </Button>

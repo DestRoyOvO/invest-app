@@ -31,8 +31,6 @@ type IdeaScreen = (typeof IDEA_SCREENS)[number];
 type ColumnKey = "symbol" | "name" | "last" | "chg" | "relVol" | "cap" | "pe" | "earnings" | "rating" | "star";
 
 const TABLE_HEIGHT = "min(65vh, 600px)";
-/** Panel tabs are 36px; phones get 40px touch targets. */
-const PHONE_TABS = "[&_[role=tab]]:max-sm:h-10";
 
 const missing = <span className="text-fg-3">{DASH}</span>;
 
@@ -74,7 +72,8 @@ function useColumns(keys: readonly ColumnKey[], now: number): DataTableColumn<Qu
       width: "6.5rem",
       render: (q) => <TickNumber value={q.price}>{formatPrice(q.price, lang)}</TickNumber>,
       sortValue: (q) => q.price,
-      hideBelow: "sm",
+      // By the table's width, so Trending in the right-hand column at xl drops the price and keeps room for the names.
+      hideBelowContainer: "md",
     },
     chg: {
       key: "chg",
@@ -201,7 +200,7 @@ function QuoteList({ data, screen, error, onRetry, keys, caption, cap, onCapChan
           <EmptyState
             actions={
               lower.length > 0 ? (
-                <Button size="sm" onClick={() => onCapChange(lower[0])} className="max-sm:h-10">
+                <Button size="sm" onClick={() => onCapChange(lower[0])}>
                   {tpl(t.discover.lowerCap, { cap: capLabel(lower[0]) })}
                 </Button>
               ) : undefined
@@ -243,7 +242,6 @@ function MoversPanel({ cap, onCapChange }: { cap: DiscoverCap; onCapChange: (cap
             value={screen}
             onChange={setScreen}
             options={MOVER_SCREENS.map((s) => ({ value: s, label: t.discover.moverTabs[s] }))}
-            className={PHONE_TABS}
           />
         </div>
         <div className="min-w-0 pr-3 pb-2.5 pl-2">
@@ -277,7 +275,6 @@ function IdeasPanel({ cap, onCapChange }: { cap: DiscoverCap; onCapChange: (cap:
             value={screen}
             onChange={setScreen}
             options={IDEA_SCREENS.map((s) => ({ value: s, label: t.discover.ideaTabs[s] }))}
-            className={PHONE_TABS}
           />
         </div>
         <div className="min-w-0 pr-3 pb-2.5 pl-2">

@@ -98,7 +98,7 @@ export function NoteEntries({ symbol, entries, price }: { symbol: string; entrie
           }}
           className="min-h-16 flex-1"
         />
-        <Button onClick={add} disabled={!text.trim()} className="self-start max-sm:h-10">
+        <Button onClick={add} disabled={!text.trim()} className="self-start">
           {t.notes.addEntry}
         </Button>
       </div>

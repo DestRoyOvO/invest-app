@@ -201,9 +201,27 @@ function Actions({ actions }: { actions: readonly AnalystAction[] }) {
   const rows = useMemo(() => (all ? actions : actions.slice(0, ACTIONS_SHOWN)), [actions, all]);
   const actionLabels = a.action as Record<string, string>;
   const columns: Array<DataTableColumn<AnalystAction>> = [
-    // "10月15日" needs more room than "Oct 15".
-    { key: "date", header: a.columns.date, width: lang === "zh" ? "5.75rem" : "4.5rem", render: (row) => <span className="num text-fg-2">{formatShortDate(row.date, lang, "America/New_York")}</span> },
-    { key: "firm", header: a.columns.firm, render: (row) => <span className="text-fg" title={row.firm}>{row.firm}</span> },
+    // "10月15日" needs more room than "Oct 15". In a box narrower than 28rem (the right-hand column at xl, phones) the
+    // date moves under the firm, so the firm keeps room for its name.
+    {
+      key: "date",
+      header: a.columns.date,
+      width: lang === "zh" ? "5.75rem" : "4.5rem",
+      hideBelowContainer: "md",
+      render: (row) => <span className="num text-fg-2">{formatShortDate(row.date, lang, "America/New_York")}</span>,
+    },
+    {
+      key: "firm",
+      header: a.columns.firm,
+      render: (row) => (
+        <span className="block py-0.5 @md:py-0">
+          <span className="block truncate text-fg" title={row.firm}>
+            {row.firm}
+          </span>
+          <span className="num block text-micro text-fg-3 @md:hidden">{formatShortDate(row.date, lang, "America/New_York")}</span>
+        </span>
+      ),
+    },
     {
       key: "rating",
       header: a.columns.rating,
@@ -226,7 +244,7 @@ function Actions({ actions }: { actions: readonly AnalystAction[] }) {
       <DataTable rows={rows} columns={columns} rowKey={(row) => `${row.date}:${row.firm}`} caption={a.actions} empty={a.noActions} />
       {actions.length > ACTIONS_SHOWN ? (
         <div className="border-t border-line px-2 py-1.5">
-          <Button size="sm" className="max-sm:h-10" variant="ghost" aria-expanded={all} onClick={() => setAll((value) => !value)}>
+          <Button size="sm" variant="ghost" aria-expanded={all} onClick={() => setAll((value) => !value)}>
             {all ? a.showLess : tpl(a.showAll, { n: actions.length })}
           </Button>
         </div>

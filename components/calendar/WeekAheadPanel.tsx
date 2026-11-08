@@ -46,7 +46,7 @@ export function WeekAheadPanel({ className }: { className?: string }) {
     body = (
       <EmptyState
         actions={
-          <Button size="sm" className="max-sm:h-10" onClick={openCommand}>
+          <Button size="sm" onClick={openCommand}>
             {c.empty.addTickers}
           </Button>
         }

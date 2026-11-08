@@ -118,13 +118,13 @@ function NoteEditor({ symbol, price, note, focusThesis, onDeleted }: NoteEditorP
         {stopAlert || targetAlert ? (
           <div className="flex flex-wrap gap-2">
             {stopAlert ? (
-              <Button size="sm" className="max-sm:h-10" onClick={() => createLevelAlert("below", stopAlert)}>
+              <Button size="sm" onClick={() => createLevelAlert("below", stopAlert)}>
                 <BellPlus aria-hidden className="size-3.5" strokeWidth={1.75} />
                 {t.notes.alertAtStop}
               </Button>
             ) : null}
             {targetAlert ? (
-              <Button size="sm" className="max-sm:h-10" onClick={() => createLevelAlert("above", targetAlert)}>
+              <Button size="sm" onClick={() => createLevelAlert("above", targetAlert)}>
                 <BellPlus aria-hidden className="size-3.5" strokeWidth={1.75} />
                 {t.notes.alertAtTarget}
               </Button>
@@ -139,7 +139,7 @@ function NoteEditor({ symbol, price, note, focusThesis, onDeleted }: NoteEditorP
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-xs text-fg-3">
           <span>{t.notes.storedLocally}</span>
           {note ? (
-            <Button size="sm" variant="ghost" className="max-sm:h-10" onClick={deleteNote}>
+            <Button size="sm" variant="ghost" onClick={deleteNote}>
               {t.notes.deleteNote}
             </Button>
           ) : null}
@@ -180,7 +180,7 @@ export function NotesPanel({ symbol, price, className }: { symbol: string; price
       ) : (
         <EmptyState
           actions={
-            <Button size="sm" className="max-sm:h-10" onClick={() => setOpenFor(symbol)}>
+            <Button size="sm" onClick={() => setOpenFor(symbol)}>
               {t.notes.write}
             </Button>
           }

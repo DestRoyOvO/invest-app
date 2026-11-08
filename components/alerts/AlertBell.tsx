@@ -83,10 +83,10 @@ export function AlertBell() {
           aria-label={t.alerts.bell.center}
           className="fixed inset-x-2 top-12 z-50 flex max-h-[calc(100dvh-4rem)] flex-col rounded-xs border border-line-2 bg-panel shadow-2xl sm:absolute sm:inset-x-auto sm:top-full sm:right-0 sm:mt-2 sm:w-96"
         >
-          <div className="flex h-9 shrink-0 items-center justify-between gap-2 border-b border-line bg-panel-2 px-3">
+          <div className="flex min-h-9 shrink-0 items-center justify-between gap-2 border-b border-line bg-panel-2 px-3">
             <h2 className="panel-title">{t.alerts.bell.center}</h2>
             {unseen > 0 ? (
-              <Button size="sm" variant="ghost" className="max-sm:h-10" onClick={() => markAlertEventsSeen()}>
+              <Button size="sm" variant="ghost" onClick={() => markAlertEventsSeen()}>
                 {t.alerts.bell.markAllSeen}
               </Button>
             ) : null}
@@ -127,7 +127,7 @@ export function AlertBell() {
             <span className="flex items-center gap-1.5">
               <Button
                 size="sm"
-                className="max-sm:h-10 max-sm:px-3"
+                className="max-sm:px-3"
                 onClick={() => {
                   setOpen(false);
                   openAlertEditor();

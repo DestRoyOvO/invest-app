@@ -112,9 +112,9 @@ export function SavedScreens({ screen, onOpen, bare = false, className }: SavedS
               setName(event.target.value);
               if (error) setError(null);
             }}
-            className="max-sm:h-10 max-sm:text-sm"
+            className="max-sm:text-sm"
           />
-          <Button type="submit" size="sm" className="max-sm:h-10">
+          <Button type="submit" size="sm">
             {t.screener.saved.save}
           </Button>
         </div>

@@ -235,6 +235,8 @@ export function PositionsPanel({ portfolio, quotes, loading, className }: Positi
         <td />
       </tr>
     ) : null;
+  // Without positions the empty state offers Add position: on phones it is the only one, from sm up the header keeps its own.
+  const showEmpty = count === 0 && !loading;
 
   return (
     <Panel
@@ -242,26 +244,25 @@ export function PositionsPanel({ portfolio, quotes, loading, className }: Positi
       code="PORT"
       className={className}
       actions={
-        // On phones these are 40px controls under the table instead, since the header is 36px tall.
-        <span className="hidden items-center gap-1 sm:inline-flex">
+        <span className="inline-flex items-center gap-1">
           {count > 0 ? (
-            <Link href="/portfolio" className="inline-flex items-center gap-1 px-1 text-xs text-fg-2 hover:text-fg">
+            <Link href="/portfolio" className="inline-flex items-center gap-1 px-1 text-xs text-fg-2 hover:text-fg max-sm:min-h-10">
               {p.analytics}
               <ArrowRight aria-hidden className="size-3.5" strokeWidth={1.75} />
             </Link>
           ) : null}
-          <Button size="sm" onClick={() => openPositionEditor("")}>
+          <Button size="sm" onClick={() => openPositionEditor("")} className={showEmpty ? "max-sm:hidden" : undefined}>
             <Plus aria-hidden className="size-3.5" strokeWidth={1.75} />
             {p.addPosition}
           </Button>
         </span>
       }
     >
-      {count === 0 && !loading ? (
+      {showEmpty ? (
         <EmptyState
           actions={
             <>
-              <Button size="sm" onClick={() => openPositionEditor("")} className="max-sm:h-10">
+              <Button size="sm" onClick={() => openPositionEditor("")}>
                 {p.addPosition}
               </Button>
               <Link href="/data#paste" className={LINK_BUTTON}>
@@ -279,7 +280,7 @@ export function PositionsPanel({ portfolio, quotes, loading, className }: Positi
             rows={loading ? [] : rows}
             columns={columns}
             rowKey={(r) => r.symbol}
-            caption={p.title}
+            caption={p.caption}
             rowHref={(r) => stockPath(r.symbol)}
             rowActions={(r) => <IconButton size="sm" label={tpl(p.editShort, { symbol: r.symbol })} icon={<Pencil className="size-3.5" strokeWidth={1.75} />} onClick={() => openPositionEditor(r.symbol)} />}
             actionsWidth="2.5rem"
@@ -289,16 +290,6 @@ export function PositionsPanel({ portfolio, quotes, loading, className }: Positi
             footer={footer}
             className={WIDTH_VARS}
           />
-          <div className="flex flex-wrap items-center gap-2 border-t border-line px-3 py-2 sm:hidden">
-            <Button onClick={() => openPositionEditor("")} className="h-10">
-              <Plus aria-hidden className="size-4" strokeWidth={1.75} />
-              {p.addPosition}
-            </Button>
-            <Link href="/portfolio" className={LINK_BUTTON}>
-              {p.analytics}
-              <ArrowRight aria-hidden className="size-3.5" strokeWidth={1.75} />
-            </Link>
-          </div>
         </>
       )}
       <div className="space-y-1 border-t border-line px-3 py-2 text-xs text-fg-3">

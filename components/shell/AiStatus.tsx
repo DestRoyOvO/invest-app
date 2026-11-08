@@ -40,7 +40,7 @@ export function AiStatusButton({ className }: { className?: string }) {
       title={label}
       aria-label={`${label}. ${t.ai.chat.open}`}
       className={cn(
-        "flex h-8 items-center gap-1.5 rounded-xs border px-2 text-xs transition-colors",
+        "flex h-8 items-center gap-1.5 rounded-xs border px-2 text-xs transition-colors max-sm:h-10 max-sm:min-w-10 max-sm:justify-center",
         state === "available" ? "border-line-2 text-fg-2 hover:bg-hover hover:text-fg" : "border-line-2 text-fg-3 hover:bg-hover",
         className,
       )}

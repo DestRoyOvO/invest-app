@@ -88,7 +88,7 @@ export function SymbolField({ value, onChange, placeholder, autoFocus = false }:
         aria-expanded={visible.length > 0}
         aria-controls={listId}
         aria-activedescendant={active >= 0 && visible[active] ? `${listId}-${active}` : undefined}
-        className="mono uppercase placeholder:normal-case max-sm:h-10"
+        className="mono uppercase placeholder:normal-case"
       />
       <ul id={listId} role="listbox" className={cn("absolute top-full right-0 left-0 z-20 mt-1 rounded-xs border border-line-2 bg-panel py-1 shadow-xl", visible.length === 0 && "hidden")}>
         {visible.map((suggestion, index) => (

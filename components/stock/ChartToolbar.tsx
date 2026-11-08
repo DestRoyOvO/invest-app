@@ -166,7 +166,7 @@ export function StudiesMenu({ settings, onChange, disabled = false, unavailable 
         disabled={disabled}
         title={disabled ? t.chart.studiesHidden : undefined}
         onClick={() => setOpen((v) => !v)}
-        className={cn("max-sm:h-10", open && "bg-hover text-fg")}
+        className={cn(open && "bg-hover text-fg")}
       >
         <SlidersHorizontal aria-hidden className="size-3.5" strokeWidth={1.75} />
         {t.chart.studies}

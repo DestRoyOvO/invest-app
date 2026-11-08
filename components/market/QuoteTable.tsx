@@ -3,7 +3,7 @@
 import { useMemo, type ReactNode } from "react";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
-import { DataTable, type Breakpoint, type DataTableColumn, type SortValue } from "@/components/ui/DataTable";
+import { DataTable, type Breakpoint, type ContainerBreakpoint, type DataTableColumn, type SortValue } from "@/components/ui/DataTable";
 import { Delta, directionOf } from "@/components/ui/Delta";
 import { Sparkline } from "@/components/ui/Sparkline";
 import { TickNumber } from "@/components/ui/TickNumber";
@@ -46,6 +46,8 @@ export interface QuoteColumnOptions {
   sortable?: boolean;
   /** Breakpoints below which columns hide, overriding the defaults. */
   hide?: Partial<Record<QuoteColumn, Breakpoint | null>>;
+  /** Container sizes below which columns hide by the table's own width (in place of the viewport breakpoints). */
+  hideContainer?: Partial<Record<QuoteColumn, ContainerBreakpoint>>;
 }
 
 /** The second line under last price: "Pre 188.70" / "AH 188.70" (full session name for screen readers). */
@@ -97,7 +99,7 @@ export const TAG = "inline-flex h-4 items-center rounded-xs border px-1 text-mic
  * and placeholders for quotes still loading) and the plain quote tables share one set of cells.
  */
 export function quoteColumns<Row>(columns: readonly QuoteColumn[], quoteOf: (row: Row) => Quote | undefined, options: QuoteColumnOptions): DataTableColumn<Row>[] {
-  const { t, lang, sparklines, extendedHours = false, earnings = false, now = 0, sortable = false, hide } = options;
+  const { t, lang, sparklines, extendedHours = false, earnings = false, now = 0, sortable = false, hide, hideContainer } = options;
   const hideOf = (col: QuoteColumn) => {
     const override = hide?.[col];
     return override === null ? undefined : (override ?? DEFAULT_HIDE[col]);
@@ -113,7 +115,7 @@ export function quoteColumns<Row>(columns: readonly QuoteColumn[], quoteOf: (row
   const build = (col: QuoteColumn): DataTableColumn<Row> => {
     // Chinese compact numbers run longer ("8882.70亿" for 888.27B), so market cap gets more room.
     const width = col === "marketCap" && lang === "zh" ? "6rem" : WIDTHS[col];
-    const base = { key: col, width, hideBelow: hideOf(col) };
+    const base = { key: col, width, hideBelow: hideOf(col), hideBelowContainer: hideContainer?.[col] };
     switch (col) {
       case "name":
         return {
@@ -233,13 +235,15 @@ interface QuoteTableProps {
   sortable?: boolean;
   /** Optional: shown when there are no quotes. */
   empty?: ReactNode;
+  /** Optional: container sizes below which columns hide by the table's own width, e.g. { trend: "sm" } in a narrow column. */
+  hideContainer?: Partial<Record<QuoteColumn, ContainerBreakpoint>>;
 }
 
 /**
  * Quote table on DataTable: fixed number widths with a free name column, fixed decimals for compact numbers, ticking
  * prices, and the whole row as a link to the quote page (the symbol is a real link for keyboard and screen readers).
  */
-export function QuoteTable({ quotes, columns, sparklines, rowAction, caption, dense = true, extendedHours = false, earnings = false, sortable = false, empty }: QuoteTableProps) {
+export function QuoteTable({ quotes, columns, sparklines, rowAction, caption, dense = true, extendedHours = false, earnings = false, sortable = false, empty, hideContainer }: QuoteTableProps) {
   const { t, lang } = usePrefs();
   const now = useNow();
   const anyExtended = extendedHours && quotes.some((q) => q.extendedSession !== null && q.extendedPrice !== null);
@@ -252,9 +256,9 @@ export function QuoteTable({ quotes, columns, sparklines, rowAction, caption, de
         sortValue: sortable ? (q) => q.symbol : undefined,
         render: (q) => <span className={cn("mono font-medium text-fg", !dense && "inline-flex min-h-10 items-center")}>{q.symbol}</span>,
       },
-      ...quoteColumns<Quote>(columns, (q) => q, { t, lang, sparklines, extendedHours: anyExtended, earnings, now, sortable }),
+      ...quoteColumns<Quote>(columns, (q) => q, { t, lang, sparklines, extendedHours: anyExtended, earnings, now, sortable, hideContainer }),
     ],
-    [t, lang, columns, sparklines, anyExtended, earnings, now, sortable, dense],
+    [t, lang, columns, sparklines, anyExtended, earnings, now, sortable, dense, hideContainer],
   );
   return (
     <DataTable

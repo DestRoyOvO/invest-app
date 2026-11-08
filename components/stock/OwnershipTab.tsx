@@ -183,18 +183,18 @@ export function OwnershipTab({ symbol }: { symbol: string }) {
         footer={
           trades.length > COLLAPSED_TRADES ? (
             <div className="border-t border-line px-1.5 py-1">
-              <Button size="sm" variant="ghost" aria-expanded={allTrades} onClick={() => setAllTrades((v) => !v)} className="max-sm:h-10">
+              <Button size="sm" variant="ghost" aria-expanded={allTrades} onClick={() => setAllTrades((v) => !v)}>
                 {allTrades ? t.common.less : tpl(o.showAll, { n: trades.length })}
               </Button>
             </div>
           ) : null
         }
       >
-        <DataTable rows={shownTrades} columns={tradeColumns} rowKey={(trade) => String(trade.index)} caption={o.trades} empty={o.noTrades} />
+        <DataTable rows={shownTrades} columns={tradeColumns} rowKey={(trade) => String(trade.index)} caption={o.tradesCaption} empty={o.noTrades} />
       </Panel>
 
       <Panel title={o.topInstitutions} footer={<p className="border-t border-line px-3 py-1.5 text-micro text-fg-3">{o.lag}</p>}>
-        <DataTable rows={institutions} columns={institutionColumns} rowKey={(row) => row.name} caption={o.topInstitutions} empty={o.noInstitutions} />
+        <DataTable rows={institutions} columns={institutionColumns} rowKey={(row) => row.name} caption={o.institutionsCaption} empty={o.noInstitutions} />
       </Panel>
     </div>
   );

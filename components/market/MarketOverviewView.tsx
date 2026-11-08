@@ -28,6 +28,11 @@ import { SectorBars } from "./SectorBars";
 import { SectorHeatmap } from "./SectorHeatmap";
 
 const STARTERS = ["AAPL", "MSFT", "NVDA", "SPY", "QQQ"];
+/**
+ * The watchlist sits in the right-hand column, a box of 356px at 1280px wide where its four columns need 360px: the 1M
+ * line drops while the table is narrower than 24rem, so the table never scrolls sideways.
+ */
+const WATCHLIST_HIDE = { trend: "sm" } as const;
 
 function WatchlistPanel() {
   const { t } = usePrefs();
@@ -63,7 +68,7 @@ function WatchlistPanel() {
       ) : (
         <>
           <StaleBanner show={freshness.stale} since={freshness.since} />
-          <QuoteTable quotes={quotes} columns={["last", "changePct", "trend"]} sparklines={sparks} caption={t.market.watchlist} />
+          <QuoteTable quotes={quotes} columns={["last", "changePct", "trend"]} sparklines={sparks} caption={t.watchlist.quotesCaption} hideContainer={WATCHLIST_HIDE} />
         </>
       )}
     </Panel>

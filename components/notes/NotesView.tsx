@@ -230,7 +230,7 @@ export function NotesView() {
           rows={hydrated ? rows : []}
           columns={columns}
           rowKey={(row) => row.symbol}
-          caption={words.title}
+          caption={words.caption}
           rowHref={(row) => `${stockPath(row.symbol)}#notes`}
           loading={!hydrated}
           loadingRows={4}

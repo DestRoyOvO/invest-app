@@ -14,6 +14,15 @@ export const marketsMessages = defineMessages(
       commodities: "Commodities",
       crypto: "Crypto",
     },
+    // Captions of the region tables: they name the tables' scroll regions, so they differ from the region headings.
+    regionCaptions: {
+      americas: "Benchmarks in the Americas",
+      europe: "Benchmarks in Europe",
+      asia: "Benchmarks in Asia-Pacific",
+      fx: "Currency rates",
+      commodities: "Commodity prices",
+      crypto: "Crypto prices",
+    },
     cols: {
       market: "Market",
       session: "Session",
@@ -56,6 +65,8 @@ export const marketsMessages = defineMessages(
       universe: "Top {n}",
       titleUs: "Movers · US market",
       titleUniverse: "Movers · {n} large caps",
+      captionUs: "{list} in the US market",
+      captionUniverse: "{list} among {n} large caps",
       relVol: "Rel vol",
       relVolTitle: "Volume today as a multiple of the 3-month daily average",
       usNote: "US-listed stocks with a market cap above {cap}, from Yahoo's screens.",
@@ -76,6 +87,7 @@ export const marketsMessages = defineMessages(
       points: "{value} pts",
       details: "Breadth details",
       bySector: "By sector",
+      bySectorCaption: "Breadth by sector",
       sector: "Sector",
       upDownCol: "Up / down",
       above50Col: "> 50D",
@@ -140,6 +152,7 @@ export const marketsMessages = defineMessages(
 
     sector: {
       etfReturns: "Sector ETFs",
+      etfCaption: "Trailing returns of the sector ETFs",
       etf: "ETF",
       d1: "1D",
       w1: "1W",
@@ -160,6 +173,14 @@ export const marketsMessages = defineMessages(
       fx: "外汇",
       commodities: "大宗商品",
       crypto: "加密货币",
+    },
+    regionCaptions: {
+      americas: "美洲股指",
+      europe: "欧洲股指",
+      asia: "亚太股指",
+      fx: "外汇汇率",
+      commodities: "大宗商品价格",
+      crypto: "加密货币价格",
     },
     cols: {
       market: "市场",
@@ -203,6 +224,8 @@ export const marketsMessages = defineMessages(
       universe: "{n} 只大盘股",
       titleUs: "异动 · 美国市场",
       titleUniverse: "异动 · {n} 只大盘股",
+      captionUs: "美国市场{list}",
+      captionUniverse: "{n} 只大盘股中的{list}",
       relVol: "量比",
       relVolTitle: "今日成交量相对 3 个月日均成交量的倍数",
       usNote: "Yahoo 筛选的美国上市股票，市值 {cap} 以上。",
@@ -223,6 +246,7 @@ export const marketsMessages = defineMessages(
       points: "{value} 个百分点",
       details: "宽度详情",
       bySector: "分板块",
+      bySectorCaption: "分板块的市场宽度",
       sector: "板块",
       upDownCol: "涨 / 跌",
       above50Col: "50日线上",
@@ -287,6 +311,7 @@ export const marketsMessages = defineMessages(
 
     sector: {
       etfReturns: "板块 ETF",
+      etfCaption: "板块 ETF 的区间回报",
       etf: "ETF",
       d1: "1日",
       w1: "1周",

@@ -44,7 +44,7 @@ export function ProfilePanel({ profile, className }: { profile: StockProfile; cl
           <dt className="col-head">{s.website}</dt>
           <dd className="truncate">
             {website ? (
-              <a href={website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-info hover:underline">
+              <a href={website} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-info hover:underline max-sm:min-h-10">
                 {new URL(website).hostname.replace(/^www\./, "")}
                 <ArrowUpRight aria-hidden className="size-3" strokeWidth={1.75} />
               </a>
@@ -59,7 +59,7 @@ export function ProfilePanel({ profile, className }: { profile: StockProfile; cl
           <p lang="en" className={expanded ? "text-sm leading-relaxed text-fg-2" : "line-clamp-5 text-sm leading-relaxed text-fg-2"}>
             {profile.summary}
           </p>
-          <Button size="sm" variant="ghost" className="mt-1 -ml-2 max-sm:h-10" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
+          <Button size="sm" variant="ghost" className="mt-1 -ml-2" onClick={() => setExpanded((v) => !v)} aria-expanded={expanded}>
             {expanded ? t.common.less : t.common.more}
           </Button>
         </div>

@@ -159,7 +159,7 @@ export function CompareBar({ symbol, compare, slots, suggestions, onChange }: Co
             label={tpl(t.chart.remove, { symbol: item })}
             icon={<X className="size-3" strokeWidth={2} />}
             onClick={() => remove(item, slot)}
-            className="size-6 max-sm:size-10"
+            className="size-6"
           />
         </span>
       ))}

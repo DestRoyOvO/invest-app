@@ -65,7 +65,7 @@ export function AlertContext({ symbol, quote, loading, kind, value, holdings, no
       lines.push(
         <div key="position" className="flex flex-wrap items-center gap-2">
           <Warn>{tpl(words.noPosition, { symbol })}</Warn>
-          <Button size="sm" className="max-sm:h-10" onClick={() => openPositionEditor(symbol)}>
+          <Button size="sm" onClick={() => openPositionEditor(symbol)}>
             {words.addPosition}
           </Button>
         </div>,
