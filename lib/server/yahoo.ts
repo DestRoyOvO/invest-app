@@ -221,6 +221,24 @@ export function todayInExchange(timeZone = "America/New_York"): number {
 // Loose shape of a raw Yahoo quote; every field is validated through num()/str().
 type RawQuote = Record<string, unknown>;
 
+const NEW_SHARE_CLASS = " New";
+
+/**
+ * The name to show from Yahoo's short and long names (quote and quoteSummary alike). Yahoo cuts shortName at about 32
+ * characters ("State Street SPDR S&P 500 ETF T" for SPY), so the long name wins when it starts with the short one and
+ * is longer. A trailing " New" share-class marker ("Berkshire Hathaway Inc. New") is dropped when the long name does
+ * not have it. Otherwise the short name, which is usually the tidier one ("Invesco QQQ Trust, Series 1"). Null
+ * without either name.
+ */
+export function displayName(shortName: unknown, longName: unknown): string | null {
+  const short = str(shortName);
+  const long = str(longName);
+  if (!short || !long) return short ?? long;
+  if (long.length > short.length && long.startsWith(short)) return long;
+  if (short.endsWith(NEW_SHARE_CLASS) && !long.endsWith(NEW_SHARE_CLASS)) return short.slice(0, -NEW_SHARE_CLASS.length).trimEnd() || short;
+  return short;
+}
+
 export function mapQuote(q: RawQuote): Quote {
   const symbol = String(q.symbol);
   const state = marketState(q.marketState);
@@ -257,7 +275,7 @@ export function mapQuote(q: RawQuote): Quote {
 
   return {
     symbol,
-    name: str(q.shortName) ?? str(q.longName) ?? str(q.displayName) ?? symbol,
+    name: displayName(q.shortName, q.longName) ?? str(q.displayName) ?? symbol,
     quoteType: str(q.quoteType),
     currency: str(q.currency),
     exchange: str(q.fullExchangeName) ?? str(q.exchange),
@@ -664,7 +682,7 @@ export function mapSummary(symbol: string, s: RawSummary): { profile: StockProfi
 
   const profile: StockProfile = {
     symbol,
-    name: str(price.shortName) ?? str(price.longName) ?? symbol,
+    name: displayName(price.shortName, price.longName) ?? symbol,
     longName: str(price.longName),
     sector: str(asset.sector),
     industry: str(asset.industry),
