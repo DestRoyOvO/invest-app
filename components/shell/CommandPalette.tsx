@@ -36,7 +36,7 @@ import { tpl } from "@/lib/format";
 import { shortcutKeys } from "@/lib/functions";
 import type { Messages } from "@/lib/i18n/messages";
 import { quoteTypeName } from "@/lib/i18n/yahoo-terms";
-import { chineseNameOf } from "@/lib/names-zh";
+import { fullName } from "@/lib/names-zh";
 import { MAX_WATCHLIST, SECTORS } from "@/lib/universe";
 import type { Lang } from "@/types/api";
 
@@ -79,8 +79,7 @@ interface Row {
 
 function rowFor(item: PaletteItem, t: Messages, lang: Lang, holdings: Readonly<Record<string, unknown>>): Row {
   const symbolText = (symbol: string, name: string | null) => {
-    const zh = lang === "zh" ? chineseNameOf(symbol) : undefined;
-    const shown = [...new Set([zh, name].filter(Boolean))].join(" · ");
+    const shown = fullName(symbol, name, lang);
     return (
       <span className="flex min-w-0 flex-1 items-baseline gap-2.5">
         <span className="mono shrink-0 font-medium text-fg">{symbol}</span>
