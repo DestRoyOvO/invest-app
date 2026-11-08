@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isUsListing, nyDayKey, weekdayOf } from "@/lib/events";
 import { MACRO_CALENDAR_ENDS, macroEventsBetween } from "@/lib/macro-calendar";
 import type { CalendarEvent, CalendarResponse, Quote } from "@/types/api";
 
@@ -14,20 +15,20 @@ const LOOKBACK_DAYS = 2;
 
 const NY_HOUR = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "numeric", hourCycle: "h23" });
 
-/** True for listings on a US exchange. Yahoo suffixes other listings with their market (0700.HK, SAP.DE, 7203.T). */
-export function isUsListing(symbol: string): boolean {
-  return !symbol.includes(".");
-}
+export { isUsListing };
 
 /**
  * Session timing of an earnings release from its New York time. Null for estimates (Yahoo uses placeholder times), for
- * date-only values (UTC midnight) and for listings outside the US, where the New York session says nothing.
+ * date-only values (UTC midnight), for listings outside the US, where the New York session says nothing, and for
+ * weekend dates, when there is no session (Berkshire reports on Saturdays).
  */
 export function earningsTiming(iso: string, estimated: boolean, symbol?: string): CalendarEvent["timing"] {
   if (estimated) return null;
   if (symbol !== undefined && !isUsListing(symbol)) return null;
   const ms = Date.parse(iso);
   if (!Number.isFinite(ms) || ms % DAY_MS === 0) return null;
+  const weekday = weekdayOf(nyDayKey(ms));
+  if (weekday === 0 || weekday === 6) return null;
   const parts = NY_HOUR.formatToParts(new Date(ms));
   const hour = Number(parts.find((p) => p.type === "hour")?.value);
   const minute = Number(parts.find((p) => p.type === "minute")?.value);

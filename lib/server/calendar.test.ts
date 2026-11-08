@@ -86,6 +86,14 @@ describe("earningsTiming", () => {
     expect(earningsTiming("2026-11-18T13:30:00.000Z", false, "BRK-B")).toBe("pre");
     expect(earningsTiming("not a date", false)).toBeNull();
   });
+
+  it("gives no slot to weekend dates, when there is no session", () => {
+    // Berkshire reports on a Saturday; Yahoo's 21:00Z is a placeholder, not "after the close".
+    expect(earningsTiming("2026-11-07T21:00:00.000Z", false, "BRK-B")).toBeNull();
+    expect(earningsTiming("2026-11-08T13:30:00.000Z", false, "XYZ")).toBeNull();
+    // 01:00Z on Saturday is still Friday evening in New York.
+    expect(earningsTiming("2026-11-07T01:00:00.000Z", false, "XYZ")).toBe("post");
+  });
 });
 
 describe("quoteEvents", () => {

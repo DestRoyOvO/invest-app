@@ -72,6 +72,19 @@ export function weekdayOf(day: string): number {
   return new Date(`${day}T00:00:00Z`).getUTCDay();
 }
 
+/** True for listings on a US exchange. Yahoo suffixes other listings with their market (0700.HK, SAP.DE, 7203.T). */
+export function isUsListing(symbol: string): boolean {
+  return !symbol.includes(".");
+}
+
+/**
+ * True when Yahoo's time of a confirmed report is the release time. For US listings it only marks the session (13:30Z
+ * before the open, 21:00Z after the close, whatever the company's actual time), so only the slot is known there.
+ */
+export function reportTimeKnown(symbol: string, iso: string): boolean {
+  return !isUsListing(symbol) && !isDateOnly(iso);
+}
+
 export type AgendaRange = "week" | "next" | "month";
 export const AGENDA_RANGES: readonly AgendaRange[] = ["week", "next", "month"];
 
@@ -125,7 +138,7 @@ export interface AgendaItem {
   event: CalendarEvent;
   /** Calendar day: the New York date, or the UTC date of a date-only value. */
   day: string;
-  /** Minutes after midnight in New York when the time is known; null for dates and unconfirmed report times. */
+  /** Minutes after midnight in New York when the exact time is known; null for dates, estimates and session slots. */
   minute: number | null;
   /** The filters the event matches. */
   filters: EventFilter[];
@@ -152,10 +165,13 @@ export function eventFilters(event: CalendarEvent, input: AgendaInput): EventFil
   return out;
 }
 
-/** Wall-clock minute of an event, or null when only the date is meaningful. */
+/**
+ * Wall-clock minute of an event, or null when no exact time is known: dividends, date-only values, estimated reports
+ * and reports whose time only marks a session slot (see reportTimeKnown).
+ */
 function eventMinute(event: CalendarEvent): number | null {
   if (event.kind === "dividend" || isDateOnly(event.at)) return null;
-  if (event.kind === "earnings" && event.estimated) return null;
+  if (event.kind === "earnings" && (event.estimated || event.timing !== null || !reportTimeKnown(event.symbol ?? "", event.at))) return null;
   const t = Date.parse(event.at);
   return Number.isFinite(t) ? nyMinuteOfDay(t) : null;
 }

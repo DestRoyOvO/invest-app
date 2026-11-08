@@ -11,6 +11,7 @@ import {
   filterCounts,
   formatWeekSummary,
   isDateOnly,
+  isUsListing,
   localTimeOf,
   macroListEnding,
   nyClock,
@@ -19,6 +20,7 @@ import {
   pickTopItems,
   rangeWindow,
   relativeDay,
+  reportTimeKnown,
   summarizeWeek,
   toAgendaItem,
   weekdayOf,
@@ -88,12 +90,27 @@ describe("rangeWindow", () => {
 describe("toAgendaItem", () => {
   it("values held positions at the last price, or at cost while no price is known", () => {
     const nvda = toAgendaItem(earnings("NVDA", "2026-11-17T21:00:00.000Z", "post"), INPUT);
-    expect(nvda).toMatchObject({ day: "2026-11-17", minute: 16 * 60, filters: ["holdings", "watchlist", "universe"], shares: 40, valueAtCost: false, currency: "USD" });
+    expect(nvda).toMatchObject({ day: "2026-11-17", minute: null, filters: ["holdings", "watchlist", "universe"], shares: 40, valueAtCost: false, currency: "USD" });
     expect(nvda.positionValue).toBeCloseTo(40 * 186.64, 8);
     const jpm = toAgendaItem(earnings("JPM", "2027-01-14T13:30:00.000Z", "pre"), INPUT);
     expect(jpm).toMatchObject({ positionValue: 2000, valueAtCost: true, currency: null });
     const aapl = toAgendaItem(earnings("AAPL", "2027-01-28T21:00:00.000Z", null, true), INPUT);
     expect(aapl).toMatchObject({ shares: null, positionValue: null, minute: null, filters: ["watchlist", "universe"] });
+  });
+
+  it("keeps an exact time only where Yahoo gives the release time", () => {
+    // US report times only mark the session slot (Yahoo puts every before-open report at 13:30Z).
+    expect(toAgendaItem(earnings("HD", "2026-11-17T13:30:00.000Z", "pre"), INPUT).minute).toBeNull();
+    // A Saturday report (no session, so no slot) still has no known time.
+    expect(toAgendaItem(earnings("BRK-B", "2026-11-07T21:00:00.000Z", null), INPUT).minute).toBeNull();
+    // A Hong Kong listing's time is its release time: 08:10Z is 03:10 in New York.
+    expect(toAgendaItem(earnings("0700.HK", "2026-11-18T08:10:00.000Z", null), INPUT).minute).toBe(3 * 60 + 10);
+    expect(toAgendaItem(macro("cpi", "2026-11-10T13:30:00.000Z"), INPUT).minute).toBe(8 * 60 + 30);
+    expect(isUsListing("BRK-B")).toBe(true);
+    expect(isUsListing("0700.HK")).toBe(false);
+    expect(reportTimeKnown("0700.HK", "2026-11-18T08:10:00.000Z")).toBe(true);
+    expect(reportTimeKnown("0700.HK", "2026-11-18T00:00:00.000Z")).toBe(false);
+    expect(reportTimeKnown("NVDA", "2026-11-17T21:00:00.000Z")).toBe(false);
   });
 
   it("computes the dividend cash for holders", () => {

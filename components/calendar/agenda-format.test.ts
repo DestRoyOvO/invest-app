@@ -37,7 +37,9 @@ describe("localLabel", () => {
     expect(localLabel(fomc, "America/New_York", en)).toBeNull();
     expect(localLabel(fomc, null, en)).toBeNull();
     expect(localLabel(item({ kind: "dividend", at: "2026-11-12T05:00:00.000Z" }), "Asia/Shanghai", en)).toBeNull();
-    expect(localLabel(item({ kind: "earnings", at: "2026-11-09T01:00:00.000Z", timing: "post" }), "Pacific/Honolulu", zh)).toBe("15:00");
+    // A session slot has no clock time to convert (Yahoo's 21:00Z only says "after the close").
+    expect(localLabel(item({ kind: "earnings", at: "2026-11-17T21:00:00.000Z", timing: "post", symbol: "NVDA" }), "Asia/Shanghai", en)).toBeNull();
+    expect(localLabel(item({ kind: "earnings", at: "2026-11-18T08:10:00.000Z", symbol: "0700.HK" }), "Asia/Shanghai", zh)).toBe("16:10");
     // 00:30 in New York is still the evening before in Honolulu.
     expect(localLabel(item({ kind: "macro", at: "2026-11-09T05:30:00.000Z", macro: "cpi" }), "Pacific/Honolulu", en)).toBe("19:30 −1 day");
   });
