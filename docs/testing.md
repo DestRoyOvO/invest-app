@@ -230,7 +230,7 @@ The specs:
 
 | Spec | Covers |
 |---|---|
-| `smoke.spec.ts` | The harness itself (fixture data source, shared clock, the "Fixture data" status bar), the overview heatmap (one tile per universe stock on the desktop, the sector list on phones), the AAPL quote with its chart and after-hours trade, the not-found view of an unknown symbol. |
+| `smoke.spec.ts` | The harness itself (fixture data source, shared clock, the "Fixture data" status bar), the overview heatmap (one tile per universe stock on the desktop, the sector list on phones), the AAPL quote with its chart and after-hours trade, the not-found view of an unknown symbol, and the 404 of a symbol that cannot exist with its title in English and Chinese. |
 | `routes.spec.ts` | Every page route (below). |
 | `a11y.spec.ts` | axe on every page of the route sweep, the command bar and the chat drawer ([Accessibility](#accessibility)). |
 | `ai.spec.ts` | Every AI scenario of the mock model, Stop, Regenerate, and the signed-out note panel and API. |
@@ -240,15 +240,18 @@ The specs:
 `e2e/specs/routes.spec.ts` opens every page of the app on both projects, from the cases of `e2e/support/routes.ts`:
 the overview, world markets, a sector (`/sector/technology`), the screener and discover, the watchlist, the portfolio and
 its exposure, risk and correlation tabs, the calendar, alerts, notes, the AAPL quote with each of its tabs (financials,
-earnings, analysts, dividends, ownership), a fund (`/stock/SPY` and its dividends), an index (`/stock/%5EGSPC`), a crypto
-pair (`BTC-USD`), a currency pair (`EURUSD=X`), a future (`GC=F`), a Hong Kong listing (`0700.HK`), the factor lab, the
-data page, help, `/unlock` (a public site redirects it home) and two not-found pages (`/stock/ZZZZ`, `/no-such-page`).
-A listing test fails when a `page.tsx` under `app/` matches no case, so a new page needs one.
+earnings, analysts, dividends, ownership), a fund (`/stock/SPY` and its dividends), a mutual fund outside the app's lists
+(`/stock/VFIAX`: the fixture data makes any four letters and an X a fund), an index (`/stock/%5EGSPC`), a crypto pair
+(`BTC-USD`), a currency pair (`EURUSD=X`), a future (`GC=F`), a Hong Kong listing (`0700.HK`), the factor lab, the data
+page, help, `/unlock` (a public site redirects it home) and three not-found pages: `/stock/ZZZZ` (a well-formed symbol
+the data source does not know, which answers 200 on purpose and shows the not-found view once the stock API answers 404),
+`/stock/%24%24%24` (a symbol that cannot exist, which answers 404 from the server) and `/no-such-page`. A listing test
+fails when a `page.tsx` under `app/` matches no case, so a new page needs one.
 
 Each test starts from `SAMPLE_DATA` in the browser (a watchlist with a fund and a crypto pair, four positions with a
 fund and a stock outside the heatmap universe, and a thesis note) and checks:
 
-- the document status (200; 404 for `/no-such-page`) and, for `/unlock`, where the redirect ends;
+- the document status (200; 404 for `/stock/%24%24%24` and `/no-such-page`) and, for `/unlock`, where the redirect ends;
 - no console error and no uncaught page error (the suite's collector), and no same-origin response with a status of
   400 or more;
 - the page's main panel with its data: one web-first assertion on a region named by its panel title and something in it
@@ -258,16 +261,16 @@ fund and a stock outside the heatmap universe, and a thesis note) and checks:
   failed AI note; Next.js's empty route announcer aside) and no stale-data banner;
 - the API routes the case names answered 200: every panel route of the AAPL quote page and its tabs (`chart`, `signal`,
   `factors`, `news`, `earnings`, `analysts`, `implied-move`, `financials`, `dividends`, `ownership`), the fund's chart and
-  dividends, the world board, the Treasury curve, the screener, discover, sector news, history, profiles and the
-  calendar.
+  dividends, the mutual fund's quote, chart, signal, factors and news, the world board, the Treasury curve, the screener,
+  discover, sector news, history, profiles and the calendar.
 
 Expected noise is allowed per case, as narrowly as possible (`expectedNoise`): `/stock/ZZZZ` gets 404 from the stock API
-and each panel route, and a case whose document should answer an error status (`status: 404` for `/no-such-page` and
-`/stock/ZZZZ`) allows that document's own console line and response, for its URL alone. A case can also accept a known
-app bug in the document status (`knownStatus`): the test passes with a `known-app-bug` annotation, and once the bug is
-fixed it notes `known-status-unused`, the cue to delete the allowance. The document's allowances follow the status the
-case expects, not the one it gets today, so the fix itself fails nothing (the smoke test of `/stock/ZZZZ` and its
-accessibility checks use the same allowances).
+and each panel route, and a case whose document should answer an error status (`status: 404` for `/stock/%24%24%24` and
+`/no-such-page`) allows that document's own console line and response, for its URL alone. A case can also accept a known
+app bug in the document status (`knownStatus`; no case needs one now): the test passes with a `known-app-bug`
+annotation, and once the bug is fixed it notes `known-status-unused`, the cue to delete the allowance. The document's
+allowances follow the status the case expects, not the one it gets today, so the fix itself fails nothing (the smoke
+tests of the quote's not-found pages and their accessibility checks use the same allowances).
 
 Write specs in `e2e/specs/*.spec.ts` with the suite's `test` from `e2e/support/test.ts`:
 
@@ -293,24 +296,22 @@ violations of impact serious or critical, listing each rule, its help link and t
 full result is attached to the test report. WCAG 2.2 is included on purpose: its target-size rule (2.5.8, 24 by 24 CSS
 pixels) is the minimum [docs/design-system.md](design-system.md) sets for controls.
 
-`e2e/specs/a11y.spec.ts` runs axe on every page of the route sweep except the redirect (31 pages, from the same sample
+`e2e/specs/a11y.spec.ts` runs axe on every page of the route sweep except the redirect (33 pages, from the same sample
 data and after the same check that the page has loaded its data), on the open command bar (empty, then with symbol
-matches for "apple") and on the open AI chat drawer, in the dark and light themes on both projects: 132 tests.
+matches for "apple") and on the open AI chat drawer, in the dark and light themes on both projects: 140 tests.
 
 A known finding is accepted for one rule on the elements inside a locator (`known: [{ rule, within, reason }]`); every
 other rule, color contrast included, still checks those elements. A known finding that no longer occurs adds an
 `axe-known-unused` annotation to the test, the cue to delete it. A finding that only some data shows is marked
 `dataDependent`: at another `E2E_NOW` it can be absent while the bug remains, so its absence is only reported at the
-default `E2E_NOW`. Accepted now, until the branches that own the fixes are merged:
+default `E2E_NOW`.
 
-| Page | Rule | Elements | Owner of the fix |
-|---|---|---|---|
-| `/sector/technology` (desktop) | label-content-name-mismatch (serious) | a heatmap tile whose change has no sign (`CSCO 0.00%` on the pinned day): the symbol and the change are two spans with no space between them, which axe reads as "CSCO0.00%" (a signed change separates them). A space between the spans fixes it. | `components/market/SectorHeatmap.tsx`, int/pages |
-| `/stock/BTC-USD` | aria-required-attr (critical) | the factor profile meter of a factor without a value (beta of a crypto pair): `Meter` keeps `role="meter"` and drops `aria-valuenow`, which the role requires | `components/ui/Meter.tsx` (int/ui), used by `components/stock/FactorProfilePanel.tsx` (int/pages) |
-
-The tile finding depends on the data (`dataDependent`): with another `E2E_NOW`, a tile of `/` or of another day's sector
-page whose price did not move can show it too, and the CSCO tile can be signed. The three findings accepted before wave 2 (heatmap tile names and sizes on `/`, the chart
-container around a focusable link on `/stock/AAPL`) were fixed by wave2/overview and wave2/quote and are gone.
+None is accepted now (`KNOWN` is empty). The last two are fixed: a heatmap tile whose change has no sign (`CSCO 0.00%` on
+the pinned day) read as "CSCO0.00%" (label-content-name-mismatch), and the factor profile's meter of a factor without a
+value (beta of a crypto pair) kept `role="meter"` without `aria-valuenow` (aria-required-attr). A tile now has a space
+between its symbol and its change, and a `Meter` without a value is an image named `<label>: Data unavailable`. The
+three findings accepted before wave 2 (heatmap tile names and sizes on `/`, the chart container around a focusable link
+on `/stock/AAPL`) were fixed by wave2/overview and wave2/quote.
 
 Color contrast passes in both themes on every page checked; `npx tsx scripts/check-contrast.ts` covers the token pairs.
 
@@ -331,21 +332,17 @@ allowance is left), the Treasury curve is served from the fixture CSV by default
 in `lib/server/fixtures/app-data.test.ts` behind its network stub, every page route is swept on both projects, and axe
 runs on every page of the sweep in both themes.
 
-What is still accepted, and what removes it:
+Nothing is accepted: no case of the sweep has a `knownStatus` and `KNOWN` in `a11y.spec.ts` is empty, so every page
+answers the status it should and shows no serious or critical axe finding in either theme on either project. That
+`/stock/ZZZZ` answers 200 is a decision, not an allowance: telling a well-formed symbol Yahoo does not know from a real
+one while the page renders would call Yahoo outside the API routes' per-client rate limit and hold up every quote page,
+so the page shows its not-found view once `/api/stock/ZZZZ` answers 404. A symbol that cannot exist
+(`/stock/%24%24%24`) answers 404 from the server, with the not-found title in the reader's language. The quote page of a
+fund, index, currency, future or crypto pair asks for no earnings or analysts, so it causes no 4xx either
+(`/stock/VFIAX` in the sweep).
 
-| Where | What | Owner | When it is fixed |
-|---|---|---|---|
-| `/stock/ZZZZ` | The document answers 200, not 404 (a soft 404): `app/(terminal)/stock/[symbol]/page.tsx` renders `StockView`, which shows the not-found view only after `/api/stock/ZZZZ` answers 404. | int/pages | The sweep notes `known-status-unused`: delete the case's `knownStatus`. |
-| `/sector/technology` | label-content-name-mismatch on a tile with an unsigned change (table above). | int/pages | The a11y test notes `axe-known-unused` at the default `E2E_NOW`: delete the entry in `KNOWN`. |
-| `/stock/BTC-USD` | aria-required-attr on a meter without a value (table above). | int/ui | As above. |
-
-Known app issues that no spec checks: the quote page shows FX prices with two decimals (`1.31` for EUR/USD, which the
-world board shows as `1.3062`) because `formatPrice` in `lib/format.ts` uses four decimals only below 1 and ignores the
-quote's `priceHint` (the sweep's price pattern accepts both); and a change that rounds to zero shows as `-0.00%`
-(`formatPercent`, same file).
-
-When the pending work of the other integration branches lands, nothing here should need to change: the specs do not look
-at the Earnings and Analysts panels of funds and indices (int/pages hides them), the only company name they check, Apple
-Inc., is the same short and long (int/pages prefers long names), a panel is the first region of its name (int/ui's
-DataTable may add a labelled scroll region around an overflowing table), and the command bar opens with "/" rather than
-through the phone's command field (int/shell turns it into an icon button).
+Known app issues that no spec checks: none at the moment. The two listed before are fixed: `priceDigits` in
+`lib/quote-figures.ts` gives currency pairs and the world board's instruments their decimals on the quote page too
+(four for EUR/USD, as on the world board), and a value that rounds to zero at the shown decimals prints without a sign,
+in the flat tone and without an arrow (`displayedSign` in `lib/format.ts`, behind `Delta` and the other direction
+colors).
