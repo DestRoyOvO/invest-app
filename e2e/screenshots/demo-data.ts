@@ -4,9 +4,10 @@ import type { DemoData } from "../support/shots";
 
 // The investor the README screenshots show: what a returning user keeps in the browser after a few weeks, in the
 // stores' own formats. Prices and dates fit the fixture data at the default E2E_NOW (Saturday 2026-11-07, after
-// Friday's session): costs are where these stocks traded in the past year, the notes' targets and stops lie inside
-// AAPL's and NVDA's one-year ranges (so the AAPL chart draws them), and no alert rule is near its level (so no alert
-// fires, and no toast covers a shot).
+// Friday's session): costs are where these stocks traded in the past year or two, AAPL's target and stop lie inside its
+// one-year range (so the 1Y chart of the quote image draws them; readme.shots.ts checks it), NVDA's target sits above
+// its 52-week high as a growth thesis's often does, and no alert rule is near its level (so no alert fires, and no
+// toast covers a shot).
 
 /** An alert rule as the store keeps it, armed at `armedAt` and not yet checked. */
 function rule(fields: Pick<AlertRule, "id" | "symbol" | "kind" | "value" | "note" | "armedAt">): AlertRule {

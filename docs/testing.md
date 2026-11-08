@@ -120,14 +120,14 @@ a few real splits show as events), intraday prices during a session (quotes show
 the next one trades), and Yahoo quirks such as the extra trailing row of weekly charts. The fixture client does not
 validate query options the way the library does, except for `fundamentalsTimeSeries`.
 
-Not realistic, so keep it out of screenshots: relations between instruments beyond the shared market and sector factors.
-Each walk runs on its own, so an index does not follow its members (NDX and QQQ down over 52 weeks while NVDA, AMZN and
-MSFT are up), related indices such as the Shanghai Composite and the CSI 300 can move apart on the same day, and long
-histories (5Y, MAX) start at arbitrary levels. The dollar index is the exception: ICE's formula computes it from the walks
-of its six currencies (EUR/USD, USD/JPY, GBP/USD, USD/CAD, USD/SEK and USD/CHF, `DOLLAR_INDEX` in
-`lib/server/fixtures/prices.ts`), so it falls as the euro rises (DXY 91.75 next to EUR/USD 1.3062 at the default `E2E_NOW`)
-and starts in December 2003 with them. Company revenue comes from a random price-to-sales ratio, so it can be a few times
-off for the largest companies.
+Not realistic, so avoid it in screenshots where the page allows: relations between instruments beyond the shared market
+and sector factors. Each walk runs on its own, so an index does not follow its members (NDX and QQQ down over 52 weeks
+while NVDA, AMZN and MSFT are up), related indices such as the Shanghai Composite and the CSI 300 can move apart on the
+same day, and long histories (5Y, MAX) start at arbitrary levels. The dollar index is the exception: ICE's formula
+computes it from the walks of its six currencies (`DOLLAR_INDEX` in `lib/server/fixtures/prices.ts`: EUR/USD, USD/JPY and
+GBP/USD, and USD/CAD, USD/SEK and USD/CHF, which the table gained for it), so it falls as the euro rises (DXY 91.75 next to
+EUR/USD 1.3062 at the default `E2E_NOW`) and starts in December 2003 with them. Company revenue comes from a random
+price-to-sales ratio, so it can be a few times off for the largest companies.
 
 Run the app on fixture data:
 
@@ -369,43 +369,59 @@ servers with the settings of `e2e/support/env.ts` (fixture data, the mock model,
 server's time (Playwright's `clock.setFixedTime`). The server stamps its data with its clock ("Updated 10:00 ET", a
 panel's "As of", the screener's snapshot time), so a running clock would put another minute into each run's images. The
 files end in `.shots.ts` outside `e2e/specs`, so neither `npm run e2e` nor Vitest runs them, and CI does not either.
+The command takes two to two and a half minutes, most of it the build. With `E2E_REUSE=1` and servers already up, a shot
+takes 15 to 25 seconds on a freshly started server and two or three once its caches are warm.
 
 | Image | Page | Look |
 |---|---|---|
 | `overview-dark-en.png` | `/`, top: My day, the week ahead, the markets board, the watchlist, sectors | desktop, dark, English, green up |
-| `quote-dark-en.png` | `/stock/AAPL`: the header with the after-hours trade and the position, the chart with the cost, target and stop lines down to its footer, key statistics | desktop, dark, English |
+| `quote-dark-en.png` | `/stock/AAPL`: the header with the after-hours trade, the report and ex-dividend chips and the position, the chart with the cost, target and stop lines down to its footer, key statistics | desktop, dark, English |
 | `portfolio-dark-en.png` | `/portfolio`: the figures, today's holdings against SPY over a year, the drawdown (scrolled down to its axis) | desktop, dark, English |
 | `calendar-dark-en.png` | `/calendar`, four weeks | desktop, dark, English |
 | `screener-dark-en.png` | `/screener` | desktop, dark, English |
 | `lab-dark-en.png` | `/lab` | desktop, dark, English |
 | `markets-dark-en.png` | `/markets` | desktop, dark, English |
-| `overview-light-zh.png` | `/`, from breadth down: the heatmap, the headlines, the AI brief | desktop, light, Chinese, red up |
+| `overview-light-zh.png` | `/`, scrolled to the headlines: the last row of the markets board, breadth and the heatmap beside the headlines and the AI brief | desktop, light, Chinese, red up |
 | `mobile-light-zh.png` | `/` on a phone: My day, the week ahead | phone, light, Chinese, red up |
 
-Desktop images are 1440 by 900 CSS pixels at device scale 1, the phone image 390 by 844 at scale 2; the nine files take
-about 2 MB.
+`e2e/screenshots/images.ts` lists the nine files with the project that captures each. Desktop images are 1440 by 900
+CSS pixels at device scale 1, the phone image 390 by 844 at scale 2; the nine files take about 2 MB. Each image ends where
+the viewport does, so the longer column runs on past the bottom edge (the overview's headlines, the quote's key
+statistics, the lab's rank correlations, the markets page's currencies). The tests choose where an image starts; the
+zh overview starts at the headlines, a few pixels off if need be, so that its top edge cuts no line of text in either
+column.
 
 **The demo investor** (`e2e/screenshots/demo-data.ts`) is put into localStorage under the stores' own keys before the
 first page load, as `app.seedStorage` does: a watchlist of ten large caps, eight positions worth about $120k at costs
-from the past year or two (seven stocks and SPY), thesis notes on AAPL and NVDA whose targets and stops lie inside the
-one-year ranges (the AAPL chart draws them), and two alert rules far from their levels, so no alert fires and no toast
-covers a page. The browser is signed in, as in the suite (the AI controls show as available), and each test sets the
-language, theme, price colors and density as cookies.
+from the past year or two (seven stocks and SPY), thesis notes on AAPL and NVDA (AAPL's target and stop lie inside its
+one-year range, so the quote image's 1Y chart draws them; NVDA's target sits above its 52-week high, as a growth thesis's
+target often does), and two alert rules far from their levels, so no alert fires and no toast covers a page. The browser
+is signed in, as in the suite (the AI controls show as available), and each test sets the language, theme, price colors
+and density as cookies.
 
 **The instant** is the default `E2E_NOW`, Saturday 2026-11-07 10:00 in New York: the market closed after Friday's
 session, Friday's after-hours trade shows and the scheduled events lie ahead (NVDA reports on Tuesday). Another
 `E2E_NOW` works, but the READMEs describe the default.
 
-**Still pictures.** Before each capture the test checks that the page's panels show their data (the route sweep's
-checks, plus the seeded positions and watchlist), then waits until no data request is in flight, every declared font
-face has loaded, no skeleton, "Loading", error state, stale-data banner or toast is visible and every image has decoded.
-The context asks for reduced motion (the app then finishes its animations at once), the capture skips what is left of
-them and hides the caret, nothing has focus and the mouse is outside the page, so no hover state or tooltip shows. Two
-runs on one machine give byte-identical files; another operating system, browser version or set of fonts changes pixels.
+**Still pictures.** Before each capture the test checks that the page shows what its image promises: the route sweep's
+checks, the seeded positions and watchlist, and on the quote page the after-hours trade, the report and ex-dividend
+chips, the position line, the note's target and stop, and no level of the investor's left off the chart. It checks the
+look as `<html>` carries it (`lang`, `data-theme`, `data-updown`, `data-density`) and that the phone image comes from the
+phone project. It then waits until no data request is in flight (one still open after 30 seconds fails the shot, named
+in the error, rather than leave its panel half drawn: a sparkline shows no skeleton), every declared font face has
+loaded, no skeleton, "Loading", error state, stale-data banner or toast is visible and every image has decoded. The
+context asks for reduced motion (the app then finishes its animations at once), the capture skips what is left of them
+and hides the caret, nothing has focus and the mouse is outside the page, so no hover state or tooltip shows. Two runs on
+one machine give byte-identical files; another operating system, browser version or set of fonts changes pixels.
+
+**One set.** The run fails unless it wrote all nine files into the folder it was asked for, each at its project's size
+(1440 by 900 pixels, the phone image 780 by 1688). A run of some of the shots (`-g`, a file:line, `--project`) therefore
+ends with an error listing the images it left as they were: run the whole command before committing them.
 
 **Synthetic data.** The images show made-up prices, company figures and headlines, labelled "Fixture data" in the status
 bar; the READMEs say so under the table. What the fixture data does not keep realistic ([Fixture
-mode](#fixture-mode)) can show: the markets image has the Shanghai Composite and the CSI 300 moving apart.
+mode](#fixture-mode)) shows where a page lists both instruments: the markets image has the Shanghai Composite down 2.57%
+beside the CSI 300 up 0.61%.
 
 **When to regenerate:** after a change that shows on one of these pages (layout, wording, tokens), a change to the
 fixture data or the demo data, and before a release. Run it without `E2E_REUSE`, look at every image (the test checks
