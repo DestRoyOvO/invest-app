@@ -20,13 +20,16 @@
 // The file is validated with zod (components/data/backup-schema.ts), which is loaded only when a file is checked, so
 // validateBackup is async: the settings menu on every page imports this module for the backup age, and should not
 // download a validator.
+//
+// Display preferences are restored only with values this version can show (isKnownPrefValue); the page applies them
+// through the preferences provider (components/data/prefs-sync.ts), as the settings menu does.
 
 import { HOLDINGS_STORAGE_KEY, sanitizeHoldings, type Holdings } from "@/hooks/useHoldings";
 import { sanitizeWatchlist, WATCHLIST_STORAGE_KEY } from "@/hooks/useWatchlist";
 
 import { createLocalStore, registeredLocalStores, STORAGE_PREFIX, type LocalStore } from "./local-store";
 import { NOTES_STORAGE_KEY, sanitizeNotes, type NotesBook, type SymbolNote } from "./notes";
-import { PREF_COOKIE_MAX_AGE } from "./prefs";
+import { DENSITIES, PREF_COOKIE_MAX_AGE, THEMES, UPDOWNS } from "./prefs";
 import { DEFAULT_WATCHLIST, MAX_WATCHLIST } from "./universe";
 
 export const BACKUP_APP = "investseek";
@@ -46,6 +49,19 @@ export type PrefCookieName = (typeof PREF_COOKIE_NAMES)[number];
 export type PrefCookies = Partial<Record<PrefCookieName, string>>;
 /** Preference values are short lowercase words ("zh", "dark", "cb", "compact"), which also keeps them safe in a cookie. */
 export const COOKIE_VALUE = /^[a-z]{1,16}$/;
+
+/** The values this version can show for each preference (lib/prefs.ts). */
+const PREF_VALUES: Readonly<Record<PrefCookieName, readonly string[]>> = {
+  is_lang: ["en", "zh"],
+  is_theme: THEMES,
+  is_updown: UPDOWNS,
+  is_density: DENSITIES,
+};
+
+/** True for a preference value this version can show; a newer version's value (a new theme) is not restored. */
+export function isKnownPrefValue(name: PrefCookieName, value: string): boolean {
+  return PREF_VALUES[name].includes(value);
+}
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
@@ -543,11 +559,11 @@ export interface PrefChange {
   to: string;
 }
 
-/** Preference cookies in the backup that differ from the current ones. */
+/** Preference cookies in the backup that differ from the current ones, leaving out values this version cannot show. */
 export function prefChanges(backup: Backup, current: PrefCookies): PrefChange[] {
   return PREF_COOKIE_NAMES.flatMap((name) => {
     const to = backup.data.cookies[name];
-    return to && to !== current[name] ? [{ name, from: current[name] ?? null, to }] : [];
+    return to && to !== current[name] && isKnownPrefValue(name, to) ? [{ name, from: current[name] ?? null, to }] : [];
   });
 }
 

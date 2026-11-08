@@ -8,10 +8,10 @@ import { useCallback, useEffect, useEffectEvent, useRef, useState, useSyncExtern
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { useHoldings } from "@/hooks/useHoldings";
 import { useWatchlist } from "@/hooks/useWatchlist";
-import { readStorage, writePrefCookie, type PrefCookies, type StorageSnapshot } from "@/lib/backup";
+import { readStorage, type PrefCookies, type StorageSnapshot } from "@/lib/backup";
 import { registeredLocalStores } from "@/lib/local-store";
-import type { Theme, UpDown } from "@/lib/prefs";
 
+import { applyPrefCookies, prefCookiesOf } from "./prefs-sync";
 import { checkSymbols, type SymbolCheck } from "./symbol-check";
 
 const EMPTY_SNAPSHOT: StorageSnapshot = {};
@@ -91,54 +91,18 @@ export function useSymbolChecks(symbols: readonly string[], queriesOf: (symbol: 
   return { checks, retry };
 }
 
-const THEMES: readonly Theme[] = ["dark", "light"];
-const UPDOWNS: readonly UpDown[] = ["intl", "cn"];
-
-function isOneOf<T extends string>(value: string, options: readonly T[]): value is T {
-  return (options as readonly string[]).includes(value);
-}
-
 /**
- * Applies preference values to the open page: through the preferences provider for the values it knows, and for any
- * other value (a theme, color convention or density from a newer version) by setting the cookie and the <html>
- * attribute directly, which is what the server renders on the next load. `current` reads what is on screen now, so a
- * restore can be undone.
+ * Applies restored preference values to the open page through the preferences provider (prefs-sync.ts), so the
+ * cookies, the <html> attributes, the theme-color meta and the resolved theme change together, as they do from the
+ * settings menu. Values this version cannot show are left alone. `current` is what is on screen now, so a restore can
+ * be compared and undone.
  */
 export function usePrefsSync() {
-  const { lang, theme, updown, setLang, setTheme, setUpdown } = usePrefs();
+  const { lang, theme, updown, density, setLang, setTheme, setUpdown, setDensity } = usePrefs();
 
-  const apply = useCallback(
-    (cookies: PrefCookies) => {
-      const root = document.documentElement;
-      // Language first: switching it rewrites the color cookie with the convention currently on screen.
-      if (cookies.is_lang === "en" || cookies.is_lang === "zh") setLang(cookies.is_lang);
-      if (cookies.is_theme) {
-        if (isOneOf(cookies.is_theme, THEMES)) setTheme(cookies.is_theme);
-        else {
-          writePrefCookie("is_theme", cookies.is_theme);
-          root.dataset.theme = cookies.is_theme;
-        }
-      }
-      if (cookies.is_updown) {
-        if (isOneOf(cookies.is_updown, UPDOWNS)) setUpdown(cookies.is_updown);
-        else {
-          writePrefCookie("is_updown", cookies.is_updown);
-          root.dataset.updown = cookies.is_updown;
-        }
-      }
-      if (cookies.is_density) {
-        writePrefCookie("is_density", cookies.is_density);
-        if (cookies.is_density === "compact") root.dataset.density = "compact";
-        else delete root.dataset.density;
-      }
-    },
-    [setLang, setTheme, setUpdown],
-  );
+  const apply = useCallback((cookies: PrefCookies) => applyPrefCookies(cookies, { setLang, setTheme, setUpdown, setDensity }), [setLang, setTheme, setUpdown, setDensity]);
 
-  const current = useCallback((): PrefCookies => {
-    const root = document.documentElement;
-    return { is_lang: lang, is_theme: root.dataset.theme ?? theme, is_updown: root.dataset.updown ?? updown, is_density: root.dataset.density ?? "comfortable" };
-  }, [lang, theme, updown]);
+  const current = useCallback((): PrefCookies => prefCookiesOf({ lang, theme, updown, density }), [lang, theme, updown, density]);
 
   return { apply, current };
 }
