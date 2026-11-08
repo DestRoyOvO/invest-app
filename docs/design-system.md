@@ -30,8 +30,9 @@ every token pair; `lib/design-tokens.test.ts` fails when a pair drops below its 
   （conventions.test.ts 会拦下这类覆盖；可排序表头整格可点）；面板标题栏最少 36px，在手机上随 40px 控件长高，所以标题栏里的
   控件在手机上也留在标题栏；紧凑密度下行内小图标按钮为 24px，带操作的行也保持约 24px；可排序表头带 aria-sort；表格横向或
   纵向放不下时，滚动框成为以表格标题命名、可用 Tab 聚焦的区域，方向键即可滚动，所以表格标题要描述表格内容，不能与所在
-  面板或分区的名称相同（lib/i18n/captions.test.ts 检查）；Esc 只关闭最内层（先关悬停卡片，再关抽屉）；提示条在悬停或
-  键盘焦点时暂停，键盘关闭后焦点移到下一条或回到原处；实时更新用礼貌型 live region；尊重"减少动态效果"。
+  面板或分区的名称相同（lib/i18n/captions.test.ts 和 conventions.test.ts 检查）；Esc 只关闭最内层（先关悬停卡片，再关
+  抽屉）；提示条在悬停或键盘焦点时暂停，键盘关闭后焦点移到下一条或回到原处；实时更新用礼貌型 live region；尊重"减少
+  动态效果"。
 - **缺失值**：一律显示 `lib/format.ts` 的 `DASH`（U+2014），格式化函数遇到 null 也返回它；不用 U+2013、连字符或
   "N/A"。它只是数据占位符，文案里仍然不用破折号。
 - **非价格的正负读数**（相关系数、z 分数、因子倾向）：只按绝对值深浅着色，用一种中性色阶并标出带符号的数字，不用红绿或
@@ -435,13 +436,18 @@ const columns: DataTableColumn<Quote>[] = [
 - Widths come from a `<colgroup>`; give number columns fixed widths (last 5.5rem, change 4.5rem, change % 5rem, volume
   5.5rem, market cap 5.25rem, P/E 3.75rem, trend 6.5rem) and leave the name column free so it takes the rest.
 - Columns hide below a viewport breakpoint (`hideBelow: "sm"`) or while the table's own box is narrower than a container
-  size (`hideBelowContainer: "md"`; Tailwind's `@` sizes: xs 20rem, sm 24rem, md 28rem, lg 32rem, xl 36rem, 2xl 42rem).
-  Use the container size for a table that can sit in the 22rem right-hand column at xl, a box of 356px at 1280px and
-  410px at 1440px, where `hideBelow` only sees a wide viewport: the overview's watchlist drops its 1M line below `sm`
-  (its four columns need 360px), Trending drops the price below `md` so the names keep room, and the analyst actions hide
-  their date column below `md`. The container size takes the place of `hideBelow`. When a column uses it, the scroll box
-  becomes the query container (`@container`), so cells can carry container classes too: the analyst actions show the
-  date under the firm with `@md:hidden`. A footer row a caller builds hides its cells with `hideClass(column)`.
+  size (`hideBelowContainer: "md"`; Tailwind's `@` sizes: 3xs 16rem, 2xs 18rem, xs 20rem, sm 24rem, md 28rem, lg 32rem,
+  xl 36rem, 2xl 42rem). Use the container size for a table that can sit in the 22rem right-hand column at xl, a box of
+  356px at 1280px and 410px at 1440px, where `hideBelow` only sees a wide viewport: the overview's watchlist drops its 1M
+  line below `sm` (its four columns need 360px), Trending drops the price below `md` so the names keep room, and the
+  analyst actions hide their date column below `md`. The container size takes the place of `hideBelow`. When a column
+  uses it, the scroll box becomes the query container (`@container`), so cells can carry container classes too: the
+  analyst actions show the date under the firm with `@md:hidden`. A table whose cells adapt while every column stays
+  makes its box the container itself with `className="@container"`: the reported quarters on the quote page set the
+  report date after the quarter, and under it with `@max-sm:block` below `sm` (the quarter column gets 104px at 1280px
+  and 106px on 360px phones; "3Q2025 10月30日" needs 127). A footer row a caller builds hides its cells with
+  `hideClass(column)`. The compact world tables (currencies, commodities, crypto) keep all four columns at 1280px and
+  let a long name truncate ("EUR/U…", "欧元/…"): the code beside it (EURUSD) stays whole and says the same.
 - Sorting: a header click cycles the column's first direction (descending for right-aligned columns), the opposite, then
   the natural order. `aria-sort` marks the sorted header. Missing values sort last both ways; equal values keep their
   `tieBreak` order, then their original order. Pass `sort`/`onSortChange` to control it, for example to keep a
@@ -467,8 +473,10 @@ const columns: DataTableColumn<Quote>[] = [
   captions its tables "Alert rules" and "Alert history" inside the Rules and History panels, the watchlist page "Watchlist
   quotes" and "Positions with value and P&L", world markets "Benchmarks in the Americas" under the Americas heading and
   "Currency rates" in the Currencies panel, and the sector page "Information Technology constituents".
-  `lib/i18n/captions.test.ts` keeps each caption apart from its panel title. To check a page, force every table to
-  overflow (`table.table-fixed { min-width: 1600px }` or a 360px viewport) and run axe: landmark-unique must not fire.
+  `lib/i18n/captions.test.ts` keeps each caption apart from its panel title, and `components/ui/conventions.test.ts`
+  fails when a page passes the `title` of a Panel (or the `aria-label` of a section) in the same file as the caption of
+  a DataTable, QuoteTable, WatchlistTable or WorldTable. To check a page, force every table to overflow
+  (`table.table-fixed { min-width: 1600px }` or a 360px viewport) and run axe: landmark-unique must not fire.
 
 ### HoverCard and Tooltip
 
