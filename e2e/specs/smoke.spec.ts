@@ -1,4 +1,4 @@
-import { PINNED_NOW } from "../support/env";
+import { DEFAULT_NOW, E2E_NOW, PINNED_NOW } from "../support/env";
 import { expect, test } from "../support/test";
 
 // Smoke tests of the harness: the production build serves fixture data on the pinned clock, the shell says so, and
@@ -47,7 +47,7 @@ test.describe("quote page", () => {
   });
 
   test("shows Friday's after-hours trade on the pinned Saturday", async ({ page, app }) => {
-    test.skip(PINNED_NOW === null, "On the real clock the market state, and with it the extended session, varies.");
+    test.skip(E2E_NOW !== DEFAULT_NOW, "Written for the default E2E_NOW, a Saturday; at other times the extended session differs.");
     await app.goto("/stock/AAPL");
     const header = page.getByRole("region", { name: "AAPL", exact: true });
     await expect(header.getByText("After hours", { exact: true })).toBeVisible();
