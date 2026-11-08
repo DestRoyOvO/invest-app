@@ -12,6 +12,7 @@ import { usePrefs } from "@/components/providers/PrefsProvider";
 import { HeatLegend } from "@/components/ui/HeatLegend";
 import { Panel, PanelMeta } from "@/components/ui/Panel";
 import { EmptyState, ErrorState, Skeleton, SkeletonRows, StaleBanner } from "@/components/ui/States";
+import { quoteFreshness } from "@/hooks/useAlerts";
 import { useOverview, useQuotes, useSparklines } from "@/hooks/useApi";
 import { useBoard } from "@/hooks/useShellApi";
 import { useWatchlist } from "@/hooks/useWatchlist";
@@ -38,6 +39,8 @@ function WatchlistPanel() {
     const bySymbol = new Map((data?.quotes ?? []).map((q) => [q.symbol, q]));
     return visible.map((s) => bySymbol.get(s)).filter((q): q is Quote => q !== undefined);
   }, [data, visible]);
+  // Older quotes the server served after Yahoo failed are flagged as well as a failed refresh, like the watchlist page.
+  const freshness = useMemo(() => quoteFreshness(data, Boolean(error)), [data, error]);
 
   return (
     <Panel
@@ -59,7 +62,7 @@ function WatchlistPanel() {
         <ErrorState error={error} onRetry={() => mutate()} compact />
       ) : (
         <>
-          <StaleBanner show={Boolean(error && data)} since={data?.asOf} />
+          <StaleBanner show={freshness.stale} since={freshness.since} />
           <QuoteTable quotes={quotes} columns={["last", "changePct", "trend"]} sparklines={sparks} caption={t.market.watchlist} />
         </>
       )}
