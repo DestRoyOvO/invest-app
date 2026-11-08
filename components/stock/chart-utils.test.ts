@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import type { Bar } from "@/types/api";
+import { formatPrice } from "@/lib/format";
+import { MESSAGES } from "@/lib/i18n/messages";
+import type { Bar, Lang } from "@/types/api";
 
 import {
   barIndexAt,
@@ -9,9 +11,12 @@ import {
   chartTime,
   compareSlots,
   dataRange,
+  drawnLevels,
   historyRangeFor,
+  levelLinesText,
   offscreenLevels,
   percentChange,
+  type PriceLevel,
   RANGES,
   sessionBaselines,
   sharesSession,
@@ -199,5 +204,67 @@ describe("comparisons and levels", () => {
       { key: "target", price: 400, side: "above" },
     ]);
     expect(offscreenLevels(levels, null, 200)).toEqual([]);
+  });
+
+  it("draws every set level the legend does not name, at the edge of the reach included", () => {
+    const levels = [
+      { key: "cost" as const, price: 118.5 },
+      { key: "target" as const, price: 240 },
+      { key: "stop" as const, price: 165 },
+    ];
+    expect(drawnLevels(levels, 164.27, 243.37)).toEqual([
+      { key: "target", price: 240 },
+      { key: "stop", price: 165 },
+    ]);
+    // Prices 100 to 200: the reach ends at 75 and 225, as the autoscale's does.
+    expect(drawnLevels([{ key: "stop", price: 75 }, { key: "target", price: 225 }, { key: "cost", price: 225.01 }], 100, 200)).toEqual([
+      { key: "stop", price: 75 },
+      { key: "target", price: 225 },
+    ]);
+    expect(drawnLevels([{ key: "target", price: null }, { key: "stop", price: 0 }, { key: "cost", price: Number.NaN }], 100, 200)).toEqual([]);
+    expect(drawnLevels(levels, null, null)).toEqual([]);
+    // Drawn and named in the legend never overlap, and together they are every set level.
+    for (const [low, high] of [[164.27, 243.37], [100, 120], [230, 260], [150, 150]] as const) {
+      const drawn = drawnLevels(levels, low, high).map((level) => level.key);
+      const named = offscreenLevels(levels, low, high).map((level) => level.key);
+      expect([...drawn, ...named].sort()).toEqual(["cost", "stop", "target"]);
+    }
+  });
+});
+
+describe("levelLinesText", () => {
+  // SAMPLE_DATA's AAPL in the end-to-end suite: a position at 150, a note with a target of 340 and a stop of 260.
+  const levels: Array<PriceLevel<"cost" | "target" | "stop">> = [
+    { key: "cost", price: 150 },
+    { key: "target", price: 340 },
+    { key: "stop", price: 260 },
+  ];
+  const text = (lang: Lang, low: number | null, high: number | null, compare = false, from = levels) => {
+    const t = MESSAGES[lang];
+    return levelLinesText(from, low, high, compare, { ...t.chart.drawnLevels, labels: t.chart.priceLine }, (price) => formatPrice(price, lang));
+  };
+
+  it("names the lines drawn within reach of the prices in view, with their prices, in both languages", () => {
+    // 1Y: prices 244.18 to 392.34 reach down to 207.14, so the cost at 150 stays off the chart (the legend names it).
+    expect(text("en", 244.18, 392.34)).toBe("Lines on the chart: Target 340.00, Stop 260.00");
+    expect(text("zh", 244.18, 392.34)).toBe("图上价格线：目标 340.00，止损 260.00");
+    // A wider span takes the cost in as well, in the legend's order.
+    expect(text("en", 120, 392.34)).toBe("Lines on the chart: Avg cost 150.00, Target 340.00, Stop 260.00");
+    expect(text("zh", 120, 392.34)).toBe("图上价格线：成本 150.00，目标 340.00，止损 260.00");
+  });
+
+  it("follows the prices in view as the range or the window changes", () => {
+    // 1D: prices 309.10 to 312.40 (span 3.30) leave every level off the chart.
+    expect(text("en", 309.1, 312.4)).toBeNull();
+    // Zoomed in on prices from 300 to 345 (reach 288.75 to 356.25): only the target is drawn; from 255 to 290, the stop.
+    expect(text("en", 300, 345)).toBe("Lines on the chart: Target 340.00");
+    expect(text("en", 255, 290)).toBe("Lines on the chart: Stop 260.00");
+  });
+
+  it("says nothing while comparing, without levels or without prices", () => {
+    expect(text("en", 244.18, 392.34, true)).toBeNull();
+    expect(text("en", 244.18, 392.34, false, [])).toBeNull();
+    expect(text("en", 244.18, 392.34, false, [{ key: "target", price: null }, { key: "stop", price: undefined }])).toBeNull();
+    expect(text("en", null, null)).toBeNull();
   });
 });

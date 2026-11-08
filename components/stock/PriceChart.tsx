@@ -48,6 +48,7 @@ import {
   dataRange,
   historyRangeFor,
   LEVEL_REACH,
+  levelLinesText,
   offscreenLevels,
   percentChange,
   sessionBaselines,
@@ -718,6 +719,10 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
 
   // Levels beyond the visible prices (the chart leaves them out), named in the legend with their side.
   const hiddenLevels = compareMode ? [] : offscreenLevels(levels, low, high);
+  // The levels it draws are lines on the canvas only, so a second screen-reader sentence names them with their prices.
+  const levelLines = levelLinesText(levels, low, high, compareMode, { ...t.chart.drawnLevels, labels: t.chart.priceLine }, (price) =>
+    formatQuotePrice(price, digits, lang),
+  );
   // Moving averages on weekly and monthly bars count weeks and months.
   const barUnit = data?.interval === "1wk" || data?.interval === "1mo" ? data.interval : null;
   const maLabel = (period: 20 | 50 | 200) => (barUnit ? tpl(t.chart.maPeriod[barUnit], { n: period }) : t.chart.study[`ma${period}`]);
@@ -838,6 +843,7 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
       <div className={cn("relative", height)}>
         <div ref={containerRef} aria-hidden="true" className="absolute inset-0" />
         <p className="sr-only">{summary}</p>
+        {levelLines ? <p className="sr-only">{levelLines}</p> : null}
         {loading ? <Skeleton className="absolute inset-3" /> : null}
         {mainQuery.error && !data ? (
           <div className="absolute inset-0 flex items-center justify-center bg-panel">

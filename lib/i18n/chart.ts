@@ -32,6 +32,8 @@ export const chartMessages = defineMessages(
     noOverlap: "{symbol}: sessions do not overlap",
     priceLine: { cost: "Avg cost", target: "Target", stop: "Stop", prevClose: "Prev close", dayAgo: "24h ago" },
     offscreen: { below: "{label} {price}, below the chart", above: "{label} {price}, above the chart" },
+    /** For screen readers: the investor's levels drawn as lines on the canvas, which assistive technology cannot read. */
+    drawnLevels: { sentence: "Lines on the chart: {levels}", item: "{label} {price}", separator: ", " },
     marker: { dividend: "Dividend {amount}", split: "Split {ratio}", earnings: "Earnings" },
     /** The one character drawn on each event marker; markerKey explains them under the chart. */
     markerText: { dividend: "D", split: "S", earnings: "E" },
@@ -76,6 +78,7 @@ export const chartMessages = defineMessages(
     noOverlap: "{symbol}：交易时段不重叠",
     priceLine: { cost: "成本", target: "目标", stop: "止损", prevClose: "昨收", dayAgo: "24小时前" },
     offscreen: { below: "{label} {price}，在图表下方", above: "{label} {price}，在图表上方" },
+    drawnLevels: { sentence: "图上价格线：{levels}", item: "{label} {price}", separator: "，" },
     marker: { dividend: "分红 {amount}", split: "拆股 {ratio}", earnings: "财报" },
     markerText: { dividend: "息", split: "拆", earnings: "财" },
     ohlc: { open: "开", high: "高", low: "低", close: "收", volume: "量" },

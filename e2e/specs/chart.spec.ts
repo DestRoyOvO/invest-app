@@ -329,7 +329,6 @@ test.describe("markers and levels", () => {
 
   test("tells assistive technology where the cost, target and stop lines drawn on the chart are", async ({ page, app, request }) => {
     test.skip(app.isPhone, "The legend is the same on phones.");
-    test.fixme(true, "Lines within the visible prices are drawn on the canvas only (aria-hidden); PriceChart names only off-chart levels.");
     await app.seedStorage(SAMPLE_DATA);
     const year = await chartSeries(request, "AAPL", "2y");
     await app.goto("/stock/AAPL");
