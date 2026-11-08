@@ -10,6 +10,7 @@ import { TickNumber } from "@/components/ui/TickNumber";
 import { stockPath } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { DASH, formatPrice, tpl } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 import type { Messages } from "@/lib/i18n/messages";
 import { displayName, fullName } from "@/lib/names-zh";
 import { firstSortDirection, metricUnit, metricValue, PHONE_COLUMNS, ratingKey, screenSortValue, type ColumnSetKey, type MetricKey } from "@/lib/screens";
@@ -158,7 +159,7 @@ export function screenColumns(metrics: readonly MetricKey[], context: ScreenColu
         indeterminate={context.someSelected}
         disabled={context.visibleCount === 0}
         onChange={context.onToggleAll}
-        label={<span className="sr-only">{tpl(t.screener.selection.selectAll, { n: context.visibleCount })}</span>}
+        label={<span className="sr-only">{plural(t.screener.selection.selectAll, context.visibleCount)}</span>}
         className="align-middle max-sm:-mx-3 max-sm:size-10 max-sm:items-center max-sm:justify-center"
       />
     ),

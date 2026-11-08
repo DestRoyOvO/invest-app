@@ -16,6 +16,7 @@ import { TickNumber } from "@/components/ui/TickNumber";
 import { useDiscover } from "@/hooks/useApi";
 import { stockPath } from "@/lib/api-client";
 import { DASH, formatCompact, formatNumber, formatPrice, formatTime, tpl } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 import { displayName, fullName } from "@/lib/names-zh";
 import { capParam, DISCOVER_CAPS, ratingKey, relativeVolume, type DiscoverCap } from "@/lib/screens";
 import type { DiscoverResponse, DiscoverScreen, Quote } from "@/types/api";
@@ -195,7 +196,7 @@ function QuoteList({ data, screen, error, onRetry, keys, caption, cap, onCapChan
         rows={current?.quotes ?? []}
         columns={columns}
         rowKey={(q) => q.symbol}
-        caption={tpl(t.discover.caption, { list: caption, n: current?.quotes.length ?? 0 })}
+        caption={plural(t.discover.caption, current?.quotes.length ?? 0, { list: caption })}
         rowHref={(q) => stockPath(q.symbol)}
         loading={!current}
         loadingRows={8}

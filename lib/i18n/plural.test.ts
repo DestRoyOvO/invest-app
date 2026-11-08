@@ -58,6 +58,13 @@ const CONVERTED: Readonly<Record<string, string>> = {
   "data.csv.fileMeta": "rows",
   "data.review.importCount": "n",
   "ai.chat.messageCount": "n",
+  "screener.caption.stocks": "n",
+  "screener.caption.etfs": "n",
+  "screener.filters.showResults": "n",
+  "screener.selection.selectAll": "n",
+  "screener.actions.exportHint": "n",
+  "screener.earningsIn": "n",
+  "discover.caption": "n",
 };
 
 type Tree = { [key: string]: Tree | string };

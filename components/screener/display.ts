@@ -3,6 +3,7 @@
 
 import { withTrueMinus } from "@/components/ui/delta-utils";
 import { DASH, formatCompact, formatNumber, formatPrice, formatRatio, formatShortDate, tpl } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 import type { Messages } from "@/lib/i18n/messages";
 import { daysUntil, formatInputNumber, metricUnit, toInput, type FilterChip, type MetricKey, type NumericRange } from "@/lib/screens";
 import type { Lang, SectorKey } from "@/types/api";
@@ -104,7 +105,7 @@ export function earningsText(t: Messages, iso: string | null, estimated: boolean
   if (days === null || days < 0 || iso === null) return { short: DASH, long: null, title: null };
   const mark = estimated ? "~" : "";
   const short = days === 0 ? t.screener.earningsToday : `${mark}${tpl(t.screener.earningsDays, { n: days })}`;
-  const spoken = days === 0 ? t.screener.earningsTodayLong : tpl(t.screener.earningsIn, { n: days });
+  const spoken = days === 0 ? t.screener.earningsTodayLong : plural(t.screener.earningsIn, days);
   const date = formatShortDate(iso, lang, NEW_YORK);
   return {
     short,

@@ -29,7 +29,7 @@ export const discoverMessages = defineMessages(
     shownNoTotal: "{n} shown · {scanned} scanned",
     empty: "No stocks in this list clear the {cap} floor right now.",
     lowerCap: "Lower the floor to {cap}",
-    caption: "{list}: {n} stocks",
+    caption: { one: "{list}: {n} stock", other: "{list}: {n} stocks" },
     source: "About these lists",
     sourceNote:
       "Lists come from Yahoo Finance predefined screens and Yahoo's trending symbols, so the definitions are Yahoo's, not ours. Shown: US-listed stocks priced at $2 or more with a market cap of at least {cap}. Quotes are delayed and the lists refresh about every 2 minutes.",

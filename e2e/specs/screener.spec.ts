@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 
 import { tpl } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 import { MESSAGES } from "@/lib/i18n/messages";
 import { COLUMN_SET_KEYS, COLUMN_SETS, ETF_UNIVERSE, PHONE_COLUMNS, PRESETS, type ColumnSetKey, type PresetKey } from "@/lib/screens";
 import { getSector, UNIVERSE_STOCKS } from "@/lib/universe";
@@ -135,7 +136,7 @@ async function checkPreset(view: Results, universe: ScreenerUniverse, said: (typ
   await expect(view.table.getByRole("columnheader", { name: S.metrics[preset.sort.key as keyof typeof S.metrics], exact: true })).toHaveAttribute("aria-sort", ariaSort(preset.sort.direction));
   const kept = rows.filter((row) => said.keeps(row, now));
   if (AT_DEFAULT_NOW) expect(kept.length, `rows the ${said.key} preset keeps`).toBeGreaterThan(0);
-  await expect(view.table).toHaveAccessibleName(tpl(S.caption, { n: kept.length, kind: S.kinds[universe] }));
+  await expect(view.table).toHaveAccessibleName(plural(S.caption[universe], kept.length));
   await expectSymbols(view.table, sortedSymbols(kept, preset.sort.key, preset.sort.direction));
   if (kept.length === 0) await expect(view.table.getByText(tpl(S.empty.noMatch, { kind: S.kindNouns[universe] }))).toBeVisible();
 }
@@ -158,7 +159,7 @@ async function checkColumnSets(view: Results, universe: ScreenerUniverse, rows: 
 /** The column heads of a set, as checkColumnSets expects them. */
 function columnHeads(universe: ScreenerUniverse, set: ColumnSetKey, rows: number, phone: boolean): string[] {
   const metrics = COLUMN_SETS[universe][set].filter((key) => !phone || key === "symbol" || PHONE_COLUMNS[universe][set].includes(key));
-  return [tpl(S.selection.selectAll, { n: rows }), ...metrics.map((key) => S.metrics[key]), S.star.column];
+  return [plural(S.selection.selectAll, rows), ...metrics.map((key) => S.metrics[key]), S.star.column];
 }
 
 /** Console errors of a page the suite's collector does not watch (a second page). */
@@ -183,7 +184,7 @@ test.describe("screener", () => {
     const expectMatches = async (matches: ScreenerRow[]) => {
       await expectSymbols(table, byCap(matches));
       await expect(region.getByText(tpl(S.count, { n: matches.length, total: rows.length }), { exact: true })).toBeVisible();
-      await expect(table).toHaveAccessibleName(tpl(S.caption, { n: matches.length, kind: S.kinds.stocks }));
+      await expect(table).toHaveAccessibleName(plural(S.caption.stocks, matches.length));
     };
 
     // A sector: only its stocks, each showing the sector's short name.
@@ -231,7 +232,7 @@ test.describe("screener", () => {
     await presets.getByRole("button", { name: S.presets[PRESETS_SAY.at(-1)!.key], exact: true }).click();
     await expect(presets.getByRole("button", { pressed: true })).toHaveCount(0);
     await expect(view.chips).toHaveCount(0);
-    await expect(view.table).toHaveAccessibleName(tpl(S.caption, { n: snapshot.rows.length, kind: S.kinds.stocks }));
+    await expect(view.table).toHaveAccessibleName(plural(S.caption.stocks, snapshot.rows.length));
   });
 
   test("each column set shows its columns", async ({ page, app }) => {
@@ -257,7 +258,7 @@ test.describe("screener", () => {
     await expect(page).toHaveURL(/[?&]u=etfs(&|$)/);
     await expect(view.table.getByRole("columnheader", { name: S.metrics.assets, exact: true })).toHaveAttribute("aria-sort", "descending");
     await expectSymbols(view.table, sortedSymbols(funds.rows, "assets", "desc"));
-    await expect(view.table).toHaveAccessibleName(tpl(S.caption, { n: funds.rows.length, kind: S.kinds.etfs }));
+    await expect(view.table).toHaveAccessibleName(plural(S.caption.etfs, funds.rows.length));
     await expect(view.region.getByText(tpl(S.count, { n: funds.rows.length, total: funds.rows.length }), { exact: true })).toBeVisible();
 
     // Only the presets that apply to funds, each keeping the funds its hint describes (the volatility percentile is
@@ -267,7 +268,7 @@ test.describe("screener", () => {
     for (const said of forFunds) await checkPreset(view, "etfs", said, funds.rows, Date.parse(funds.asOf));
     await view.region.getByRole("list", { name: S.presets.label }).getByRole("button", { name: S.presets[forFunds.at(-1)!.key], exact: true }).click();
     await expect(view.chips).toHaveCount(0);
-    await expect(view.table).toHaveAccessibleName(tpl(S.caption, { n: funds.rows.length, kind: S.kinds.etfs }));
+    await expect(view.table).toHaveAccessibleName(plural(S.caption.etfs, funds.rows.length));
   });
 
   test("each ETF column set shows the fund columns", async ({ page, app }) => {
@@ -381,7 +382,7 @@ test.describe("screener", () => {
 
     const [download] = await Promise.all([
       page.waitForEvent("download"),
-      region.getByRole("button", { name: tpl(S.actions.exportHint, { n: matches.length }) }).click(),
+      region.getByRole("button", { name: plural(S.actions.exportHint, matches.length) }).click(),
     ]);
     expect(download.suggestedFilename()).toBe(`investseek-screener-stocks-${newYorkDay(Date.parse(snapshot.asOf))}.csv`);
     const csv = readFileSync(await download.path(), "utf8");
@@ -490,7 +491,7 @@ test.describe("screener", () => {
     const sheet = page.getByRole("dialog", { name: S.filters.title });
     await sheet.getByRole("checkbox", { name: getSector("energy")!.label.en }).check();
     const energy = rows.filter((row) => row.sector === "energy");
-    await sheet.getByRole("button", { name: tpl(S.filters.showResults, { n: energy.length }) }).click();
+    await sheet.getByRole("button", { name: plural(S.filters.showResults, energy.length) }).click();
     await expect(sheet).toBeHidden();
     await expectSymbols(table, byCap(energy));
     await expect(region.getByRole("button", { name: tpl(S.filters.buttonCount, { n: 1 }) })).toBeVisible();
@@ -531,7 +532,7 @@ test.describe("discover", () => {
         expect(quote.marketCap ?? 0, quote.symbol).toBeGreaterThanOrEqual(floor);
       }
       const table = tableIn(region);
-      await expect(table).toHaveAccessibleName(tpl(D.caption, { list: list.label, n: symbols.length }));
+      await expect(table).toHaveAccessibleName(plural(D.caption, symbols.length, { list: list.label }));
       await expectSymbols(table, symbols);
       const meta = data.total !== null ? tpl(D.shown, { n: symbols.length, scanned: data.scanned, total: data.total }) : tpl(D.shownNoTotal, { n: symbols.length, scanned: data.scanned });
       await expect(region).toContainText(meta);

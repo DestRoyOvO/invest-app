@@ -19,6 +19,7 @@ import { useScreener } from "@/hooks/useApi";
 import { useHoldings } from "@/hooks/useHoldings";
 import { cn } from "@/lib/cn";
 import { tpl } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 import {
   activeFilterChips,
   activePreset,
@@ -319,7 +320,7 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
               {snapshot ? <PanelMeta>{tpl(t.screener.count, { n: matches.length, total: rows.length })}</PanelMeta> : null}
               <IconButton
                 size="sm"
-                label={tpl(t.screener.actions.exportHint, { n: matches.length })}
+                label={plural(t.screener.actions.exportHint, matches.length)}
                 icon={<Download className="size-3.5" strokeWidth={1.75} />}
                 onClick={exportCsv}
                 disabled={!snapshot || matches.length === 0}
@@ -464,7 +465,7 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
                 rows={matches}
                 columns={columns}
                 rowKey={(row) => row.symbol}
-                caption={tpl(t.screener.caption, { n: matches.length, kind })}
+                caption={plural(t.screener.caption[screen.universe], matches.length)}
                 sort={screen.sort}
                 onSortChange={setSort}
                 rowClassName={(row) => cn("cursor-pointer", selected.has(row.symbol) && "bg-panel-2")}
@@ -506,7 +507,7 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
               {t.screener.filters.clear}
             </Button>
             <Button ref={showResultsRef} variant="primary" onClick={() => setSheetOpen(false)}>
-              {tpl(t.screener.filters.showResults, { n: snapshot ? matches.length : universeSize })}
+              {plural(t.screener.filters.showResults, snapshot ? matches.length : universeSize)}
             </Button>
           </div>
         }
