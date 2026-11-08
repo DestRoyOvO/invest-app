@@ -429,18 +429,6 @@ export async function rowCells(table: Locator, row: Locator): Promise<{ cells: R
 }
 
 /**
- * The cell of a row under a column head, among the columns shown at this width: hidden columns drop out of the heads
- * and the cells alike, so the positions line up on phones too. Throws when the column is not shown.
- */
-export async function cellOf(table: Locator, row: Locator, column: string): Promise<Locator> {
-  await expect(row).toBeVisible();
-  const heads = (await table.getByRole("columnheader").allTextContents()).map((text) => text.trim());
-  const index = heads.indexOf(column);
-  if (index < 0) throw new Error(`No column "${column}" is shown; the heads are ${heads.join(" | ")}`);
-  return row.getByRole("cell").nth(index);
-}
-
-/**
  * What a cell should show: its whole text, a pattern, or a check that returns "ok" or what is wrong (`figure` compares a
  * computed number at the precision shown).
  */
