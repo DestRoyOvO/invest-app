@@ -58,9 +58,13 @@ export function companyFigures(security: Security): CompanyFigures {
   const priceToSales = between(1.5, 9, s, "ps");
   const profitMargin = profitable ? Math.min(0.45, Math.max(0.03, netIncomeTtm / (cap / priceToSales))) : netIncomeTtm / (cap / priceToSales);
   const revenueTtm = Math.abs(netIncomeTtm / profitMargin);
-  const operatingMargin = profitable ? profitMargin * between(1.1, 1.45, s, "op") : profitMargin + 0.03;
+  // Operating income is pretax income (net income / 0.82) plus a little, so the operating margin is at least about 1.26
+  // times the net margin; the statements (timeseries.ts) keep that in every quarter.
+  const operatingMargin = profitable ? profitMargin * between(1.3, 1.6, s, "op") : profitMargin + 0.03;
   const grossMargin = Math.max(operatingMargin + 0.08, between(0.3, 0.75, s, "gross"));
-  const earningsGrowth = between(-0.08, 0.35, s, "eg");
+  // Earnings grow close to revenue, so margins drift slowly instead of tripling over a few years.
+  const revenueGrowth = between(-0.04, 0.3, s, "rg");
+  const earningsGrowth = revenueGrowth + between(-0.04, 0.06, s, "eg");
   const equity = (shares * security.anchorPrice) / between(2, 18, s, "pb");
   const figures: CompanyFigures = {
     epsTtm,
@@ -72,7 +76,7 @@ export function companyFigures(security: Security): CompanyFigures {
     operatingMargin,
     ebitdaMargin: operatingMargin + between(0.02, 0.08, s, "ebitda"),
     profitMargin,
-    revenueGrowth: between(-0.04, 0.3, s, "rg"),
+    revenueGrowth,
     earningsGrowth,
     debtToEquityPercent: between(10, 180, s, "de"),
     totalCash: revenueTtm * between(0.05, 0.4, s, "cash"),

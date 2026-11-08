@@ -347,6 +347,33 @@ describe("quote page research", () => {
     expect(lastYear.revenue! / quarterRevenue).toBeLessThan(5);
   });
 
+  it("keep the margins of every stock's statements in order, moving a little from period to period", { timeout: 30_000 }, async () => {
+    for (const symbol of UNIVERSE_STOCKS) {
+      const financials = await getFinancials(symbol);
+      expect(financials, symbol).not.toBeNull();
+      for (const periods of [financials!.annual, financials!.quarterly]) {
+        for (const period of periods) {
+          const at = `${symbol} ${period.end}`;
+          // Net income is below operating income (taxes and other items cost), which is below gross profit.
+          if (period.netIncome! > 0) expect(period.netMargin!, at).toBeLessThan(period.operatingMargin!);
+          expect(period.operatingMargin!, at).toBeLessThan(period.grossMargin!);
+          expect(period.ebitda!, at).toBeGreaterThan(period.operatingIncome!);
+        }
+        // Not fixed ratios of revenue: margins and capital spending move between periods.
+        expect(new Set(periods.map((period) => period.grossMargin!.toFixed(4))).size, symbol).toBeGreaterThan(1);
+        expect(new Set(periods.map((period) => (period.capitalExpenditure! / period.revenue!).toFixed(4))).size, symbol).toBeGreaterThan(1);
+      }
+      // Earnings grow about as fast as revenue: over the four fiscal years the net margin changes by a fraction, and
+      // revenue that grew by a third comes with higher earnings.
+      const [first, last] = [financials!.annual[0], financials!.annual.at(-1)!];
+      if (first.netIncome! > 0 && last.netIncome! > 0) {
+        expect(last.netMargin! / first.netMargin!, symbol).toBeGreaterThan(0.75);
+        expect(last.netMargin! / first.netMargin!, symbol).toBeLessThan(1.35);
+        if (last.revenue! / first.revenue! > 1.3) expect(last.dilutedEps!, symbol).toBeGreaterThan(first.dilutedEps!);
+      }
+    }
+  });
+
   it("sum ten years of dividends and announce the next payment", async () => {
     const [history, quote] = await Promise.all([getDividends("AAPL"), quoteOf("AAPL")]);
     expect(history).not.toBeNull();
