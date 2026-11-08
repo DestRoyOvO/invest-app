@@ -195,6 +195,8 @@ function QuoteList({ data, screen, error, onRetry, keys, caption, cap, onCapChan
         loadingRows={8}
         stickyHeader
         maxHeight={TABLE_HEIGHT}
+        // The scroll box contains the rows' sr-only text, so rows scrolled out of it do not stretch the page.
+        className="relative"
         empty={
           <EmptyState
             actions={

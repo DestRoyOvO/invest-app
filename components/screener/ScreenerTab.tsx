@@ -471,7 +471,9 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
                 stickyHeader
                 maxHeight="var(--eqs-max-h)"
                 minWidth="var(--eqs-min)"
-                className={cn("[--eqs-min:0px] sm:[--eqs-min:var(--eqs-wide)] lg:absolute lg:inset-0", PHONE_WIDTHS)}
+                // `relative` makes the scroll box the containing block of the rows' sr-only labels, which would otherwise
+                // hang below it (down to the 78th row) and let the page scroll on into blank space.
+                className={cn("relative [--eqs-min:0px] sm:[--eqs-min:var(--eqs-wide)] lg:absolute lg:inset-0", PHONE_WIDTHS)}
                 empty={
                   <EmptyState
                     actions={
