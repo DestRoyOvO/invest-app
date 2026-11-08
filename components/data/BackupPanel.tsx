@@ -35,6 +35,7 @@ import { formatDate, formatTime, tpl } from "@/lib/format";
 import { exportBackupNow, getEnv } from "./browser";
 import { usePrefsSync, useStorageSnapshot } from "./hooks";
 import { diffSummary, lastBackupLabel, prefNameLabel, prefValueLabel, storeLabel, symbolList } from "./labels";
+import { ResultLine } from "./ResultLine";
 import { focusSoon, TOUCH } from "./styles";
 
 type RestoreState =
@@ -122,6 +123,7 @@ export function BackupPanel() {
     const env = getEnv();
     if (!env) {
       setState({ phase: "error", message: t.data.backup.errors.unavailable });
+      focusSoon(pickRef);
       return;
     }
     const prefsBefore = restorePrefs && prefs.length > 0 ? prefsSync.current() : null;
@@ -132,6 +134,8 @@ export function BackupPanel() {
       toast.show({ message: tpl(t.data.backup.restored, { summary: diffSummary(t, result.diffs) }), action: { label: t.data.undo, onAction: () => undo(result, prefsBefore) } });
     } catch (cause) {
       setState({ phase: "error", message: cause instanceof StorageWriteError ? t.data.backup.errors[cause.reason] : t.data.backup.errors.invalid });
+      // The confirm button is gone; the error is announced and the file button is the way on.
+      focusSoon(pickRef);
     }
   };
 
@@ -217,14 +221,22 @@ export function BackupPanel() {
       ) : null}
 
       {state.phase === "done" ? (
-        // Focus moves here from the button that just disappeared, so keyboard users keep their place.
-        <div role="status" tabIndex={-1} autoFocus className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-line px-3 py-2.5 text-sm text-fg-2 focus:outline-none">
+        // Focus moves here from the confirm button that just disappeared, so keyboard users keep their place.
+        <ResultLine className="gap-y-2 border-t border-line px-3 py-2.5">
           <Check aria-hidden className="size-4 shrink-0 text-fg-3" strokeWidth={2} />
           <span className="min-w-0">{tpl(t.data.backup.done, { file: state.file, summary: diffSummary(t, state.result.diffs) })}</span>
-          <Button size="sm" variant="ghost" onClick={() => undo(state.result, state.prefsBefore)} className={TOUCH}>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              undo(state.result, state.prefsBefore);
+              focusSoon(pickRef);
+            }}
+            className={TOUCH}
+          >
             {t.data.undo}
           </Button>
-        </div>
+        </ResultLine>
       ) : null}
 
       {state.phase === "preview" ? (
@@ -272,7 +284,9 @@ export function BackupPanel() {
             {nothingToDo ? (
               <p className="text-sm text-fg-2">{t.data.backup.nothingToDo}</p>
             ) : state.confirming ? (
-              <div className="flex flex-wrap items-center gap-2">
+              // Keyed apart from the row it replaces, so React mounts a new "Restore now" (and runs its autoFocus)
+              // instead of reusing the Cancel button's element.
+              <div key="confirm" className="flex flex-wrap items-center gap-2">
                 <p className="w-full text-sm text-fg">{tpl(mode === "merge" ? t.data.backup.confirmMerge : t.data.backup.confirmReplace, { summary: diffSummary(t, visible) })}</p>
                 <Button onClick={restore} className={TOUCH} autoFocus>
                   {t.data.backup.confirm}
@@ -289,7 +303,7 @@ export function BackupPanel() {
                 </Button>
               </div>
             ) : (
-              <div className="flex flex-wrap items-center gap-2">
+              <div key="start" className="flex flex-wrap items-center gap-2">
                 <Button ref={startRef} onClick={() => setState({ ...state, confirming: true })} className={TOUCH}>
                   {t.data.backup.start}
                 </Button>

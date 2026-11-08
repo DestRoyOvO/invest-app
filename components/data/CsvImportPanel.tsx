@@ -15,7 +15,7 @@ import { tpl } from "@/lib/format";
 
 import { downloadCsv } from "./browser";
 import { ImportDone, ImportReview, useImportOutcome } from "./ImportReview";
-import { TOUCH } from "./styles";
+import { focusSoon, TOUCH } from "./styles";
 
 /** Larger files are not positions exports. */
 const MAX_CSV_BYTES = 2 * 1024 * 1024;
@@ -37,6 +37,7 @@ export function CsvImportPanel() {
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const chooseRef = useRef<HTMLButtonElement>(null);
   const { outcome, record, undo, clear } = useImportOutcome();
 
   const load = async (picked: File) => {
@@ -119,7 +120,7 @@ export function CsvImportPanel() {
       >
         <p className="max-w-prose text-sm text-fg-2">{t.data.csv.intro}</p>
         <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={() => inputRef.current?.click()} className={TOUCH}>
+          <Button ref={chooseRef} onClick={() => inputRef.current?.click()} className={TOUCH}>
             <FileUp aria-hidden className="size-4" strokeWidth={1.75} />
             {file ? t.data.csv.another : t.data.csv.choose}
           </Button>
@@ -158,7 +159,15 @@ export function CsvImportPanel() {
           </fieldset>
         ) : null}
       </div>
-      {outcome ? <ImportDone outcome={outcome} onUndo={() => undo(outcome.changes)} /> : null}
+      {outcome ? (
+        <ImportDone
+          outcome={outcome}
+          onUndo={() => {
+            undo(outcome.changes);
+            focusSoon(chooseRef);
+          }}
+        />
+      ) : null}
       {rows.length > 0 ? (
         <ImportReview
           rows={rows}

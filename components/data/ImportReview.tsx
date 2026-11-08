@@ -18,6 +18,7 @@ import { DASH, formatPrice, tpl } from "@/lib/format";
 import { getEnv } from "./browser";
 import { useSymbolChecks } from "./hooks";
 import { formatShares, symbolList } from "./labels";
+import { ResultLine } from "./ResultLine";
 import { focusSoon, TOUCH } from "./styles";
 
 export interface ImportOutcome {
@@ -72,12 +73,14 @@ export function useImportOutcome() {
   return { outcome, record, undo, clear: useCallback(() => setOutcome(null), []) };
 }
 
-/** The line shown after an import: what happened, a way to see it, and Undo. */
+/**
+ * The line shown after an import: what happened, a way to see it, and Undo. Focus moves here from the import button,
+ * which is gone once the import is done; `onUndo` should put focus somewhere sensible, since this line goes away too.
+ */
 export function ImportDone({ outcome, onUndo }: { outcome: ImportOutcome; onUndo: () => void }) {
   const { t } = usePrefs();
   return (
-    // Focus moves here from the import button, which is gone once the import is done.
-    <div role="status" tabIndex={-1} autoFocus className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-t border-line px-3 py-2.5 text-sm text-fg-2 focus:outline-none">
+    <ResultLine className="gap-y-1.5 border-t border-line px-3 py-2.5">
       <Check aria-hidden className="size-4 shrink-0 text-fg-3" strokeWidth={2} />
       <span>{tpl(t.data.review.done, { n: outcome.count })}</span>
       <Link href="/watchlist" className="text-info underline-offset-2 hover:underline">
@@ -86,7 +89,7 @@ export function ImportDone({ outcome, onUndo }: { outcome: ImportOutcome; onUndo
       <Button size="sm" variant="ghost" onClick={onUndo} className={TOUCH}>
         {t.data.undo}
       </Button>
-    </div>
+    </ResultLine>
   );
 }
 
