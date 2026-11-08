@@ -5,7 +5,7 @@ import type { WorldRow } from "@/types/markets";
 import { WORLD_BOARD, WORLD_REGIONS } from "@/lib/universe";
 
 import { changeDistribution } from "./breadth";
-import { curveChartGeometry, niceStep, spreadSparkGeometry } from "./curve-chart";
+import { coversYear, curveChartGeometry, fitAxisLabels, labelWidth, niceStep, spreadSparkGeometry } from "./curve-chart";
 import { dateInZone, groupWorld, localTradeTime, overnightSummary, sessionOf } from "./world";
 
 function row(symbol: string, overrides: Partial<WorldRow> = {}): WorldRow {
@@ -155,6 +155,39 @@ describe("spreadSparkGeometry", () => {
 
   it("needs two points", () => {
     expect(spreadSparkGeometry([5], 100, 26)).toEqual({ path: "", zeroY: null, end: null });
+  });
+});
+
+describe("axis labels", () => {
+  it("estimates label widths, CJK characters at a full em", () => {
+    expect(labelWidth("10Y", 10)).toBeCloseTo(18);
+    expect(labelWidth("10年", 10)).toBeCloseTo(22);
+    expect(labelWidth("", 11)).toBe(0);
+  });
+
+  it("keeps every label that has room", () => {
+    const labels = [0, 40, 80, 120].map((x) => ({ x, width: 20 }));
+    expect(fitAxisLabels(labels)).toEqual([0, 1, 2, 3]);
+  });
+
+  it("skips labels that would run into the one before, but always shows the last", () => {
+    // 14 tenors 21px apart in a narrow column: 10Y, 20Y and 30Y sit next to each other.
+    const at = (index: number, text: string) => ({ x: 44 + index * 21, width: labelWidth(text, 11) });
+    const en = [at(0, "1M"), at(3, "3M"), at(5, "6M"), at(6, "1Y"), at(7, "2Y"), at(9, "5Y"), at(11, "10Y"), at(12, "20Y"), at(13, "30Y")];
+    expect(fitAxisLabels(en)).toEqual([0, 1, 2, 3, 4, 5, 6, 8]);
+    const zh = [at(0, "1月"), at(3, "3月"), at(5, "6月"), at(6, "1年"), at(7, "2年"), at(9, "5年"), at(11, "10年"), at(12, "20年"), at(13, "30年")];
+    expect(fitAxisLabels(zh)).toEqual([0, 1, 2, 4, 5, 6, 8]);
+    // The last label displaces the ones it would overlap.
+    expect(fitAxisLabels([{ x: 0, width: 10 }, { x: 30, width: 20 }, { x: 40, width: 20 }])).toEqual([0, 2]);
+    expect(fitAxisLabels([])).toEqual([]);
+  });
+});
+
+describe("coversYear", () => {
+  it("is true when the history starts about a year before the latest curve", () => {
+    expect(coversYear([{ date: "2025-11-07" }, { date: "2026-11-06" }], "2026-11-06")).toBe(true);
+    expect(coversYear([{ date: "2026-01-02" }, { date: "2026-11-06" }], "2026-11-06")).toBe(false);
+    expect(coversYear([], "2026-11-06")).toBe(false);
   });
 });
 

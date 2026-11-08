@@ -3,17 +3,17 @@
 import type { ReactNode } from "react";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
-import { AdvanceDeclineBar, TallyPercent, WeightGap } from "@/components/market/BreadthStrip";
-import { sharePercent } from "@/components/market/metrics";
+import { AdvanceDeclineBar, BREADTH_GRID, BREADTH_TILE, TallyPercent, WeightGap, WeightPair } from "@/components/market/BreadthStrip";
+import { sharePercent, staleSinceOf } from "@/components/market/metrics";
 import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
-import { Delta, HEAT_EDGES, heatStyle, type HeatStep } from "@/components/ui/Delta";
+import { HEAT_EDGES, heatStyle, type HeatStep } from "@/components/ui/Delta";
 import { Meter } from "@/components/ui/Meter";
 import { Panel, PanelMeta } from "@/components/ui/Panel";
-import { ErrorState, Skeleton, StaleBanner } from "@/components/ui/States";
+import { ErrorState, Skeleton, SkeletonRows, StaleBanner } from "@/components/ui/States";
 import { useOverview } from "@/hooks/useApi";
 import { cn } from "@/lib/cn";
 import { formatRatio, formatTime, tpl } from "@/lib/format";
-import { getSector, UNIVERSE_STOCKS } from "@/lib/universe";
+import { getSector, SECTORS, UNIVERSE_STOCKS } from "@/lib/universe";
 import type { BreadthTally, MarketBreadth, SectorBreadth, SectorSnapshot } from "@/types/api";
 
 import { changeDistribution } from "./breadth";
@@ -145,7 +145,7 @@ function SectorTable({ breadth }: { breadth: MarketBreadth }) {
     <section aria-label={t.markets.breadth.bySector} className="border-t border-line">
       <h3 className="col-head px-3 pt-2.5 pb-1">{t.markets.breadth.bySector}</h3>
       {/* Column widths step up from sm, where the meters appear; phones keep room for the sector names. */}
-      <div className="[--breadth-pct:5rem] [--breadth-ud:5.5rem] sm:[--breadth-pct:7.25rem] sm:[--breadth-ud:6.25rem]">
+      <div className="[--breadth-pct:5.25rem] [--breadth-ud:5.5rem] sm:[--breadth-pct:7.25rem] sm:[--breadth-ud:6.25rem]">
         <DataTable rows={breadth.sectors} columns={columns} rowKey={(row) => row.key} caption={t.markets.breadth.bySector} rowHref={(row) => `/sector/${row.key}`} />
       </div>
     </section>
@@ -167,35 +167,30 @@ export function BreadthPanel({ className }: { className?: string }) {
       className={cn("scroll-mt-2", className)}
       actions={data ? <PanelMeta>{tpl(t.markets.asOfEt, { time: formatTime(data.asOf, lang, "America/New_York") })}</PanelMeta> : null}
     >
-      <StaleBanner show={Boolean(error && data)} since={data?.asOf} />
+      <StaleBanner show={Boolean(error && data) || Boolean(data?.warnings.includes("quotes_stale"))} since={staleSinceOf(data)} />
       {breadth && data ? (
         <>
-          <div className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3 lg:grid-cols-5">
-            <SummaryTile label={t.markets.breadth.above50} value={<TallyPercent tally={breadth.above50d} />}>
-              <TallyMeter tally={breadth.above50d} label={t.markets.breadth.above50} />
-              <div className="mt-1.5">{tpl(t.markets.breadth.ofStocks, { count: breadth.above50d.count, of: breadth.above50d.of })}</div>
-            </SummaryTile>
-            <SummaryTile label={t.markets.breadth.above200} value={<TallyPercent tally={breadth.above200d} />}>
-              <TallyMeter tally={breadth.above200d} label={t.markets.breadth.above200} />
-              <div className="mt-1.5">{tpl(t.markets.breadth.ofStocks, { count: breadth.above200d.count, of: breadth.above200d.of })}</div>
-            </SummaryTile>
-            <SummaryTile label={t.markets.breadth.advDec} value={`${breadth.advancers} / ${breadth.decliners}`}>
-              <AdvanceDeclineBar breadth={breadth} />
-              <div className="mt-1.5">{tpl(t.markets.breadth.unchanged, { n: breadth.unchanged })}</div>
-            </SummaryTile>
-            <SummaryTile label={t.markets.breadth.highsLows} value={`${breadth.nearHigh.count} / ${breadth.nearLow.count}`}>
-              {tpl(t.markets.breadth.within, { pct: formatRatio(breadth.nearExtreme, { digits: 0 }) })}
-            </SummaryTile>
-            <SummaryTile label={t.markets.breadth.equalVsCap} value={<WeightGap breadth={breadth} />} className="col-span-2 sm:col-span-1">
-              <span className="flex flex-wrap gap-x-2">
-                <span>
-                  RSP <Delta value={breadth.equalWeight} />
-                </span>
-                <span>
-                  SPY <Delta value={breadth.capWeight} />
-                </span>
-              </span>
-            </SummaryTile>
+          <div className="@container">
+            <div className={BREADTH_GRID}>
+              <SummaryTile label={t.markets.breadth.above50} value={<TallyPercent tally={breadth.above50d} />} className={BREADTH_TILE[0]}>
+                <TallyMeter tally={breadth.above50d} label={t.markets.breadth.above50} />
+                <div className="mt-1.5">{tpl(t.markets.breadth.ofStocks, { count: breadth.above50d.count, of: breadth.above50d.of })}</div>
+              </SummaryTile>
+              <SummaryTile label={t.markets.breadth.above200} value={<TallyPercent tally={breadth.above200d} />} className={BREADTH_TILE[1]}>
+                <TallyMeter tally={breadth.above200d} label={t.markets.breadth.above200} />
+                <div className="mt-1.5">{tpl(t.markets.breadth.ofStocks, { count: breadth.above200d.count, of: breadth.above200d.of })}</div>
+              </SummaryTile>
+              <SummaryTile label={t.markets.breadth.advDec} value={`${breadth.advancers} / ${breadth.decliners}`} className={BREADTH_TILE[2]}>
+                <AdvanceDeclineBar breadth={breadth} />
+                <div className="mt-1.5">{tpl(t.markets.breadth.unchanged, { n: breadth.unchanged })}</div>
+              </SummaryTile>
+              <SummaryTile label={t.markets.breadth.highsLows} value={`${breadth.nearHigh.count} / ${breadth.nearLow.count}`} className={BREADTH_TILE[3]}>
+                {tpl(t.markets.breadth.within, { pct: formatRatio(breadth.nearExtreme, { digits: 0 }) })}
+              </SummaryTile>
+              <SummaryTile label={t.markets.breadth.equalVsCap} value={<WeightGap breadth={breadth} />} className={BREADTH_TILE[4]}>
+                <WeightPair breadth={breadth} />
+              </SummaryTile>
+            </div>
           </div>
           <Distribution sectors={data.sectors} />
           <SectorTable breadth={breadth} />
@@ -206,10 +201,25 @@ export function BreadthPanel({ className }: { className?: string }) {
       ) : data ? (
         <p className="px-3 py-3 text-sm text-fg-2">{t.markets.breadth.unavailable}</p>
       ) : (
-        <div className="space-y-2 p-3">
-          <Skeleton className="h-16" />
-          <Skeleton className="h-24" />
-          <Skeleton className="h-40" />
+        // Shaped like the loaded panel (the tiles, the distribution and the sector table), so the page keeps its length
+        // while the data loads and a link to #breadth lands where the panel will be.
+        <div aria-busy="true">
+          <div className="@container">
+            <div className={BREADTH_GRID}>
+              {BREADTH_TILE.map((span, i) => (
+                <div key={i} className={cn("space-y-2 bg-panel px-3 py-2.5", span)}>
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-5 w-14" />
+                  <Skeleton className="h-1.5 w-full" />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2 border-t border-line p-3">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-[7.5rem]" />
+          </div>
+          <SkeletonRows rows={SECTORS.length + 4} className="border-t border-line" />
         </div>
       )}
     </Panel>

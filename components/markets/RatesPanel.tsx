@@ -12,14 +12,16 @@ import { cn } from "@/lib/cn";
 import { formatDate, formatShortDate, tpl } from "@/lib/format";
 import type { TenorKey, YieldCurve, YieldCurveResponse, YieldSpread } from "@/types/markets";
 
-import { curveChartGeometry, spreadSparkGeometry } from "./curve-chart";
+import { coversYear, curveChartGeometry, fitAxisLabels, labelWidth, spreadSparkGeometry } from "./curve-chart";
 
-/** Tenors labeled on the x axis (every tenor is plotted). */
+/** Tenors that may be labeled on the x axis (every tenor is plotted); labels that would collide are left out. */
 const AXIS_TENORS = new Set<TenorKey>(["1M", "3M", "6M", "1Y", "2Y", "5Y", "10Y", "20Y", "30Y"]);
 /** Tenors in the table under the chart. */
 const KEY_TENORS: readonly TenorKey[] = ["3M", "2Y", "5Y", "10Y", "30Y"];
 const CHART_HEIGHT = 200;
 const PAD = { top: 12, right: 14, bottom: 24, left: 44 };
+/** Axis labels at the micro text size. */
+const AXIS_FONT = 11;
 
 interface TenorRow {
   tenor: TenorKey;
@@ -78,6 +80,12 @@ function YieldCurveChart({ data, series }: { data: YieldCurveResponse; series: S
   const [hover, setHover] = useState<number | null>(null);
   const index = hover ?? tenIndex;
   const geometry = useMemo(() => curveChartGeometry(series.map((s) => s.curve.yields), width, CHART_HEIGHT, PAD), [series, width]);
+  const axisLabels = useMemo(() => {
+    const candidates = data.tenors.flatMap((tenor, i) =>
+      AXIS_TENORS.has(tenor) && geometry.xs[i] !== undefined ? [{ tenor, x: geometry.xs[i], width: labelWidth(t.markets.rates.tenors[tenor], AXIS_FONT) }] : [],
+    );
+    return fitAxisLabels(candidates).map((i) => candidates[i]);
+  }, [data.tenors, geometry.xs, t]);
 
   const onPointerMove = (event: PointerEvent<SVGSVGElement>) => {
     if (geometry.xs.length === 0) return;
@@ -128,18 +136,16 @@ function YieldCurveChart({ data, series }: { data: YieldCurveResponse; series: S
             {geometry.yTicks.map((tick) => (
               <g key={tick.value}>
                 <line x1={PAD.left} x2={width - PAD.right} y1={tick.y} y2={tick.y} stroke="var(--line)" strokeWidth={1} />
-                <text x={PAD.left - 6} y={tick.y} dy="0.32em" textAnchor="end" fontSize={10} fill="var(--fg-3)" className="num">
+                <text x={PAD.left - 6} y={tick.y} dy="0.32em" textAnchor="end" fontSize={AXIS_FONT} fill="var(--fg-3)" className="num">
                   {tick.value.toFixed(2)}%
                 </text>
               </g>
             ))}
-            {data.tenors.map((tenor, i) =>
-              AXIS_TENORS.has(tenor) ? (
-                <text key={tenor} x={geometry.xs[i]} y={CHART_HEIGHT - 6} textAnchor="middle" fontSize={10} fill="var(--fg-3)" className="num">
-                  {t.markets.rates.tenors[tenor]}
-                </text>
-              ) : null,
-            )}
+            {axisLabels.map((label) => (
+              <text key={label.tenor} x={label.x} y={CHART_HEIGHT - 6} textAnchor="middle" fontSize={AXIS_FONT} fill="var(--fg-3)" className="num">
+                {t.markets.rates.tenors[label.tenor]}
+              </text>
+            ))}
             <line x1={geometry.xs[index]} x2={geometry.xs[index]} y1={PAD.top} y2={CHART_HEIGHT - PAD.bottom} stroke="var(--line-2)" strokeWidth={1} />
             {series.map((s, i) => (
               <path
@@ -180,37 +186,54 @@ function SpreadSpark({ spread }: { spread: YieldSpread }) {
   );
 }
 
-function SpreadRow({ spread }: { spread: YieldSpread }) {
-  const { t } = usePrefs();
+/**
+ * One spread: its name and inversion note, the latest value against a month ago, and a year of history. In a narrow
+ * container (the right-hand column) the history moves under the value, so the name and the note keep their room.
+ */
+function SpreadRow({ spread, latestDate }: { spread: YieldSpread; latestDate: string }) {
+  const { t, lang } = usePrefs();
   const inverted = spread.bp !== null && spread.bp < 0;
+  // "In the last year" only when the history reaches that far back (it is shorter when last year's file is missing).
   const note = inverted
     ? tpl(t.markets.rates.inverted, { short: t.markets.rates.shortTenor[spread.key] })
     : spread.invertedDays > 0
       ? tpl(t.markets.rates.invertedDays, { n: spread.invertedDays, total: spread.history.length })
-      : t.markets.rates.neverInverted;
+      : coversYear(spread.history, latestDate)
+        ? t.markets.rates.neverInverted
+        : spread.history.length > 0
+          ? tpl(t.markets.rates.neverInvertedSince, { date: formatShortDate(spread.history[0].date, lang, "UTC") })
+          : null;
   const change = spread.bp !== null && spread.monthAgoBp !== null ? spread.bp - spread.monthAgoBp : null;
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-3 px-3 py-2">
-      <div className="min-w-0">
-        <div className="flex items-baseline gap-2">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-3 py-2 @md:grid-cols-[minmax(0,1fr)_auto_auto]">
+      <div className="min-w-0 @max-md:row-span-2">
+        <div className="flex flex-wrap items-baseline gap-x-2">
           <span className="mono font-medium text-fg">{t.markets.rates.spread[spread.key]}</span>
-          <span className="truncate text-xs text-fg-3">{t.markets.rates.spreadName[spread.key]}</span>
+          <span className="text-xs text-fg-3">{t.markets.rates.spreadName[spread.key]}</span>
         </div>
-        <p className={cn("mt-0.5 flex items-center gap-1 text-micro", inverted ? "text-warn" : "text-fg-3")}>
-          {inverted ? <AlertTriangle aria-hidden className="size-3 shrink-0" strokeWidth={1.75} /> : null}
-          {note}
-        </p>
+        {note ? (
+          <p className={cn("mt-0.5 flex items-start gap-1 text-micro", inverted ? "text-warn" : "text-fg-3")}>
+            {inverted ? <AlertTriangle aria-hidden className="mt-0.5 size-3 shrink-0" strokeWidth={1.75} /> : null}
+            {note}
+          </p>
+        ) : null}
       </div>
       <div className="text-right">
         <div className="num text-base text-fg">{signedBp(spread.bp, t.markets.rates.bp)}</div>
-        <div className="num text-micro text-fg-3">{tpl(t.markets.rates.vsMonthAgo, { n: signedBp(change, t.markets.rates.bp) })}</div>
+        <div className="num text-micro whitespace-nowrap text-fg-3">{tpl(t.markets.rates.vsMonthAgo, { n: signedBp(change, t.markets.rates.bp) })}</div>
       </div>
-      <span className="flex items-center gap-1.5">
+      <span className="flex items-center justify-end gap-1.5">
         <SpreadSpark spread={spread} />
-        <span className="text-micro text-fg-3">{t.markets.rates.history}</span>
+        {/* The "1Y" tag only when the line covers a year; a shorter history is dated in the note instead. */}
+        {coversYear(spread.history, latestDate) ? <span className="text-micro text-fg-3">{t.markets.rates.history}</span> : null}
       </span>
     </div>
   );
+}
+
+/** A change in yield in basis points, in neutral ink: a reading, not a price move. */
+function bpChange(latest: number | null, before: number | null, template: string): string {
+  return signedBp(latest !== null && before !== null ? (latest - before) * 100 : null, template);
 }
 
 function RatesBody({ data }: { data: YieldCurveResponse }) {
@@ -231,29 +254,24 @@ function RatesBody({ data }: { data: YieldCurveResponse }) {
     monthAgo: at(monthAgo, tenor),
     yearAgo: at(yearAgo, tenor),
   }));
+  // The level now and how far it moved in a month and a year; the curves themselves (with the levels a month and a year
+  // ago) are in the chart and its readout. Fixed widths fit the 22rem right-hand column in both languages.
   const tenorColumns: DataTableColumn<TenorRow>[] = [
     { key: "tenor", header: t.markets.rates.tenor, render: (row) => <span className="mono font-medium text-fg">{t.markets.rates.tenors[row.tenor]}</span> },
-    { key: "latest", header: t.markets.rates.latest, align: "right", width: "5rem", render: (row) => <span className="num text-fg">{percent(row.latest)}</span> },
-    { key: "monthAgo", header: t.markets.rates.monthAgo, align: "right", width: "5.5rem", render: (row) => <span className="num text-fg-2">{percent(row.monthAgo)}</span> },
+    { key: "latest", header: t.markets.rates.latest, align: "right", width: "4.5rem", render: (row) => <span className="num text-fg">{percent(row.latest)}</span> },
     {
-      key: "yearAgo",
-      header: t.markets.rates.yearAgo,
-      align: "right",
-      width: "5.25rem",
-      hideBelow: "sm",
-      render: (row) => <span className="num text-fg-2">{percent(row.yearAgo)}</span>,
-    },
-    {
-      key: "chg",
+      key: "chg1m",
       header: t.markets.rates.chg1m,
       align: "right",
-      width: "5.75rem",
-      // A change in yield is a reading, not a price move: neutral ink with its sign.
-      render: (row) => (
-        <span className="num text-fg">
-          {signedBp(row.latest !== null && row.monthAgo !== null ? (row.latest - row.monthAgo) * 100 : null, t.markets.rates.bp)}
-        </span>
-      ),
+      width: "5.25rem",
+      render: (row) => <span className="num text-fg">{bpChange(row.latest, row.monthAgo, t.markets.rates.bp)}</span>,
+    },
+    {
+      key: "chg1y",
+      header: t.markets.rates.chg1y,
+      align: "right",
+      width: "5.25rem",
+      render: (row) => <span className="num text-fg">{bpChange(row.latest, row.yearAgo, t.markets.rates.bp)}</span>,
     },
   ];
 
@@ -296,11 +314,11 @@ function RatesBody({ data }: { data: YieldCurveResponse }) {
         </table>
       </div>
 
-      <section aria-label={t.markets.rates.spreads} className="border-t border-line">
+      <section aria-label={t.markets.rates.spreads} className="@container border-t border-line">
         <h3 className="col-head px-3 pt-2.5">{t.markets.rates.spreads}</h3>
         <div className="divide-y divide-line/70">
           {data.spreads.map((spread) => (
-            <SpreadRow key={spread.key} spread={spread} />
+            <SpreadRow key={spread.key} spread={spread} latestDate={data.current.date} />
           ))}
         </div>
       </section>
@@ -322,7 +340,15 @@ export function RatesPanel({ className }: { className?: string }) {
       className={cn("scroll-mt-2", className)}
       actions={data ? <PanelMeta>{formatDate(data.current.date, lang, "UTC")}</PanelMeta> : null}
     >
-      <StaleBanner show={Boolean(error && data) || Boolean(data?.stale)} />
+      {/* The age of what is shown: when the file behind the latest curve was downloaded from Treasury. */}
+      <StaleBanner show={Boolean(error && data) || Boolean(data?.stale)} since={data?.fetchedAt} />
+      {/* Older cached responses have no warnings field. */}
+      {data?.warnings?.includes("previous_year") ? (
+        <p className="flex items-start gap-2 border-b border-line bg-panel-2 px-3 py-1.5 text-xs text-warn">
+          <AlertTriangle aria-hidden className="mt-0.5 size-3.5 shrink-0" strokeWidth={1.75} />
+          {t.markets.rates.partial}
+        </p>
+      ) : null}
       {data ? (
         <RatesBody data={data} />
       ) : error ? (

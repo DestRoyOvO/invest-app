@@ -70,6 +70,39 @@ export function curveChartGeometry(series: ReadonlyArray<ReadonlyArray<number | 
   return { xs, yTicks, paths, points };
 }
 
+/** Rough width of an axis label in px: CJK characters are about 1em wide, digits and Latin letters about 0.6em. */
+export function labelWidth(text: string, fontSize: number): number {
+  let width = 0;
+  for (const char of text) width += /[⺀-鿿豈-﫿＀-￯]/.test(char) ? fontSize : fontSize * 0.6;
+  return width;
+}
+
+/**
+ * Which axis labels fit, as indexes into `labels` (centred at `x`, left to right): each label needs `gap` px of space
+ * after the one before it, otherwise it is skipped. The last label (the long end of the curve) always shows, in place
+ * of the labels before it that it would run into.
+ */
+export function fitAxisLabels(labels: ReadonlyArray<{ x: number; width: number }>, gap = 4): number[] {
+  const kept: number[] = [];
+  const clear = (a: number, b: number) => labels[b].x - labels[b].width / 2 >= labels[a].x + labels[a].width / 2 + gap;
+  labels.forEach((_, index) => {
+    const last = index === labels.length - 1;
+    if (kept.length === 0 || clear(kept[kept.length - 1], index)) kept.push(index);
+    else if (last) {
+      while (kept.length > 0 && !clear(kept[kept.length - 1], index)) kept.pop();
+      kept.push(index);
+    }
+  });
+  return kept;
+}
+
+/** True when a spread history reaches back about a year before the latest curve (it starts 350 or more days earlier). */
+export function coversYear(history: ReadonlyArray<{ date: string }>, latestDate: string): boolean {
+  const first = history[0]?.date;
+  if (!first) return false;
+  return Date.parse(latestDate) - Date.parse(first) >= 350 * 86_400_000;
+}
+
 export interface SpreadSparkGeometry {
   path: string;
   /** y of the zero line (the inversion threshold), which the range always includes. */

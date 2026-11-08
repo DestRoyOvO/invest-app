@@ -2,10 +2,11 @@
 
 import { useId } from "react";
 
+import { staleSinceOf } from "@/components/market/metrics";
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Delta } from "@/components/ui/Delta";
 import { Panel, PanelMeta } from "@/components/ui/Panel";
-import { ErrorState, SkeletonRows, StaleBanner } from "@/components/ui/States";
+import { ErrorState, Skeleton, StaleBanner } from "@/components/ui/States";
 import { useWorldMarkets } from "@/hooks/useMarketsApi";
 import { formatTime, tpl } from "@/lib/format";
 import { getWorldSymbol, type WorldRegion } from "@/lib/universe";
@@ -58,12 +59,27 @@ function MissingNote({ data, regions }: { data: WorldMarketsResponse; regions: r
   return <p className="border-t border-line px-3 py-1.5 text-micro text-fg-3">{tpl(t.markets.missing, { symbols: codes })}</p>;
 }
 
-/** WEI: the world's equity benchmarks by region, with the overnight line on top. */
+/** The overnight line while the board loads, at the line's height. */
+function OvernightPlaceholder() {
+  const { t } = usePrefs();
+  return (
+    <div className="flex items-baseline gap-x-5 border-b border-line px-3 py-2 text-xs">
+      <span className="col-head">{t.markets.overnight}</span>
+      <Skeleton className="h-3.5 w-full max-w-80 self-center" />
+    </div>
+  );
+}
+
+/**
+ * WEI: the world's equity benchmarks by region, with the overnight line on top. While the board loads, the region
+ * tables list their instruments with placeholders, so the panel already has its loaded height and the breadth panel
+ * below does not jump (for example after following a link to /markets#breadth).
+ */
 export function WorldPanel({ className }: { className?: string }) {
   const { t, lang } = usePrefs();
   const headingId = useId();
   const { data, error, mutate } = useWorldMarkets();
-  const groups = data ? groupWorld(data.rows).filter((group) => EQUITY_REGIONS.includes(group.region)) : [];
+  const groups = groupWorld(data?.rows ?? []).filter((group) => EQUITY_REGIONS.includes(group.region));
   const now = data ? Date.parse(data.asOf) : 0;
 
   return (
@@ -73,24 +89,22 @@ export function WorldPanel({ className }: { className?: string }) {
       className={className}
       actions={data ? <PanelMeta>{tpl(t.markets.asOfEt, { time: formatTime(data.asOf, lang, "America/New_York") })}</PanelMeta> : null}
     >
-      <StaleBanner show={Boolean(error && data) || Boolean(data?.warnings.includes("quotes_stale"))} since={data?.asOf} />
-      {data ? (
-        <>
-          <OvernightLine data={data} />
+      <StaleBanner show={Boolean(error && data) || Boolean(data?.warnings.includes("quotes_stale"))} since={staleSinceOf(data)} />
+      {error && !data ? (
+        <ErrorState error={error} onRetry={() => mutate()} />
+      ) : (
+        <div aria-busy={!data}>
+          {data ? <OvernightLine data={data} /> : <OvernightPlaceholder />}
           {groups.map((group) => (
             <section key={group.region} aria-labelledby={`${headingId}-${group.region}`} className="border-b border-line last:border-b-0">
               <h3 id={`${headingId}-${group.region}`} className="col-head bg-panel-2 px-3 py-1.5">
                 {t.markets.regions[group.region]}
               </h3>
-              <WorldTable entries={group.entries} caption={t.markets.regions[group.region]} now={now} />
+              <WorldTable entries={group.entries} caption={t.markets.regions[group.region]} now={now} loading={!data} />
             </section>
           ))}
-          <MissingNote data={data} regions={EQUITY_REGIONS} />
-        </>
-      ) : error ? (
-        <ErrorState error={error} onRetry={() => mutate()} />
-      ) : (
-        <SkeletonRows rows={14} />
+          {data ? <MissingNote data={data} regions={EQUITY_REGIONS} /> : null}
+        </div>
       )}
     </Panel>
   );
@@ -100,20 +114,18 @@ export function WorldPanel({ className }: { className?: string }) {
 export function RegionPanel({ region, code, className }: { region: "fx" | "commodities" | "crypto"; code: string; className?: string }) {
   const { t } = usePrefs();
   const { data, error, mutate } = useWorldMarkets();
-  const group = data ? groupWorld(data.rows).find((g) => g.region === region) : undefined;
+  const group = groupWorld(data?.rows ?? []).find((g) => g.region === region);
 
   return (
     <Panel title={t.markets.regions[region]} code={code} className={className}>
-      {data && group ? (
-        <>
-          <WorldTable entries={group.entries} caption={t.markets.regions[region]} compact now={Date.parse(data.asOf)} />
-          <MissingNote data={data} regions={[region]} />
-        </>
-      ) : error ? (
+      {error && !data ? (
         <ErrorState error={error} onRetry={() => mutate()} compact />
-      ) : (
-        <SkeletonRows rows={region === "crypto" ? 2 : 5} />
-      )}
+      ) : group ? (
+        <div aria-busy={!data}>
+          <WorldTable entries={group.entries} caption={t.markets.regions[region]} compact now={data ? Date.parse(data.asOf) : 0} loading={!data} />
+          {data ? <MissingNote data={data} regions={[region]} /> : null}
+        </div>
+      ) : null}
     </Panel>
   );
 }
