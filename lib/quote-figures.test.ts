@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatQuotePrice, priceDigits, reportedPrice, reportedVolume } from "./quote-figures";
+import { formatQuotePrice, priceDigits, reportedChange, reportedPrice, reportedVolume } from "./quote-figures";
 
 describe("Yahoo placeholder prices", () => {
   it("reads a zero open, day range, 52-week end, previous close, bid or ask as not reported", () => {
@@ -9,6 +9,25 @@ describe("Yahoo placeholder prices", () => {
     expect(reportedPrice(4.859)).toBe(4.859);
     // A negative futures price is a price (WTI, April 2020).
     expect(reportedPrice(-37.63)).toBe(-37.63);
+  });
+});
+
+describe("Yahoo placeholder changes", () => {
+  it("recomputes a change Yahoo derived from a price of 0 (Treasury yields on 2026-11-08)", () => {
+    const tnx = reportedChange(-4.837, -49.886547, 4.859, 4.837);
+    expect(tnx.change).toBeCloseTo(0.022, 10);
+    expect(tnx.changePercent).toBeCloseTo((0.022 / 4.837) * 100, 10);
+    const fvx = reportedChange(-4.6080003, -49.783924, 4.648, 4.6080003);
+    expect(fvx.change).toBeCloseTo(0.0399997, 6);
+  });
+
+  it("keeps every other change as Yahoo sent it", () => {
+    expect(reportedChange(0.022000313, 0.45483, 4.859, 4.837)).toEqual({ change: 0.022000313, changePercent: 0.45483 });
+    // BTC-USD measures its change against a 24-hour reference, not the previous close.
+    expect(reportedChange(-272.07812, -0.358, 75669.22, 75753.71)).toEqual({ change: -272.07812, changePercent: -0.358 });
+    expect(reportedChange(null, null, 4.859, 4.837)).toEqual({ change: null, changePercent: null });
+    expect(reportedChange(-4.837, -49.9, null, 4.837)).toEqual({ change: -4.837, changePercent: -49.9 });
+    expect(reportedChange(-4.837, -49.9, 4.859, null)).toEqual({ change: -4.837, changePercent: -49.9 });
   });
 });
 

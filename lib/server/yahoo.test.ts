@@ -204,6 +204,15 @@ describe("mapQuote", () => {
     expect(mapQuote({ symbol: "CL=F", quoteType: "FUTURE", regularMarketDayLow: -40.32, regularMarketPreviousClose: 18.27 })).toMatchObject({ dayLow: -40.32, previousClose: 18.27 });
   });
 
+  it("recomputes a change Yahoo derived from a placeholder price of 0", () => {
+    // ^TNX as Yahoo quoted it on 2026-11-08 from about 06:55 UTC: change -4.837 (minus the previous close), -49.89%.
+    const tnx = mapQuote({ symbol: "^TNX", quoteType: "INDEX", regularMarketPrice: 4.859, regularMarketPreviousClose: 4.837, regularMarketChange: -4.837, regularMarketChangePercent: -49.886547 });
+    expect(tnx.change).toBeCloseTo(0.022, 10);
+    expect(tnx.changePercent).toBeCloseTo(0.4548, 4);
+    const aapl = mapQuote({ symbol: "AAPL", quoteType: "EQUITY", regularMarketPrice: 342.37, regularMarketPreviousClose: 344.17, regularMarketChange: -1.80002, regularMarketChangePercent: -0.523 });
+    expect(aapl).toMatchObject({ change: -1.80002, changePercent: -0.523 });
+  });
+
   it("leaves the new fields null when Yahoo omits them", () => {
     const quote = mapQuote({ symbol: "^GSPC", regularMarketPrice: 7000 });
     expect(quote).toMatchObject({

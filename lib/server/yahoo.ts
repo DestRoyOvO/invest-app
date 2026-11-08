@@ -28,7 +28,7 @@ import {
   type RawChart,
 } from "@/lib/bars";
 import { hasCjk } from "@/lib/names-zh";
-import { reportedPrice, reportedVolume } from "@/lib/quote-figures";
+import { reportedChange, reportedPrice, reportedVolume } from "@/lib/quote-figures";
 
 import { cached, HOUR, isFresh, MINUTE, peek } from "./cache";
 import { log } from "./log";
@@ -247,7 +247,8 @@ export function displayName(shortName: unknown, longName: unknown): string | nul
 /**
  * A Yahoo quote in the app's units. Figures Yahoo fills with a placeholder 0 become null (lib/quote-figures.ts): the
  * open, day range, 52-week range and previous close of yields such as ^TNX, and the volume of indices, currencies and
- * other types without exchange volume (a stock's or an ETF's 0 volume is real and stays).
+ * other types without exchange volume (a stock's or an ETF's 0 volume is real and stays). A change Yahoo computed from
+ * a placeholder price of 0 is recomputed from the price and the previous close.
  */
 export function mapQuote(q: RawQuote): Quote {
   const symbol = String(q.symbol);
@@ -277,6 +278,9 @@ export function mapQuote(q: RawQuote): Quote {
     }
   }
 
+  const price = num(q.regularMarketPrice);
+  const previousClose = reportedPrice(num(q.regularMarketPreviousClose));
+  const { change, changePercent } = reportedChange(num(q.regularMarketChange), num(q.regularMarketChangePercent), price, previousClose);
   const earnings = earningsDates(q, Date.now());
   const dividend = announcedDividend(q.corporateActions);
   const expenseRatioPercent = num(q.netExpenseRatio); // percent units
@@ -291,10 +295,10 @@ export function mapQuote(q: RawQuote): Quote {
     currency: str(q.currency),
     exchange: str(q.fullExchangeName) ?? str(q.exchange),
     marketState: state,
-    price: num(q.regularMarketPrice),
-    change: num(q.regularMarketChange),
-    changePercent: num(q.regularMarketChangePercent),
-    previousClose: reportedPrice(num(q.regularMarketPreviousClose)),
+    price,
+    change,
+    changePercent,
+    previousClose,
     open: reportedPrice(num(q.regularMarketOpen)),
     dayHigh: reportedPrice(num(q.regularMarketDayHigh)),
     dayLow: reportedPrice(num(q.regularMarketDayLow)),
