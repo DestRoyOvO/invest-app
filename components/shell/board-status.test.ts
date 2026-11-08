@@ -14,7 +14,7 @@ function quote(symbol: string, overrides: Partial<Quote> = {}): Quote {
 }
 
 function board(overrides: Partial<BoardResponse> = {}): BoardResponse {
-  return { asOf: "2026-11-09T19:00:00.000Z", marketState: "REGULAR", board: [{ quote: quote("^GSPC"), spark: [] }], warnings: [], quotesAsOf: null, ...overrides };
+  return { asOf: "2026-11-09T19:00:00.000Z", marketState: "REGULAR", board: [{ quote: quote("^GSPC"), spark: [] }], warnings: [], staleSince: null, quotesAsOf: null, ...overrides };
 }
 
 // 14:00 EST on Monday 9 Nov 2026.
