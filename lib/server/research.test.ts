@@ -191,6 +191,9 @@ describe("dividends", () => {
     const chart = { meta: { gmtoffset: -18_000 }, events: { dividends: quarterlyDividends(2016, 2026, () => 0.51) } };
     const history = buildDividendHistory("KO", chart, quote({ exDividendDate: "2026-11-28T05:00:00.000Z", dividendAmount: 0.51, dividendDate: "2026-12-15T00:00:00.000Z" }), NOW);
     expect(history.payments[0].exDate >= "2016-11-07").toBe(true);
+    // The ten-year window starts in November 2016, so 2016 has one payment: its bar is left out, the payment is not.
+    expect(history.payments[0].exDate.startsWith("2016")).toBe(true);
+    expect(history.years[0].year).toBe(2017);
     expect(history.payments.at(-1)).toEqual({ exDate: "2026-08-12", amount: 0.51 });
     expect(history.yield).toBeCloseTo(2.04 / 70, 6);
     expect(history.next).toEqual({ exDate: "2026-11-28", amount: 0.51 });
