@@ -266,7 +266,7 @@ export function BackupPanel() {
             <p className="max-w-prose text-xs text-fg-3">{mode === "merge" ? t.data.backup.mergeHint : t.data.backup.replaceHint}</p>
           </div>
           {visible.length > 0 ? (
-            <DataTable rows={visible} columns={columns} rowKey={(diff) => diff.key} caption={t.data.backup.caption} rowClassName={() => "hover:bg-panel!"} />
+            <DataTable rows={visible} columns={columns} rowKey={(diff) => diff.key} caption={t.data.backup.caption} rowHover={false} />
           ) : null}
           <div className="space-y-3 px-3 py-3">
             {notes.map((note, index) => (

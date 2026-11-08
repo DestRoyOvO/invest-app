@@ -269,7 +269,7 @@ export function ImportReview({ rows, onImported }: { rows: readonly ImportRow[];
         rowKey={(entry) => String(entry.row.line)}
         caption={t.data.review.caption}
         // Rows are not links, so they do not highlight; the status colors then always sit on the panel color.
-        rowClassName={() => "hover:bg-panel!"}
+        rowHover={false}
         stickyHeader
         maxHeight="min(55vh, 440px)"
       />
