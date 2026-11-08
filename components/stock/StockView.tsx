@@ -33,25 +33,29 @@ import { OwnershipTab } from "./OwnershipTab";
 import { PriceChart } from "./PriceChart";
 import { ProfilePanel } from "./ProfilePanel";
 import { QuoteHeader } from "./QuoteHeader";
-import { liveTitle, parseCompare, quoteQuery, resolveTab, tabsFor, type QuoteTab } from "./quote-utils";
+import { liveTitle, parseCompare, QUOTE_TABS, quoteQuery, resolveTab, tabsFor, type QuoteTab } from "./quote-utils";
 import { QuoteTabs } from "./QuoteTabs";
 import { RiskPanel } from "./RiskPanel";
 import { SignalPanel } from "./SignalPanel";
 import { useGSequenceGuard } from "./use-g-guard";
 
-/** Phone order of the overview panels (one column below xl); from xl up each stack keeps its DOM order. Static strings so Tailwind sees them. */
+/**
+ * Phone order of the overview panels. Only phones reorder: from sm to xl the single column follows the DOM (the left
+ * stack, then the right one), so keyboard and screen-reader order match what is on screen wherever a keyboard is
+ * likely. Static strings so Tailwind sees them.
+ */
 const ORDER = {
-  chart: "order-1 xl:order-none",
-  news: "order-2 xl:order-none",
-  ai: "order-3 xl:order-none",
-  stats: "order-4 xl:order-none",
-  risk: "order-5 xl:order-none",
-  earnings: "order-6 xl:order-none",
-  signal: "order-7 xl:order-none",
-  factors: "order-8 xl:order-none",
-  analysts: "order-9 xl:order-none",
-  notes: "order-10 xl:order-none",
-  company: "order-11 xl:order-none",
+  chart: "max-sm:order-1",
+  news: "max-sm:order-2",
+  ai: "max-sm:order-3",
+  stats: "max-sm:order-4",
+  risk: "max-sm:order-5",
+  earnings: "max-sm:order-6",
+  signal: "max-sm:order-7",
+  factors: "max-sm:order-8",
+  analysts: "max-sm:order-9",
+  notes: "max-sm:order-10",
+  company: "max-sm:order-11",
 } as const;
 
 function NotFound({ symbol }: { symbol: string }) {
@@ -77,6 +81,17 @@ function HeaderSkeleton() {
       <Skeleton className="h-6 w-48" />
       <Skeleton className="h-9 w-64" />
       <Skeleton className="h-10 w-full" />
+    </div>
+  );
+}
+
+/** Stand-in for the section tabs while the quote loads: which tabs apply depends on the quote type. */
+function TabsSkeleton() {
+  return (
+    <div aria-hidden className="flex h-10 items-center gap-5 bg-panel px-5">
+      <Skeleton className="h-3 w-16" />
+      <Skeleton className="h-3 w-16" />
+      <Skeleton className="h-3 w-14" />
     </div>
   );
 }
@@ -110,7 +125,9 @@ export function StockView({ symbol, rawInput }: { symbol: string | null; rawInpu
   const request = useMemo<AnalyzeRequest | null>(() => (symbol ? { kind: "stock", symbol, lang } : null), [symbol, lang]);
 
   const quote: Quote | null = data?.quote ?? null;
-  const tabs = tabsFor(data ? data.quote.quoteType : undefined);
+  // Which tabs apply depends on the quote type, so until the quote is known a deep link (?tab=financials) keeps its
+  // tab but shows a skeleton: no research request goes out for a fund or an index that has no such tab.
+  const tabs = data ? tabsFor(data.quote.quoteType) : QUOTE_TABS;
   const tab = resolveTab(searchParams.get("tab"), tabs);
   const compareParam = searchParams.get("compare");
   const compare = useMemo(() => parseCompare(compareParam, symbol ?? ""), [compareParam, symbol]);
@@ -214,13 +231,13 @@ export function StockView({ symbol, rawInput }: { symbol: string | null; rawInpu
         ) : (
           <HeaderSkeleton />
         )}
-        <QuoteTabs tabs={tabs} active={tab} hrefFor={hrefFor} />
+        {data ? <QuoteTabs tabs={tabs} active={tab} hrefFor={hrefFor} /> : <TabsSkeleton />}
       </div>
 
       {tab === "overview" ? (
         // Column flow: two independent stacks from xl up. Below xl the stacks dissolve (display: contents) into one
-        // column in the order a phone reader needs: chart, news, AI note, key stats, risk, earnings, signal, factors,
-        // analysts, notes, company.
+        // column in DOM order, and on phones in the order a phone reader needs: chart, news, AI note, key stats, risk,
+        // earnings, signal, factors, analysts, notes, company.
         <div className="flex flex-col gap-px bg-line px-px pb-px xl:grid xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] xl:items-start xl:gap-0 xl:bg-transparent xl:p-0">
           <div className="contents xl:flex xl:min-w-0 xl:flex-col xl:gap-px xl:bg-line xl:px-px xl:pb-px">
             <PriceChart symbol={symbol} quote={quote} sectorEtf={sectorEtf} compare={compare} onCompareChange={setCompare} className={ORDER.chart} />
@@ -244,9 +261,15 @@ export function StockView({ symbol, rawInput }: { symbol: string | null; rawInpu
             )}
             <EarningsPanel symbol={symbol} className={ORDER.earnings} />
             <AnalystsPanel symbol={symbol} className={ORDER.analysts} />
-            <NewsPanel symbol={symbol} className={ORDER.news} />
+            <NewsPanel symbol={symbol} ready={Boolean(data)} className={ORDER.news} />
             {data ? <ProfilePanel profile={data.profile} className={ORDER.company} /> : null}
           </div>
+        </div>
+      ) : !data ? (
+        <div className="flex flex-col gap-px bg-line px-px pb-px">
+          <Panel title={t.stock.tabs[tab]}>
+            <SkeletonRows rows={8} />
+          </Panel>
         </div>
       ) : (
         <div className="flex flex-col gap-px bg-line px-px pb-px">

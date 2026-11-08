@@ -12,10 +12,14 @@ import { tpl } from "@/lib/format";
 
 const COLLAPSED = 5;
 
-/** Company news first, then industry and macro context; the top five with the rest a click away. */
-export function NewsPanel({ symbol, className }: { symbol: string; className?: string }) {
+/**
+ * Company news first, then industry and macro context; the top five with the rest a click away. With `ready` false
+ * the request waits (the page passes the quote's arrival): the news route reuses the quote and profile the page has
+ * just loaded instead of loading, and charging for, the same calls in parallel.
+ */
+export function NewsPanel({ symbol, ready = true, className }: { symbol: string; ready?: boolean; className?: string }) {
   const { t } = usePrefs();
-  const { data, error, mutate } = useStockNews(symbol);
+  const { data, error, mutate } = useStockNews(ready ? symbol : null);
   const [expanded, setExpanded] = useState(false);
   const items = data?.news ?? [];
 
