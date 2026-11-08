@@ -1,7 +1,7 @@
 import "server-only";
 
 import { between, pick, round } from "./random";
-import type { Security } from "./securities";
+import { employeesOf, securityOf, type Security } from "./securities";
 import { addTradingDays, DAY_MS, dayNumber, isTradingDay, localToUtc, nextTradingDay, previousTradingDay, tradingDayOnOrBefore, yearOf } from "./sessions";
 
 // Company figures and event schedules of the fixture data. Fundamentals are fixed per symbol (seeded by it); earnings
@@ -45,6 +45,16 @@ export interface CompanyFigures {
 
 const figuresCache = new Map<string, CompanyFigures>();
 
+/**
+ * The beta of a stock's price walk against the S&P 500 (prices.ts): both load on the same daily market factor, so the
+ * beta is the ratio of their volatilities times the two market loadings.
+ */
+function walkBeta(security: Security): number {
+  const benchmark = securityOf("^GSPC");
+  if (!benchmark || benchmark.vol <= 0) return 1;
+  return (security.vol / benchmark.vol) * security.marketLoading * benchmark.marketLoading;
+}
+
 export function companyFigures(security: Security): CompanyFigures {
   const known = figuresCache.get(security.symbol);
   if (known) return known;
@@ -66,6 +76,9 @@ export function companyFigures(security: Security): CompanyFigures {
   const revenueGrowth = between(-0.04, 0.3, s, "rg");
   const earningsGrowth = revenueGrowth + between(-0.04, 0.06, s, "eg");
   const equity = (shares * security.anchorPrice) / between(2, 18, s, "pb");
+  const debtToEquity = between(0.1, 1.8, s, "debt");
+  // Insiders hold up to 12% of a company of $50 billion or less, a fraction of a percent of the largest ones.
+  const insiderScale = Math.min(1, Math.max(0.05, (50e9 / cap) ** 0.4));
   const figures: CompanyFigures = {
     epsTtm,
     forwardEps: profitable ? epsTtm * (1 + Math.max(0.02, earningsGrowth)) : epsTtm * 0.5,
@@ -78,19 +91,20 @@ export function companyFigures(security: Security): CompanyFigures {
     profitMargin,
     revenueGrowth,
     earningsGrowth,
-    debtToEquityPercent: between(10, 180, s, "de"),
+    debtToEquityPercent: debtToEquity * 100,
     totalCash: revenueTtm * between(0.05, 0.4, s, "cash"),
-    totalDebt: equity * between(0.1, 1.8, s, "debt"),
+    totalDebt: equity * debtToEquity,
     returnOnEquity: profitable ? Math.min(0.9, netIncomeTtm / equity) : netIncomeTtm / equity,
     returnOnAssets: between(0.02, 0.2, s, "roa") * (profitable ? 1 : -0.5),
-    beta: between(0.6, 1.8, s, "beta"),
+    // Yahoo's five-year monthly beta differs a little from the beta of a year of daily returns.
+    beta: walkBeta(security) * between(0.9, 1.1, s, "beta"),
     bookValuePerShare: equity / shares,
-    employees: Math.round(Math.max(800, revenueTtm / between(300_000, 1_500_000, s, "staff")) / 10) * 10,
+    employees: employeesOf(s) ?? Math.round(Math.max(800, revenueTtm / between(300_000, 1_500_000, s, "staff")) / 10) * 10,
     targetRatio: between(1.04, 1.22, s, "target"),
     recommendationMean: round(between(1.5, 2.9, s, "rating"), 1),
     analysts: 12 + pick(40, s, "analysts"),
     shortPercentOfFloat: between(0.005, 0.12, s, "short"),
-    insidersPercentHeld: between(0.001, 0.12, s, "insiders"),
+    insidersPercentHeld: between(0.001, 0.12, s, "insiders") * insiderScale,
     institutionsPercentHeld: between(0.45, 0.85, s, "institutions"),
   };
   // Any well-formed symbol is valid, so the memo is bounded (the figures are cheap to recompute).

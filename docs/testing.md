@@ -89,19 +89,21 @@ What the mode guarantees:
 - **Sensible levels.** Indices (^GSPC, ^IXIC, ^DJI, ^RUT and the world board), ^VIX around 15 to 20, Treasury yields
   (^IRX, ^FVX, ^TNX, ^TYX) of a few percent from one curve model, FX, futures and crypto at plausible levels.
 - **Names are facts, figures are not.** A table covers the app's universe (`lib/universe.ts`, `lib/names-zh.ts`, the sector
-  and broad ETFs, the world board) with real names, sectors, approximate sizes and first trading days. Every other
-  well-formed symbol is known too, with a stable made-up name. People, analyst firms and institutions in the ownership and
-  analyst modules are made up, and every description says it is synthetic. Insider trades are those of the company's
-  officers, each under one title, on trading days of the listing. Rating actions come out on trading days
-  during New York business hours, each firm on its own rating scale and starting from its previous grade. Headlines are made up as well: a stock's
-  ticker brings stories about the company, the ticker of a fund, index, yield, crypto pair, currency pair or future
-  market stories about that instrument (flows, levels, rates), other searches stories about the topic.
+  and broad ETFs, the world board) with real names, sectors, approximate sizes, first trading days and headcounts. Every
+  other well-formed symbol is known too, with a stable made-up name. People, analyst firms and institutions in the
+  ownership and analyst modules are made up, and every description says it is synthetic. Insider trades are those of the
+  company's officers, each under one title, on trading days of the listing. Rating actions come out on trading days
+  during New York business hours, each firm on its own rating scale and starting from its previous grade. Headlines are
+  made up as well: a stock's ticker brings stories about the company, the ticker of a fund, index, yield, crypto pair,
+  currency pair or future market stories about that instrument (flows, levels, rates), other searches stories about the
+  topic.
 - **Consistent results.** A calendar quarter's EPS and revenue depend only on the quarter, so a reported quarter never
   changes; the quote, every quoteSummary module and `fundamentalsTimeSeries` share one trailing EPS (the four latest
   reported quarters) and the same annual sums. Earnings grow at about the rate of revenue. In the statements a year is
   the sum of its quarters line by line, each quarter's margins move a little around the company's figures, operating
   income lies between pretax income and gross profit, and the dividends paid are those of the dividend history that went
-  ex in the period.
+  ex in the period. Debt to equity is the balance sheet's, the beta is the price walk's against the S&P 500 (within a
+  tenth), and insiders hold less of the largest companies.
 - **Upcoming events.** Earnings and dividends are scheduled relative to the latest completed session, so the calendar, My
   day and the week ahead always have entries. The default watchlist has fixed near-term dates: NVDA reports 2 sessions
   ahead, MSFT 4, AAPL 6, GOOGL 8 and AMZN 9; AAPL goes ex-dividend in 3 sessions. Other stocks report 2 to 45 sessions

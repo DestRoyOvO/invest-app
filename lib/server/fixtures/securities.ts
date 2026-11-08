@@ -493,6 +493,38 @@ const LISTED: Readonly<Record<string, string>> = {
   "ETH-USD": "2017-11-09",
 };
 
+// ---------------------------------------------------------------------------
+// Headcounts
+// ---------------------------------------------------------------------------
+
+/**
+ * Approximate full-time employees of the table's companies (rounded, as published around 2025), for the Company panel.
+ * Companies outside the table get a headcount from their revenue (company.ts).
+ */
+const EMPLOYEES: Readonly<Record<string, number>> = {
+  NVDA: 36_000, MSFT: 228_000, AAPL: 164_000, AVGO: 37_000, ORCL: 162_000, AMD: 28_000, CRM: 76_000, ADBE: 30_000, CSCO: 90_000, QCOM: 49_000,
+  GOOGL: 183_000, META: 76_000, NFLX: 14_000, DIS: 233_000, TMUS: 70_000, VZ: 100_000, T: 141_000, CMCSA: 182_000,
+  AMZN: 1_556_000, TSLA: 125_000, HD: 470_000, MCD: 150_000, BKNG: 24_000, LOW: 300_000, TJX: 349_000, NKE: 79_000, SBUX: 361_000,
+  WMT: 2_100_000, COST: 333_000, PG: 108_000, KO: 69_000, PEP: 318_000, PM: 83_000, MDLZ: 91_000,
+  LLY: 47_000, UNH: 400_000, JNJ: 138_000, ABBV: 55_000, MRK: 74_000, TMO: 125_000, ABT: 114_000, AMGN: 28_000, PFE: 81_000,
+  "BRK-B": 392_000, JPM: 317_000, V: 31_000, MA: 35_000, BAC: 213_000, WFC: 217_000, GS: 46_000, MS: 80_000, BLK: 21_000,
+  GE: 53_000, CAT: 112_000, RTX: 186_000, UNP: 32_000, HON: 102_000, BA: 172_000, DE: 75_000, LMT: 121_000,
+  XOM: 61_000, CVX: 45_000, COP: 11_800, SLB: 110_000, EOG: 3_100,
+  LIN: 66_000, SHW: 63_000, APD: 21_000, FCX: 28_000, NEM: 22_000,
+  NEE: 17_000, SO: 28_000, DUK: 27_000, CEG: 14_000,
+  PLD: 2_700, AMT: 4_700, EQIX: 13_000, SPG: 3_300,
+  TSM: 77_000, INTC: 108_000, MU: 48_000, ASML: 44_000, ARM: 7_100, PLTR: 4_000, IBM: 270_000, UBER: 31_000, ABNB: 7_300, SMCI: 5_700,
+  MRVL: 6_500, COIN: 4_000, MSTR: 1_500, HOOD: 2_300, SHOP: 8_100, PYPL: 24_000,
+  BABA: 125_000, PDD: 23_000, JD: 570_000, BIDU: 31_000, NTES: 21_000, TCOM: 41_000, BILI: 8_000, NIO: 32_000, XPEV: 16_000, LI: 32_000,
+  BEKE: 130_000, TME: 5_200, FUTU: 3_300, TAL: 21_000, EDU: 75_000, VIPS: 7_000,
+  "0700.HK": 110_000, "9988.HK": 125_000, "3690.HK": 100_000, "1810.HK": 43_000, "1211.HK": 900_000, "9618.HK": 570_000, "2318.HK": 290_000, "0005.HK": 211_000,
+};
+
+/** The approximate headcount of a company of the table, or null for any other symbol. */
+export function employeesOf(symbol: string): number | null {
+  return EMPLOYEES[symbol] ?? null;
+}
+
 /** The market profile of a listing: its calendar, starting on its first trading day when it listed later. */
 function listedProfile(symbol: string, key: ProfileKey): MarketProfile {
   const profile: MarketProfile = PROFILES[key];

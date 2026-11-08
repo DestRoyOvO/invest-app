@@ -493,6 +493,34 @@ describe("quote page research", () => {
     }
   });
 
+  it("give companies plausible headcounts, insider holdings, leverage and betas", async () => {
+    // Approximate published headcounts, not revenue over a random revenue per employee (Apple had 2.1 million).
+    const employees = async (symbol: string) => (await getSummary(symbol))!.profile.employees!;
+    expect(await employees("AAPL")).toBeGreaterThan(100_000);
+    expect(await employees("AAPL")).toBeLessThan(250_000);
+    expect(await employees("WMT")).toBeGreaterThan(1_500_000);
+    expect(await employees("EOG")).toBeLessThan(10_000);
+    expect(await employees("0700.HK")).toBeLessThan(200_000);
+
+    const symbols = ["AAPL", "MSFT", "AMZN", "XOM", "JPM", "KO", "TSLA"];
+    const history = await getHistory([...symbols, "^GSPC"], "1y", SATURDAY);
+    const returns = (closes: ReadonlyArray<number | null>) => closes.slice(1).map((close, i) => Math.log(close! / closes[i]!));
+    const market = returns(history.closes["^GSPC"]);
+    const mean = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
+    for (const symbol of symbols) {
+      const { stats } = (await getSummary(symbol))!;
+      // Debt to equity is the balance sheet's: total debt over book equity (market cap over price to book).
+      expect(stats.debtToEquity!, symbol).toBeCloseTo(stats.totalDebt! / (stats.marketCap! / stats.priceToBook!), 2);
+      // The reported beta is about the beta of the price history against the S&P 500 (the risk panel's).
+      const own = returns(history.closes[symbol]);
+      const [ownMean, marketMean] = [mean(own), mean(market)];
+      const sample = mean(own.map((r, i) => (r - ownMean) * (market[i] - marketMean))) / mean(market.map((r) => (r - marketMean) ** 2));
+      expect(Math.abs(stats.beta! - sample), `${symbol} beta ${stats.beta} against ${sample.toFixed(2)} over a year`).toBeLessThan(0.35);
+    }
+    // Insiders of the largest companies hold a fraction of a percent to a few percent.
+    for (const symbol of ["AAPL", "MSFT", "NVDA", "GOOGL"]) expect((await getOwnership(symbol))!.breakdown!.insiders!, symbol).toBeLessThan(0.03);
+  });
+
   it("list the trades of the company's own officers, one title each, on trading days", async () => {
     for (const symbol of ["AAPL", "MSFT", "SHOP", "0700.HK"]) {
       const profile = (await fixtureClient.quoteSummary(symbol, { modules: ["assetProfile"] })) as { assetProfile: { companyOfficers: Array<{ name: string; title: string }> } };
