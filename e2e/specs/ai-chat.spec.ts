@@ -1,7 +1,7 @@
 import { AI_CHATS_KEY, AI_PREFS_KEY, type ChatHistory, type Conversation } from "@/lib/ai-store";
 import type { ChatRequest } from "@/types/api";
 
-import { hitAtCenter, readLocal, seedLocal, serverNow } from "../support/notes";
+import { hitAtCenter, readLocal, seedLocal, serverNow, toastArrivals, watchToasts } from "../support/notes";
 import { SAMPLE_DATA } from "../support/routes";
 import { expect, test, type Page } from "../support/test";
 
@@ -181,12 +181,16 @@ test.describe("the chat footer", () => {
   test.use({ permissions: ["clipboard-read", "clipboard-write"] });
 
   test("stays within reach while the Copy toast shows", async ({ page, app }) => {
+    await watchToasts(page);
     await app.goto("/");
     await openFromTopBar(page);
     await ask(page, "Which sectors moved the most?");
     await copyButtons(page).click();
     const copied = page.locator("[data-toast]").filter({ hasText: "Copied as Markdown." });
     await expect(copied).toBeVisible();
+    // The toast shows inside the dialog, so a screen reader that honours aria-modal still hears it: it went into a
+    // polite live region that was there before it.
+    expect(await toastArrivals(page)).toEqual([{ text: "Copied as Markdown.", announced: true, inDialog: true, modalOpen: true }]);
     // Its button is Dismiss, told apart from the drawer's Close, and the message says what it dismisses.
     await expect(drawer(page).getByRole("button", { name: "Close", exact: true })).toHaveCount(1);
     await expect(copied.getByRole("button", { name: "Dismiss", exact: true })).toHaveAccessibleDescription("Copied as Markdown.");

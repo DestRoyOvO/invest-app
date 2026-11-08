@@ -16,7 +16,9 @@ import {
   seedLocal,
   serverNow,
   signedPct,
+  toastArrivals,
   watchNotificationRequests,
+  watchToasts,
   writtenDate,
 } from "../support/notes";
 import { SAMPLE_DATA } from "../support/routes";
@@ -335,6 +337,7 @@ test.describe("managing rules", () => {
 test.describe("on a phone", () => {
   test("the toasts of a saved alert leave the editor's buttons clear", async ({ page, app, request }) => {
     test.skip(!app.isPhone, "Wider screens show the editor at the side, clear of the toasts.");
+    await watchToasts(page);
     await app.seedStorage(SAMPLE_DATA);
     const last = (await listQuotes(request, ["AAPL"])).get("AAPL")?.price;
     if (!last) throw new Error("No AAPL quote");
@@ -360,6 +363,17 @@ test.describe("on a phone", () => {
       await expect(trigger).toBeVisible();
       expect(await hitAtCenter(button), `a tap on ${name}`).toBe("itself");
     }
+    // Each toast is announced once, where it first showed: at the screen's edge (no dialog was open), in a polite live
+    // region that was there before it, also while the editor closed. Carried into the next editor, inside its dialog,
+    // they are not announced again.
+    const saved = `Alert saved: AAPL At or above ${price(level)}`;
+    const which = (text: string) => (text.startsWith(saved) ? "saved" : text.startsWith("AAPL traded at") ? "trigger" : text);
+    expect((await toastArrivals(page)).map(({ text, ...how }) => ({ toast: which(text), ...how }))).toEqual([
+      { toast: "saved", announced: true, inDialog: false, modalOpen: false },
+      { toast: "trigger", announced: true, inDialog: false, modalOpen: false },
+      { toast: "saved", announced: false, inDialog: true, modalOpen: true },
+      { toast: "trigger", announced: false, inDialog: true, modalOpen: true },
+    ]);
   });
 });
 
