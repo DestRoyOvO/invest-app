@@ -112,7 +112,9 @@ function WeekRow({ item, today }: { item: AgendaItem; today: string }) {
       <span className="num text-right text-fg">
         {value ? (
           event.kind === "earnings" ? (
-            <TickNumber value={item.positionValue}>{value}</TickNumber>
+            <TickNumber key={item.valueAtCost ? "cost" : "market"} value={item.positionValue}>
+              {value}
+            </TickNumber>
           ) : (
             value
           )

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Panel } from "@/components/ui/Panel";
 import { SkeletonRows } from "@/components/ui/States";
 import { StatTile } from "@/components/ui/StatTile";
-import { nyClock, nyWeekday, type AgendaItem } from "@/lib/events";
+import { nyClock, nyShortDate, nyWeekday, type AgendaItem } from "@/lib/events";
 import { formatDate, formatRatio, tpl } from "@/lib/format";
 import { MACRO_CALENDAR_ENDS, MACRO_EVENTS, MACRO_SOURCES } from "@/lib/macro-calendar";
 
@@ -30,11 +30,13 @@ interface GlanceStripProps {
   /** Value of all positions in the base currency, for the share reporting. */
   portfolioValue: number | null;
   rangeLabel: string;
+  /** Name macro days by weekday (one week) or by date (four weeks). */
+  dayStyle?: "weekday" | "date";
   className?: string;
 }
 
 /** Four figures for the period above the agenda: holdings and watchlist names reporting, dividend cash, macro releases. */
-export function GlanceStrip({ items, portfolioValue, rangeLabel, className }: GlanceStripProps) {
+export function GlanceStrip({ items, portfolioValue, rangeLabel, dayStyle = "weekday", className }: GlanceStripProps) {
   const { t, lang } = usePrefs();
   const g = t.calendar.glance;
   const figures = items ? glance(items) : null;
@@ -61,7 +63,7 @@ export function GlanceStrip({ items, portfolioValue, rangeLabel, className }: Gl
               figures.macro.length > 0
                 ? figures.macro
                     .slice(0, 3)
-                    .map((m) => `${t.calendar.macroCode[m.event.macro ?? "cpi"]} ${nyWeekday(Date.parse(m.event.at), lang)}`)
+                    .flatMap((m) => (m.event.macro ? [`${t.calendar.macroCode[m.event.macro]} ${(dayStyle === "date" ? nyShortDate : nyWeekday)(Date.parse(m.event.at), lang)}`] : []))
                     .join(" · ")
                 : g.none
             }

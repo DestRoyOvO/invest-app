@@ -53,7 +53,10 @@ export function quoteEvents(quote: Quote, from: number, to: number): CalendarEve
     [quote.lastEarningsDate, false],
   ] as const) {
     if (!inWindow(iso, from, to)) continue;
-    events.push({ ...base, id: `earnings:${quote.symbol}:${iso.slice(0, 10)}`, kind: "earnings", at: iso, timing: earningsTiming(iso, estimated, quote.symbol), estimated, amount: null });
+    const id = `earnings:${quote.symbol}:${iso.slice(0, 10)}`;
+    // Around a report Yahoo's next and last timestamps can fall on the same day: keep one event so ids stay unique.
+    if (events.some((event) => event.id === id)) continue;
+    events.push({ ...base, id, kind: "earnings", at: iso, timing: earningsTiming(iso, estimated, quote.symbol), estimated, amount: null });
   }
   // Ex-dividend dates (you must hold the shares before this date to receive the dividend). Payment dates are left
   // out: Yahoo often keeps a past one, and the ex-date is the one that matters for a holder.

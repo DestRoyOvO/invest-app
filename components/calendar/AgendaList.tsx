@@ -207,7 +207,8 @@ function PositionText({ item }: { item: AgendaItem }) {
     return (
       <span title={label}>
         <span className="sr-only">{label}</span>
-        <TickNumber value={item.positionValue} className={cn(item.valueAtCost && "text-fg-2")}>
+        {/* Remounts when the quote arrives, so switching from cost to market value is not flashed as a price move. */}
+        <TickNumber key={item.valueAtCost ? "cost" : "market"} value={item.positionValue} className={cn(item.valueAtCost && "text-fg-2")}>
           <span aria-hidden>
             {value}
             {item.valueAtCost ? "*" : ""}

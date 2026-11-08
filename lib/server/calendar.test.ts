@@ -114,6 +114,15 @@ describe("quoteEvents", () => {
     expect(events.map((e) => [e.id, e.timing, e.estimated])).toEqual([["earnings:0700.HK:2026-11-18", null, false]]);
   });
 
+  it("keeps one event when the next and the last report share a day", () => {
+    const events = quoteEvents(
+      quote("XYZ", { nextEarningsDate: "2026-11-09T21:00:00.000Z", earningsDateEstimated: false, lastEarningsDate: "2026-11-09T12:00:00.000Z" }),
+      NOW - 2 * DAY,
+      NOW + 30 * DAY,
+    );
+    expect(events.map((e) => [e.id, e.timing])).toEqual([["earnings:XYZ:2026-11-09", "post"]]);
+  });
+
   it("skips dates outside the window", () => {
     const events = quoteEvents(quote("AAPL", { nextEarningsDate: "2027-01-28T21:00:00.000Z", earningsDateEstimated: true }), NOW, NOW + 30 * DAY);
     expect(events).toEqual([]);

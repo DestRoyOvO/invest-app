@@ -208,7 +208,7 @@ function Actions({ actions }: { actions: readonly AnalystAction[] }) {
   const rows = useMemo(() => (all ? actions : actions.slice(0, ACTIONS_SHOWN)), [actions, all]);
   const actionLabels = a.action as Record<string, string>;
   const columns: Array<DataTableColumn<AnalystAction>> = [
-    { key: "date", header: a.columns.date, width: lang === "zh" ? "5rem" : "4rem", render: (row) => <span className="num text-fg-2">{formatShortDate(row.date, lang, "America/New_York")}</span> },
+    { key: "date", header: a.columns.date, width: lang === "zh" ? "5rem" : "4.5rem", render: (row) => <span className="num text-fg-2">{formatShortDate(row.date, lang, "America/New_York")}</span> },
     { key: "firm", header: a.columns.firm, render: (row) => <span className="text-fg" title={row.firm}>{row.firm}</span> },
     {
       key: "rating",

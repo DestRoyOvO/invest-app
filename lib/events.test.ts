@@ -223,5 +223,8 @@ describe("week summary", () => {
   it("names at most two macro releases", () => {
     const items = [macro("jobs", "2026-12-04T13:30:00.000Z"), macro("fomc", "2026-12-09T19:00:00.000Z", true), macro("cpi", "2026-12-10T13:30:00.000Z")].map((e) => toAgendaItem(e, INPUT));
     expect(formatWeekSummary(summarizeWeek(items), labels, "en")).toBe("Jobs report Fri 08:30 ET · FOMC Wed 14:00 ET");
+    // Over four weeks a weekday is ambiguous: name the date.
+    expect(formatWeekSummary(summarizeWeek(items), labels, "en", 3, "date")).toBe("Jobs report Dec 4 08:30 ET · FOMC Dec 9 14:00 ET · CPI Dec 10 08:30 ET");
+    expect(formatWeekSummary(summarizeWeek(items), calendarMessages.zh.summary, "zh", 1, "date")).toBe("非农 12月4日 美东 08:30");
   });
 });

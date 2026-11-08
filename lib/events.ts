@@ -352,20 +352,34 @@ export interface WeekSummaryLabels {
   none: string;
 }
 
-const weekdayCache = new Map<Lang, Intl.DateTimeFormat>();
+const dayFormatCache = new Map<string, Intl.DateTimeFormat>();
+
+function nyDayFormat(lang: Lang, style: "weekday" | "date"): Intl.DateTimeFormat {
+  const key = `${lang}:${style}`;
+  let format = dayFormatCache.get(key);
+  if (!format) {
+    const options: Intl.DateTimeFormatOptions = style === "weekday" ? { weekday: "short" } : { month: "short", day: "numeric" };
+    format = new Intl.DateTimeFormat(LOCALES[lang], { ...options, timeZone: NEW_YORK });
+    dayFormatCache.set(key, format);
+  }
+  return format;
+}
 
 /** Short weekday of an instant in New York, e.g. "Wed" or "周三". */
 export function nyWeekday(ms: number, lang: Lang): string {
-  let format = weekdayCache.get(lang);
-  if (!format) {
-    format = new Intl.DateTimeFormat(LOCALES[lang], { weekday: "short", timeZone: NEW_YORK });
-    weekdayCache.set(lang, format);
-  }
-  return format.format(new Date(ms));
+  return nyDayFormat(lang, "weekday").format(new Date(ms));
 }
 
-/** One line such as "3 holdings report · FOMC Wed 14:00 ET"; at most `maxMacro` macro releases are named. */
-export function formatWeekSummary(summary: WeekSummary, labels: WeekSummaryLabels, lang: Lang, maxMacro = 2): string {
+/** Short New York date, e.g. "Nov 10" or "11月10日". */
+export function nyShortDate(ms: number, lang: Lang): string {
+  return nyDayFormat(lang, "date").format(new Date(ms));
+}
+
+/**
+ * One line such as "3 holdings report · FOMC Wed 14:00 ET"; at most `maxMacro` macro releases are named. Over more than
+ * a week a weekday is ambiguous, so `dayStyle: "date"` names the date instead ("CPI Nov 10 08:30 ET").
+ */
+export function formatWeekSummary(summary: WeekSummary, labels: WeekSummaryLabels, lang: Lang, maxMacro = 2, dayStyle: "weekday" | "date" = "weekday"): string {
   const parts: string[] = [];
   const counted = (n: number, one: string, other: string) => {
     if (n > 0) parts.push(tpl(n === 1 ? one : other, { n }));
@@ -375,7 +389,8 @@ export function formatWeekSummary(summary: WeekSummary, labels: WeekSummaryLabel
   counted(summary.holdingsExDividend, labels.exDividendOne, labels.exDividendOther);
   for (const release of summary.macro.slice(0, Math.max(0, maxMacro))) {
     const t = Date.parse(release.at);
-    parts.push(tpl(labels.macroAt, { name: labels.macroNames[release.key], day: nyWeekday(t, lang), time: nyClock(t) }));
+    const day = dayStyle === "date" ? nyShortDate(t, lang) : nyWeekday(t, lang);
+    parts.push(tpl(labels.macroAt, { name: labels.macroNames[release.key], day, time: nyClock(t) }));
   }
   return parts.length > 0 ? parts.join(" · ") : labels.none;
 }

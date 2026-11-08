@@ -72,7 +72,8 @@ export function CalendarView() {
     { value: "month" as const, label: c.range.month },
   ];
   const rangeLabel = rangeOptions.find((o) => o.value === prefs.range)?.label ?? "";
-  const summary = agenda ? formatWeekSummary(summarizeWeek(agenda.items), c.summary, lang) : null;
+  const dayStyle = prefs.range === "month" ? "date" : "weekday";
+  const summary = agenda ? formatWeekSummary(summarizeWeek(agenda.items), c.summary, lang, 2, dayStyle) : null;
   const macroEnding = feed.data && span && now !== null ? macroListEnding(feed.data.macroCalendarEnds, span, now) : false;
   const noNames = held.length === 0 && watchlist.length === 0;
 
@@ -154,7 +155,7 @@ export function CalendarView() {
   return (
     <div className="grid gap-px bg-line p-px xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
       <h1 className="sr-only">{c.title}</h1>
-      <GlanceStrip items={agenda?.items ?? null} portfolioValue={portfolioValue} rangeLabel={rangeLabel} className="xl:col-span-2" />
+      <GlanceStrip items={agenda?.items ?? null} portfolioValue={portfolioValue} rangeLabel={rangeLabel} dayStyle={dayStyle} className="xl:col-span-2" />
       <div className="flex min-w-0 flex-col gap-px">
         <Panel
           code="EVTS"
