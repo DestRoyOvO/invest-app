@@ -9,7 +9,7 @@ import { Panel } from "@/components/ui/Panel";
 import { formatCompact, formatDate, formatMultiple, formatNumber, formatPercent, formatPrice, formatRatio, tpl } from "@/lib/format";
 import type { KeyStats as KeyStatsData, Quote } from "@/types/api";
 
-import { instrumentKind } from "./quote-utils";
+import { formatQuotePrice, instrumentKind, priceDigits } from "./quote-utils";
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -59,6 +59,8 @@ export function KeyStats({ stats, quote, className }: { stats: KeyStatsData; quo
   const currencyDiffers = financialCurrency !== null && quote.currency !== null && financialCurrency !== quote.currency;
   const kind = instrumentKind(quote.quoteType);
   const isFund = kind === "fund";
+  // Moving averages with the instrument's decimals, as in the quote header (a currency pair keeps its pips).
+  const digits = priceDigits(quote.symbol, quote.quoteType);
   const balanceTitle = currencyDiffers ? `${t.stock.groups.balance} · ${financialCurrency}` : t.stock.groups.balance;
   const avgVolume = stats.avgVolume ?? quote.avgVolume;
   const marketCap = stats.marketCap ?? quote.marketCap;
@@ -72,8 +74,8 @@ export function KeyStats({ stats, quote, className }: { stats: KeyStatsData; quo
           <Row label={s.change52w}>
             <Delta value={quote.fiftyTwoWeekChangePercent} digits={1} />
           </Row>
-          <Row label={s.ma50}>{formatPrice(quote.fiftyDayAverage, lang)}</Row>
-          <Row label={s.ma200}>{formatPrice(quote.twoHundredDayAverage, lang)}</Row>
+          <Row label={s.ma50}>{formatQuotePrice(quote.fiftyDayAverage, digits, lang)}</Row>
+          <Row label={s.ma200}>{formatQuotePrice(quote.twoHundredDayAverage, digits, lang)}</Row>
         </Group>
       </Panel>
     );
@@ -104,8 +106,8 @@ export function KeyStats({ stats, quote, className }: { stats: KeyStatsData; quo
             <Delta value={quote.fiftyTwoWeekChangePercent} />
           </Row>
           <Row label={s.dividendYield}>{formatRatio(stats.dividendYield ?? quote.dividendYield, { digits: 2 })}</Row>
-          <Row label={s.ma50}>{formatPrice(quote.fiftyDayAverage, lang)}</Row>
-          <Row label={s.ma200}>{formatPrice(quote.twoHundredDayAverage, lang)}</Row>
+          <Row label={s.ma50}>{formatQuotePrice(quote.fiftyDayAverage, digits, lang)}</Row>
+          <Row label={s.ma200}>{formatQuotePrice(quote.twoHundredDayAverage, digits, lang)}</Row>
           <Row label={s.avgVolume}>{formatCompact(avgVolume, lang)}</Row>
         </Group>
       ) : (
@@ -157,8 +159,8 @@ export function KeyStats({ stats, quote, className }: { stats: KeyStatsData; quo
           <Row label={s.change52w}>
             <Delta value={quote.fiftyTwoWeekChangePercent} digits={1} />
           </Row>
-          <Row label={s.ma50}>{formatPrice(quote.fiftyDayAverage, lang)}</Row>
-          <Row label={s.ma200}>{formatPrice(quote.twoHundredDayAverage, lang)}</Row>
+          <Row label={s.ma50}>{formatQuotePrice(quote.fiftyDayAverage, digits, lang)}</Row>
+          <Row label={s.ma200}>{formatQuotePrice(quote.twoHundredDayAverage, digits, lang)}</Row>
         </Group>
       )}
       <Group title={t.stock.groups.events}>

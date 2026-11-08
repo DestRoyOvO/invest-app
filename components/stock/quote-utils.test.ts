@@ -3,13 +3,17 @@ import { describe, expect, it } from "vitest";
 import {
   daysUntil,
   earningsTiming,
+  formatQuotePrice,
   futureDate,
   instrumentKind,
   isUsListing,
   liveTitle,
   parseCompare,
   positionFigures,
+  priceDigits,
   quoteQuery,
+  reportedPrice,
+  reportedVolume,
   resolveTab,
   showsCoverage,
   tabsFor,
@@ -120,6 +124,51 @@ describe("liveTitle", () => {
     expect(liveTitle("DOGE-USD", 0.12345, 0)).toBe("DOGE-USD 0.1235 0.00% · InvestSeek");
     expect(liveTitle("XYZ", null, null)).toBe("XYZ · InvestSeek");
     expect(liveTitle("XYZ", 10, null)).toBe("XYZ 10.00 · InvestSeek");
+  });
+
+  it("keeps a currency pair's decimals", () => {
+    expect(liveTitle("EURUSD=X", 1.1143303, -0.6686)).toBe("EURUSD=X 1.1143 ▼0.67% · InvestSeek");
+    expect(liveTitle("USDJPY=X", 158.425, 0.49)).toBe("USDJPY=X 158.425 ▲0.49% · InvestSeek");
+  });
+});
+
+describe("price decimals", () => {
+  it("gives the world board's instruments its digits, other currency pairs four and the rest none", () => {
+    expect(priceDigits("EURUSD=X", "CURRENCY")).toBe(4);
+    expect(priceDigits("USDJPY=X", "CURRENCY")).toBe(3);
+    expect(priceDigits("HG=F", "FUTURE")).toBe(4);
+    expect(priceDigits("^GSPC", "INDEX")).toBe(2);
+    // A pair the world board does not list, by quote type or by Yahoo's "=X" before the quote arrives.
+    expect(priceDigits("AUDUSD=X", "CURRENCY")).toBe(4);
+    expect(priceDigits("AUDUSD=X", null)).toBe(4);
+    expect(priceDigits("AAPL", "EQUITY")).toBeNull();
+    expect(priceDigits("ES=F", "FUTURE")).toBeNull();
+  });
+
+  it("formats with those decimals, or with formatPrice's rule", () => {
+    expect(formatQuotePrice(1.1143303, 4, "en")).toBe("1.1143");
+    expect(formatQuotePrice(158.425, 3, "en")).toBe("158.425");
+    expect(formatQuotePrice(1.1143303, null, "en")).toBe("1.11");
+    expect(formatQuotePrice(0.12345, null, "en")).toBe("0.1235");
+    expect(formatQuotePrice(null, 4, "en")).toBe("—");
+  });
+});
+
+describe("Yahoo placeholders", () => {
+  it("reads a zero open, day range or 52-week end as not reported", () => {
+    expect(reportedPrice(0)).toBeNull();
+    expect(reportedPrice(null)).toBeNull();
+    expect(reportedPrice(4.859)).toBe(4.859);
+    // A negative futures price is a price (WTI, April 2020).
+    expect(reportedPrice(-37.63)).toBe(-37.63);
+  });
+
+  it("drops a zero volume only where none is reported", () => {
+    expect(reportedVolume(0, "other")).toBeNull();
+    expect(reportedVolume(166_431, "other")).toBe(166_431);
+    // A stock before its first trade of the day has traded nothing yet.
+    expect(reportedVolume(0, "equity")).toBe(0);
+    expect(reportedVolume(null, "fund")).toBeNull();
   });
 });
 
