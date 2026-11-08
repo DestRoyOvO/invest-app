@@ -167,8 +167,11 @@ test("My day values the positions at the page's quotes, beside the week ahead, t
     const quote = board.board.find((item) => item.quote.symbol === def.symbol)?.quote;
     if (!quote) throw new Error(`No board quote for ${def.symbol}`);
     const price = def.kind === "yield" ? `${formatNumber(quote.price, 3, "en")}%` : formatPrice(quote.price, "en");
-    // The absolute change shows only where the cell is wide enough.
-    return new RegExp(`^${esc(def.label.en)}\\s*${esc(def.code)}\\s*${esc(price)}\\s*(?:${esc(signedChange(quote.change))}\\s*)?${esc(signedPercent(quote.changePercent))}\\s*$`);
+    // The absolute change and the "1M" tag beside the sparkline show only where the cell is wide enough (each cell is a
+    // size container, and the desktop's cells are within a pixel of the tag's width).
+    return new RegExp(
+      `^${esc(def.label.en)}\\s*${esc(def.code)}\\s*${esc(price)}\\s*(?:${esc(signedChange(quote.change))}\\s*)?${esc(signedPercent(quote.changePercent))}\\s*(?:${esc(en.columns.trend)}\\s*)?$`,
+    );
   });
   const boardLinks = panel(page, en.market.board).getByRole("link").filter({ hasNotText: en.markets.worldLink });
   await expect(boardLinks).toHaveText(cells, { useInnerText: true });
@@ -227,7 +230,7 @@ test("the movers switch between the US market and the large caps, and the choice
 
 /**
  * The desktop treemap: one listbox with a single tab stop, arrow keys that move the active tile (its active descendant,
- * selected), Enter that opens the quote, and a card for the hovered or active tile.
+ * selected), Enter that opens the quote, and a card for the hovered or active tile, which Escape closes.
  */
 async function checkTreemap(page: Page, overview: MarketOverview): Promise<void> {
   const heatmap = panel(page, en.market.heatmap);
@@ -274,6 +277,11 @@ async function checkTreemap(page: Page, overview: MarketOverview): Promise<void>
     current = await active();
     await expect(card).toContainText(current.name.split(" ")[0]);
   }
+  // Escape closes only the card: the treemap keeps the focus and its active tile.
+  await page.keyboard.press("Escape");
+  await expect(card).toBeHidden();
+  await expect(treemap).toBeFocused();
+  await expect(treemap).toHaveAttribute("aria-activedescendant", current.id);
   // A stock tile ("AAPL +0.39%"), not a sector header: Enter opens its quote.
   const symbol = current.name.split(" ")[0];
   expect(UNIVERSE_STOCKS, `the active tile ${current.name} is a stock`).toContain(symbol);
