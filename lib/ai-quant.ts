@@ -209,7 +209,8 @@ export function quantBlock({ report, profile, evaluation = SIGNAL_EVALUATION, re
       `- short-term relative strength (the technical score, 0-100, from price momentum, trend, RSI and volume against other large caps over recent weeks): ${report.technicalScore.toFixed(1)}, reads ${READING[labelForScore(report.technicalScore)]}`,
     );
   }
-  const informative = [...report.factors.filter((factor) => !factor.imputed)].sort((a, b) => b.score - a.score);
+  // Factors without weight (the volatility regime in v4) describe risk, which the risk forecast covers.
+  const informative = [...report.factors.filter((factor) => !factor.imputed && factor.weight > 0)].sort((a, b) => b.score - a.score);
   const describe = (factor: SignalReport["factors"][number]) => `${factor.key} ${Math.round(factor.score)}${factorValue(factor.raw, factor.rawUnit)}`;
   if (informative.length >= 4) {
     lines.push(`- factor readings (0-100, higher reads stronger): strongest ${informative.slice(0, 2).map(describe).join(", ")}; weakest ${informative.slice(-2).reverse().map(describe).join(", ")}`);

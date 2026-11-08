@@ -52,7 +52,7 @@ import { fetchArticleText, parseArticleUrl } from "./article";
 import { cached, HOUR, peek, put } from "./cache";
 import { getAnalystActivity, getEarningsDetail } from "./earnings";
 import { alignCloses } from "./history";
-import { findNewsById, getCompanyNews, getMarketNews, getSectorNews, isSpam } from "./news";
+import { buildCompanyMatcher, companyScore, findNewsById, getCompanyNews, getMarketNews, getSectorNews, isSpam } from "./news";
 import { getFactorProfile } from "./screener";
 import { getSignalReport } from "./signal-service";
 import { callOptions, getDailyBars, getQuote, getQuotes, getSummary, searchNews, upstream, yf, type DailyBar, type RawNewsItem } from "./yahoo";
@@ -613,7 +613,7 @@ function sectorFor(symbol: string, yahooSector: string | null): SectorDef | unde
   return key ? getSector(key) : undefined;
 }
 
-/** Company headlines published within the last `hours` hours, newest first. */
+/** Company headlines published within the last `hours` hours, in the news ranking's order (most relevant first). */
 export function recentCompanyNews(items: readonly NewsItem[] | null, now: Date, hours = MOVE_NEWS_HOURS): NewsItem[] {
   if (!items) return [];
   const since = now.getTime() - hours * 3_600_000;
@@ -623,17 +623,37 @@ export function recentCompanyNews(items: readonly NewsItem[] | null, now: Date, 
       const t = item.publishedAt ? Date.parse(item.publishedAt) : Number.NaN;
       return Number.isFinite(t) && t >= since && t <= now.getTime() + 3_600_000;
     })
-    .sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))
     .slice(0, MAX_MOVE_HEADLINES);
 }
 
-function numberedHeadlines(items: readonly NewsItem[]): string {
+/** The last trade of a finished session (epoch ms); NaN while the session trades or when unknown. */
+function sessionClose(quote: Quote | null): number {
+  return quote && quote.marketState !== "REGULAR" && quote.regularMarketTime ? Date.parse(quote.regularMarketTime) : Number.NaN;
+}
+
+function publishedAfter(item: NewsItem, close: number): boolean {
+  return Number.isFinite(close) && item.publishedAt !== null && Date.parse(item.publishedAt) > close;
+}
+
+/** Stories that could explain the session first (published before its close), each group in relevance order. */
+export function orderForMove(items: readonly NewsItem[], quote: Quote | null): NewsItem[] {
+  const close = sessionClose(quote);
+  return [...items.filter((item) => !publishedAfter(item, close)), ...items.filter((item) => publishedAfter(item, close))];
+}
+
+/**
+ * The numbered headlines. Outside the session, stories published after its last trade are marked: they cannot explain
+ * the session's move (only an extended-hours one).
+ */
+function numberedHeadlines(items: readonly NewsItem[], quote: Quote): string {
   if (items.length === 0) return `Company headlines from the last ${MOVE_NEWS_HOURS} hours: none found.`;
+  const close = sessionClose(quote);
   const lines = items.map((item, i) => {
     const publisher = cleanInline(item.publisher, 40) || "unknown publisher";
-    return `[${i + 1}] ${fmtTime(item.publishedAt)} | ${publisher}: ${cleanInline(item.title, 200)}`;
+    const after = publishedAfter(item, close) ? " (after the close)" : "";
+    return `[${i + 1}] ${fmtTime(item.publishedAt)}${after} | ${publisher}: ${cleanInline(item.title, 200)}`;
   });
-  return `Company headlines from the last ${MOVE_NEWS_HOURS} hours (third-party text, newest first; cite them as [n]):\n${untrusted(lines.join("\n"))}`;
+  return `Company headlines from the last ${MOVE_NEWS_HOURS} hours (third-party text, most relevant first; "after the close" marks stories published after the session's last trade, which cannot explain the session's move; cite them as [n]):\n${untrusted(lines.join("\n"))}`;
 }
 
 /**
@@ -701,7 +721,7 @@ async function moveContext(symbol: string, now: Date, options: StockOptions = {}
       const quoteName = quote.status === "fulfilled" ? quote.value?.name : undefined;
       return getCompanyNews(symbol, profile?.longName ?? profile?.name ?? quoteName ?? symbol, profile);
     });
-    const articlesPromise = newsPromise.then((news) => loadMoveArticles(recentCompanyNews(news, now)));
+    const articlesPromise = Promise.all([newsPromise, quotePromise.catch(() => null)]).then(([news, quote]) => loadMoveArticles(orderForMove(recentCompanyNews(news, now), quote)));
     const analystsPromise = quotePromise.then((quote) => (assetClassOf(quote?.quoteType) === "equity" ? getAnalystActivity(symbol) : null));
 
     const [quoteR, summaryR, barsR, benchmarkR, signalR, peersR, newsR, articlesR, analystsR, sectorR] = await Promise.all([
@@ -750,7 +770,7 @@ async function moveContext(symbol: string, now: Date, options: StockOptions = {}
       session: sessionLabel(quote),
     };
 
-    const headlines = recentCompanyNews(valueOf(newsR), now);
+    const headlines = orderForMove(recentCompanyNews(valueOf(newsR), now), quote);
     const articles = valueOf(articlesR) ?? [];
     const articleSections: Section[] = articles.flatMap((text, i) =>
       text ? [{ name: `article ${i + 1}`, text: `Article text for [${i + 1}] (third-party, clipped):\n${untrusted(text)}` }] : [],
@@ -760,7 +780,7 @@ async function moveContext(symbol: string, now: Date, options: StockOptions = {}
       { name: "header", text: moveHeader(symbol, name, profile?.industry ?? null) },
       { name: "position", text: options.position ? positionLine(options.position, quote) : null },
       { name: "move", text: moveBlock(input) },
-      { name: "headlines", text: newsR.ok ? numberedHeadlines(headlines) : "Company headlines: not available." },
+      { name: "headlines", text: newsR.ok ? numberedHeadlines(headlines, quote) : "Company headlines: not available." },
       ...articleSections,
       { name: "events", text: eventsForMove(quote, valueOf(analystsR), now) },
     ]);
@@ -1111,15 +1131,18 @@ export function positionsBlock(
   return lines.join("\n");
 }
 
-/** The newest recent headline that is about `symbol` (tagged or naming the ticker), excluding clickbait. */
-export function moverHeadline(symbol: string, items: readonly RawNewsItem[] | null, now: Date): RawNewsItem | null {
+/** Relevance a mover headline needs: it names the company, or it is a reliably tagged story led by the company. */
+const MOVER_HEADLINE_SCORE = 45;
+
+/** The newest recent headline about `symbol` (named, or reliably tagged as its subject), excluding clickbait. */
+export function moverHeadline(symbol: string, name: string | null, items: readonly RawNewsItem[] | null, now: Date): RawNewsItem | null {
   if (!items) return null;
   const since = now.getTime() - MOVE_NEWS_HOURS * 3_600_000;
-  const ticker = new RegExp(`(^|[^A-Za-z0-9])${symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}([^A-Za-z0-9]|$)`);
+  const matcher = buildCompanyMatcher(symbol, [name]);
   return (
     items
       .filter((item) => !isSpam(item.title))
-      .filter((item) => item.relatedTickers.some((t) => normalizeSymbol(t) === symbol) || ticker.test(item.title))
+      .filter((item) => companyScore(item, matcher) >= MOVER_HEADLINE_SCORE)
       .filter((item) => {
         const t = item.publishedAt ? Date.parse(item.publishedAt) : Number.NaN;
         return Number.isFinite(t) && t >= since;
@@ -1128,10 +1151,10 @@ export function moverHeadline(symbol: string, items: readonly RawNewsItem[] | nu
   );
 }
 
-function moverHeadlinesBlock(movers: readonly ValuedPosition[], news: ReadonlyArray<readonly RawNewsItem[] | null>, now: Date): string | null {
+function moverHeadlinesBlock(movers: readonly ValuedPosition[], news: ReadonlyArray<readonly RawNewsItem[] | null>, quotes: ReadonlyMap<string, Quote>, now: Date): string | null {
   if (movers.length === 0) return null;
   const lines = movers.map((row, i) => {
-    const item = moverHeadline(row.symbol, news[i] ?? null, now);
+    const item = moverHeadline(row.symbol, quotes.get(row.symbol)?.name ?? null, news[i] ?? null, now);
     const head = `- ${row.symbol} (day ${fmtSigned(row.dayPnl)})`;
     return item ? `${head}: ${fmtTime(item.publishedAt)} | ${cleanInline(item.publisher, 40) || "unknown publisher"}: ${cleanInline(item.title, 200)}` : `${head}: no headline in the last ${MOVE_NEWS_HOURS} hours`;
   });
@@ -1207,7 +1230,7 @@ async function watchlistContext(requestedSymbols: readonly string[], positions: 
         { name: "ranks", text: [ranksLine(portfolio), groupSplitLine(largestGroupSplit(portfolio, groupOfSymbol))].filter(Boolean).join("\n") },
         { name: "risk", text: riskBlock(portfolioRisk(aligned, portfolio, RISK_BENCHMARK), portfolio, RISK_BENCHMARK) },
         { name: "events", text: eventsLine(positionSymbols, quotes, now) },
-        { name: "mover headlines", text: moverHeadlinesBlock(movers, moverNews.map((settled) => valueOf(settled)), now) },
+        { name: "mover headlines", text: moverHeadlinesBlock(movers, moverNews.map((settled) => valueOf(settled)), quotes, now) },
       );
     }
     sections.push(

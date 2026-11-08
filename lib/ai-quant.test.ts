@@ -65,6 +65,12 @@ describe("quant facts", () => {
     expect(text).toContain("- limits: the score mixes technical and fundamental factors");
   });
 
+  it("leaves factors without weight out of the readings", () => {
+    const withRegime = { ...REPORT, factors: [...REPORT.factors, { key: "volatility" as const, group: "technical" as const, score: 0, weight: 0, imputed: false, raw: 0.48, rawUnit: "percent" as const }] };
+    expect(quantBlock({ report: withRegime, profile: null })).toContain("weakest value 32 (54.2x), rsi 45 (61.3)");
+    expect(quantBlock({ report: withRegime, profile: null })).not.toContain("volatility 0");
+  });
+
   it("reports the risk forecast with its measured coverage and the volatility group", () => {
     const [forecast, group] = riskForecastLines(REPORT.risk);
     expect(forecast).toBe(

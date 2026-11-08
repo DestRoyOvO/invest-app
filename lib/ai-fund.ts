@@ -4,7 +4,7 @@
 
 import type { Quote } from "@/types/api";
 
-import { cleanInline, fmtChangePercent, fmtCompact, fmtMultiple, fmtRatio, isFiniteNumber } from "./ai-format";
+import { cleanInline, fmtChangePercent, fmtCompact, fmtRatio, isFiniteNumber } from "./ai-format";
 
 const MAX_HOLDINGS = 10;
 const MAX_SECTORS = 8;
@@ -117,13 +117,9 @@ export function fundBlock(fund: FundData | null, quote: Quote | null): string {
     lines.push(`- sector weights: ${fund.sectorWeights.map((entry) => `${cleanInline(entry.sector, 30)} ${fmtRatio(entry.weight)}`).join(", ")}`);
   }
   if (fund) {
-    const valuation = [
-      isFiniteNumber(fund.priceToEarnings) ? `P/E ${fmtMultiple(fund.priceToEarnings)}` : null,
-      isFiniteNumber(fund.priceToBook) ? `P/B ${fmtMultiple(fund.priceToBook)}` : null,
-      isFiniteNumber(fund.stockShare) ? `stocks ${fmtRatio(fund.stockShare)}` : null,
-      isFiniteNumber(fund.bondShare) ? `bonds ${fmtRatio(fund.bondShare)}` : null,
-    ].filter(Boolean);
-    if (valuation.length > 0) lines.push(`- holdings: ${valuation.join(", ")}`);
+    // Yahoo's holdings P/E and P/B come in inconsistent units (seen as 0.0x and 0.2x for SPY), so they are left out.
+    const mix = [isFiniteNumber(fund.stockShare) ? `stocks ${fmtRatio(fund.stockShare)}` : null, isFiniteNumber(fund.bondShare) ? `bonds ${fmtRatio(fund.bondShare)}` : null].filter(Boolean);
+    if (mix.length > 0) lines.push(`- asset mix: ${mix.join(", ")}`);
   }
   return lines.join("\n");
 }

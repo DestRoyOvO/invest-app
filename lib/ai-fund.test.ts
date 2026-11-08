@@ -40,7 +40,8 @@ describe("fund data", () => {
     expect(text).toContain("- category Large Blend; family SPDR State Street Global Advisors; legal type Exchange Traded Fund; expense ratio 0.09% a year; net assets $680.00B; year to date +15.20%");
     expect(text).toContain("- top 3 holdings, 21.2% of assets (Yahoo lists only these, so exposure beyond them is unknown): AAPL Apple Inc 7.7%, NVDA NVIDIA Corp 7.6%, MSFT Microsoft Corp 5.9%");
     expect(text).toContain("- sector weights: technology 31.2%, consumer cyclical 10.5%, real estate 2.0%");
-    expect(text).toContain("- holdings: P/E 27.1x, P/B 4.9x, stocks 99.6%, bonds 0.0%");
+    expect(text).toContain("- asset mix: stocks 99.6%, bonds 0.0%");
+    expect(text).not.toContain("P/E");
     expect(fundBlock(null, null)).toBe("Fund profile: not available.");
   });
 });

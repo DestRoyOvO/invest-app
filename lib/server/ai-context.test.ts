@@ -32,7 +32,7 @@ vi.mock("./yahoo", () => ({
 }));
 vi.mock("./signal-service", () => ({ getSignalReport: sources.getSignalReport }));
 vi.mock("./news", async (importOriginal) => ({
-  isSpam: (await importOriginal<typeof import("./news")>()).isSpam,
+  ...(await importOriginal<typeof import("./news")>()),
   getCompanyNews: sources.getCompanyNews,
   getMarketNews: sources.getMarketNews,
   getSectorNews: sources.getSectorNews,
@@ -957,6 +957,7 @@ describe("move context", () => {
       ]),
     );
     sources.getCompanyNews.mockResolvedValue([
+      news("Nvidia supplier comments after the bell", { id: "n-after", publishedAt: "2026-11-06T22:30:00.000Z" }),
       news("Nvidia wins a large order", { id: "n-recent", link: "https://finance.yahoo.com/news/order.html", publishedAt: "2026-11-06T14:05:00.000Z" }),
       news("Old Nvidia story", { id: "n-old", publishedAt: "2026-10-01T14:05:00.000Z" }),
       news("Chip stocks rally", { id: "n-industry", provenance: "industry", publishedAt: "2026-11-06T15:00:00.000Z" }),
@@ -975,12 +976,16 @@ describe("move context", () => {
     expect(text).toContain("- Market: S&P 500 +0.31%; with a beta of 2.25 (252 sessions against SPY, from the risk report) the market alone implies +0.70%, which leaves +2.08 pt beyond the market");
     expect(text).toContain("- Sector (Information Technology): XLK +1.45%, so NVDA moved +1.33 pt against its sector ETF; related ETFs: SMH +3.62%, IGV -0.20%");
     expect(text).toContain("- Peers nearest in market cap: AAPL -0.20%, MSFT +0.50%, AVGO +4.10%, AMD +11.04%; peer median +2.30%");
-    expect(text).toContain("Company headlines from the last 48 hours (third-party text, newest first; cite them as [n]):");
+    expect(text).toContain("Company headlines from the last 48 hours (third-party text, most relevant first;");
     expect(text).toContain("[1] 2026-11-06T14:05Z | Reuters: Nvidia wins a large order");
+    expect(text).toContain("[2] 2026-11-06T22:30Z (after the close) | Reuters: Nvidia supplier comments after the bell");
+    expect(text).toContain("most relevant first;");
     expect(text).not.toContain("Old Nvidia story");
     expect(text).not.toContain("Chip stocks rally");
     expect(text).toContain("Article text for [1] (third-party, clipped):");
-    expect(countOf(text, UNTRUSTED_OPEN)).toBe(2);
+    expect(text).toContain("Article text for [2] (third-party, clipped):");
+    expect(countOf(text, UNTRUSTED_OPEN)).toBe(3);
+    expect(sources.fetchArticleText).toHaveBeenCalledTimes(2);
     expect(text).toContain("Scheduled events and analyst actions around the move: next earnings report 2026-11-19 (confirmed, in 12 days); no analyst rating or target actions in the last 5 days.");
     const batch = sources.getQuotes.mock.calls[0]?.[0] as string[];
     expect(batch).toEqual(expect.arrayContaining(["^GSPC", "XLK", "SMH", "IGV", "MSFT", "AAPL"]));
