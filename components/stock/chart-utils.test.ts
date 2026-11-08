@@ -15,6 +15,7 @@ import {
   smaSeries,
   stepRange,
   tickDecimals,
+  tickDigits,
   visibleBars,
   windowStart,
   zoneOffsetSeconds,
@@ -147,5 +148,14 @@ describe("tickDecimals", () => {
     expect(tickDecimals([0.25, 0.5, 0.75])).toBe(2);
     expect(tickDecimals([0.1234, 0.1236])).toBe(4);
     expect(tickDecimals([])).toBe(2);
+  });
+});
+
+describe("tickDigits", () => {
+  it("shares one count on an ordinary axis and gives each tick its own across decades", () => {
+    expect(tickDigits([180, 182.5, 185], 2)).toEqual([1, 1, 1]);
+    expect(tickDigits([0.1234, 0.1236], 2)).toEqual([2, 2]);
+    expect(tickDigits([600, 60, 6, 0.6, 0.06], 2)).toEqual([0, 0, 0, 1, 2]);
+    expect(tickDigits([], 2)).toEqual([]);
   });
 });

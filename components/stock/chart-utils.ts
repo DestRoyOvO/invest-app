@@ -232,3 +232,16 @@ export function tickDecimals(ticks: readonly number[]): number {
   }
   return 4;
 }
+
+/**
+ * Decimals for each tick of a price axis. Ticks share one count (the fewest that show the step, at most `precision`)
+ * unless they span more than a factor of 50, as a log scale over decades does: then each tick gets its own
+ * (600, 60, 6, 0.6, 0.06), at most four.
+ */
+export function tickDigits(ticks: readonly number[], precision: number): number[] {
+  const positive = ticks.filter((tick) => Number.isFinite(tick) && tick > 0);
+  const spread = positive.length > 1 ? Math.max(...positive) / Math.min(...positive) : 1;
+  if (spread > 50) return ticks.map((tick) => Math.min(tickDecimals([tick]), 4));
+  const shared = Math.min(tickDecimals(ticks), precision);
+  return ticks.map(() => shared);
+}

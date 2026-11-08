@@ -50,6 +50,7 @@ import {
   smaSeries,
   stepRange,
   tickDecimals,
+  tickDigits,
   visibleBars,
   windowStart,
 } from "./chart-utils";
@@ -413,8 +414,8 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
       minMove: precision === 4 ? 0.0001 : 0.01,
       formatter: formatPriceFn,
       tickmarksFormatter: (prices: number[]) => {
-        const digits = Math.min(tickDecimals(prices), precision);
-        return prices.map((p) => p.toLocaleString(LOCALES[lang], { minimumFractionDigits: digits, maximumFractionDigits: digits }));
+        const digits = tickDigits(prices, precision);
+        return prices.map((p, i) => p.toLocaleString(LOCALES[lang], { minimumFractionDigits: digits[i], maximumFractionDigits: digits[i] }));
       },
     };
     const percentText = (value: number, digits = 2) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(digits)}%`;
