@@ -20,7 +20,7 @@ import { GET as screenerRoute } from "@/app/api/screener/route";
 
 import { clearCache } from "./cache";
 import { resetRateLimits } from "./rate-limit";
-import { barMetrics, ETF_UNIVERSE, getFactorProfile, getScreener, quoteColumns, rankFactors } from "./screener";
+import { barMetrics, ETF_UNIVERSE, getFactorProfile, getScreener, quoteColumns, rankFactors, upcomingExDate } from "./screener";
 
 const DAY = 24 * 60 * 60 * 1000;
 const START = Date.UTC(2025, 2, 1);
@@ -128,6 +128,18 @@ describe("row building", () => {
   it("carries the dividend columns from the quote", () => {
     const columns = quoteColumns("KO", quote("KO", { dividendRate: 2.04, exDividendDate: "2026-11-28T05:00:00.000Z" }));
     expect(columns).toMatchObject({ dividendRate: 2.04, exDividendDate: "2026-11-28T05:00:00.000Z", dividendYield: 0.01 });
+  });
+
+  it("keeps only ex-dividend dates from today on (New York)", () => {
+    // todayInExchange is mocked to 2026-11-07; Yahoo still lists a dividend that went ex the day before.
+    expect(quoteColumns("PFE", quote("PFE", { exDividendDate: "2026-11-06T05:00:00.000Z" })).exDividendDate).toBeNull();
+    expect(quoteColumns("WFC", quote("WFC", { exDividendDate: "2026-11-07T05:00:00.000Z" })).exDividendDate).toBe("2026-11-07T05:00:00.000Z");
+    const today = Date.UTC(2026, 10, 7);
+    // 03:00 UTC on Nov 7 is still Nov 6 in New York.
+    expect(upcomingExDate("2026-11-07T03:00:00.000Z", today)).toBeNull();
+    expect(upcomingExDate("2026-11-10T05:00:00.000Z", today)).toBe("2026-11-10T05:00:00.000Z");
+    expect(upcomingExDate("not a date", today)).toBeNull();
+    expect(upcomingExDate(null, today)).toBeNull();
   });
 
   it("computes returns, RSI, the technical reading and the style factors from bars", () => {

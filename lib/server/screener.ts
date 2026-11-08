@@ -3,7 +3,7 @@ import "server-only";
 import type { DailyBar } from "@/lib/bars";
 import { crossSectionalPercentiles, FACTOR_KEYS, styleFactorsAt, type DatedClose } from "@/lib/factors";
 import { latestTechnicalScore, wilderRsiSeries } from "@/lib/signal";
-import { ETF_UNIVERSE, universeSymbols } from "@/lib/screens";
+import { ETF_UNIVERSE, newYorkDate, universeSymbols } from "@/lib/screens";
 import { percentileRank } from "@/lib/stats";
 import { sectorOfSymbol } from "@/lib/universe";
 import type { FactorProfile, Quote, ScreenerResponse, ScreenerRow, ScreenerUniverse, StyleFactorKey } from "@/types/api";
@@ -63,8 +63,20 @@ export function barMetrics(bars: readonly DailyBar[], benchmark: readonly DatedC
   };
 }
 
+/**
+ * The ex-dividend date when it falls today or later in New York, else null. Yahoo keeps the latest dividend in the
+ * quote's corporate actions for a while after it goes ex, and a past date would read as an upcoming one (and sort
+ * first by ex-date). `today` is UTC midnight of the New York date (todayInExchange). Exported for tests.
+ */
+export function upcomingExDate(iso: string | null, today: number): string | null {
+  if (iso === null) return null;
+  const at = Date.parse(iso);
+  if (!Number.isFinite(at)) return null;
+  return Date.parse(`${newYorkDate(at)}T00:00:00Z`) >= today ? iso : null;
+}
+
 /** Quote-based columns of one row (no extra Yahoo call: everything comes from the batched quote). Exported for tests. */
-export function quoteColumns(symbol: string, quote: Quote | undefined) {
+export function quoteColumns(symbol: string, quote: Quote | undefined, today: number = todayInExchange()) {
   const price = quote?.price ?? null;
   return {
     symbol,
@@ -79,7 +91,7 @@ export function quoteColumns(symbol: string, quote: Quote | undefined) {
     priceToBook: quote?.priceToBook ?? null,
     dividendYield: quote?.dividendYield ?? null,
     dividendRate: quote?.dividendRate ?? null,
-    exDividendDate: quote?.exDividendDate ?? null,
+    exDividendDate: upcomingExDate(quote?.exDividendDate ?? null, today),
     analystRating: quote?.analystRating ?? null,
     nextEarningsDate: quote?.nextEarningsDate ?? null,
     earningsDateEstimated: quote?.earningsDateEstimated ?? null,
@@ -122,13 +134,14 @@ async function buildSnapshot(universe: ScreenerUniverse): Promise<ScreenerRespon
   const warnings: string[] = [];
   if (!benchmark) warnings.push("benchmark");
   const partial: string[] = [];
+  const today = todayInExchange();
   const rows: ScreenRow[] = symbols.map((symbol, i) => {
     const quote = quotes.get(symbol);
     const bars = barsList[i];
     if (!bars) partial.push(symbol);
     const metrics = bars ? barMetrics(completedBars(bars, quote), benchmark) : null;
     return {
-      ...quoteColumns(symbol, quote),
+      ...quoteColumns(symbol, quote, today),
       return1m: metrics?.return1m ?? null,
       return3m: metrics?.return3m ?? null,
       return6m: metrics?.return6m ?? null,

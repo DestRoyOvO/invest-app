@@ -7,7 +7,10 @@ import type { ScreenerRow } from "./api";
 export interface ScreenerRowExtras {
   /** Forward annual dividend per share (Quote.dividendRate). */
   dividendRate?: number | null;
-  /** Ex-date of the announced cash dividend (ISO, midnight New York time); null when none is announced. */
+  /**
+   * Ex-date of the announced cash dividend (ISO, midnight New York time), today or later on the snapshot's New York
+   * date; null when none is announced or the latest one has already gone ex.
+   */
   exDividendDate?: string | null;
 }
 
