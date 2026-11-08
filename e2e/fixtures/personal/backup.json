@@ -1,0 +1,38 @@
+{
+  "app": "investseek",
+  "schema": 1,
+  "exportedAt": "2026-10-01T14:30:00.000Z",
+  "data": {
+    "storage": {
+      "investseek:watchlist:v1": ["AAPL", "AMZN", "GOOGL"],
+      "investseek:holdings:v1": {
+        "AAPL": { "shares": 12, "cost": 160 },
+        "GOOGL": { "shares": 4, "cost": 120 }
+      },
+      "investseek:notes:v1": {
+        "AAPL": {
+          "thesis": "An older thesis from another device.",
+          "conviction": 3,
+          "target": 320,
+          "stop": 250,
+          "reviewBy": "2026-11-15",
+          "tags": [],
+          "entries": [],
+          "updatedAt": "2026-10-01T14:00:00.000Z"
+        },
+        "MSFT": {
+          "thesis": "Cloud margins hold while AI spending grows.",
+          "conviction": 4,
+          "target": 680,
+          "stop": 540,
+          "reviewBy": "2026-12-15",
+          "tags": ["quality"],
+          "entries": [{ "at": "2026-09-30T15:00:00.000Z", "price": 590.1, "text": "Started the position.", "kind": "note" }],
+          "updatedAt": "2026-10-01T14:00:00.000Z"
+        }
+      }
+    },
+    "text": {},
+    "cookies": { "is_density": "compact" }
+  }
+}

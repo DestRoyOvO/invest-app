@@ -1,0 +1,11 @@
+Account Number,Account Name,Symbol,Description,Quantity,Last Price,Current Value,Cost Basis Total,Average Cost Basis,Type
+Z12345678,Individual,AAPL,APPLE INC,15,$310.45,"$4,656.75","$2,250.00",$150.00,Margin
+Z12345678,Individual,MSFT,MICROSOFT CORP,8,$607.30,"$4,858.40","$2,800.00",$350.00,Margin
+Z12345678,Individual,BRK.B,BERKSHIRE HATHAWAY INC CL B,4,$533.34,"$2,133.36","$1,600.00",$400.00,Margin
+Z12345678,Individual,SPAXX**,HELD IN MONEY MARKET,,,"$1,200.50",,,Cash
+Z12345678,Individual,-AAPL261218C300,CALL (AAPL) APPLE INC DEC 18 26 $300 (100 SHS),-1,$25.00,"-$2,500.00",,,Margin
+Z12345678,Individual,ZZZQ,DELISTED HOLDINGS CORP,10,$1.00,$10.00,$50.00,$5.00,Margin
+Z12345678,Individual,Pending Activity,,,,$150.00,,,
+
+"The data and information in this spreadsheet is provided to you solely for your use and is not for distribution."
+"Date downloaded Nov-07-2026 10:00 a.m ET"

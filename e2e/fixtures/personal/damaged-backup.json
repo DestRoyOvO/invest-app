@@ -1,0 +1,13 @@
+{
+  "app": "investseek",
+  "schema": 1,
+  "exportedAt": "2026-10-01T14:30:00.000Z",
+  "data": {
+    "storage": {
+      "investseek:watchlist:v1": ["AAPL", "AMZN", "GOOGL"],
+      "portfolio": { "AAPL": { "shares": 12, "cost": 160 } }
+    },
+    "text": {},
+    "cookies": {}
+  }
+}
