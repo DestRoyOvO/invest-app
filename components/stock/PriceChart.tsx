@@ -17,7 +17,7 @@ import type {
   Time,
   UTCTimestamp,
 } from "lightweight-charts";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Delta } from "@/components/ui/Delta";
@@ -42,6 +42,7 @@ import {
   barIndexAt,
   bollingerSeries,
   chartTime,
+  compareSlots,
   dataRange,
   historyRangeFor,
   percentChange,
@@ -133,21 +134,29 @@ function readColors() {
   };
 }
 
-/** Re-renders when the theme, the price convention or the OS color scheme changes, so canvas colors follow the CSS. */
-function useThemeVersion(): number {
-  const [version, setVersion] = useState(0);
-  useEffect(() => {
-    const bump = () => setVersion((v) => v + 1);
-    const observer = new MutationObserver(bump);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-updown"] });
-    const media = window.matchMedia("(prefers-color-scheme: light)");
-    media.addEventListener("change", bump);
-    return () => {
-      observer.disconnect();
-      media.removeEventListener("change", bump);
-    };
-  }, []);
-  return version;
+function subscribeTheme(onChange: () => void): () => void {
+  const observer = new MutationObserver(onChange);
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-updown"] });
+  const media = window.matchMedia("(prefers-color-scheme: light)");
+  media.addEventListener("change", onChange);
+  return () => {
+    observer.disconnect();
+    media.removeEventListener("change", onChange);
+  };
+}
+
+function themeSnapshot(): string {
+  const root = document.documentElement;
+  const light = window.matchMedia("(prefers-color-scheme: light)").matches;
+  return `${root.dataset.theme ?? ""}|${root.dataset.updown ?? ""}|${light ? "light-os" : "dark-os"}`;
+}
+
+/**
+ * The theme, the price convention and the OS color scheme as one key. It changes whenever the CSS colors can change,
+ * so canvas colors (which the chart cannot read from CSS itself) follow them.
+ */
+function useThemeKey(): string {
+  return useSyncExternalStore(subscribeTheme, themeSnapshot, () => "server");
 }
 
 const LOCALES: Record<Lang, string> = { en: "en-US", zh: "zh-CN" };
@@ -198,7 +207,8 @@ interface PriceChartProps {
 export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange, className }: PriceChartProps) {
   const { t, lang, theme, updown } = usePrefs();
   const settings = useLocalStore(chartSettingsStore);
-  const themeVersion = useThemeVersion();
+  const themeKey = useThemeKey();
+  const slots = useMemo(() => compareSlots(themeKey.split("|")[1] === "cb"), [themeKey]);
   const inGSequence = useGSequenceGuard();
   const range = settings.range;
   const compareMode = compare.length > 0;
@@ -419,13 +429,15 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
     handles.candles?.applyOptions({ upColor: c.up, downColor: c.down, wickUpColor: c.up, wickDownColor: c.down, priceFormat });
     // In percentage mode the quote's own line carries the 0% baseline; the comparisons draw none.
     handles.line?.applyOptions({ color: c.fg, priceFormat, baseLineColor: c.line2, baseLineStyle: lib.LineStyle.Dashed });
-    handles.overlays.forEach((series, slot) => series.applyOptions({ color: c.series[slot], priceFormat, baseLineVisible: false }));
+    handles.overlays.forEach((series, i) =>
+      series.applyOptions({ color: c.series[slots[i].token - 1], lineStyle: slots[i].dashed ? lib.LineStyle.Dashed : lib.LineStyle.Solid, priceFormat, baseLineVisible: false }),
+    );
     handles.ma.forEach((series, i) => series.applyOptions({ color: c.series[i], priceFormat }));
     handles.bands.forEach((series) => series.applyOptions({ color: c.series[5], priceFormat }));
     handles.volume?.applyOptions({ color: withAlpha(c.fg3, 0.35) });
     handles.rsi?.applyOptions({ color: c.fg2, priceFormat: { type: "custom", minMove: 1, formatter: (v: number) => v.toFixed(0) } });
     for (const line of handles.rsiLines) line.applyOptions({ color: c.line2 });
-  }, [handles, themeVersion, theme, updown, lang, intraday, scaleMode, precision]);
+  }, [handles, themeKey, slots, theme, updown, lang, intraday, scaleMode, precision]);
 
   // --- Data into the chart --------------------------------------------------------------------------------------------
   const viewKey = `${symbol}|${range}|${structure}|${settings.extended}|${compare.join(",")}`;
@@ -549,7 +561,7 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
       // Intraday bars arrive every minute; keep the whole session in view.
       chart.timeScale().fitContent();
     }
-  }, [handles, bars, times, compareLines, events, markerKinds, settings.ma20, settings.ma50, settings.ma200, settings.bollinger, previousClose, sessionClose, position, note, range, viewKey, intraday, t, themeVersion]);
+  }, [handles, bars, times, compareLines, events, markerKinds, settings.ma20, settings.ma50, settings.ma200, settings.bollinger, previousClose, sessionClose, position, note, range, viewKey, intraday, t, themeKey]);
 
   // --- Crosshair and visible range for the legend -------------------------------------------------------------------
   const [hoverTime, setHoverTime] = useState<number | null>(null);
@@ -653,7 +665,7 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
           />
         ) : null}
         <div className="min-w-0 lg:ml-auto">
-          <CompareBar symbol={symbol} compare={compare} suggestions={suggestions} onChange={onCompareChange} />
+          <CompareBar symbol={symbol} compare={compare} slots={slots} suggestions={suggestions} onChange={onCompareChange} />
         </div>
       </div>
 
@@ -662,7 +674,7 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
           <>
             {compareReturns.map((line, i) => (
               <span key={line.symbol} className="flex items-center gap-1.5">
-                <SeriesKey slot={i - 1} main={i === 0} />
+                <SeriesKey slot={slots[i - 1]} main={i === 0} />
                 <span className="mono font-medium text-fg">{line.symbol}</span>
                 {line.missing ? (
                   <span>{tpl(t.chart.noData, { symbol: line.symbol })}</span>

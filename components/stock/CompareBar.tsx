@@ -12,25 +12,31 @@ import { tpl } from "@/lib/format";
 import { hasCjk, searchChineseNames } from "@/lib/names-zh";
 import { normalizeSymbol } from "@/lib/symbols";
 
-import { MAX_COMPARE } from "./chart-utils";
+import { MAX_COMPARE, type SeriesSlot } from "./chart-utils";
 
-/** Line key for a comparison slot: series 1, series 2 dashed (it looks like series 1 to some color-blind readers), series 3. */
-export function SeriesKey({ slot, main = false }: { slot: number; main?: boolean }) {
-  if (main) return <span aria-hidden className="inline-block h-0.5 w-3 shrink-0 bg-fg" />;
-  if (slot === 1) return <span aria-hidden className="inline-block w-3 shrink-0 border-t-2 border-dashed border-series-2" />;
-  return <span aria-hidden className={cn("inline-block h-0.5 w-3 shrink-0", slot === 0 ? "bg-series-1" : "bg-series-3")} />;
+// Static class names so Tailwind sees them.
+const SOLID: Record<SeriesSlot["token"], string> = { 1: "bg-series-1", 2: "bg-series-2", 3: "bg-series-3", 4: "bg-series-4" };
+const DASHED: Record<SeriesSlot["token"], string> = { 1: "border-series-1", 2: "border-series-2", 3: "border-series-3", 4: "border-series-4" };
+
+/** Line key next to a series name: the quote's own line in --fg, a comparison in its series color (dashed when the line is). */
+export function SeriesKey({ slot, main = false }: { slot?: SeriesSlot; main?: boolean }) {
+  if (main || !slot) return <span aria-hidden className="inline-block h-0.5 w-3 shrink-0 bg-fg" />;
+  if (slot.dashed) return <span aria-hidden className={cn("inline-block w-3 shrink-0 border-t-2 border-dashed", DASHED[slot.token])} />;
+  return <span aria-hidden className={cn("inline-block h-0.5 w-3 shrink-0", SOLID[slot.token])} />;
 }
 
 interface CompareBarProps {
   symbol: string;
   compare: readonly string[];
+  /** Colors of the comparison lines, in order (see compareSlots). */
+  slots: readonly SeriesSlot[];
   /** Default chips (SPY, the sector ETF) offered when they are not on the chart yet. */
   suggestions: readonly string[];
   onChange: (symbols: string[]) => void;
 }
 
 /** Comparison overlays: active chips with a remove button, one-click defaults and a symbol search (Chinese names too). */
-export function CompareBar({ symbol, compare, suggestions, onChange }: CompareBarProps) {
+export function CompareBar({ symbol, compare, slots, suggestions, onChange }: CompareBarProps) {
   const { t } = usePrefs();
   const [adding, setAdding] = useState(false);
   const [value, setValue] = useState("");
@@ -87,7 +93,7 @@ export function CompareBar({ symbol, compare, suggestions, onChange }: CompareBa
       <span className="col-head">{t.chart.compare}</span>
       {compare.map((item, slot) => (
         <span key={item} className={cn(chipClass, "border-line-2 pr-0.5 text-fg")}>
-          <SeriesKey slot={slot} />
+          <SeriesKey slot={slots[slot]} />
           {item}
           <IconButton size="sm" label={tpl(t.chart.remove, { symbol: item })} icon={<X className="size-3" strokeWidth={2} />} onClick={() => onChange(compare.filter((s) => s !== item))} className="size-6 max-sm:size-9" />
         </span>

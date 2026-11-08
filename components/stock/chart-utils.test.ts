@@ -6,6 +6,7 @@ import {
   barIndexAt,
   bollingerSeries,
   chartTime,
+  compareSlots,
   dataRange,
   historyRangeFor,
   percentChange,
@@ -55,6 +56,13 @@ describe("ranges", () => {
     expect(stepRange("1d", -1)).toBe("1d");
     expect(stepRange("max", 1)).toBe("max");
     expect(RANGES).toHaveLength(10);
+  });
+
+  it("keeps comparison colors apart from the quote's own line in every convention", () => {
+    expect(compareSlots(false).map((slot) => slot.token)).toEqual([1, 2, 3]);
+    expect(compareSlots(false)[1].dashed).toBe(true);
+    expect(compareSlots(true).map((slot) => slot.token)).toEqual([2, 3, 4]);
+    expect(compareSlots(true).some((slot) => slot.dashed)).toBe(false);
   });
 
   it("drops extended-hours bars unless asked to keep them", () => {

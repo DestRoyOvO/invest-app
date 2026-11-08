@@ -60,6 +60,31 @@ export function stepRange(range: ChartRange, step: -1 | 1): ChartRange {
   return RANGES[Math.min(Math.max(index + step, 0), RANGES.length - 1)];
 }
 
+export interface SeriesSlot {
+  /** Series token number: --series-1 ... --series-4. */
+  token: 1 | 2 | 3 | 4;
+  dashed: boolean;
+}
+
+/**
+ * Colors of the three comparison lines. Normally series 1 to 3, with series 2 dashed because series 1 and 2 look
+ * alike to red-green color-blind readers. The color-blind price convention turns --series-1 into --fg, the color of
+ * the quote's own line, so there the comparisons take series 2 to 4.
+ */
+export function compareSlots(colorBlindConvention: boolean): SeriesSlot[] {
+  return colorBlindConvention
+    ? [
+        { token: 2, dashed: false },
+        { token: 3, dashed: false },
+        { token: 4, dashed: false },
+      ]
+    : [
+        { token: 1, dashed: false },
+        { token: 2, dashed: true },
+        { token: 3, dashed: false },
+      ];
+}
+
 /** Hides pre- and post-market bars unless extended hours are on; daily bars have no session and always stay. */
 export function visibleBars(bars: readonly Bar[], extended: boolean): Bar[] {
   return extended ? [...bars] : bars.filter((bar) => (bar.session ?? "regular") === "regular");

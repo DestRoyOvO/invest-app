@@ -227,6 +227,7 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   text("accent", "accent-soft", "Accent badge on a hovered row", "hover"),
   text("accent-fg", "accent", "Primary button"),
   text("info", "panel", "Links, info badges"),
+  text("info", "panel-2", "Info badge in a panel header (a statement currency)"),
   text("warn", "panel", "Warnings"),
   text("warn", "panel-2", "Stale data banner"),
   text("danger", "panel", "Errors"),
