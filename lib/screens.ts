@@ -497,6 +497,35 @@ export const PHONE_COLUMNS: Readonly<Record<ScreenerUniverse, Readonly<Record<Co
   etfs: { overview: ["price", "ytd"], valuation: ["er", "yield"], momentum: ["r3m", "high"], risk: ["vol", "beta"], dividends: ["yield", "er"], factors: ["momPct", "volPct"] },
 };
 
+const NARROW_MOMENTUM: readonly MetricKey[] = ["ma50", "r1m", "rsi", "r6m", "ma200"];
+const NARROW_RISK: readonly MetricKey[] = ["dvol", "betaPct", "volPct", "high"];
+const NARROW_FACTORS: readonly MetricKey[] = ["revPct", "highPct", "betaPct"];
+
+/**
+ * The columns a set gives up, first to last, when the table is narrower than the whole set (a tablet, or a laptop with
+ * the filter rail open). The symbol, the name and the two phone columns always stay.
+ */
+export const NARROW_DROP_ORDER: Readonly<Record<ScreenerUniverse, Readonly<Record<ColumnSetKey, readonly MetricKey[]>>>> = {
+  stocks: {
+    // Earnings last: the overview is the only set with it, and the "Earnings this week" preset sorts by it.
+    overview: ["sector", "pe", "cap", "earnings"],
+    valuation: ["fpe", "pb", "rating", "cap"],
+    momentum: NARROW_MOMENTUM,
+    risk: NARROW_RISK,
+    dividends: ["cap", "pe", "price", "exdiv"],
+    factors: NARROW_FACTORS,
+  },
+  etfs: {
+    // 1M and 6M first: the momentum set has them, and Vol and Beta are the overview's risk columns.
+    overview: ["r1m", "r6m", "assets", "r3m", "vol", "beta", "er"],
+    valuation: ["pe", "assets"],
+    momentum: NARROW_MOMENTUM,
+    risk: NARROW_RISK,
+    dividends: ["ytd", "assets", "price"],
+    factors: NARROW_FACTORS,
+  },
+};
+
 export function columnsFor(screen: Pick<Screen, "universe" | "columns">): readonly MetricKey[] {
   return COLUMN_SETS[screen.universe][screen.columns];
 }

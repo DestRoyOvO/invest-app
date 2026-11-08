@@ -18,50 +18,7 @@ import type { ScreenRow } from "@/types/screener";
 
 import { earningsText, formatMetric } from "./display";
 import { WatchStar } from "./WatchStar";
-
-/**
- * Column widths in rem, sized for the longest header with its sort arrow and the widest value. The name column has
- * none, so it takes what is left (at least NAME_MIN_REM before the table scrolls sideways).
- */
-const WIDTHS: Readonly<Record<MetricKey, number | null>> = {
-  symbol: 5,
-  name: null,
-  sector: 6,
-  price: 5.25,
-  chg: 5.25,
-  cap: 6,
-  assets: 5.75,
-  er: 4.5,
-  pe: 4,
-  fpe: 6.5,
-  pb: 4,
-  yield: 5,
-  div: 5.25,
-  exdiv: 6,
-  rating: 7.5,
-  earnings: 6.5,
-  ytd: 5,
-  r1m: 4.75,
-  r3m: 4.75,
-  r6m: 4.75,
-  high: 7,
-  ma50: 5.5,
-  ma200: 6,
-  rsi: 4,
-  vol: 4.5,
-  beta: 4.5,
-  dvol: 5.25,
-  momPct: 7,
-  revPct: 6.75,
-  highPct: 7,
-  volPct: 6.5,
-  betaPct: 6.75,
-};
-
-const NAME_MIN_REM = 6.5;
-/** Fits the checkbox and the label gap inside the cell padding, so the truncating cell draws no ellipsis. */
-const SELECT_REM = 3;
-const STAR_REM = 3.25;
+import { SELECT_REM, STAR_REM, WIDTHS } from "./widths";
 
 /**
  * Narrower columns below sm, set on the table: the checkbox and star cells drop their padding there and hold a 40px
@@ -71,11 +28,6 @@ export const PHONE_WIDTHS = "max-sm:[--eqs-select:2.5rem] max-sm:[--eqs-star:2.5
 
 /** Returns and today's change are price moves, so they take the up and down colors; every other number is neutral. */
 const PRICE_MOVES: ReadonlySet<MetricKey> = new Set(["chg", "ytd", "r1m", "r3m", "r6m"]);
-
-/** Width at which the visible columns stop squeezing the name, for the table's minWidth from sm up. */
-export function tableMinWidthRem(keys: readonly MetricKey[]): number {
-  return keys.reduce((sum, key) => sum + (WIDTHS[key] ?? NAME_MIN_REM), SELECT_REM + STAR_REM);
-}
 
 export interface ScreenColumnContext {
   t: Messages;

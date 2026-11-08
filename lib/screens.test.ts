@@ -25,6 +25,7 @@ import {
   MAX_SAVED_SCREENS,
   METRICS,
   METRIC_KEYS,
+  NARROW_DROP_ORDER,
   newYorkDate,
   normalizeFilters,
   normalizeScreen,
@@ -296,6 +297,22 @@ describe("column sets", () => {
         expect(keys.slice(0, 2), `${universe}/${set}`).toEqual(["symbol", "name"]);
         for (const key of keys) expect(METRICS[key].universes, `${universe}/${set}/${key}`).toContain(universe);
         for (const key of PHONE_COLUMNS[universe][set as keyof (typeof COLUMN_SETS)["stocks"]]) expect(keys, `${universe}/${set} phone`).toContain(key);
+      }
+    }
+  });
+
+  it("give up only lower-priority columns on narrow tables, each once", () => {
+    for (const universe of ["stocks", "etfs"] as const) {
+      for (const [set, keys] of Object.entries(COLUMN_SETS[universe])) {
+        const drop = NARROW_DROP_ORDER[universe][set as keyof (typeof COLUMN_SETS)["stocks"]];
+        const kept = ["symbol", "name", ...PHONE_COLUMNS[universe][set as keyof (typeof COLUMN_SETS)["stocks"]]];
+        expect(new Set(drop).size, `${universe}/${set}`).toBe(drop.length);
+        for (const key of drop) {
+          expect(keys, `${universe}/${set}/${key}`).toContain(key);
+          expect(kept, `${universe}/${set}/${key}`).not.toContain(key);
+        }
+        // Everything else can go, so the narrowest table is the phone set.
+        expect([...kept, ...drop].sort(), `${universe}/${set}`).toEqual([...keys].sort());
       }
     }
   });

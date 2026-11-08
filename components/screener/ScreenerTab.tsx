@@ -50,12 +50,14 @@ import { getSector, MAX_WATCHLIST } from "@/lib/universe";
 import type { ScreenerUniverse, SectorKey } from "@/types/api";
 import type { ScreenRow } from "@/types/screener";
 
-import { PHONE_WIDTHS, screenColumns, tableMinWidthRem } from "./columns";
+import { PHONE_WIDTHS, screenColumns } from "./columns";
 import { chipLabel } from "./display";
 import { FilterRail } from "./FilterRail";
 import { firstFocusable, focusFirst, revealInStrip } from "./focus";
 import { SavedScreens } from "./SavedScreens";
 import { useWatchToggle } from "./useWatchToggle";
+import { useWidthRem } from "./useWidthRem";
+import { fitColumns, tableMinWidthRem } from "./widths";
 
 /** Clicks on these never open the row's quote; `.eqs-control` marks the checkbox and star cells. */
 const INTERACTIVE = "a,button,input,select,textarea,label,summary,[role='button'],.eqs-control";
@@ -115,8 +117,8 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
   const railRef = useRef<HTMLDivElement>(null);
   const presetsRef = useRef<HTMLUListElement>(null);
   const chipsRef = useRef<HTMLDivElement>(null);
-  const tableRef = useRef<HTMLDivElement>(null);
   const showResultsRef = useRef<HTMLButtonElement>(null);
+  const { ref: tableAreaRef, element: tableArea, widthRem: tableWidthRem } = useWidthRem<HTMLDivElement>();
   const columnTabsRef = useRef<HTMLDivElement>(null);
 
   // On a phone the column-set tabs scroll sideways: keep the chosen one in view (a link or a preset can pick Factors).
@@ -139,7 +141,8 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
   const counts = useMemo(() => sectorCounts(rows), [rows]);
   const selectedVisible = useMemo(() => matches.filter((row) => selected.has(row.symbol)).map((row) => row.symbol), [matches, selected]);
 
-  const metrics = columnsFor(screen);
+  // The set's columns that fit the table: a tablet or a laptop with the rail open drops the lower-priority ones.
+  const metrics = fitColumns(columnsFor(screen), screen.universe, screen.columns, tableWidthRem);
   const universeSize = rows.length || universeSymbols(screen.universe).length;
   const activeCount = countActiveFilters(screen.filters);
   const chips = activeFilterChips(screen.filters);
@@ -185,7 +188,7 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
   /** Empties the selection; the selection bar goes away with the focused button, so focus moves to "Select all". */
   const clearSelection = () => {
     flushSync(() => setSelected(new Set()));
-    focusFirst(tableRef.current?.querySelector<HTMLElement>("thead input[type=checkbox]"));
+    focusFirst(tableArea?.querySelector<HTMLElement>("thead input[type=checkbox]"));
   };
 
   const addSelected = () => {
@@ -442,7 +445,7 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
           ) : (
             // Row clicks bubble here; keyboard users have the symbol link in each row.
             <div
-              ref={tableRef}
+              ref={tableAreaRef}
               onClick={onTableClick}
               style={{ "--eqs-wide": `${tableMinWidthRem(metrics)}rem` } as CSSProperties}
               className="relative [--eqs-max-h:max(22rem,calc(100dvh-19rem))] lg:min-h-64 lg:flex-1 lg:[--eqs-max-h:none]"
