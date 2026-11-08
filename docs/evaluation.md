@@ -27,6 +27,8 @@ Hindsight gap: the universe, equal-weighted, returned 19.1% a year over the wind
 
 Each reading's mean excess return over all observations splits exactly into **timing** (the same-day universe was up or down when the reading occurred) and **selection** (the stock against the equal-weight universe on the same day). Selection is the part a stock picker could use. Readings cluster in sell-offs and rallies, so the intervals come from a moving-block bootstrap over dates (20-session blocks, 2000 replicates, seed 20261107); an episode is a run of dates with gaps of at most 10 sessions.
 
+In the app (/lab and the track record on each quote page) a reading's row turns grey when its largest episode holds more than 30% of its observations, because one market stretch then dominates the row; its selection is then not colored even when the interval excludes zero. Readings seen on at least 50% of all dates are exempt: they form one long run by construction (Neutral occurs nearly every session, so all of it is one episode), and without the exemption Neutral and the other everyday readings would always be grey. Here Strong, Neutral and Weak are exempt at every horizon, and no row is grey.
+
 ### 5 sessions
 
 All observations: mean +0.33%, up 55%, n = 210753.
