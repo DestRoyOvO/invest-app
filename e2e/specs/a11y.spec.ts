@@ -27,14 +27,6 @@ const KNOWN: Readonly<Record<string, (page: Page, phone: boolean) => KnownViolat
             dataDependent: true,
           },
         ],
-  "/stock/BTC-USD": (page) => [
-    {
-      rule: "aria-required-attr",
-      within: page.getByRole("region", { name: "Factor profile" }).locator('[role="meter"]:not([aria-valuenow])'),
-      reason:
-        "the meter of a factor without a value (beta, for a crypto pair) keeps role=meter but leaves out aria-valuenow, which that role requires; components/ui/Meter.tsx (int/ui), as used by components/stock/FactorProfilePanel.tsx (int/pages)",
-    },
-  ],
 };
 
 const PAGES = ROUTES.filter((route) => route.finalPath === undefined);

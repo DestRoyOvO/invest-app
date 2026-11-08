@@ -196,7 +196,14 @@ export function RiskPanel({ symbol, className, id }: { symbol: string; className
         <RiskStat
           label={tpl(r.universePct, { n: universeSize })}
           value={profileSettled ? (universePercentile === null ? DASH : ordinal(universePercentile, lang)) : <Skeleton className="mt-1 h-5 w-10" />}
-          meter={<Meter value={universePercentile} label={tpl(r.universePct, { n: universeSize })} valueText={percentileText(universePercentile)} />}
+          // While the factor profile loads, a skeleton stands in for the meter, as it does for the number above it.
+          meter={
+            profileSettled ? (
+              <Meter value={universePercentile} label={tpl(r.universePct, { n: universeSize })} valueText={percentileText(universePercentile)} />
+            ) : (
+              <Skeleton className="h-1.5 w-full" />
+            )
+          }
           sub={r.universePctSub}
         />
         <RiskStat label={r.beta} value={profileSettled || beta !== null ? formatBeta(beta) : <Skeleton className="mt-1 h-5 w-10" />} sub={r.betaSub} />
