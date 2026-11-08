@@ -558,7 +558,7 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
           shape: "circle",
           size: 0.5,
           color: mark.kind === "earnings" ? c.fg2 : c.fg3,
-          text: mark.kind === "dividend" ? "D" : mark.kind === "split" ? "S" : "E",
+          text: t.chart.markerText[mark.kind],
         })),
       );
 
