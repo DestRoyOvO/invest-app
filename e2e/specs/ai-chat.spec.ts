@@ -181,7 +181,6 @@ test.describe("the chat footer", () => {
   test.use({ permissions: ["clipboard-read", "clipboard-write"] });
 
   test("stays within reach while the Copy toast shows", async ({ page, app }) => {
-    test.fixme(true, "components/ui/Toast.tsx: the toasts (z-60; bottom right from md, 4rem above the bottom on phones) cover the chat drawer's footer for 5 s after Copy: the question box on desktop and phone, Send on desktop");
     await app.goto("/");
     await openFromTopBar(page);
     await ask(page, "Which sectors moved the most?");

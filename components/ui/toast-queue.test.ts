@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createToastStore, pushToast, remainingTime, removeToast } from "./toast-queue";
+import { activeOutlet, addOutlet, createToastStore, pushToast, remainingTime, removeOutlet, removeToast } from "./toast-queue";
 
 describe("toast queue", () => {
   it("appends and keeps the newest ones", () => {
@@ -170,5 +170,32 @@ describe("toast store", () => {
     expect(store.isHeld()).toBe(false);
     vi.advanceTimersByTime(10_000);
     expect(ids()).toEqual(["a"]);
+  });
+});
+
+describe("toast outlets", () => {
+  it("hand the toasts to the newest outlet, and back to the one below or the screen's edge as outlets go", () => {
+    let outlets: readonly string[] = [];
+    expect(activeOutlet(outlets)).toBeNull();
+    outlets = addOutlet(outlets, "chat");
+    outlets = addOutlet(outlets, "alert editor");
+    expect(activeOutlet(outlets)).toBe("alert editor");
+    outlets = removeOutlet(outlets, "alert editor");
+    expect(activeOutlet(outlets)).toBe("chat");
+    outlets = removeOutlet(outlets, "chat");
+    expect(activeOutlet(outlets)).toBeNull();
+  });
+
+  it("move an outlet registered again to the top, once", () => {
+    const outlets = addOutlet(addOutlet(addOutlet([], "a"), "b"), "a");
+    expect(outlets).toEqual(["b", "a"]);
+    expect(activeOutlet(outlets)).toBe("a");
+  });
+
+  it("keep the same list when an unknown outlet goes, so React skips the render", () => {
+    const outlets = addOutlet([], "a");
+    expect(removeOutlet(outlets, "b")).toBe(outlets);
+    // The closing drawer is removed before or after the opening one registers: the result is the same.
+    expect(removeOutlet(addOutlet(outlets, "b"), "a")).toEqual(addOutlet(removeOutlet(outlets, "a"), "b"));
   });
 });

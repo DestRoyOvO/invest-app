@@ -335,7 +335,6 @@ test.describe("managing rules", () => {
 test.describe("on a phone", () => {
   test("the toasts of a saved alert leave the editor's buttons clear", async ({ page, app, request }) => {
     test.skip(!app.isPhone, "Wider screens show the editor at the side, clear of the toasts.");
-    test.fixme(true, "components/ui/Toast.tsx: on phones the toasts (z-60, 4rem above the bottom) cover an open bottom sheet's footer, here Save alert and Cancel, for 5 to 10 s");
     await app.seedStorage(SAMPLE_DATA);
     const last = (await listQuotes(request, ["AAPL"])).get("AAPL")?.price;
     if (!last) throw new Error("No AAPL quote");

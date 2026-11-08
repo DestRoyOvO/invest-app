@@ -7,6 +7,7 @@ import { useT } from "@/components/providers/PrefsProvider";
 import { cn } from "@/lib/cn";
 
 import { IconButton } from "./Button";
+import { ToastOutlet } from "./Toast";
 
 export type DrawerSide = "right" | "bottom" | "auto";
 
@@ -30,15 +31,26 @@ const CONTAINER: Record<DrawerSide, string> = {
   auto: "items-end sm:items-stretch sm:justify-end",
 };
 
+// A sheet with toasts in it may grow past 85dvh, so the toasts take room from the backdrop rather than from its content.
 const SHEET = "max-h-[85dvh] rounded-t-sm border-t pb-[env(safe-area-inset-bottom)]";
 const PANEL: Record<DrawerSide, string> = {
   right: "h-full border-l",
-  bottom: SHEET,
-  auto: `${SHEET} sm:h-full sm:max-h-none sm:rounded-none sm:border-t-0 sm:border-l sm:pb-0`,
+  bottom: `${SHEET} has-[[data-toast]]:max-h-[calc(100dvh-2.75rem)]`,
+  auto: `${SHEET} max-sm:has-[[data-toast]]:max-h-[calc(100dvh-2.75rem)] sm:h-full sm:max-h-none sm:rounded-none sm:border-t-0 sm:border-l sm:pb-0`,
+};
+
+// Where the toasts show while the drawer is open, in a strip of their own. In a side panel the strip sits between the
+// content and the footer: the content gives up the room and nothing moves. In a sheet, which grows upward, it comes
+// first (visually only; it stays after the content in the reading and Tab order), so nothing in the sheet moves either.
+const OUTLET: Record<DrawerSide, string> = {
+  right: "shrink-0 border-line has-[[data-toast]]:border-t",
+  bottom: "order-first shrink-0 border-line has-[[data-toast]]:border-b",
+  auto: "shrink-0 border-line max-sm:order-first max-sm:has-[[data-toast]]:border-b sm:has-[[data-toast]]:border-t",
 };
 
 /**
  * Modal side panel or bottom sheet: focus moves inside on open, Tab is trapped, Escape closes, focus returns on close.
+ * While it is open the toasts show inside it (ToastOutlet), where they stay operable and announced and cover nothing.
  */
 export function Drawer({ open, onClose, title, children, footer, side = "right", widthClassName = "sm:w-[460px]" }: DrawerProps) {
   const t = useT();
@@ -102,6 +114,7 @@ export function Drawer({ open, onClose, title, children, footer, side = "right",
           <IconButton label={t.common.close} icon={<X className="size-4" strokeWidth={1.75} />} onClick={onClose} size="sm" />
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+        <ToastOutlet className={OUTLET[side]} />
         {footer ? <div className="shrink-0 border-t border-line">{footer}</div> : null}
       </div>
     </div>
