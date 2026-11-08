@@ -15,12 +15,19 @@ function isNum(value: number | null | undefined): value is number {
 // ---------------------------------------------------------------------------
 
 /**
- * The score as the headline prints it: a whole number, unless rounding would cross a reading's cut-off (57.6 stays
- * "57.6" rather than "58" next to a Neutral label, because Strong starts at 58).
+ * The score as the headline prints it, never a number on the other side of a reading's cut-off: a whole number when
+ * that stays inside the reading, otherwise one decimal (57.6 prints "57.6" rather than "58" next to a Neutral label,
+ * because Strong starts at 58). The cut-offs are whole numbers, so only a tenth that lands on one can cross it; that
+ * tenth moves one step back to the score's side (57.96 prints "57.9", not "58.0"; 42.04 prints "42.1", because 42 is
+ * Weak).
  */
 export function scoreText(score: number): string {
+  const label = labelForScore(score);
   const whole = Math.round(score);
-  return labelForScore(whole) === labelForScore(score) ? String(whole) : score.toFixed(1);
+  if (labelForScore(whole) === label) return String(whole);
+  const tenth = Math.round(score * 10) / 10;
+  if (labelForScore(tenth) === label) return tenth.toFixed(1);
+  return (score < tenth ? tenth - 0.1 : tenth + 0.1).toFixed(1);
 }
 
 export type RsiState = "oversold" | "nearOversold" | "nearOverbought" | "overbought";

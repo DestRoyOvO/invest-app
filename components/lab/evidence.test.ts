@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { FactorHorizonResult, FactorResearch, Interval } from "@/lib/evaluation";
-import { FACTOR_WEIGHTS, TECHNICAL_FACTORS } from "@/lib/signal";
+import { FACTOR_WEIGHTS, labelForScore, TECHNICAL_FACTORS } from "@/lib/signal";
 
 import factorResearchJson from "@/lib/factor-research.json";
 
@@ -80,6 +80,33 @@ describe("scoreText", () => {
     expect(scoreText(42.1)).toBe("42.1");
     expect(scoreText(71.6)).toBe("71.6");
     expect(scoreText(28.4)).toBe("28.4");
+  });
+
+  it("keeps the tenth on the score's side when it would land on a cut-off", () => {
+    // ">=" cut-offs (Strong at 58, Very strong at 72): just below them, step down.
+    expect(scoreText(57.96)).toBe("57.9");
+    expect(scoreText(57.95)).toBe("57.9");
+    expect(scoreText(57.99)).toBe("57.9");
+    expect(scoreText(71.96)).toBe("71.9");
+    // ">" cut-offs (Weak at 42 and below, Very weak at 28 and below): just above them, step up.
+    expect(scoreText(42.04)).toBe("42.1");
+    expect(scoreText(42.01)).toBe("42.1");
+    expect(scoreText(28.03)).toBe("28.1");
+    // Floating-point neighbours of a cut-off.
+    expect(scoreText(57.99999999999999)).toBe("57.9");
+    expect(scoreText(42.00000000000001)).toBe("42.1");
+  });
+
+  it("never prints a number that reads as a different reading", () => {
+    for (const cut of [28, 42, 58, 72]) {
+      for (let step = -100; step <= 100; step++) {
+        const score = cut + step / 1000;
+        expect(labelForScore(Number(scoreText(score))), `score ${score}`).toBe(labelForScore(score));
+      }
+    }
+    for (let score = 0; score <= 100; score += 0.01) {
+      expect(labelForScore(Number(scoreText(score))), `score ${score}`).toBe(labelForScore(score));
+    }
   });
 });
 
