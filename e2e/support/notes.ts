@@ -170,3 +170,16 @@ export async function notificationState(page: Page): Promise<{ requests: number;
     permission: typeof Notification === "undefined" ? "unsupported" : Notification.permission,
   }));
 }
+
+/**
+ * What a tap or click at the middle of an element reaches: "itself" (the element or something inside it), otherwise
+ * the text of the toast in the way, or the tag name of whatever else covers it.
+ */
+export async function hitAtCenter(locator: Locator): Promise<string> {
+  return locator.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    if (hit && element.contains(hit)) return "itself";
+    return hit?.closest("[data-toast]")?.textContent ?? hit?.tagName ?? "nothing";
+  });
+}

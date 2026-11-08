@@ -3,6 +3,8 @@ import { ALERT_LOG_STORAGE_KEY, ALERTS_STORAGE_KEY, createRule, type AlertEvent,
 import {
   dailyBars,
   dataRows,
+  escapeRegExp,
+  hitAtCenter,
   listQuotes,
   notificationState,
   nyDate,
@@ -21,9 +23,9 @@ import { expect, test, type Page } from "../support/test";
 
 // Local alerts (lib/alerts.ts): rules of every kind created in the editor, checked by the alert engine against the
 // quotes the app reads (/api/quotes); the bell's count of unseen triggers, the rules table and the history; pause,
-// edit (which re-arms) and delete with Undo; persistence in investseek:alerts:v1 and investseek:alert-log:v1; the
-// catch-up that replays daily bars for a price level crossed while no tab was open; and the notification permission,
-// which the app asks for only from a click.
+// edit (a new condition re-arms) and delete with Undo; persistence in investseek:alerts:v1 and investseek:alert-log:v1;
+// the catch-up that replays daily bars for a price level crossed while no tab was open; and the notification
+// permission, which the app asks for only from a click.
 //
 // Which rule triggers is computed here from the same quotes, the positions in the browser and the bars, never written
 // down as a number.
@@ -48,6 +50,9 @@ const VALUE_LABEL: Record<Exclude<AlertKind, "cross_ma200">, string> = {
 const SHORT_NY_DATE = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
 
 interface Planned {
+  symbol: string;
+  /** The symbol's last price, which the editor shows once it has looked the quote up. */
+  last: number;
   kind: AlertKind;
   value: number | null;
   /** The rule as the rules table words it. */
@@ -74,13 +79,18 @@ function bell(page: Page) {
   return page.getByRole("banner").getByRole("button", { name: /^Alerts\b/ });
 }
 
+/** The count on the bell, which sits next to the bell button in the bell's own wrapper (hidden from assistive tech). */
+function bellBadge(page: Page) {
+  return bell(page).locator("xpath=..").getByText(/^(\d+|9\+)$/);
+}
+
 /** Creates a rule through the editor opened from the rules panel, after checking what the editor says about it. */
-async function createInEditor(page: Page, symbol: string, last: number, plan: Planned): Promise<void> {
+async function createInEditor(page: Page, plan: Planned): Promise<void> {
   await panel(page, "Rules").getByRole("button", { name: "New alert" }).click();
   const editor = page.getByRole("dialog", { name: "New alert" });
-  await editor.getByRole("combobox", { name: "Symbol" }).fill(symbol);
+  await editor.getByRole("combobox", { name: "Symbol" }).fill(plan.symbol);
   // The quote of the symbol, once typing pauses.
-  await expect(editor.getByText(`Last ${price(last)}`, { exact: true })).toBeVisible();
+  await expect(editor.getByText(`Last ${price(plan.last)}`, { exact: true })).toBeVisible();
   await editor.getByRole("combobox", { name: "Condition" }).selectOption({ label: KIND_LABEL[plan.kind] });
   if (plan.kind !== "cross_ma200") await editor.getByRole("textbox", { name: VALUE_LABEL[plan.kind] }).fill(String(plan.value));
   await expect(editor.getByText(plan.context, { exact: true })).toBeVisible();
@@ -89,60 +99,95 @@ async function createInEditor(page: Page, symbol: string, last: number, plan: Pl
   else await expect(alreadyMet).toHaveCount(0);
   await editor.getByRole("button", { name: "Save alert" }).click();
   await expect(editor).toBeHidden();
-  await expect(page.locator("[data-toast]").filter({ hasText: `Alert saved: ${symbol} ${plan.rule}` })).toBeVisible();
+  await expect(page.locator("[data-toast]").filter({ hasText: `Alert saved: ${plan.symbol} ${plan.rule}` })).toBeVisible();
 }
 
 test.describe("rules of every kind", () => {
   test("the editor creates each kind; the rules the quotes meet trigger, the others keep watching", async ({ page, app, request, context }) => {
     test.skip(app.isPhone, "One project is enough for the rule logic; the drawer and the bell are the same on phones.");
-    // Six round trips through the editor: on a busy machine this takes longer than the suite's 60 seconds.
+    // Nine round trips through the editor: on a busy machine this takes longer than the suite's 60 seconds.
     test.slow();
     await watchNotificationRequests(context);
-    await app.seedStorage(SAMPLE_DATA);
     const now = await serverNow(request);
-    const quote = (await listQuotes(request, ["AAPL"])).get("AAPL");
-    if (!quote?.price || quote.changePercent === null || !quote.twoHundredDayAverage || !quote.nextEarningsDate || !quote.regularMarketTime) {
+    const quotes = await listQuotes(request, ["AAPL", "MSFT", "NVDA"]);
+    const aapl = quotes.get("AAPL");
+    const msft = quotes.get("MSFT");
+    const nvda = quotes.get("NVDA");
+    if (!aapl?.price || aapl.changePercent === null || !aapl.twoHundredDayAverage || !aapl.nextEarningsDate || !aapl.regularMarketTime) {
       throw new Error("The AAPL quote lacks a field the rules read");
     }
-    const last = quote.price;
-    const cost = SAMPLE_DATA.holdings.AAPL.cost;
+    if (!msft?.price || msft.changePercent === null || !msft.regularMarketTime || !nvda?.price) throw new Error("The MSFT or NVDA quote lacks a field the rules read");
+    // Day moves in both directions: the fixture's last session has AAPL up and MSFT down.
+    expect(aapl.changePercent).toBeGreaterThan(0);
+    expect(msft.changePercent).toBeLessThan(0);
+    // The sample positions are all in profit; NVDA, bought 25% above today's price, adds one at a loss.
+    const holdings: Record<string, { shares: number; cost: number }> = { ...SAMPLE_DATA.holdings, NVDA: { shares: 10, cost: Math.round(nvda.price * 125) / 100 } };
+    await app.seedStorage({ ...SAMPLE_DATA, holdings });
 
+    const last = aapl.price;
     const above = Math.floor(last * 0.98);
     const below = Math.floor(last * 0.9);
-    const move = Math.abs(quote.changePercent);
-    const moveRule = Math.max(0.1, Math.floor(move * 10) / 10);
-    const pnl = ((last - cost) / cost) * 100;
-    const reportIn = nyDaysTo(now, nyDate(new Date(quote.nextEarningsDate)));
-    const versusAverage = (last / quote.twoHundredDayAverage - 1) * 100;
-    const session = writtenDate(quote.regularMarketTime.slice(0, 10), { short: true });
+    const reportIn = nyDaysTo(now, nyDate(new Date(aapl.nextEarningsDate)));
+    const versusAverage = (last / aapl.twoHundredDayAverage - 1) * 100;
     const away = (level: number) => `${Math.abs((level / last - 1) * 100).toFixed(1)}%`;
+    /** A move rule at the largest tenth of a percent the session's move reached, whichever its direction. */
+    const dayMove = (symbol: string, at: number, change: number, time: string): Planned => {
+      const value = Math.max(0.1, Math.floor(Math.abs(change) * 10) / 10);
+      return {
+        symbol,
+        last: at,
+        kind: "day_move",
+        value,
+        rule: `Day move ±${value}% or more`,
+        context: `Today ${signedPct(change)}`,
+        met: Math.abs(change) >= value,
+        event: `${symbol} moved ${signedPct(change)} on ${writtenDate(time.slice(0, 10), { short: true })}`,
+        now: `today ${signedPct(change)}`,
+      };
+    };
+    /** A rule on the P&L from the position's cost: a negative value is a loss of at least that much, a positive one a gain. */
+    const fromCost = (symbol: string, at: number, value: number): Planned => {
+      const { cost } = holdings[symbol];
+      const pnl = ((at - cost) / cost) * 100;
+      return {
+        symbol,
+        last: at,
+        kind: "pnl_from_cost",
+        value,
+        rule: `${value < 0 ? "Loss" : "Gain"} from cost of ${Math.abs(value)}% or more`,
+        context: `P&L from cost now ${signedPct(pnl)}`,
+        met: value < 0 ? pnl <= value : pnl >= value,
+        event: `${symbol} was ${signedPct(pnl)} from your cost`,
+        now: `P&L ${signedPct(pnl)}`,
+      };
+    };
 
     const plans: Planned[] = [
-      { kind: "above", value: above, rule: `At or above ${price(above)}`, context: `The level is ${away(above)} below the last price.`, met: last >= above, event: `AAPL traded at ${price(last)}, at or above ${price(above)}` },
-      { kind: "below", value: below, rule: `At or below ${price(below)}`, context: `The level is ${away(below)} below the last price.`, met: last <= below, now: `${away(below)} away` },
+      { symbol: "AAPL", last, kind: "above", value: above, rule: `At or above ${price(above)}`, context: `The level is ${away(above)} below the last price.`, met: last >= above, event: `AAPL traded at ${price(last)}, at or above ${price(above)}` },
+      { symbol: "AAPL", last, kind: "below", value: below, rule: `At or below ${price(below)}`, context: `The level is ${away(below)} below the last price.`, met: last <= below, now: `${away(below)} away` },
+      dayMove("AAPL", last, aapl.changePercent, aapl.regularMarketTime),
+      dayMove("MSFT", msft.price, msft.changePercent, msft.regularMarketTime),
+      fromCost("AAPL", last, 50),
+      // A loss rule keeps watching a position in profit and triggers on the one at a loss.
+      fromCost("AAPL", last, -10),
+      fromCost("NVDA", nvda.price, -10),
       {
-        kind: "day_move",
-        value: moveRule,
-        rule: `Day move ±${moveRule}% or more`,
-        context: `Today ${signedPct(quote.changePercent)}`,
-        met: move >= moveRule,
-        event: `AAPL moved ${signedPct(quote.changePercent)} on ${session}`,
-        now: `today ${signedPct(quote.changePercent)}`,
-      },
-      { kind: "pnl_from_cost", value: 50, rule: "Gain from cost of 50% or more", context: `P&L from cost now ${signedPct(pnl)}`, met: pnl >= 50, event: `AAPL was ${signedPct(pnl)} from your cost`, now: `P&L ${signedPct(pnl)}` },
-      {
+        symbol: "AAPL",
+        last,
         kind: "earnings_within",
         value: 3,
         rule: "Report within 3 days",
-        context: `Next report ${SHORT_NY_DATE.format(new Date(quote.nextEarningsDate))}${quote.earningsDateEstimated ? " (est.)" : ""}`,
+        context: `Next report ${SHORT_NY_DATE.format(new Date(aapl.nextEarningsDate))}${aapl.earningsDateEstimated ? " (est.)" : ""}`,
         met: reportIn <= 3,
         now: `in ${reportIn} days`,
       },
       {
+        symbol: "AAPL",
+        last,
         kind: "cross_ma200",
         value: null,
         rule: "Crosses the 200-day average",
-        context: `The price is ${Math.abs(versusAverage).toFixed(1)}% ${versusAverage >= 0 ? "above" : "below"} the 200-day average (${price(quote.twoHundredDayAverage)}).`,
+        context: `The price is ${Math.abs(versusAverage).toFixed(1)}% ${versusAverage >= 0 ? "above" : "below"} the 200-day average (${price(aapl.twoHundredDayAverage)}).`,
         // A cross needs the price on the other side of the average than at the last check; the editor records the side.
         met: false,
         now: `${signedPct(versusAverage)} vs avg`,
@@ -156,17 +201,17 @@ test.describe("rules of every kind", () => {
     await app.goto("/alerts");
     await expect(bell(page)).toHaveAccessibleName("Alerts");
     for (const [index, plan] of plans.entries()) {
-      await createInEditor(page, "AAPL", last, plan);
+      await createInEditor(page, plan);
       // The permission is asked for once, from the click that saves the first rule; never again.
       expect((await notificationState(page)).requests).toBe(1);
       await expect(dataRows(rulesTable(page))).toHaveCount(index + 1);
     }
 
     await expect(bell(page)).toHaveAccessibleName(`Alerts, ${triggered.length} new`);
-    await expect(page.getByRole("banner").getByText(String(triggered.length), { exact: true })).toBeVisible();
+    await expect(bellBadge(page)).toHaveText(String(triggered.length));
     const rows = dataRows(rulesTable(page));
     for (const plan of plans) {
-      const row = rows.filter({ hasText: plan.rule });
+      const row = rows.filter({ has: page.getByRole("link", { name: plan.symbol, exact: true }) }).filter({ hasText: plan.rule });
       await expect(row).toContainText(plan.met ? "Triggered" : "Watching");
       if (!plan.met && plan.now) await expect(row).toContainText(plan.now);
     }
@@ -181,11 +226,12 @@ test.describe("rules of every kind", () => {
     for (const plan of triggered) await expect(center.getByRole("listitem").filter({ hasText: plan.event })).toBeVisible();
     await center.getByRole("button", { name: "Mark all seen" }).click();
     await expect(bell(page)).toHaveAccessibleName("Alerts");
+    await expect(bellBadge(page)).toHaveCount(0);
 
     const stored = (await readLocal<AlertRule[]>(page, ALERTS_STORAGE_KEY)) ?? [];
-    expect(stored.map((rule) => [rule.kind, rule.value, rule.done])).toEqual(plans.map((plan) => [plan.kind, plan.value, plan.met]));
+    expect(stored.map((rule) => [rule.symbol, rule.kind, rule.value, rule.done])).toEqual(plans.map((plan) => [plan.symbol, plan.kind, plan.value, plan.met]));
     const log = (await readLocal<AlertEvent[]>(page, ALERT_LOG_STORAGE_KEY)) ?? [];
-    expect(log.map((event) => event.kind).sort()).toEqual(triggered.map((plan) => plan.kind).sort());
+    expect(log.map((event) => `${event.symbol} ${event.kind}`).sort()).toEqual(triggered.map((plan) => `${plan.symbol} ${plan.kind}`).sort());
     expect(log.every((event) => event.seen)).toBe(true);
   });
 });
@@ -199,10 +245,11 @@ test.describe("managing rules", () => {
     const nvda = quotes.get("NVDA")?.price;
     const amzn = quotes.get("AMZN")?.changePercent;
     if (!msft || !nvda || amzn === null || amzn === undefined) throw new Error("Missing quotes");
-    // Three rules that watch at today's quotes; the edit moves the MSFT level below its price.
+    // Three rules that watch at today's quotes; the edits move the MSFT level below its price, twice.
     const nvdaLevel = Math.floor(nvda * 0.8);
     const msftLevel = Math.ceil(msft * 1.15);
     const msftEdited = Math.floor(msft * 0.99);
+    const msftLower = msftEdited - 5;
     const amznMove = Math.ceil(Math.abs(amzn)) + 2;
     const rules = [
       createRule({ symbol: "NVDA", kind: "below", value: nvdaLevel, repeat: "once" }, now),
@@ -210,6 +257,7 @@ test.describe("managing rules", () => {
       createRule({ symbol: "AMZN", kind: "day_move", value: amznMove, repeat: "daily" }, now),
     ];
     await seedLocal(context, { [ALERTS_STORAGE_KEY]: rules });
+    const msftEvent = (level: number) => new RegExp(escapeRegExp(`MSFT traded at ${price(msft)}, at or above ${price(level)}`));
 
     await app.goto("/alerts");
     const rows = dataRows(rulesTable(page));
@@ -234,7 +282,7 @@ test.describe("managing rules", () => {
     await expect(row("MSFT")).toContainText(`At or above ${price(msftEdited)}`);
     await expect(row("MSFT")).toContainText("Triggered");
     await expect(bell(page)).toHaveAccessibleName("Alerts, 1 new");
-    await expect(dataRows(historyTable(page))).toHaveText([new RegExp(`MSFT traded at ${price(msft)}, at or above ${price(msftEdited)}`)]);
+    await expect(dataRows(historyTable(page))).toHaveText([msftEvent(msftEdited)]);
     // A new note alone keeps the rule's state: it does not fire again.
     await page.getByRole("button", { name: "Edit the alert for MSFT" }).click();
     await editor.getByRole("textbox", { name: "Note (optional)" }).fill("Above the old high");
@@ -244,6 +292,16 @@ test.describe("managing rules", () => {
     await expect(row("MSFT")).toContainText("Triggered");
     await expect(dataRows(historyTable(page))).toHaveCount(1);
     await expect(bell(page)).toHaveAccessibleName("Alerts, 1 new");
+    // A new level re-arms a rule that already fired, so it fires again where the new level holds.
+    await page.getByRole("button", { name: "Edit the alert for MSFT" }).click();
+    await expect(level).toHaveValue(String(msftEdited));
+    await level.fill(String(msftLower));
+    await editor.getByRole("button", { name: "Save changes" }).click();
+    await expect(editor).toBeHidden();
+    await expect(row("MSFT")).toContainText(`At or above ${price(msftLower)}`);
+    await expect(row("MSFT")).toContainText("Triggered");
+    await expect(dataRows(historyTable(page))).toHaveText([msftEvent(msftLower), msftEvent(msftEdited)]);
+    await expect(bell(page)).toHaveAccessibleName("Alerts, 2 new");
 
     // Delete, Undo, delete again.
     await page.getByRole("button", { name: "Delete the alert for AMZN" }).click();
@@ -258,15 +316,15 @@ test.describe("managing rules", () => {
       .poll(async () => ((await readLocal<AlertRule[]>(page, ALERTS_STORAGE_KEY)) ?? []).map((rule) => ({ symbol: rule.symbol, value: rule.value, paused: rule.paused, done: rule.done })))
       .toEqual([
         { symbol: "NVDA", value: nvdaLevel, paused: true, done: false },
-        { symbol: "MSFT", value: msftEdited, paused: false, done: true },
+        { symbol: "MSFT", value: msftLower, paused: false, done: true },
       ]);
 
     await page.reload();
     await expect(rows).toHaveCount(2);
     await expect(row("NVDA")).toContainText("Paused");
     await expect(row("MSFT")).toContainText("Triggered");
-    await expect(dataRows(historyTable(page))).toHaveCount(1);
-    await expect(bell(page)).toHaveAccessibleName("Alerts, 1 new");
+    await expect(dataRows(historyTable(page))).toHaveCount(2);
+    await expect(bell(page)).toHaveAccessibleName("Alerts, 2 new");
     // Resuming starts a fresh watch.
     await page.getByRole("button", { name: "Resume the alert for NVDA" }).click();
     await expect(row("NVDA")).toContainText("Watching");
@@ -282,7 +340,9 @@ test.describe("on a phone", () => {
     if (!last) throw new Error("No AAPL quote");
     const level = Math.floor(last * 0.98);
     await app.goto("/alerts");
-    await createInEditor(page, "AAPL", last, {
+    await createInEditor(page, {
+      symbol: "AAPL",
+      last,
       kind: "above",
       value: level,
       rule: `At or above ${price(level)}`,
@@ -298,13 +358,7 @@ test.describe("on a phone", () => {
       const button = editor.getByRole("button", { name, exact: true });
       await expect(button).toBeVisible();
       await expect(trigger).toBeVisible();
-      // What a tap at the middle of the button reaches.
-      const reached = await button.evaluate((element) => {
-        const box = element.getBoundingClientRect();
-        const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
-        return hit && element.contains(hit) ? "button" : (hit?.closest("[data-toast]")?.textContent ?? hit?.tagName ?? "nothing");
-      });
-      expect(reached, `a tap on ${name}`).toBe("button");
+      expect(await hitAtCenter(button), `a tap on ${name}`).toBe("itself");
     }
   });
 });
