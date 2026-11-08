@@ -15,10 +15,12 @@ export type RawEnv = Readonly<Record<string, string | undefined>>;
 export const LOG_LEVELS = ["debug", "info", "warn", "error", "silent"] as const;
 export type LogLevel = (typeof LOG_LEVELS)[number];
 
-export const MARKET_DATA_SOURCES = ["yahoo", "fixtures", "record"] as const;
+/**
+ * yahoo: live data through yahoo-finance2. fixtures: deterministic synthetic data (lib/server/fixtures), no network
+ * access, for the end-to-end tests and screenshots.
+ */
+export const MARKET_DATA_SOURCES = ["yahoo", "fixtures"] as const;
 export type MarketDataSource = (typeof MARKET_DATA_SOURCES)[number];
-/** Sources this build can serve. "fixtures" and "record" are reserved for the replay mode of the end-to-end suite. */
-const AVAILABLE_DATA_SOURCES: ReadonlySet<MarketDataSource> = new Set(["yahoo"]);
 
 export const SITE_ACCESS_MODES = ["public", "private"] as const;
 export type SiteAccess = (typeof SITE_ACCESS_MODES)[number];
@@ -123,7 +125,7 @@ export const envSchema = z.object({
   LOG_LEVEL: z.preprocess(lowerCased, z.enum(LOG_LEVELS, { error: "must be debug, info, warn, error or silent" }).default("info")),
   MARKET_DATA_SOURCE: z.preprocess(
     lowerCased,
-    z.enum(MARKET_DATA_SOURCES, { error: "must be yahoo, fixtures or record" }).default("yahoo"),
+    z.enum(MARKET_DATA_SOURCES, { error: "must be yahoo or fixtures" }).default("yahoo"),
   ),
 });
 
@@ -265,14 +267,13 @@ export function parseEnv(raw: RawEnv): ServerEnv {
     });
   }
 
-  let marketDataSource = values.MARKET_DATA_SOURCE;
-  if (!AVAILABLE_DATA_SOURCES.has(marketDataSource)) {
+  // Allowed in production, because the end-to-end suite tests a production build, but never silently.
+  if (isProduction && values.MARKET_DATA_SOURCE === "fixtures") {
     issues.push({
       key: "MARKET_DATA_SOURCE",
       level: "warn",
-      message: `MARKET_DATA_SOURCE=${marketDataSource} is not available in this build yet; market data comes from Yahoo.`,
+      message: "MARKET_DATA_SOURCE=fixtures serves synthetic market data for tests, not real prices; unset it for a real deployment.",
     });
-    marketDataSource = "yahoo";
   }
 
   return {
@@ -290,7 +291,7 @@ export function parseEnv(raw: RawEnv): ServerEnv {
     siteAccess: values.SITE_ACCESS,
     siteUrl: values.SITE_URL === undefined ? null : new URL(values.SITE_URL).origin,
     logLevel: values.LOG_LEVEL,
-    marketDataSource,
+    marketDataSource: values.MARKET_DATA_SOURCE,
     issues,
   };
 }

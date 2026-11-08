@@ -143,10 +143,24 @@ describe("parseEnv values", () => {
     for (const secret of ["hunter2", "token-abc", "pw-qzx", "tiny-qzx"]) expect(text).not.toContain(secret);
   });
 
-  it("reports MARKET_DATA_SOURCE values reserved for the fixture mode and keeps serving Yahoo", () => {
-    const env = parseEnv({ MARKET_DATA_SOURCE: "fixtures" });
+  it("serves fixture data on request, silently in development", () => {
+    const env = parseEnv({ MARKET_DATA_SOURCE: " Fixtures " });
+    expect(env.marketDataSource).toBe("fixtures");
+    expect(env.issues).toEqual([]);
+  });
+
+  it("allows fixture data in production (the end-to-end suite runs a production build) but reports it", () => {
+    const env = parseEnv({ NODE_ENV: "production", MARKET_DATA_SOURCE: "fixtures" });
+    expect(env.marketDataSource).toBe("fixtures");
+    expect(env.issues).toEqual([expect.objectContaining({ key: "MARKET_DATA_SOURCE", level: "warn" })]);
+    expect(env.issues[0].message).toContain("synthetic");
+  });
+
+  it("no longer knows the reserved record mode", () => {
+    const env = parseEnv({ MARKET_DATA_SOURCE: "record" });
     expect(env.marketDataSource).toBe("yahoo");
     expect(env.issues).toEqual([expect.objectContaining({ key: "MARKET_DATA_SOURCE", level: "warn" })]);
+    expect(env.issues[0].message).toContain('"record"');
   });
 });
 

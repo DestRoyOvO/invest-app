@@ -183,7 +183,7 @@ default". An invalid value falls back to the default and is reported at startup 
 | `TRUST_PROXY` | off | `1` behind a reverse proxy you control that appends the client address to `X-Forwarded-For` (nginx, Caddy). Rate limits then use the right-most address. Leave it off otherwise: forwarded headers are ignored and all clients share one rate-limit bucket. Not needed on Vercel. Accepts 1/0, true/false, yes/no, on/off. Docker Compose sets `1` and reads this one from the shell or a `.env` file, not from `.env.local`. |
 | `SITE_URL` | none | Public address of the deployment, e.g. `https://invest.example.com`. Only the origin is kept. |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` or `silent`. |
-| `MARKET_DATA_SOURCE` | `yahoo` | Where market data comes from. `fixtures` and `record` are reserved for the replay mode of the end-to-end tests and are not available yet; the server reports them at startup and uses Yahoo. |
+| `MARKET_DATA_SOURCE` | `yahoo` | Where market data comes from: `yahoo` for live data, or `fixtures` for deterministic synthetic data with no network access (prices, news, the Treasury curve and article text), which the end-to-end tests use (see [docs/testing.md](testing.md)). Never use `fixtures` for a real deployment: the prices are made up. The status bar then says "Fixture data", `/api/health` reports `"dataSource":"fixtures"`, and a production server logs a `config.issue` warning at startup. |
 
 Set by the platform or the build, not in `.env.local`:
 
@@ -214,8 +214,9 @@ code 1) when:
 - `SITE_ACCESS` has a value other than `public` or `private`.
 
 Everything else is a warning and the server starts: an `ACCESS_PASSWORD` shorter than 12 characters, a `SESSION_SECRET`
-without a password, `DEEPSEEK_API_KEY` without `ACCESS_PASSWORD` in production (AI stays off), and invalid values that
-fall back to their defaults. In development every problem is only logged, so you can fix it while the server runs.
+without a password, `DEEPSEEK_API_KEY` without `ACCESS_PASSWORD` in production (AI stays off), `MARKET_DATA_SOURCE=fixtures`
+in production (synthetic prices; the end-to-end tests run a production build this way), and invalid values that fall back
+to their defaults. In development every problem is only logged, so you can fix it while the server runs.
 `next build` skips the checks, so CI can build without production secrets.
 
 After upgrading to this version, a production browser signs in once more: the session cookie is now named

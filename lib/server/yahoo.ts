@@ -18,6 +18,7 @@ import { normalizeBars, type DailyBar, type RawChart } from "@/lib/bars";
 import { hasCjk } from "@/lib/names-zh";
 
 import { cached, HOUR, isFresh, MINUTE, peek } from "./cache";
+import { withMarketDataSource } from "./fixtures/client";
 import { log } from "./log";
 
 // ---------------------------------------------------------------------------
@@ -38,7 +39,7 @@ type YahooClient = InstanceType<typeof YahooFinance>;
 const globalForYahoo = globalThis as unknown as { __investseekYahoo?: YahooClient };
 
 /** One shared client per process: the cookie jar, crumb and request queue are reused across requests. */
-export const yf: YahooClient =
+const yahooClient: YahooClient =
   globalForYahoo.__investseekYahoo ??
   (globalForYahoo.__investseekYahoo = new YahooFinance({
     suppressNotices: ["yahooSurvey", "ripHistorical"],
@@ -47,6 +48,9 @@ export const yf: YahooClient =
     queue: { concurrency: 4 },
     validation: { logErrors: false, logOptionsErrors: false },
   }));
+
+/** The client every Yahoo call goes through; with MARKET_DATA_SOURCE=fixtures it answers from lib/server/fixtures. */
+export const yf: YahooClient = withMarketDataSource(yahooClient);
 
 /**
  * Upper bound on Yahoo calls queued in or running through the client (concurrency 4). Beyond it new calls fail fast
