@@ -2,7 +2,7 @@ import "server-only";
 
 import { yieldOn } from "./curve";
 import { gaussian, normalFrom, prng, seedOf } from "./random";
-import { securityOf, type Security } from "./securities";
+import { securityOf, type RateLeg, type Security } from "./securities";
 import {
   DAY_MS,
   dailyStamp,
@@ -24,8 +24,9 @@ import {
 // factor (seeded by the date), a sector factor (seeded by sector and date) and the security's own noise (seeded by
 // symbol and date). So a bar for a given session is the same on every run and every day, stocks move together with
 // their sector and the index, and a fund that tracks an index moves exactly like it. ^VIX mean-reverts around its
-// level, Treasury yields come from the curve model (curve.ts). Intraday bars are drawn inside their daily bar: they
-// open at its open, close at its close and touch its high and low.
+// level, Treasury yields come from the curve model (curve.ts), and the dollar index and the currency pairs outside the
+// table (HKDUSD=X) are computed from the closes of the table's currencies. Intraday bars are drawn inside their daily
+// bar: they open at its open, close at its close and touch its high and low.
 
 /** The day whose close equals each security's anchor price. A trading day on every calendar. */
 export const ANCHOR_DAY = parseDayKey("2026-01-02");
@@ -169,7 +170,7 @@ function vixLog(security: Security, day: number): number {
  * The ICE US Dollar Index: 50.14348112 × EURUSD^-0.576 × USDJPY^0.136 × GBPUSD^-0.119 × USDCAD^0.091 × USDSEK^0.042 ×
  * USDCHF^0.036, with Yahoo's symbols of the six currencies.
  */
-export const DOLLAR_INDEX: { factor: number; weights: ReadonlyArray<readonly [symbol: string, weight: number]> } = {
+export const DOLLAR_INDEX: { factor: number; weights: readonly RateLeg[] } = {
   factor: 50.14348112,
   weights: [
     ["EURUSD=X", -0.576],
@@ -194,16 +195,18 @@ function closesOn(security: Security, days: readonly number[]): number[] {
 }
 
 /**
- * Raw closes of the dollar index (DOLLAR_INDEX) for consecutive trading days, and the close of the trading day before
- * the first, from the currency walks' closes of the same days: the index follows its currencies.
+ * Raw closes for consecutive trading days, and the close of the trading day before the first, of a security computed
+ * from the closes of others on the same days: `factor` times each leg's close raised to its power. The dollar index
+ * (DOLLAR_INDEX) follows its six currencies this way, and a currency pair outside the table the table's dollar rates of
+ * its two currencies (Security.legs: HKDUSD=X is 1 / HKD=X).
  */
-function dollarIndexCloses(security: Security, days: readonly number[]): { previous: number; closes: number[] } {
+function basketCloses(security: Security, days: readonly number[], factor: number, legs: readonly RateLeg[]): { previous: number; closes: number[] } {
   const wanted = [previousTradingDay(security.profile, days[0]), ...days];
-  const logs = wanted.map(() => Math.log(DOLLAR_INDEX.factor));
-  for (const [symbol, weight] of DOLLAR_INDEX.weights) {
-    const currency = securityOf(symbol);
-    if (!currency) throw new Error(`The fixture data has no ${symbol}.`);
-    closesOn(currency, wanted).forEach((close, i) => (logs[i] += weight * Math.log(close)));
+  const logs = wanted.map(() => Math.log(factor));
+  for (const [symbol, power] of legs) {
+    const leg = securityOf(symbol);
+    if (!leg) throw new Error(`The fixture data has no ${symbol}.`);
+    closesOn(leg, wanted).forEach((close, i) => (logs[i] += power * Math.log(close)));
   }
   const [previous, ...closes] = logs.map(Math.exp);
   return { previous, closes };
@@ -219,7 +222,8 @@ function rawCloses(security: Security, days: readonly number[]): { previous: num
   if (security.model === "vix") {
     return { previous: Math.exp(vixLog(security, before)), closes: days.map((day) => Math.exp(vixLog(security, day))) };
   }
-  if (security.model === "dollar-index") return dollarIndexCloses(security, days);
+  if (security.model === "dollar-index") return basketCloses(security, days, DOLLAR_INDEX.factor, DOLLAR_INDEX.weights);
+  if (security.model === "cross") return basketCloses(security, days, 1, security.legs ?? []);
   // Up to the anchor the walk runs on its (squashed) deviation from the anchor price, after it on compounded returns.
   const anchor = Math.log(security.anchorPrice);
   let deviation = before < ANCHOR_DAY ? backwardDeviation(security, before) : 0;
@@ -240,9 +244,12 @@ function rawCloses(security: Security, days: readonly number[]): { previous: num
 // Daily bars
 // ---------------------------------------------------------------------------
 
-/** Decimals Yahoo prints for a price (its priceHint). */
+/**
+ * Decimals Yahoo prints for a price (its priceHint). A currency rate below 0.1 keeps six (JPY/USD 0.006556): at four, a
+ * yen position would convert at 0.0066, 0.7% off.
+ */
 export function priceDigits(security: Security, price: number): number {
-  if (security.type === "CURRENCY") return price > 20 ? 3 : 4;
+  if (security.type === "CURRENCY") return price > 20 ? 3 : price < 0.1 ? 6 : 4;
   if (security.model === "rate") return 3;
   if (price < 1) return 4;
   if (security.type === "FUTURE" && price < 10) return 4;

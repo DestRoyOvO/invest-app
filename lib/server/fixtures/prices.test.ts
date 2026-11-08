@@ -117,6 +117,51 @@ describe("daily bars", () => {
     expect(dayKey(dailyRows(security("DX-Y.NYB"), parseDayKey("2000-01-01"), from)[0].day)).toBe("2003-12-01");
   });
 
+  it("derive a currency pair outside the table from the table's dollar rates, session by session", () => {
+    const from = parseDayKey("2025-11-03");
+    const to = parseDayKey("2026-11-06");
+    const closes = (symbol: string) => new Map(dailyRows(security(symbol), from, to).map((row) => [row.day, row.c]));
+    const [hkd, euro, yen] = ["HKD=X", "EURUSD=X", "USDJPY=X"].map(closes);
+    const on = (pair: Map<number, number>, day: number) => pair.get(day) as number;
+    // Each pair from USD/HKD, EUR/USD and USD/JPY, written out here: the currency it is quoted in per unit of the other.
+    const derived: Array<[symbol: string, rate: (day: number) => number]> = [
+      ["HKDUSD=X", (day) => 1 / on(hkd, day)],
+      ["USDHKD=X", (day) => on(hkd, day)],
+      ["EURHKD=X", (day) => on(euro, day) * on(hkd, day)],
+      ["JPYUSD=X", (day) => 1 / on(yen, day)],
+      ["EUR=X", (day) => 1 / on(euro, day)],
+      ["EURJPY=X", (day) => on(euro, day) * on(yen, day)],
+    ];
+    for (const [symbol, rate] of derived) {
+      const rows = dailyRows(security(symbol), from, to);
+      expect(rows.map((row) => row.day), symbol).toEqual([...hkd.keys()]);
+      // Equal up to the rounding of the closes: four decimals (HKD/USD 0.1277 is the coarsest), three above 20, six below 0.1.
+      for (const row of rows) expect(Math.abs(row.c / rate(row.day) - 1), `${symbol} ${dayKey(row.day)}`).toBeLessThan(5e-4);
+    }
+    // The yen keeps six decimals (0.0066 would be about 0.7% off), so its close is within 0.01% of 1 / USD/JPY.
+    const [yenRow] = dailyRows(security("JPYUSD=X"), to, to);
+    expect(Math.abs(yenRow.c * on(yen, yenRow.day) - 1)).toBeLessThan(1e-4);
+  });
+
+  it("give a derived pair one series: its quote, its chart and every window of its bars agree", () => {
+    const pair = security("HKDUSD=X");
+    const quote = buildQuote(pair, SATURDAY)!;
+    const chart = buildChart("HKDUSD=X", { period1: new Date(SATURDAY - 35 * DAY), interval: "1d" }, SATURDAY);
+    const bars = chart.quotes as Array<{ close: number }>;
+    expect(bars.at(-1)?.close).toBe(quote.regularMarketPrice);
+    expect(bars.at(-2)?.close).toBe(quote.regularMarketPreviousClose);
+    const day = parseDayKey("2026-06-15");
+    const decade = dailyRows(pair, parseDayKey("2016-01-01"), parseDayKey("2026-11-06")).find((row) => row.day === day);
+    expect(dailyRows(pair, day, day)[0]).toEqual(decade);
+    // A week later the past sessions are unchanged.
+    const thisWeek = latestCompletedSession(pair.profile, SATURDAY);
+    const nextWeek = latestCompletedSession(pair.profile, WEEK_LATER);
+    expect(dailyRows(pair, thisWeek - 30, nextWeek).filter((row) => row.day <= thisWeek)).toEqual(dailyRows(pair, thisWeek - 30, thisWeek));
+    // And the quote is in line with the table's USD/HKD quote, so a position in HKD converts at the right rate.
+    const usdHkd = buildQuote(security("HKD=X"), SATURDAY)!;
+    expect(Math.abs((quote.regularMarketPrice as number) * (usdHkd.regularMarketPrice as number) - 1)).toBeLessThan(5e-4);
+  });
+
   it("move a fund exactly like the index it tracks", () => {
     const from = parseDayKey("2026-09-01");
     const to = parseDayKey("2026-11-06");
