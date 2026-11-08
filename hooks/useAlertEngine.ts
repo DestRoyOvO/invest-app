@@ -14,12 +14,62 @@ import { alertLogStore, isActive, markAlertEventsSeen, type AlertBar, type Alert
 import type { ChartData, ChartRange } from "@/types/api";
 
 const LOCK_NAME = "investseek:alert-engine";
+const FRONT_CHANNEL = "investseek:alert-front";
+/** How long the notifying tab waits for another tab to say it is in front. */
+const FRONT_REPLY_MS = 150;
 const NO_SYMBOLS: readonly string[] = [];
 /** Triggers older than this when they reach a tab are listed in the alert center but not shown as a toast. */
 const TOAST_WINDOW_MS = 2 * 60_000;
 const MAX_NOTIFICATIONS = 3;
 
 const noopSubscribe = () => () => {};
+
+/** This tab is what the investor is looking at: visible and focused. */
+function inFront(): boolean {
+  return document.visibilityState === "visible" && document.hasFocus();
+}
+
+function openFrontChannel(): BroadcastChannel | null {
+  try {
+    return typeof BroadcastChannel === "undefined" ? null : new BroadcastChannel(FRONT_CHANNEL);
+  } catch {
+    return null;
+  }
+}
+
+/** Answers the notifying tab when this tab is in front, where the toast already shows each trigger. Runs in every tab. */
+function useFrontAnswers(): void {
+  useEffect(() => {
+    const channel = openFrontChannel();
+    if (!channel) return;
+    channel.onmessage = (event: MessageEvent<{ type?: string; id?: string }>) => {
+      if (event.data?.type === "ask" && inFront()) channel.postMessage({ type: "front", id: event.data.id });
+    };
+    return () => channel.close();
+  }, []);
+}
+
+/**
+ * Asks the other InvestSeek tabs whether one of them is in front. Resolves true on the first yes, false after a short
+ * wait (or at once without BroadcastChannel). A closed or crashed tab simply does not answer, so nothing goes stale.
+ */
+function anotherTabInFront(): Promise<boolean> {
+  const channel = openFrontChannel();
+  if (!channel) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const id = Math.random().toString(36).slice(2);
+    const done = (answer: boolean) => {
+      window.clearTimeout(timer);
+      channel.close();
+      resolve(answer);
+    };
+    const timer = window.setTimeout(() => done(false), FRONT_REPLY_MS);
+    channel.onmessage = (event: MessageEvent<{ type?: string; id?: string }>) => {
+      if (event.data?.type === "front" && event.data.id === id) done(true);
+    };
+    channel.postMessage({ type: "ask", id });
+  });
+}
 
 /**
  * True while this tab holds the alert lock (Web Locks API), so exactly one tab per browser checks rules and sends
@@ -66,7 +116,7 @@ async function fetchBars(symbol: string, range: ChartRange): Promise<readonly Al
 /**
  * Runs the local alert rules while the app is open (mounted once, through AlertEngine in the shell). The tab holding
  * the lock polls quotes for the alert symbols, also while hidden, replays missed price levels from daily bars, logs
- * triggers and sends a system notification when permitted and the tab is not in front.
+ * triggers and sends a system notification when permitted and no InvestSeek tab is in front (that tab shows a toast).
  */
 export function useAlertEngine(): void {
   const { t, lang } = usePrefs();
@@ -78,6 +128,7 @@ export function useAlertEngine(): void {
   const { quotes, data, error } = useQuoteMap(leader ? symbols : NO_SYMBOLS, { whenHidden: true });
 
   const [engine] = useState(() => createAlertEngine({ fetchBars }));
+  useFrontAnswers();
 
   // Declared first so a development double mount restarts the engine before the check below runs.
   useEffect(() => {
@@ -86,10 +137,7 @@ export function useAlertEngine(): void {
   }, [engine]);
 
   useEffect(() => {
-    engine.setNotifier((events: readonly AlertEvent[]) => {
-      if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-      // In front, the toast already says it.
-      if (document.visibilityState === "visible" && document.hasFocus()) return;
+    const show = (events: readonly AlertEvent[]) => {
       for (const event of events.slice(0, MAX_NOTIFICATIONS)) {
         try {
           const notification = new Notification(t.alerts.notifyTitle, { body: describeAlertEvent(event, t, lang, "live"), tag: event.id, icon: "/icon.svg" });
@@ -103,6 +151,14 @@ export function useAlertEngine(): void {
           // Some mobile browsers only show notifications from a service worker; the log and the toast still have it.
         }
       }
+    };
+    engine.setNotifier((events: readonly AlertEvent[]) => {
+      if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+      // In front, here or in another InvestSeek tab, the toast already says it.
+      if (inFront()) return;
+      void anotherTabInFront().then((front) => {
+        if (!front) show(events);
+      });
     });
   }, [engine, t, lang, router]);
 
