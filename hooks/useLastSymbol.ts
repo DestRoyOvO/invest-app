@@ -4,6 +4,8 @@ import { useSyncExternalStore } from "react";
 
 import { normalizeSymbol } from "@/lib/symbols";
 
+import { addRecent } from "./useRecents";
+
 const STORAGE_KEY = "investseek:last-symbol";
 const FALLBACK = "AAPL";
 const listeners = new Set<() => void>();
@@ -22,8 +24,12 @@ function subscribe(listener: () => void) {
   return () => listeners.delete(listener);
 }
 
-/** Records the most recently viewed quote so the "Quote" navigation item returns to it. */
+/**
+ * Records the most recently viewed quote so the Quote navigation item (QT) and security codes typed alone return to it,
+ * and adds it to the recent symbols of the command bar (hooks/useRecents.ts).
+ */
 export function rememberSymbol(symbol: string) {
+  addRecent(symbol);
   if (snapshot === symbol) return;
   snapshot = symbol;
   try {

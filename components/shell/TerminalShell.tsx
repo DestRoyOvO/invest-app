@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, type ReactNode } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { ChatDrawer } from "@/components/ai/ChatDrawer";
 import { AlertEditorHost } from "@/components/alerts/AlertEditorHost";
@@ -10,63 +10,95 @@ import { NewsDrawer } from "@/components/news/NewsDrawer";
 import { PositionEditorHost } from "@/components/portfolio/PositionEditorHost";
 import { useT } from "@/components/providers/PrefsProvider";
 import { useUi } from "@/components/providers/UiProvider";
+import { isComposing, isDialogOpen, isTypingTarget } from "@/hooks/useHotkeys";
 import { useLastSymbol } from "@/hooks/useLastSymbol";
-import { stockPath } from "@/lib/api-client";
+import { rememberSector, useLastSector } from "@/hooks/useRecents";
+import { GO_SHORTCUTS, safeDecode } from "@/lib/functions";
 
 import { CommandPalette } from "./CommandPalette";
 import { MobileTabBar } from "./MobileTabBar";
-import { navItems } from "./nav";
+import { navGroups } from "./nav";
 import { NavRail } from "./NavRail";
+import { ShortcutsSheet } from "./ShortcutsSheet";
 import { StatusBar } from "./StatusBar";
 import { TickerStrip } from "./TickerStrip";
 import { TopBar } from "./TopBar";
 
-function isTyping(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
-}
+/** How long the second key of a "g" sequence is awaited. */
+const GO_TIMEOUT_MS = 1500;
 
 export function TerminalShell({ children }: { children: ReactNode }) {
   const t = useT();
   const router = useRouter();
-  const { openCommand, commandOpen } = useUi();
+  const pathname = usePathname();
+  const { openCommand, commandOpen, openShortcuts } = useUi();
   const lastSymbol = useLastSymbol();
-  const items = useMemo(() => navItems(stockPath(lastSymbol)), [lastSymbol]);
+  const lastSector = useLastSector();
+  const ctx = useMemo(() => ({ lastSymbol, lastSector }), [lastSymbol, lastSector]);
+  const groups = useMemo(() => navGroups(ctx), [ctx]);
+  const [goPending, setGoPending] = useState(false);
+  const goTimer = useRef<number | undefined>(undefined);
 
-  // Keyboard: "/" or Ctrl/Cmd+K opens the command bar; "g" then a letter jumps to a section.
+  // SECT returns to the sector opened last.
   useEffect(() => {
-    let gPressedAt = 0;
-    const onKeyDown = (event: KeyboardEvent) => {
-      // Shortcuts never act behind an open dialog (palette, drawers, position editor).
-      if (event.defaultPrevented || commandOpen || document.querySelector("[aria-modal=\"true\"]")) return;
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+    const match = /^\/sector\/([^/?#]+)/.exec(pathname);
+    if (match) rememberSector(safeDecode(match[1]));
+  }, [pathname]);
+
+  const endGo = useEffectEvent(() => {
+    window.clearTimeout(goTimer.current);
+    setGoPending(false);
+  });
+
+  // Global keys: "/" or Ctrl/Cmd+K opens the command bar, "?" the shortcuts sheet, and "g" then a letter jumps to a
+  // function. The listener runs in the capture phase, so a "g" sequence wins over a page hotkey on the same letter.
+  const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
+    if (event.defaultPrevented || isComposing(event)) return;
+    // Shortcuts never act behind an open dialog (command bar, drawers, editors, the settings menu).
+    if (commandOpen || isDialogOpen()) {
+      if (goPending) endGo();
+      return;
+    }
+    if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === "k") {
+      event.preventDefault();
+      endGo();
+      openCommand();
+      return;
+    }
+    if (isTypingTarget(event.target) || event.metaKey || event.ctrlKey || event.altKey) return;
+
+    if (goPending) {
+      endGo();
+      const target = GO_SHORTCUTS.get(event.key.toLowerCase());
+      if (target) {
         event.preventDefault();
-        openCommand();
-        return;
+        event.stopPropagation();
+        router.push(target.scope === "security" ? target.href(lastSymbol) : target.href(undefined, { lastSector }));
       }
-      if (isTyping(event.target) || event.metaKey || event.ctrlKey || event.altKey) return;
-      if (event.key === "/") {
-        event.preventDefault();
-        openCommand();
-        return;
-      }
-      const key = event.key.toLowerCase();
-      if (key === "g") {
-        gPressedAt = Date.now();
-        return;
-      }
-      if (gPressedAt && Date.now() - gPressedAt < 1200) {
-        const target = items.find((item) => item.shortcut === key);
-        if (target) {
-          event.preventDefault();
-          router.push(target.href);
-        }
-      }
-      gPressedAt = 0;
+      return;
+    }
+    if (event.key === "/") {
+      event.preventDefault();
+      openCommand();
+    } else if (event.key === "?") {
+      event.preventDefault();
+      openShortcuts();
+    } else if (event.key === "g" || event.key === "G") {
+      event.preventDefault();
+      window.clearTimeout(goTimer.current);
+      setGoPending(true);
+      goTimer.current = window.setTimeout(() => setGoPending(false), GO_TIMEOUT_MS);
+    }
+  });
+
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => onKeyDown(event);
+    document.addEventListener("keydown", listener, true);
+    return () => {
+      document.removeEventListener("keydown", listener, true);
+      window.clearTimeout(goTimer.current);
     };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [commandOpen, items, openCommand, router]);
+  }, []);
 
   return (
     <div className="relative flex h-dvh flex-col overflow-hidden">
@@ -79,14 +111,15 @@ export function TerminalShell({ children }: { children: ReactNode }) {
       <TopBar />
       <TickerStrip />
       <div className="flex min-h-0 flex-1">
-        <NavRail items={items} />
-        <main id="main" tabIndex={-1} className="relative min-w-0 flex-1 overflow-y-auto pb-14 focus:outline-none md:pb-0">
+        <NavRail groups={groups} />
+        <main id="main" tabIndex={-1} className="relative min-w-0 flex-1 overflow-y-auto pb-[calc(3.5rem+env(safe-area-inset-bottom))] focus:outline-none md:pb-0">
           {children}
         </main>
       </div>
-      <StatusBar />
-      <MobileTabBar items={items} />
+      <StatusBar goPending={goPending} />
+      <MobileTabBar ctx={ctx} />
       <CommandPalette />
+      <ShortcutsSheet />
       <ChatDrawer />
       <NewsDrawer />
       <AlertEngine />
