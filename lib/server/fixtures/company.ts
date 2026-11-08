@@ -86,6 +86,8 @@ export function companyFigures(security: Security): CompanyFigures {
     insidersPercentHeld: between(0.001, 0.12, s, "insiders"),
     institutionsPercentHeld: between(0.45, 0.85, s, "institutions"),
   };
+  // Any well-formed symbol is valid, so the memo is bounded (the figures are cheap to recompute).
+  if (figuresCache.size >= 5000) figuresCache.clear();
   figuresCache.set(s, figures);
   return figures;
 }
