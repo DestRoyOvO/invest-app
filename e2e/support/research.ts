@@ -174,6 +174,55 @@ export function timeText(event: CalendarEvent): string {
   return etTime(Date.parse(event.at));
 }
 
+/** Where a US report's session slot falls among a day's times: before the open, during the session, after the close. */
+const SLOT_MINUTE: Readonly<Record<"pre" | "intraday" | "post", number>> = { pre: 8 * 60, intraday: 12 * 60, post: 16 * 60 + 1 };
+
+/** Minutes after midnight in New York. */
+function newYorkMinute(ms: number): number {
+  const [hour, minute] = NY_CLOCK.format(new Date(ms)).split(":").map(Number);
+  return (hour % 24) * 60 + minute;
+}
+
+/**
+ * When an event falls within its day, in minutes after midnight, for ordering: an ex-dividend date first (it applies
+ * from the open), a US report at its session slot (before the open as 08:00, during the session as 12:00, after the
+ * close as 16:01; its time only marks the session), a macro release or a report outside the US at its New York time,
+ * and a report without a time (an estimated or date-only one) after everything else.
+ */
+export function minuteInDay(event: CalendarEvent): number {
+  if (event.kind === "dividend") return -1;
+  if (event.kind === "earnings" && event.timing) return SLOT_MINUTE[event.timing];
+  const ms = Date.parse(event.at);
+  const timed = ms % DAY_MS !== 0 && (event.kind === "macro" || (!event.estimated && (event.symbol ?? "").includes(".")));
+  return timed ? newYorkMinute(ms) : 24 * 60;
+}
+
+/** Holdings first, then watchlist names, then the rest (Top 78 names and macro releases). */
+function listRank(event: CalendarEvent, lists: CalendarLists): number {
+  if (event.symbol !== null && Object.hasOwn(lists.holdings, event.symbol)) return 0;
+  return event.symbol !== null && lists.watchlist.includes(event.symbol) ? 1 : 2;
+}
+
+/**
+ * The order the agenda and the week ahead list events in: by day, then by the time within the day (minuteInDay), then
+ * holdings before watchlist names before the rest, then by symbol (a release by its key) and id.
+ */
+export function eventOrder(lists: CalendarLists): (a: CalendarEvent, b: CalendarEvent) => number {
+  return (a, b) =>
+    eventDay(a).localeCompare(eventDay(b)) ||
+    minuteInDay(a) - minuteInDay(b) ||
+    listRank(a, lists) - listRank(b, lists) ||
+    (a.symbol ?? a.macro ?? "").localeCompare(b.symbol ?? b.macro ?? "") ||
+    a.id.localeCompare(b.id);
+}
+
+/** Problems with the order of rows that show these events: each row by the event it shows, against eventOrder. */
+function orderProblems(where: string, rows: readonly ListedRow[], events: readonly CalendarEvent[], lists: CalendarLists, shows: (row: ListedRow, event: CalendarEvent) => boolean): string[] {
+  const expected = [...events].sort(eventOrder(lists)).map((event) => event.id);
+  const shown = rows.map((row) => events.find((event) => shows(row, event))?.id ?? `"${row.text}"`);
+  return shown.join(" | ") === expected.join(" | ") ? [] : [`${where}: rows in the order ${shown.join(", ")}, expected ${expected.join(", ")}`];
+}
+
 const MONTH = new Intl.DateTimeFormat("en-US", { month: "long", timeZone: "UTC" });
 
 /** A macro release's name: "Consumer prices". */
@@ -330,8 +379,9 @@ export interface AgendaContext {
 
 /**
  * What differs between the agenda and these events: one heading per day in date order, named by its date and its
- * distance from today, and under each exactly the events of that day, each starting with its time and stating its kind
- * (with the macro code of a release) and the money a position has at stake. Empty when they agree.
+ * distance from today, and under each exactly the events of that day in the agenda's order (eventOrder), each starting
+ * with its time and stating its kind (with the macro code of a release) and the money a position has at stake. Empty
+ * when they agree.
  */
 export function agendaProblems(agenda: readonly AgendaDay[], events: readonly CalendarEvent[], context: AgendaContext): string[] {
   const days = [...new Set(events.map(eventDay))].sort();
@@ -343,6 +393,7 @@ export function agendaProblems(agenda: readonly AgendaDay[], events: readonly Ca
     const rows = agenda[index].rows;
     const dayEvents = events.filter((event) => eventDay(event) === day);
     if (rows.length !== dayEvents.length) problems.push(`${day}: ${rows.length} rows, expected ${dayEvents.length} (${dayEvents.map((event) => event.id).join(", ")})`);
+    problems.push(...orderProblems(day, rows, dayEvents, context.lists, (row, event) => rowsOf([row], event).length === 1));
     for (const event of dayEvents) {
       const matches = rowsOf(rows, event);
       if (matches.length !== 1) {
@@ -365,16 +416,18 @@ export async function expectAgenda(agenda: Locator, events: readonly CalendarEve
 }
 
 /**
- * What differs between the week ahead's rows and these events: one row per event, starting with its day (Today,
- * Tomorrow or the weekday) and its time, with the money a position has at stake. Empty when they agree.
+ * What differs between the week ahead's rows and these events: one row per event, in the agenda's order (eventOrder),
+ * starting with its day (Today, Tomorrow or the weekday) and its time, with the money a position has at stake. Empty
+ * when they agree.
  */
 export function weekAheadProblems(rows: readonly ListedRow[], events: readonly CalendarEvent[], context: AgendaContext): string[] {
   const problems = rows.length === events.length ? [] : [`${rows.length} rows, expected ${events.length} (${events.map((event) => event.id).join(", ")})`];
+  // The week ahead names the event without its kind; the time column tells a report from an ex-date.
+  const shows = (row: ListedRow, event: CalendarEvent) =>
+    row.text.includes(timeText(event)) && (event.symbol ? row.symbols.includes(event.symbol) : row.symbols.length === 0 && row.text.includes(CAL.macro[event.macro ?? "cpi"]));
+  problems.push(...orderProblems("the week ahead", rows, events, context.lists, shows));
   for (const event of events) {
-    // The week ahead names the event without its kind; the time column tells a report from an ex-date.
-    const matches = rows.filter(
-      (row) => row.text.includes(timeText(event)) && (event.symbol ? row.symbols.includes(event.symbol) : row.symbols.length === 0 && row.text.includes(CAL.macro[event.macro ?? "cpi"])),
-    );
+    const matches = rows.filter((row) => shows(row, event));
     if (matches.length !== 1) {
       problems.push(`${event.id}: ${matches.length} rows`);
       continue;
