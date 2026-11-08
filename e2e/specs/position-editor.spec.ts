@@ -11,10 +11,16 @@ function editor(page: Page, title: string) {
   return page.getByRole("dialog", { name: title, exact: true });
 }
 
-/** The value of a term in the editor's preview ("Shares after", "Realized P&L"): the definition that follows it. */
+/**
+ * The value of a term in the editor's preview ("Shares after", "Realized P&L"): the definition in the term's group
+ * (the preview is a description list whose terms and definitions come in pairs, each pair in a div of its own).
+ */
 function preview(page: Page, title: string, term: string) {
   const name = new RegExp(`^${escapeRegExp(term)}$`);
-  return editor(page, title).getByRole("term").filter({ hasText: name }).locator("xpath=following-sibling::*[1]");
+  return editor(page, title)
+    .locator("dl > div")
+    .filter({ has: page.getByRole("term").filter({ hasText: name }) })
+    .getByRole("definition");
 }
 
 /** A toast (they stack, newest last) by its message. */
@@ -113,7 +119,7 @@ test.describe("position editor", () => {
     expect((await storedHoldings(page)).AAPL).toEqual({ shares: left, cost: held.cost });
   });
 
-  test("refuses zero, negative, non-numeric and oversold input without saving; Escape returns focus to the opener", async ({ page, app }) => {
+  test("refuses zero, negative, non-numeric and oversold shares, costs and prices without saving; Escape returns focus to the opener", async ({ page, app }) => {
     test.skip(app.isPhone, "Keyboard focus and Escape are desktop concerns; the phone test saves through the sheet.");
     const held = { shares: 10, cost: 150 };
     await app.seedStorage({ holdings: { AAPL: held } });
@@ -142,13 +148,33 @@ test.describe("position editor", () => {
     await expect(costField).toBeFocused();
     expect((await storedHoldings(page)).AAPL).toEqual(held);
 
-    // Selling more shares than are held.
+    // Buying shares at a price of zero.
+    await dialog.getByRole("radio", { name: "Add shares" }).click();
+    const paid = dialog.getByLabel("Price paid per share");
+    await dialog.getByLabel("Shares to add").fill("2");
+    await paid.fill("0");
+    await save.click();
+    await expect(dialog.getByRole("alert")).toHaveText("Enter a price above 0.");
+    await expect(paid).toHaveAttribute("aria-invalid", "true");
+    await expect(paid).toBeFocused();
+    expect((await storedHoldings(page)).AAPL).toEqual(held);
+
+    // Selling more shares than are held, then selling at a price that is not a number.
     await dialog.getByRole("radio", { name: "Reduce" }).click();
     const sell = dialog.getByLabel("Shares to sell");
+    const salePrice = dialog.getByLabel("Sale price per share");
     await sell.fill(String(held.shares + 1));
     await save.click();
     await expect(dialog.getByRole("alert")).toHaveText(`You hold ${held.shares} shares. Sell ${held.shares} or fewer.`);
     await expect(sell).toHaveAttribute("aria-invalid", "true");
+    expect((await storedHoldings(page)).AAPL).toEqual(held);
+    await sell.fill("2");
+    await salePrice.fill("abc");
+    await save.click();
+    await expect(dialog.getByRole("alert")).toHaveText("Enter a price above 0.");
+    await expect(salePrice).toHaveAttribute("aria-invalid", "true");
+    await expect(sell).not.toHaveAttribute("aria-invalid", "true");
+    await expect(salePrice).toBeFocused();
     expect((await storedHoldings(page)).AAPL).toEqual(held);
 
     await page.keyboard.press("Escape");
