@@ -13,7 +13,7 @@ import { useToast } from "@/components/ui/Toast";
 import { requestNotificationPermission } from "@/hooks/useAlerts";
 import { useHydrated } from "@/hooks/useLocalValue";
 import { useNote, useNow } from "@/hooks/useNotes";
-import { addAlertRule, alertsStore, removeAlertRule, type AlertKind } from "@/lib/alerts";
+import { addAlertRule, alertsStore, MAX_ALERT_RULES, removeAlertRule, type AlertKind } from "@/lib/alerts";
 import { cn } from "@/lib/cn";
 import { formatInteger, formatPrice, tpl } from "@/lib/format";
 import { MAX_THESIS_CHARS, removeNote, restoreNote, reviewDaysLeft, updateNote, type SymbolNote } from "@/lib/notes";
@@ -50,16 +50,20 @@ function NoteEditor({ symbol, price, note, focusThesis, onDeleted }: NoteEditorP
 
   const createLevelAlert = (kind: AlertKind, level: number) => {
     const rules = alertsStore.getSnapshot();
-    const exists = rules.some((rule) => rule.symbol === symbol && rule.kind === kind && rule.value === level && !rule.paused && !rule.done);
-    const result = exists ? null : addAlertRule({ symbol, kind, value: level, repeat: "once", note: kind === "below" ? t.notes.stop : t.notes.target });
-    if (result && result.status !== "added") return;
+    const words = { symbol, side: kind === "below" ? t.notes.alertSideBelow : t.notes.alertSideAbove, level: formatPrice(level, lang) };
+    if (rules.some((rule) => rule.symbol === symbol && rule.kind === kind && rule.value === level && !rule.paused && !rule.done)) {
+      toast.show({ message: tpl(t.notes.alertExists, words) });
+      return;
+    }
+    const result = addAlertRule({ symbol, kind, value: level, repeat: "once", note: kind === "below" ? t.notes.stop : t.notes.target });
+    if (result.status === "full") {
+      toast.show({ message: tpl(t.alerts.editor.errors.full, { n: MAX_ALERT_RULES }) });
+      return;
+    }
+    if (result.status !== "added") return;
     // Ask once, from this click, when the first rule exists; never on page load.
-    if (result && rules.length === 0) void requestNotificationPermission();
-    const side = kind === "below" ? t.notes.alertSideBelow : t.notes.alertSideAbove;
-    toast.show({
-      message: tpl(t.notes.alertCreated, { symbol, side, level: formatPrice(level, lang) }),
-      action: result ? { label: t.notes.undo, onAction: () => removeAlertRule(result.rule.id) } : undefined,
-    });
+    if (rules.length === 0) void requestNotificationPermission();
+    toast.show({ message: tpl(t.notes.alertCreated, words), action: { label: t.notes.undo, onAction: () => removeAlertRule(result.rule.id) } });
   };
 
   const deleteNote = () => {
