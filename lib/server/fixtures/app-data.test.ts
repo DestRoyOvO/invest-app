@@ -2,6 +2,18 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+// Fixture mode promises no network access: a getter that fetches or opens an https request fails this file. (The
+// article reader is the app's only node:https user; every other download goes through fetch.)
+const networkCalls = vi.hoisted(() => [] as string[]);
+vi.mock("node:https", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:https")>();
+  const blocked = (...args: unknown[]) => {
+    networkCalls.push(`https ${String(args[0])}`);
+    throw new Error("node:https request in fixture mode");
+  };
+  return { ...actual, default: { ...actual, request: blocked, get: blocked }, request: blocked, get: blocked };
+});
+
 import { DEFAULT_WATCHLIST, MARKET_BOARD, SECTORS, UNIVERSE_STOCKS } from "@/lib/universe";
 
 import { getFundData } from "../ai-context";
@@ -16,6 +28,8 @@ import { getScreener } from "../screener";
 import { getSignalReport } from "../signal-service";
 import { getDailyBars, getQuotes, getSparkline, getSummary, searchNews, searchSymbols } from "../yahoo";
 
+import { treasuryFetch } from "./treasury";
+
 // The fixture data through the app's own getters and mappers (mapQuote, mapSummary, normalizeBars, the news scoring,
 // the screens, the calendar, the signal engine): every key field the pages show must come out filled. The client is
 // the real shared `yf`, switched to fixtures by MARKET_DATA_SOURCE, as in the end-to-end suite.
@@ -25,12 +39,17 @@ const SATURDAY = Date.parse("2026-11-07T15:00:00Z");
 beforeAll(() => {
   vi.stubEnv("MARKET_DATA_SOURCE", "fixtures");
   vi.useFakeTimers({ now: SATURDAY, toFake: ["Date"] });
+  vi.stubGlobal("fetch", async (input: unknown) => {
+    networkCalls.push(`fetch ${input instanceof Request ? input.url : String(input)}`);
+    throw new Error("fetch in fixture mode");
+  });
   clearCache();
 });
 
 afterAll(() => {
   vi.useRealTimers();
   vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
 });
 
 describe("quotes", () => {
@@ -157,5 +176,19 @@ describe("pages", () => {
     const [story] = await searchNews("Federal Reserve", 1);
     expect(await fetchArticleText(story.link)).toContain("synthetic fixture text");
     expect(await fetchArticleText("https://www.reuters.com/markets/some-story")).toBeNull();
+  });
+
+  it("serve the Treasury curve from the fixture CSV through the fetch rates.ts is wired to", async () => {
+    const url = "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/2026/all?type=daily_treasury_yield_curve&field_tdr_date_value=2026&page&_format=csv";
+    const response = await treasuryFetch(url, { headers: { accept: "text/csv" } });
+    expect(response.status).toBe(200);
+    expect((await response.text()).split("\n")[1]).toMatch(/^11\/06\/2026,/);
+  });
+});
+
+describe("network access", () => {
+  // Runs last: every getter above has had its chance to reach the network.
+  it("never happened in fixture mode", () => {
+    expect(networkCalls).toEqual([]);
   });
 });

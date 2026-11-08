@@ -1,11 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
 import { dailyRows } from "./prices";
 import { securityOf } from "./securities";
 import { parseDayKey } from "./sessions";
-import { fixtureTreasuryFetch, treasuryCsv, treasuryYearOf } from "./treasury";
+import { fixtureTreasuryFetch, treasuryCsv, treasuryFetch, treasuryYearOf } from "./treasury";
 
 const SATURDAY = Date.parse("2026-11-07T15:00:00Z");
 const URL_2026 =
@@ -43,6 +43,24 @@ describe("treasuryCsv", () => {
 
   it("is the same on every call", () => {
     expect(treasuryCsv(2025, SATURDAY)).toBe(treasuryCsv(2025, SATURDAY + 86_400_000 * 30));
+  });
+});
+
+describe("treasuryFetch", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+  });
+
+  it("answers from the fixture CSV in fixture mode and from the network otherwise", async () => {
+    const network = vi.fn(async () => new Response("live", { status: 200 }));
+    vi.stubGlobal("fetch", network);
+    vi.stubEnv("MARKET_DATA_SOURCE", "fixtures");
+    expect((await (await treasuryFetch(URL_2026, {})).text()).startsWith("Date,")).toBe(true);
+    expect(network).not.toHaveBeenCalled();
+    vi.stubEnv("MARKET_DATA_SOURCE", "yahoo");
+    expect(await (await treasuryFetch(URL_2026, {})).text()).toBe("live");
+    expect(network).toHaveBeenCalledWith(URL_2026, {});
   });
 });
 

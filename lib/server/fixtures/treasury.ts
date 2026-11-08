@@ -1,5 +1,7 @@
 import "server-only";
 
+import { readEnv } from "../env";
+
 import { yieldOn } from "./curve";
 import { dayNumber, latestCompletedSession, parseDayKey, PROFILES, tradingDaysBetween } from "./sessions";
 
@@ -7,7 +9,7 @@ import { dayNumber, latestCompletedSession, parseDayKey, PROFILES, tradingDaysBe
 // the same model behind ^IRX, ^FVX, ^TNX and ^TYX) in the columns Treasury publishes, newest row first, up to the
 // latest completed NYSE session; a year that has not started yet is an empty file, as Treasury serves it.
 // fixtureTreasuryFetch is a fetch-compatible function for lib/server/rates.ts (its fetchImpl), so the Rates panel can
-// run without network access.
+// run without network access, and treasuryFetch picks it or the global fetch by MARKET_DATA_SOURCE.
 
 interface Tenor {
   header: string;
@@ -68,4 +70,13 @@ export async function fixtureTreasuryFetch(input: string | URL | Request, init?:
   const year = /daily_treasury_yield_curve/.test(url) ? treasuryYearOf(url) : null;
   if (year === null) return new Response("Not found", { status: 404, headers: { "content-type": "text/plain" } });
   return new Response(treasuryCsv(year), { status: 200, headers: { "content-type": "text/csv; charset=utf-8" } });
+}
+
+/**
+ * The fetch the Treasury download should use by default (lib/server/rates.ts of the overview branch:
+ * `options.fetchImpl ?? treasuryFetch`): fixtureTreasuryFetch while MARKET_DATA_SOURCE=fixtures, the global fetch
+ * otherwise, decided on every call like the shared Yahoo client.
+ */
+export function treasuryFetch(input: string, init: RequestInit): Promise<Response> {
+  return readEnv().marketDataSource === "fixtures" ? fixtureTreasuryFetch(input, init) : fetch(input, init);
 }
