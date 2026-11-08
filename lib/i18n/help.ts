@@ -42,7 +42,7 @@ export const helpMessages = defineMessages(
       functions: "Functions",
       count: "{n} functions",
       countFiltered: "{n} of {total}",
-      columns: { code: "Code", function: "Function", usage: "Type", keys: "Keys" },
+      columns: { code: "Code", function: "Function", usage: "Type", route: "Route", keys: "Keys" },
       grammar: {
         title: "Command grammar",
         rows: {
@@ -131,7 +131,7 @@ export const helpMessages = defineMessages(
       functions: "功能",
       count: "{n} 个功能",
       countFiltered: "{n} / {total}",
-      columns: { code: "代码", function: "功能", usage: "输入", keys: "按键" },
+      columns: { code: "代码", function: "功能", usage: "输入", route: "路径", keys: "按键" },
       grammar: {
         title: "命令语法",
         rows: {

@@ -26,10 +26,15 @@ function usage(fn: FunctionDef, symbol: string): string {
   return fn.scope === "security" ? `${symbol} ${fn.code}` : fn.code;
 }
 
-function matches(fn: FunctionDef, t: Messages, query: string): boolean {
+/** Where a function goes: symbol functions open the last viewed symbol, SECT the last sector. */
+function routeOf(fn: FunctionDef, symbol: string, sector: string | null): string {
+  return fn.scope === "security" ? fn.href(symbol) : fn.href(undefined, { lastSector: sector });
+}
+
+function matches(fn: FunctionDef, t: Messages, query: string, route: string): boolean {
   if (!query) return true;
   const { label, description } = t.help.functions[fn.labelKey];
-  return [fn.code, label, description, ...fn.aliases].some((text) => text.toLowerCase().includes(query));
+  return [fn.code, label, description, route, ...fn.aliases].some((text) => text.toLowerCase().includes(query));
 }
 
 /** /help: every function by group, the command grammar, keyboard shortcuts, data sources and the disclaimer. */
@@ -59,8 +64,22 @@ export function HelpView() {
         key: "usage",
         header: page.columns.usage,
         width: "8.5rem",
-        hideBelow: "md",
+        hideBelow: "lg",
         render: (fn) => <span className="mono text-xs text-fg-2">{usage(fn, lastSymbol)}</span>,
+      },
+      {
+        key: "route",
+        header: page.columns.route,
+        width: "13.5rem",
+        hideBelow: "md",
+        render: (fn) => {
+          const route = routeOf(fn, lastSymbol, lastSector);
+          return (
+            <span className="mono text-xs text-fg-2" title={route}>
+              {route}
+            </span>
+          );
+        },
       },
       {
         key: "keys",
@@ -81,12 +100,12 @@ export function HelpView() {
         },
       },
     ],
-    [page.columns, t.help.functions, lastSymbol],
+    [page.columns, t.help.functions, lastSymbol, lastSector],
   );
 
   // The Type column ("NVDA GP") only helps where symbol functions are listed; elsewhere it would repeat the code.
   const columnsFor = (rows: readonly FunctionDef[]) => (rows.some((fn) => fn.scope === "security") ? allColumns : allColumns.filter((column) => column.key !== "usage"));
-  const visible = FUNCTIONS.filter((fn) => matches(fn, t, q));
+  const visible = FUNCTIONS.filter((fn) => matches(fn, t, q, routeOf(fn, lastSymbol, lastSector)));
   const examples: Array<{ text: string; description: string }> = [
     { text: "PORT", description: page.grammar.rows.code },
     { text: `${lastSymbol} GP`, description: page.grammar.rows.tickerCode },
@@ -111,7 +130,12 @@ export function HelpView() {
             <Input
               type="search"
               className="[&::-webkit-search-cancel-button]:appearance-none"
-              value={query} onChange={(event) => setQuery(event.target.value)} placeholder={page.searchPlaceholder} autoComplete="off" spellCheck={false} />
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={page.searchPlaceholder}
+              autoComplete="off"
+              spellCheck={false}
+            />
           </Field>
           {query ? <IconButton label={page.clear} icon={<X className="size-4" strokeWidth={1.75} />} onClick={() => setQuery("")} /> : null}
         </div>
@@ -135,7 +159,7 @@ export function HelpView() {
                   columns={columnsFor(rows)}
                   rowKey={(fn) => fn.labelKey}
                   caption={`${page.functions} · ${t.nav.groups[group]}`}
-                  rowHref={(fn) => (fn.scope === "security" ? fn.href(lastSymbol) : fn.href(undefined, { lastSector }))}
+                  rowHref={(fn) => routeOf(fn, lastSymbol, lastSector)}
                 />
               </Panel>
             );
