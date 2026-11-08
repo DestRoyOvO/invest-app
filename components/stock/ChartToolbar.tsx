@@ -59,12 +59,23 @@ export function RangePicker({ value, onChange }: { value: ChartRange; onChange: 
   );
 }
 
+interface StudiesMenuProps {
+  settings: ChartSettings;
+  onChange: (patch: Partial<ChartSettings>) => void;
+  disabled?: boolean;
+  /**
+   * Studies the symbol's data cannot draw, with the reason shown under the switch (volume for ^TNX or EURUSD=X). Their
+   * switch is off and disabled; the saved setting stays for the next symbol.
+   */
+  unavailable?: Partial<Record<ChartStudy, string>>;
+}
+
 /**
  * The studies menu: moving averages, Bollinger bands, the RSI pane, volume and the log scale, applied at once. A
  * disclosure: the switches follow the button in tab order, and the menu closes on Escape (focus returns to the
  * button), on a click outside, or when focus moves on past it.
  */
-export function StudiesMenu({ settings, onChange, disabled = false }: { settings: ChartSettings; onChange: (patch: Partial<ChartSettings>) => void; disabled?: boolean }) {
+export function StudiesMenu({ settings, onChange, disabled = false, unavailable }: StudiesMenuProps) {
   const { t } = usePrefs();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -115,15 +126,20 @@ export function StudiesMenu({ settings, onChange, disabled = false }: { settings
       </Button>
       {open ? (
         <div id={panelId} role="group" aria-label={t.chart.studiesTitle} className="absolute top-full right-0 z-40 mt-1 w-56 space-y-1 rounded-xs border border-line-2 bg-panel p-2 shadow-2xl">
-          {CHART_STUDIES.map((study: ChartStudy) => (
-            <Switch
-              key={study}
-              label={t.chart.study[study]}
-              checked={settings[study]}
-              onCheckedChange={(checked) => onChange({ [study]: checked })}
-              className="flex w-full rounded-xs px-1.5 py-1.5 hover:bg-hover max-sm:min-h-10 max-sm:items-center"
-            />
-          ))}
+          {CHART_STUDIES.map((study: ChartStudy) => {
+            const reason = unavailable?.[study];
+            return (
+              <Switch
+                key={study}
+                label={t.chart.study[study]}
+                description={reason}
+                checked={reason ? false : settings[study]}
+                disabled={Boolean(reason)}
+                onCheckedChange={(checked) => onChange({ [study]: checked })}
+                className="flex w-full rounded-xs px-1.5 py-1.5 enabled:hover:bg-hover max-sm:min-h-10 max-sm:items-center"
+              />
+            );
+          })}
         </div>
       ) : null}
     </div>
