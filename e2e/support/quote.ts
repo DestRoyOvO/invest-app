@@ -305,6 +305,14 @@ export function chartSummaryText(page: Page, symbol: string): Locator {
   return chartPanel(page).getByText(new RegExp(`^${escapeRegExp(symbol)} \\S+: low `));
 }
 
+/**
+ * The chart's drawing area: the box that holds the canvas and the text summary. The canvas is not read, but the box's
+ * height shows the panes below the prices (it grows to make room for the RSI pane).
+ */
+export function chartArea(page: Page, symbol: string): Locator {
+  return chartSummaryText(page, symbol).locator("..");
+}
+
 /** The data rows of a table: rows of cells, without DataTable's one full-width cell for loading or no rows. */
 export function dataRows(table: Locator): Locator {
   const page = table.page();

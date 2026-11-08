@@ -7,6 +7,7 @@ import { AT_DEFAULT_NOW } from "../support/env";
 import {
   api,
   CHART_RANGES,
+  chartArea,
   chartPanel,
   chartSeries,
   chartSummary,
@@ -219,6 +220,10 @@ test.describe("studies", () => {
     test.skip(app.isPhone, "Desktop keyboard shortcuts (L, [ and ]); the menu is the same on phones.");
     await app.goto("/stock/AAPL");
     const chart = chartPanel(page);
+    // The RSI pane is drawn on the canvas; outside it, the room the chart makes for the pane is what shows.
+    const area = chartArea(page, "AAPL");
+    const plainHeight = known(await area.boundingBox(), "chart area").height;
+    const areaHeight = async () => (await area.boundingBox())?.height;
     const menuButton = chart.getByRole("button", { name: "Studies" });
     await menuButton.click();
     await expect(menuButton).toHaveAttribute("aria-expanded", "true");
@@ -239,6 +244,7 @@ test.describe("studies", () => {
     await expect(legend("BB 20, 2")).toBeVisible();
     await expect(legend("MA 50")).toBeVisible();
     await expect(legend("MA 20")).toHaveCount(0);
+    await expect.poll(areaHeight).toBeGreaterThan(plainHeight);
     await expect
       .poll(() => storedChartSettings(page))
       .toMatchObject({ range: "1y", ma20: false, ma50: true, ma200: true, bollinger: true, rsi: true, volume: true, log: true });
@@ -256,6 +262,7 @@ test.describe("studies", () => {
     await expect(legend("MA 200")).toBeVisible();
     await expect(legend("BB 20, 2")).toBeVisible();
     await expect(legend("MA 20")).toHaveCount(0);
+    await expect.poll(areaHeight).toBeGreaterThan(plainHeight);
     await menuButton.click();
     const expected: Record<string, boolean> = { "MA 20": false, "MA 50": true, "MA 200": true, "Bollinger (20, 2)": true, "RSI (14)": true, Volume: true, "Log scale": false };
     for (const name of studies) await expect(menu.getByRole("switch", { name, exact: true })).toHaveAttribute("aria-checked", String(expected[name]));
