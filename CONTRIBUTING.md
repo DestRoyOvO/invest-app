@@ -6,7 +6,7 @@ Yahoo Finance through `yahoo-finance2`; AI notes come from DeepSeek.
 
 ## Setup
 
-Requirements: Node.js 22 (see `.nvmrc`; 20.9 or newer works) and npm.
+Requirements: Node.js 22 (see `.nvmrc`; yahoo-finance2 4 needs 22 or newer, and Vitest 5 needs 22.12 or newer) and npm.
 
 ```bash
 git clone https://github.com/DestRoyOvO/invest-app.git
@@ -42,11 +42,14 @@ npx tsx --conditions=react-server scripts/smoke-yahoo.ts
 
 The signal panel publishes its own track record, so the committed results must match the code.
 
-- Change the signal model or its inputs: re-run `npm run evaluate`. It downloads about three years of daily bars for the
-  78 stocks of the heatmap universe (one Yahoo request per stock) and rewrites `docs/evaluation.md` and
-  `lib/signal-evaluation.json`. Commit both with the change.
-- Change the factor research (`scripts/research-factors.ts`, see `docs/roadmap-v0.3.md`): run it with `npx tsx` and
-  commit `lib/factor-research.json` and `docs/factor-research.md`.
+- Change the signal model or its inputs: re-run `npm run evaluate`. It downloads daily bars from 2013 for the 78 stocks
+  of the heatmap universe plus SPY and RSP (one Yahoo request per symbol) into a cache outside the repository, and
+  rewrites `docs/evaluation.md` and `lib/signal-evaluation.json` from the windows pinned in
+  `scripts/evaluation.config.json`. Commit both with the change.
+- Change the factor research (`scripts/research-factors.ts`, `lib/research.ts`): run `npm run research -- --offline`
+  after `npm run evaluate`, so both use the same bars, and commit `lib/factor-research.json`,
+  `lib/risk-calibration.json` and `docs/factor-research.md`. Unit tests fail when the committed files no longer match the
+  model or come from different downloads.
 
 Results are research, not trading advice, and the docs say so.
 

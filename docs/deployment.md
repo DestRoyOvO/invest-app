@@ -124,9 +124,9 @@ Things that behave differently from a single process:
   on Vercel. Keep your DeepSeek prepaid balance small: it is the real cap on spending.
 - **Cold starts.** A new instance has empty caches and repeats Yahoo's cookie and crumb handshake before its first
   quote, so the first page after a quiet period is slower.
-- **Long AI answers need Fluid compute.** The AI routes allow up to 130 seconds (`maxDuration`). That needs Fluid
-  compute, the default for new projects; without it the Hobby plan stops functions after 60 seconds and long notes are
-  cut off.
+- **Long AI answers need Fluid compute.** The AI routes allow up to 250 seconds (`maxDuration`), enough for a
+  reasoning model to finish. That needs Fluid compute, the default for new projects; without it the Hobby plan stops
+  functions after 60 seconds and long notes are cut off.
 - **Cloud IP ranges.** Yahoo throttles some cloud networks. Check a preview deployment before relying on it.
 
 Private mode works on Vercel too: `proxy.ts` runs in front of every page and API route.
@@ -202,7 +202,7 @@ When a server process starts (`npm start`, the Docker image, a Vercel instance, 
 validates the settings and writes one line that describes the configuration without any secret:
 
 ```json
-{"ts":"2026-11-07T20:27:05.755Z","level":"info","event":"startup","version":"0.2.0","nodeEnv":"production","commit":null,"authMode":"password","signIn":"ready","aiConfigured":true,"model":"deepseek-chat","aiEndpoint":"default","aiDailyLimit":200,"proxyTrust":"x-forwarded-for","siteAccess":"private","siteUrl":"https://invest.example.com","dataSource":"yahoo","logLevel":"info"}
+{"ts":"2026-11-07T20:27:05.755Z","level":"info","event":"startup","version":"0.3.0","nodeEnv":"production","commit":null,"authMode":"password","signIn":"ready","aiConfigured":true,"model":"deepseek-chat","aiEndpoint":"default","aiDailyLimit":200,"proxyTrust":"x-forwarded-for","siteAccess":"private","siteUrl":"https://invest.example.com","dataSource":"yahoo","logLevel":"info"}
 ```
 
 Each problem gets its own `config.issue` line. A production server **refuses to start** (it logs why and exits with
@@ -227,7 +227,7 @@ subdomain cannot plant or overwrite it.
 `GET /api/health` is the liveness check. It answers `200` while the server runs and never calls Yahoo:
 
 ```json
-{"ok":true,"time":"2026-11-07T20:23:37.614Z","aiConfigured":false,"version":"0.2.0","commit":"0123456789abcdef0123456789abcdef01234567","uptimeSeconds":7,"dataSource":"yahoo"}
+{"ok":true,"time":"2026-11-07T20:23:37.614Z","aiConfigured":false,"version":"0.3.0","commit":"0123456789abcdef0123456789abcdef01234567","uptimeSeconds":7,"dataSource":"yahoo"}
 ```
 
 `GET /api/health?ready=1` is the readiness check. It adds statistics about the app's own recent Yahoo calls:
