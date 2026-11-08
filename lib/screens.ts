@@ -10,10 +10,12 @@
 // sizes, so a shared link reads like the form, e.g. /screener?yield=3..&pe=..15.
 
 import { sortRows, type SortDirection, type SortState } from "@/components/ui/table-sort";
-import type { ScreenerUniverse, SectorKey } from "@/types/api";
+import type { Lang, ScreenerUniverse, SectorKey } from "@/types/api";
 import type { ScreenRow } from "@/types/screener";
 
 import { createLocalStore } from "./local-store";
+import { displayName } from "./names-zh";
+import { htmlLang } from "./prefs";
 import { BROAD_ETFS, SECTOR_KEYS, SECTORS, UNIVERSE_STOCKS } from "./universe";
 
 export type { SortDirection, SortState } from "@/components/ui/table-sort";
@@ -448,13 +450,23 @@ export function sectorCounts(rows: readonly ScreenRow[]): Partial<Record<SectorK
 // ---------------------------------------------------------------------------
 
 /**
- * Rows in the screen's order with DataTable's rules (components/ui/table-sort.ts): missing values last in both
- * directions, ties in snapshot order. The table re-sorts by the same values, so the export matches the screen.
+ * What a column sorts by, on screen and in the export: the name as the table shows it (the Chinese name in Chinese,
+ * lib/names-zh.ts), every other column by its raw value.
  */
-export function sortScreenRows(rows: readonly ScreenRow[], sort: SortState | null): ScreenRow[] {
+export function screenSortValue(key: MetricKey, row: ScreenRow, lang: Lang): number | string | null {
+  return key === "name" ? displayName(row.symbol, row.name, lang) : metricValue(key, row);
+}
+
+/**
+ * Rows in the screen's order with DataTable's rules (components/ui/table-sort.ts): missing values last in both
+ * directions, ties in snapshot order, text collated in the app language (pinyin order for Chinese names). The table
+ * re-sorts by the same values (screenSortValue) in the same collation (DataTable passes htmlLang), so the rows on
+ * screen and in the export come in one order.
+ */
+export function sortScreenRows(rows: readonly ScreenRow[], sort: SortState | null, lang: Lang): ScreenRow[] {
   if (!sort || !isMetricKey(sort.key)) return [...rows];
   const key = sort.key;
-  return sortRows(rows, (row) => metricValue(key, row), sort.direction);
+  return sortRows(rows, (row) => screenSortValue(key, row, lang), sort.direction, undefined, htmlLang(lang));
 }
 
 /** First direction when a column head is clicked: highest first for numbers, A to Z for text, soonest first for dates. */
@@ -745,8 +757,16 @@ function round(value: number, digits: number): number {
   return Math.round(value * factor) / factor;
 }
 
-function csvValue(key: MetricKey, row: ScreenRow, sectorLabel: (key: SectorKey) => string): string | number | null {
-  const value = metricValue(key, row);
+export interface CsvOptions {
+  /** The interface language, for the Name column (default English). */
+  lang?: Lang;
+  /** The Sector column's text for a sector key (default the key); the screener passes the English label. */
+  sectorLabel?: (key: SectorKey) => string;
+}
+
+function csvValue(key: MetricKey, row: ScreenRow, lang: Lang, sectorLabel: (key: SectorKey) => string): string | number | null {
+  // The name as the table shows it; every other column from the raw value.
+  const value = key === "name" ? displayName(row.symbol, row.name, lang) : metricValue(key, row);
   if (value === null) return null;
   const unit = METRICS[key].unit;
   if (typeof value === "string") {
@@ -765,12 +785,15 @@ function csvValue(key: MetricKey, row: ScreenRow, sectorLabel: (key: SectorKey) 
 
 /**
  * The rows as CSV with every field of the universe (not only the visible column set), in the order given, with CRLF
- * line ends. Percent columns are in percent units (3.12 = 3.12%), sizes in dollars, dates as New York YYYY-MM-DD.
+ * line ends: pass the rows the table shows (sortScreenRows), and the file lists them in the table's order. The Name
+ * column shows each name as the table does in `lang`: the Chinese name in Chinese where one is known
+ * (lib/names-zh.ts), the English name otherwise. The other columns read the same in every language: percent columns
+ * in percent units (3.12 = 3.12%), sizes in dollars, dates as New York YYYY-MM-DD.
  */
-export function toCsv(rows: readonly ScreenRow[], universe: ScreenerUniverse, sectorLabel: (key: SectorKey) => string = (key) => key): string {
+export function toCsv(rows: readonly ScreenRow[], universe: ScreenerUniverse, { lang = "en", sectorLabel = (key) => key }: CsvOptions = {}): string {
   const columns = CSV_COLUMNS[universe];
   const lines = [columns.map((key) => csvField(CSV_HEADERS[key])).join(",")];
-  for (const row of rows) lines.push(columns.map((key) => csvField(csvValue(key, row, sectorLabel))).join(","));
+  for (const row of rows) lines.push(columns.map((key) => csvField(csvValue(key, row, lang, sectorLabel))).join(","));
   return `${lines.join("\r\n")}\r\n`;
 }
 

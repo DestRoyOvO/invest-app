@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { SectorKey } from "@/types/api";
 import type { ScreenRow } from "@/types/screener";
 
+import { parseCsv } from "./csv";
 import {
   activeFilterChips,
   activePreset,
@@ -42,6 +44,7 @@ import {
   restoreSavedScreen,
   sanitizeSavedScreens,
   screenFromParams,
+  screenSortValue,
   screensStore,
   screenToQuery,
   searchParamsFrom,
@@ -274,13 +277,45 @@ describe("sorting", () => {
   const rows = [row("A", { trailingPE: 30 }), row("B", { trailingPE: null }), row("C", { trailingPE: 10 }), row("D", { trailingPE: 30 })];
 
   it("sorts by a metric with missing values last and ties in snapshot order", () => {
-    expect(symbols(sortScreenRows(rows, { key: "pe", direction: "desc" }))).toEqual(["A", "D", "C", "B"]);
-    expect(symbols(sortScreenRows(rows, { key: "pe", direction: "asc" }))).toEqual(["C", "A", "D", "B"]);
+    for (const lang of ["en", "zh"] as const) {
+      expect(symbols(sortScreenRows(rows, { key: "pe", direction: "desc" }, lang))).toEqual(["A", "D", "C", "B"]);
+      expect(symbols(sortScreenRows(rows, { key: "pe", direction: "asc" }, lang))).toEqual(["C", "A", "D", "B"]);
+    }
   });
 
   it("keeps the snapshot order without a sort or for an unknown key", () => {
-    expect(symbols(sortScreenRows(rows, null))).toEqual(["A", "B", "C", "D"]);
-    expect(symbols(sortScreenRows(rows, { key: "bogus", direction: "asc" }))).toEqual(["A", "B", "C", "D"]);
+    expect(symbols(sortScreenRows(rows, null, "en"))).toEqual(["A", "B", "C", "D"]);
+    expect(symbols(sortScreenRows(rows, { key: "bogus", direction: "asc" }, "zh"))).toEqual(["A", "B", "C", "D"]);
+  });
+
+  describe("names, as the table shows them", () => {
+    const named = [
+      row("AAPL", { name: "Apple Inc." }),
+      row("KRMN", { name: "Karman Holdings Inc." }),
+      row("XOM", { name: "Exxon Mobil Corporation" }),
+      row("META", { name: "Meta Platforms, Inc." }),
+      row("MSFT", { name: "Microsoft Corporation" }),
+      row("NVDA", { name: "NVIDIA Corporation" }),
+    ];
+
+    it("sort by the English name in English", () => {
+      expect(symbols(sortScreenRows(named, { key: "name", direction: "asc" }, "en"))).toEqual(["AAPL", "XOM", "KRMN", "META", "MSFT", "NVDA"]);
+    });
+
+    it("sort by the Chinese name in pinyin order in Chinese, and by the English name without one", () => {
+      // 埃克森美孚 (ai), 苹果 (ping), 微软 (wei), 英伟达 (ying); the Chinese collation puts Latin names after them:
+      // Karman Holdings (no Chinese name), then Meta (the Latin name Chinese media use).
+      expect(symbols(sortScreenRows(named, { key: "name", direction: "asc" }, "zh"))).toEqual(["XOM", "AAPL", "MSFT", "NVDA", "KRMN", "META"]);
+      expect(symbols(sortScreenRows(named, { key: "name", direction: "desc" }, "zh"))).toEqual(["META", "KRMN", "NVDA", "MSFT", "AAPL", "XOM"]);
+    });
+
+    it("are the values the table sorts by", () => {
+      expect(screenSortValue("name", named[0], "zh")).toBe("苹果");
+      expect(screenSortValue("name", named[0], "en")).toBe("Apple Inc.");
+      expect(screenSortValue("name", named[1], "zh")).toBe("Karman Holdings Inc.");
+      expect(screenSortValue("pe", named[0], "zh")).toBe(20);
+      expect(screenSortValue("symbol", named[0], "zh")).toBe("AAPL");
+    });
   });
 
   it("starts numbers high first and text and dates in ascending order", () => {
@@ -444,7 +479,7 @@ describe("CSV export", () => {
         row("BRK-B", { name: '=HYPERLINK("x")', sector: "financials", trailingPE: null }),
       ],
       "stocks",
-      (key) => (key === "technology" ? "Information Technology" : "Financials"),
+      { sectorLabel: (key) => (key === "technology" ? "Information Technology" : "Financials") },
     );
     const lines = csv.split("\r\n");
     expect(lines).toHaveLength(4);
@@ -458,6 +493,28 @@ describe("CSV export", () => {
     expect(first).toContain(",2027-01-29,");
     expect(lines[2]).toContain(`"'=HYPERLINK(""x"")"`);
     expect(lines[2]).toContain("Financials,100,1,100000000000,,18,");
+  });
+
+  it("names the rows as the table does, in its language, and keeps every other column", () => {
+    const rows = [
+      row("AAPL", { name: "Apple Inc." }),
+      row("KRMN", { name: " Karman Holdings Inc. " }),
+      row("META", { name: "Meta Platforms, Inc." }),
+      // Its Chinese name is the ticker, which the table does not repeat as a name.
+      row("IBM", { name: "International Business Machines Corporation" }),
+      row("ZZZZ", { name: "" }),
+    ];
+    const sectorLabel = (key: SectorKey) => (key === "technology" ? "Information Technology" : key);
+    const zh = parseCsv(toCsv(rows, "stocks", { lang: "zh", sectorLabel }), ",").rows;
+    const en = parseCsv(toCsv(rows, "stocks", { lang: "en", sectorLabel }), ",").rows;
+    expect(zh.map((fields) => fields[1])).toEqual(["Name", "苹果", "Karman Holdings Inc.", "Meta", "International Business Machines Corporation", ""]);
+    expect(en.map((fields) => fields[1])).toEqual(["Name", "Apple Inc.", "Karman Holdings Inc.", "Meta Platforms, Inc.", "International Business Machines Corporation", ""]);
+    expect(toCsv(rows, "stocks", { sectorLabel })).toBe(toCsv(rows, "stocks", { lang: "en", sectorLabel }));
+    // Headers, symbols, sectors and every figure read the same in both languages, in the order given.
+    const withoutNames = (table: string[][]) => table.map((fields) => [fields[0], ...fields.slice(2)]);
+    expect(withoutNames(zh)).toEqual(withoutNames(en));
+    expect(zh.map((fields) => fields[0])).toEqual(["Symbol", "AAPL", "KRMN", "META", "IBM", "ZZZZ"]);
+    expect(zh[1][2]).toBe("Information Technology");
   });
 
   it("uses the fund columns for ETFs", () => {

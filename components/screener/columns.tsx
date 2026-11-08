@@ -12,7 +12,7 @@ import { cn } from "@/lib/cn";
 import { DASH, formatPrice, tpl } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/messages";
 import { displayName, fullName } from "@/lib/names-zh";
-import { firstSortDirection, metricUnit, metricValue, PHONE_COLUMNS, ratingKey, type ColumnSetKey, type MetricKey } from "@/lib/screens";
+import { firstSortDirection, metricUnit, metricValue, PHONE_COLUMNS, ratingKey, screenSortValue, type ColumnSetKey, type MetricKey } from "@/lib/screens";
 import { getSector } from "@/lib/universe";
 import type { Lang, ScreenerUniverse } from "@/types/api";
 import type { ScreenRow } from "@/types/screener";
@@ -136,8 +136,8 @@ function metricColumn(metric: MetricKey, context: ScreenColumnContext): DataTabl
     align: numeric ? "right" : "left",
     width: width === null ? undefined : metricUnit(metric) === "percentile" ? `min(${width}rem, var(--eqs-pct-max, ${width}rem))` : `${width}rem`,
     render: (row) => <MetricCell metric={metric} row={row} context={context} />,
-    // Names sort as they read: by the Chinese name in Chinese. The CSV keeps Yahoo's English names.
-    sortValue: (row) => (metric === "name" ? displayName(row.symbol, row.name, context.lang) : metricValue(metric, row)),
+    // Names sort as they read (by the Chinese name in Chinese), with the values sortScreenRows orders the CSV by.
+    sortValue: (row) => screenSortValue(metric, row, context.lang),
     firstSort: firstSortDirection(metric),
     hideBelow: phone ? undefined : "sm",
   };

@@ -135,9 +135,10 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
   const now = snapshot ? Date.parse(snapshot.asOf) : 0;
   const watchSet = useMemo(() => new Set(watchlist), [watchlist]);
   const holdingSet = useMemo(() => new Set(Object.keys(holdings)), [holdings]);
+  // In the table's order (names as they read, collated in the app language), so the CSV lists the rows as shown.
   const matches = useMemo(
-    () => sortScreenRows(filterRows(rows, screen.filters, { watchlist: watchSet, holdings: holdingSet, now }), screen.sort),
-    [rows, screen.filters, screen.sort, watchSet, holdingSet, now],
+    () => sortScreenRows(filterRows(rows, screen.filters, { watchlist: watchSet, holdings: holdingSet, now }), screen.sort, lang),
+    [rows, screen.filters, screen.sort, watchSet, holdingSet, now, lang],
   );
   const counts = useMemo(() => sectorCounts(rows), [rows]);
   const selectedVisible = useMemo(() => matches.filter((row) => selected.has(row.symbol)).map((row) => row.symbol), [matches, selected]);
@@ -221,8 +222,10 @@ export function ScreenerTab({ screen, onScreenChange }: ScreenerTabProps) {
 
   const exportCsv = () => {
     if (!snapshot) return;
-    const csv = toCsv(matches, screen.universe, (key) => getSector(key)?.label.en ?? key);
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    // The table's rows and names; sectors keep their English labels, as the headers do.
+    const csv = toCsv(matches, screen.universe, { lang, sectorLabel: (key) => getSector(key)?.label.en ?? key });
+    // The byte order mark makes Excel read UTF-8 (Chinese names) correctly, as the data page's CSV files do.
+    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = csvFileName(screen.universe, snapshot.asOf);
