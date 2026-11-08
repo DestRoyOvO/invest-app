@@ -472,14 +472,10 @@ export async function expectCells(table: Locator, row: Locator, expected: Readon
   return read;
 }
 
-/**
- * A KPI tile by its label: the label's own element and the figure, delta and sub-line beside it. StatTile has no role
- * or name to find it by, so this relies on its markup: the label is a direct child of the tile's root element (a
- * wrapper around the label would break every tile read). A labelled group on StatTile would remove the coupling.
- */
+/** A KPI tile by its label: StatTile is a group named by its label, holding the label, figure, delta and sub-line. */
 export function tile(page: Page, label: string): Locator {
-  // The tiles come first in the page, before any panel that may use the same words.
-  return page.locator("main").getByText(label, { exact: true }).first().locator("xpath=..");
+  // The tiles come first in the page, before any other group that may use the same words.
+  return page.locator("main").getByRole("group", { name: label, exact: true }).first();
 }
 
 /** What a KPI tile shows under its label, one line per part: the figure, then its delta and sub-line if any. */

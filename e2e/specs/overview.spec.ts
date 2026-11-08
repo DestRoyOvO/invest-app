@@ -116,7 +116,7 @@ test("My day values the positions at the page's quotes, beside the week ahead, t
   const losers = positions.filter((p) => p.dayPnl < 0).sort((a, b) => a.dayPnl - b.dayPnl);
   // The seed has more of both than the panel lists (four each at the default E2E_NOW), so the cut is checked too.
   if (AT_DEFAULT_NOW) expect(Math.min(gainers.length, losers.length), "positions that rose and fell, of the seed").toBeGreaterThan(3);
-  const moverRows = (title: string) => myDay.getByRole("heading", { name: title, exact: true }).locator("xpath=following-sibling::ul[1]").getByRole("listitem");
+  const moverRows = (title: string) => myDay.getByRole("list", { name: title, exact: true }).getByRole("listitem");
   const moverText = (p: Position) => new RegExp(`^${esc(p.symbol)}\\s*${esc(money(p.dayPnl))}\\s*${esc(signedPercent(p.quote.changePercent))}$`);
   await expect(moverRows(en.port.myDay.contributors)).toHaveText(gainers.slice(0, 3).map(moverText));
   await expect(moverRows(en.port.myDay.detractors)).toHaveText(losers.slice(0, 3).map(moverText));
