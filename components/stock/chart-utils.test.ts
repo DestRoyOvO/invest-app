@@ -9,9 +9,11 @@ import {
   compareSlots,
   dataRange,
   historyRangeFor,
+  offscreenLevels,
   percentChange,
   RANGES,
   sessionBaselines,
+  sharesSession,
   smaSeries,
   stepRange,
   tickDecimals,
@@ -157,5 +159,30 @@ describe("tickDigits", () => {
     expect(tickDigits([0.1234, 0.1236], 2)).toEqual([2, 2]);
     expect(tickDigits([600, 60, 6, 0.6, 0.06], 2)).toEqual([0, 0, 0, 1, 2]);
     expect(tickDigits([], 2)).toEqual([]);
+  });
+});
+
+describe("comparisons and levels", () => {
+  it("tells sessions that trade at the same time from ones that never overlap", () => {
+    const hk = [Date.parse("2026-11-06T01:30:00Z"), Date.parse("2026-11-06T07:55:00Z")];
+    const ny = [Date.parse("2026-11-06T14:30:00Z"), Date.parse("2026-11-06T20:55:00Z")];
+    const london = [Date.parse("2026-11-06T08:00:00Z"), Date.parse("2026-11-06T14:30:00Z")];
+    expect(sharesSession(hk, ny)).toBe(false);
+    expect(sharesSession(ny, london)).toBe(true);
+    expect(sharesSession(ny, [])).toBe(false);
+  });
+
+  it("names the levels beyond a quarter of the visible price span, with their side", () => {
+    const levels = [
+      { key: "cost" as const, price: 118.5 },
+      { key: "target" as const, price: 240 },
+      { key: "stop" as const, price: 165 },
+    ];
+    // Prices 164 to 243 (span 79): the cost is more than 19.75 below the low, the others are within reach.
+    expect(offscreenLevels(levels, 164.27, 243.37)).toEqual([{ key: "cost", price: 118.5, side: "below" }]);
+    expect(offscreenLevels([{ key: "target", price: 400 }, { key: "stop", price: null }, { key: "cost", price: 0 }], 100, 200)).toEqual([
+      { key: "target", price: 400, side: "above" },
+    ]);
+    expect(offscreenLevels(levels, null, 200)).toEqual([]);
   });
 });

@@ -22,7 +22,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Delta } from "@/components/ui/Delta";
 import { Panel } from "@/components/ui/Panel";
-import { ErrorState, Skeleton } from "@/components/ui/States";
+import { ErrorState, Skeleton, StaleBanner } from "@/components/ui/States";
 import { Switch } from "@/components/ui/Switch";
 import { useHistory } from "@/hooks/useApi";
 import { useEarnings } from "@/hooks/useEarningsApi";
@@ -45,8 +45,11 @@ import {
   compareSlots,
   dataRange,
   historyRangeFor,
+  LEVEL_REACH,
+  offscreenLevels,
   percentChange,
   sessionBaselines,
+  sharesSession,
   smaSeries,
   stepRange,
   tickDecimals,
@@ -86,7 +89,11 @@ interface CompareLine {
   points: Point[];
   loading: boolean;
   missing: boolean;
+  /** An intraday comparison whose session never overlaps the quote's (not drawn). */
+  noOverlap: boolean;
 }
+
+type LevelKey = "cost" | "target" | "stop";
 
 type EventKind = "dividend" | "split" | "earnings";
 
@@ -160,6 +167,10 @@ function useThemeKey(): string {
   return useSyncExternalStore(subscribeTheme, themeSnapshot, () => "server");
 }
 
+function subscribeNothing(): () => void {
+  return () => {};
+}
+
 const LOCALES: Record<Lang, string> = { en: "en-US", zh: "zh-CN" };
 
 function isTrading(quote: Quote | null): boolean {
@@ -217,7 +228,10 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
   const intradayRange = isIntradayRange(range);
 
   // --- Data -------------------------------------------------------------------------------------------------------
-  const mainQuery = useChartSeries(symbol, dataRange(range), live);
+  // The saved range is only known once the page has hydrated (the server renders the default settings), so the
+  // requests wait for that render instead of first loading the default range's bars.
+  const hydrated = useSyncExternalStore(subscribeNothing, () => true, () => false);
+  const mainQuery = useChartSeries(hydrated ? symbol : null, dataRange(range), live);
   const data = mainQuery.data ?? null;
   const intraday = data?.intraday ?? false;
   const timezone = data?.timezone ?? null;
@@ -226,8 +240,8 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
   const timeIndex = useMemo(() => new Map(times.map((time, i) => [time, i])), [times]);
 
   const historyRange = compareMode ? historyRangeFor(range) : null;
-  const historyQuery = useHistory(historyRange ? [symbol, ...compare] : [], historyRange ?? "2y");
-  const overlayRange: ChartRange | null = compareMode && !historyRange ? dataRange(range) : null;
+  const historyQuery = useHistory(hydrated && historyRange ? [symbol, ...compare] : [], historyRange ?? "2y");
+  const overlayRange: ChartRange | null = hydrated && compareMode && !historyRange ? dataRange(range) : null;
   const overlay0 = useChartSeries(overlayRange ? (compare[0] ?? null) : null, overlayRange ?? "1d", live);
   const overlay1 = useChartSeries(overlayRange ? (compare[1] ?? null) : null, overlayRange ?? "1d", live);
   const overlay2 = useChartSeries(overlayRange ? (compare[2] ?? null) : null, overlayRange ?? "1d", live);
@@ -254,8 +268,8 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
       };
       const mainPoints = toPoints(symbol);
       return [
-        { symbol, points: mainPoints.length > 0 ? mainPoints : own, loading: pending, missing: false },
-        ...compare.map((s) => ({ symbol: s, points: toPoints(s), loading: pending, missing: !pending && toPoints(s).length === 0 })),
+        { symbol, points: mainPoints.length > 0 ? mainPoints : own, loading: pending, missing: false, noOverlap: false },
+        ...compare.map((s) => ({ symbol: s, points: toPoints(s), loading: pending, missing: !pending && toPoints(s).length === 0, noOverlap: false })),
       ];
     }
     const overlays = [
@@ -263,12 +277,16 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
       { data: overlayData1, error: overlayError1 },
       { data: overlayData2, error: overlayError2 },
     ];
+    const ownStarts = intraday ? bars.map((bar) => bar.t) : [];
     return [
-      { symbol, points: own, loading: false, missing: false },
+      { symbol, points: own, loading: false, missing: false, noOverlap: false },
       ...compare.map((s, i) => {
         const { data: overlay, error } = overlays[i];
-        const points = visibleBars(overlay?.bars ?? [], settings.extended).map((bar) => ({ time: chartTime(bar.t, intraday, timezone), value: bar.c }));
-        return { symbol: s, points, loading: !overlay && !error, missing: Boolean(error) || (Boolean(overlay) && points.length === 0) };
+        const shownBars = visibleBars(overlay?.bars ?? [], settings.extended);
+        // Intraday sessions that never trade at the same time (Hong Kong and New York) are not drawn against each other.
+        const noOverlap = intraday && ownStarts.length > 0 && shownBars.length > 0 && !sharesSession(ownStarts, shownBars.map((bar) => bar.t));
+        const points = noOverlap ? [] : shownBars.map((bar) => ({ time: chartTime(bar.t, intraday, timezone), value: bar.c }));
+        return { symbol: s, points, loading: !overlay && !error, missing: Boolean(error) || (Boolean(overlay) && shownBars.length === 0), noOverlap };
       }),
     ];
   }, [
@@ -325,6 +343,15 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
   }, [events]);
 
   const position = holdings[symbol];
+  // The investor's own levels: the average cost from holdings, the target and stop from the note.
+  const levels = useMemo(
+    () => [
+      { key: "cost" as LevelKey, price: position?.cost ?? null },
+      { key: "target" as LevelKey, price: note?.target ?? null },
+      { key: "stop" as LevelKey, price: note?.stop ?? null },
+    ],
+    [position, note],
+  );
   const hasExtended = Boolean(data?.bars.some((bar) => bar.session !== undefined && bar.session !== "regular"));
   // Intraday change is measured from each session's previous regular close; daily bars from the bar before.
   // Round-the-clock markets measure every bar from the start of the rolling window.
@@ -337,6 +364,8 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
   // The last price line follows the header: the change against the previous regular close.
   const previousClose = quote?.previousClose ?? (baselines ? (baselines.at(-1) ?? null) : bars.length > 1 ? bars[bars.length - 2].c : null);
   const sessionClose = range === "1d" ? (data?.previousClose ?? null) : null;
+  // Round-the-clock markets have no close: their 1D window starts 24 hours back, unlike the header's previous close.
+  const sessionCloseTitle = data?.continuous ? t.chart.priceLine.dayAgo : t.chart.priceLine.prevClose;
   const precision = (lastBar?.c ?? quote?.price ?? 2) < 1 ? 4 : 2;
 
   // --- Chart instance ---------------------------------------------------------------------------------------------
@@ -465,7 +494,7 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
     );
     handles.ma.forEach((series, i) => series.applyOptions({ color: c.series[i], priceFormat }));
     handles.bands.forEach((series) => series.applyOptions({ color: c.series[5], priceFormat }));
-    handles.volume?.applyOptions({ color: withAlpha(c.fg3, 0.35) });
+    handles.volume?.applyOptions({ color: withAlpha(c.fg3, 0.35), priceFormat: { type: "custom", minMove: 1, formatter: (v: number) => formatCompact(v, lang) } });
     handles.rsi?.applyOptions({ color: c.fg2, priceFormat: { type: "custom", minMove: 1, formatter: (v: number) => v.toFixed(0) } });
     for (const line of handles.rsiLines) line.applyOptions({ color: c.line2 });
   }, [handles, themeKey, slots, theme, updown, lang, intraday, scaleMode, precision]);
@@ -475,12 +504,26 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
   const appliedView = useRef<string | null>(null);
   /** Price lines drawn on the current candle series (recreated with every data or level change). */
   const priceLines = useRef<{ series: ISeriesApi<"Candlestick">; lines: IPriceLine[] } | null>(null);
+  /** First and last time of the data last put into the chart. */
+  const shownSpan = useRef<{ first: number; last: number } | null>(null);
 
   useEffect(() => {
     if (!isLive(handles)) return;
     const { lib, chart } = handles;
     const c = readColors();
     const ts = times as UTCTimestamp[];
+    // Whether the previous data was all in view, read before the new data moves the window.
+    const before = shownSpan.current;
+    let wasFitted = false;
+    if (before) {
+      try {
+        const shown = chart.timeScale().getVisibleRange();
+        wasFitted = shown === null || ((shown.from as number) <= before.first && (shown.to as number) >= before.last);
+      } catch {
+        wasFitted = false;
+      }
+    }
+    shownSpan.current = times.length > 0 ? { first: times[0], last: times[times.length - 1] } : null;
 
     if (handles.mode === "price" && handles.candles) {
       // Pre- and post-market candles are drawn at reduced strength, so the regular session stands out.
@@ -534,24 +577,26 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
             axisLabelVisible: true,
             axisLabelColor: c.line2,
             axisLabelTextColor: c.fg2,
-            title: t.chart.priceLine.prevClose,
+            title: sessionCloseTitle,
           }),
         );
       }
-      const levels: Array<[number | null | undefined, string, string, number]> = [
-        [position?.cost, t.chart.priceLine.cost, c.fg2, lib.LineStyle.Dashed],
-        [note?.target, t.chart.priceLine.target, c.info, lib.LineStyle.Dotted],
-        [note?.stop, t.chart.priceLine.stop, c.fg2, lib.LineStyle.Dotted],
-      ];
-      for (const [price, title, color, lineStyle] of levels) {
+      const levelStyle: Record<LevelKey, { color: string; lineStyle: number }> = {
+        cost: { color: c.fg2, lineStyle: lib.LineStyle.Dashed },
+        target: { color: c.info, lineStyle: lib.LineStyle.Dotted },
+        stop: { color: c.fg2, lineStyle: lib.LineStyle.Dotted },
+      };
+      for (const { key, price } of levels) {
         if (typeof price === "number" && price > 0) {
-          lines.push(handles.candles.createPriceLine({ price, color, lineWidth: 1, lineStyle, axisLabelVisible: true, title, axisLabelColor: color }));
+          const { color, lineStyle } = levelStyle[key];
+          lines.push(handles.candles.createPriceLine({ price, color, lineWidth: 1, lineStyle, axisLabelVisible: true, title: t.chart.priceLine[key], axisLabelColor: color }));
         }
       }
       priceLines.current = { series: handles.candles, lines };
 
-      // Keep the investor's levels (and the previous close on 1D) on screen when they sit near the visible prices.
-      const levelPrices = [...levels.map(([price]) => price), sessionClose].filter((p): p is number => typeof p === "number" && p > 0);
+      // Keep the investor's levels (and the previous close on 1D) on screen when they sit near the visible prices;
+      // the legend names the farther ones instead (offscreenLevels).
+      const levelPrices = [...levels.map((level) => level.price), sessionClose].filter((p): p is number => typeof p === "number" && p > 0);
       handles.candles.applyOptions({
         autoscaleInfoProvider: (original: () => AutoscaleInfo | null): AutoscaleInfo | null => {
           const base = original();
@@ -559,7 +604,7 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
           let { minValue, maxValue } = base.priceRange;
           const span = maxValue - minValue;
           for (const p of levelPrices) {
-            if (p >= minValue - span * 0.25 && p <= maxValue + span * 0.25) {
+            if (p >= minValue - span * LEVEL_REACH && p <= maxValue + span * LEVEL_REACH) {
               minValue = Math.min(minValue, p);
               maxValue = Math.max(maxValue, p);
             }
@@ -588,11 +633,11 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
           // A range outside the data: keep the chart's own view.
         }
       });
-    } else if (intraday) {
-      // Intraday bars arrive every minute; keep the whole session in view.
+    } else if (intraday && wasFitted) {
+      // Intraday bars arrive every minute: keep the whole session in view, unless the reader has zoomed or panned.
       chart.timeScale().fitContent();
     }
-  }, [handles, bars, times, compareLines, events, markerKinds, settings.ma20, settings.ma50, settings.ma200, settings.bollinger, previousClose, sessionClose, position, note, range, viewKey, intraday, t, themeKey]);
+  }, [handles, bars, times, compareLines, events, markerKinds, settings.ma20, settings.ma50, settings.ma200, settings.bollinger, previousClose, sessionClose, sessionCloseTitle, levels, range, viewKey, intraday, t, themeKey]);
 
   // --- Crosshair and visible range for the legend -------------------------------------------------------------------
   const [hoverTime, setHoverTime] = useState<number | null>(null);
@@ -613,8 +658,8 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
 
   // --- Keys ---------------------------------------------------------------------------------------------------------
   useHotkeys([
-    { key: "[", description: t.chart.keys, handler: () => updateChartSettings({ range: stepRange(range, -1) }) },
-    { key: "]", description: t.chart.keys, handler: () => updateChartSettings({ range: stepRange(range, 1) }) },
+    { key: "[", description: t.chart.prevRange, handler: () => updateChartSettings({ range: stepRange(range, -1) }) },
+    { key: "]", description: t.chart.nextRange, handler: () => updateChartSettings({ range: stepRange(range, 1) }) },
     { key: "l", description: t.chart.study.log, when: () => !compareMode && !inGSequence(), handler: () => updateChartSettings({ log: !settings.log }) },
   ]);
 
@@ -655,7 +700,13 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
     });
   }, [compareLines, visible, hoverTime]);
 
-  const loading = mainQuery.isLoading && !data;
+  // Levels beyond the visible prices (the chart leaves them out), named in the legend with their side.
+  const hiddenLevels = compareMode ? [] : offscreenLevels(levels, low, high);
+  // Moving averages on weekly and monthly bars count weeks and months.
+  const barUnit = data?.interval === "1wk" || data?.interval === "1mo" ? data.interval : null;
+  const maLabel = (period: 20 | 50 | 200) => (barUnit ? tpl(t.chart.maPeriod[barUnit], { n: period }) : t.chart.study[`ma${period}`]);
+
+  const loading = (!hydrated || mainQuery.isLoading) && !data;
   const noRegular = Boolean(data && data.bars.length > 0 && bars.length === 0);
   const height = !compareMode && settings.rsi ? "h-[392px] sm:h-[472px]" : "h-[300px] sm:h-[380px]";
   const ohlc = t.chart.ohlc;
@@ -670,7 +721,7 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
       actions={<StudiesMenu settings={settings} onChange={updateChartSettings} disabled={compareMode} />}
       footer={
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line px-3 py-1.5 text-micro text-fg-3">
-          <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer" className="hover:text-fg-2 hover:underline">
+          <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer" className="hover:text-fg-2 hover:underline max-sm:inline-flex max-sm:min-h-10 max-sm:items-center">
             {t.chart.attribution}
           </a>
           {!compareMode && markerKinds.size > 0 ? (
@@ -685,6 +736,7 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
         </div>
       }
     >
+      <StaleBanner show={Boolean(mainQuery.error && data)} />
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line px-2 py-1 sm:px-3">
         <RangePicker value={range} onChange={(next) => updateChartSettings({ range: next })} />
         {intradayRange && hasExtended ? (
@@ -707,7 +759,9 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
               <span key={line.symbol} className="flex items-center gap-1.5">
                 <SeriesKey slot={slots[i - 1]} main={i === 0} />
                 <span className="mono font-medium text-fg">{line.symbol}</span>
-                {line.missing ? (
+                {line.noOverlap ? (
+                  <span>{tpl(t.chart.noOverlap, { symbol: line.symbol })}</span>
+                ) : line.missing ? (
                   <span>{tpl(t.chart.noData, { symbol: line.symbol })}</span>
                 ) : line.loading ? (
                   <Skeleton className="h-3 w-10" />
@@ -743,17 +797,23 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
                 {ohlc.volume} <span className="num text-fg-2">{formatCompact(shown.v, lang)}</span>
               </span>
             ) : null}
-            {shown.session && shown.session !== "regular" ? <span className="text-warn">{t.chart.session[shown.session]}</span> : null}
+            {shown.session && shown.session !== "regular" ? <span className="text-fg-2">{t.chart.session[shown.session]}</span> : null}
             {shownEvents.map((mark) => (
               <span key={`${mark.kind}-${mark.time}`} className="text-fg-2">
                 {eventLabel(t, mark.kind, mark.label)}
               </span>
             ))}
             <span className="ml-auto flex flex-wrap items-center gap-x-3">
-              {settings.ma20 ? <StudyKey slot={0} label={t.chart.study.ma20} /> : null}
-              {settings.ma50 ? <StudyKey slot={1} label={t.chart.study.ma50} /> : null}
-              {settings.ma200 ? <StudyKey slot={2} label={t.chart.study.ma200} /> : null}
+              {settings.ma20 ? <StudyKey slot={0} label={maLabel(20)} /> : null}
+              {settings.ma50 ? <StudyKey slot={1} label={maLabel(50)} /> : null}
+              {settings.ma200 ? <StudyKey slot={2} label={maLabel(200)} /> : null}
               {settings.bollinger ? <StudyKey slot={5} label={t.chart.legendBollinger} /> : null}
+              {hiddenLevels.map((level) => (
+                <span key={level.key} className="flex items-center gap-1">
+                  <LevelSwatch level={level.key} />
+                  <span>{tpl(t.chart.offscreen[level.side], { label: t.chart.priceLine[level.key], price: formatPrice(level.price, lang) })}</span>
+                </span>
+              ))}
             </span>
           </>
         ) : null}
@@ -774,6 +834,12 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
       </div>
     </Panel>
   );
+}
+
+/** Line key for an investor level, drawn like its price line: the average cost dashed, the target (info) and stop dotted. */
+function LevelSwatch({ level }: { level: LevelKey }) {
+  const style = level === "cost" ? "border-dashed border-fg-2" : level === "target" ? "border-dotted border-info" : "border-dotted border-fg-2";
+  return <span aria-hidden className={cn("inline-block w-3 border-t-2", style)} />;
 }
 
 /** Legend key for a study line: series 1 to 3 for the moving averages (series 2 dashed), series 6 dotted for the bands. */

@@ -59,7 +59,11 @@ export function RangePicker({ value, onChange }: { value: ChartRange; onChange: 
   );
 }
 
-/** The studies popover: moving averages, Bollinger bands, the RSI pane, volume and the log scale, applied at once. */
+/**
+ * The studies menu: moving averages, Bollinger bands, the RSI pane, volume and the log scale, applied at once. A
+ * disclosure: the switches follow the button in tab order, and the menu closes on Escape (focus returns to the
+ * button), on a click outside, or when focus moves on past it.
+ */
 export function StudiesMenu({ settings, onChange, disabled = false }: { settings: ChartSettings; onChange: (patch: Partial<ChartSettings>) => void; disabled?: boolean }) {
   const { t } = usePrefs();
   const [open, setOpen] = useState(false);
@@ -87,7 +91,14 @@ export function StudiesMenu({ settings, onChange, disabled = false }: { settings
   }, [open]);
 
   return (
-    <div ref={rootRef} className="relative">
+    <div
+      ref={rootRef}
+      className="relative"
+      onBlur={(event) => {
+        const next = event.relatedTarget;
+        if (open && next instanceof Node && !rootRef.current?.contains(next)) setOpen(false);
+      }}
+    >
       <Button
         ref={buttonRef}
         size="sm"
@@ -103,7 +114,7 @@ export function StudiesMenu({ settings, onChange, disabled = false }: { settings
         {t.chart.studies}
       </Button>
       {open ? (
-        <div id={panelId} role="dialog" aria-label={t.chart.studiesTitle} className="absolute top-full right-0 z-40 mt-1 w-56 space-y-1 rounded-xs border border-line-2 bg-panel p-2 shadow-2xl">
+        <div id={panelId} role="group" aria-label={t.chart.studiesTitle} className="absolute top-full right-0 z-40 mt-1 w-56 space-y-1 rounded-xs border border-line-2 bg-panel p-2 shadow-2xl">
           {CHART_STUDIES.map((study: ChartStudy) => (
             <Switch
               key={study}

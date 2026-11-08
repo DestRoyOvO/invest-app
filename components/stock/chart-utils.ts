@@ -85,6 +85,44 @@ export function compareSlots(colorBlindConvention: boolean): SeriesSlot[] {
       ];
 }
 
+/**
+ * True when two intraday series share at least one bar start, that is, trade at the same time at least once. Sessions
+ * on different exchanges can be disjoint (Hong Kong closes before New York opens), and a percentage comparison of
+ * two sessions that never overlap draws two unrelated lines side by side.
+ */
+export function sharesSession(mainTimes: readonly number[], otherTimes: readonly number[]): boolean {
+  const main = new Set(mainTimes);
+  return otherTimes.some((time) => main.has(time));
+}
+
+/** The price scale stretches to an investor level (average cost, target, stop) within this share of the visible span. */
+export const LEVEL_REACH = 0.25;
+
+export interface PriceLevel<K extends string> {
+  key: K;
+  price: number | null | undefined;
+}
+
+/**
+ * Levels the chart leaves off screen because they sit beyond LEVEL_REACH of the visible price span (the autoscale
+ * keeps the candles readable instead), with the side they are on, so the legend can still name them.
+ */
+export function offscreenLevels<K extends string>(
+  levels: readonly PriceLevel<K>[],
+  low: number | null,
+  high: number | null,
+): Array<{ key: K; price: number; side: "below" | "above" }> {
+  if (low === null || high === null || !Number.isFinite(low) || !Number.isFinite(high) || high < low) return [];
+  const reach = (high - low) * LEVEL_REACH;
+  const out: Array<{ key: K; price: number; side: "below" | "above" }> = [];
+  for (const { key, price } of levels) {
+    if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) continue;
+    if (price < low - reach) out.push({ key, price, side: "below" });
+    else if (price > high + reach) out.push({ key, price, side: "above" });
+  }
+  return out;
+}
+
 /** Hides pre- and post-market bars unless extended hours are on; daily bars have no session and always stay. */
 export function visibleBars(bars: readonly Bar[], extended: boolean): Bar[] {
   return extended ? [...bars] : bars.filter((bar) => (bar.session ?? "regular") === "regular");
