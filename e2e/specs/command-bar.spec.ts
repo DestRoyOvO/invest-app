@@ -1,6 +1,6 @@
 import { tpl } from "@/lib/format";
-import { functionByKey, functionsByCode } from "@/lib/functions";
-import { CHINESE_NAMES } from "@/lib/names-zh";
+import { functionByKey, functionsByCode, symbolOfToken } from "@/lib/functions";
+import { CHINESE_NAMES, searchChineseNames } from "@/lib/names-zh";
 import type { SearchResponse } from "@/types/api";
 
 import {
@@ -22,8 +22,9 @@ import { expect, test } from "../support/test";
 
 // The command bar: function codes, the TICKER CODE grammar in both orders, COMP, Chinese company names, the symbol search
 // with keyboard selection, unknown input, and questions for the assistant. Expected pages and labels come from the
-// function registry (lib/functions.ts); listed matches are compared with the app's own /api/search answer. A code that
-// opens a part of a page (GC, GP) must land there. The bar opens with "/" on the desktop and from its button on phones.
+// function registry (lib/functions.ts); listed matches are compared with the app's own /api/search answer and its own
+// Chinese name search (lib/names-zh.ts). A code that opens a part of a page (GC, GP) must land there. The bar opens with
+// "/" on the desktop and from its button on phones.
 
 const esc = escapeRegExp;
 
@@ -97,9 +98,27 @@ test.describe("desktop", () => {
       if (code === "GP") await expectLanded(page, href);
     }
 
-    // A Chinese name alone offers its quote first ("Open AAPL"), before the symbol's actions.
-    let bar = await typeCommand(page, chineseName("AAPL"));
-    await expect(bar.selected).toHaveAccessibleName(new RegExp(`^${esc(en.command.open)} AAPL\\b`));
+    // A Chinese name alone offers its quote first ("Open 0700.HK"), then the symbol's actions, then the other symbols whose
+    // Chinese names contain the text, in the order of the app's own name search (tickers only: the names are the zh
+    // catalog's).
+    const nameSearch = async (query: string) => {
+      const exact = symbolOfToken(query);
+      if (!exact) throw new Error(`No symbol is named ${query}`);
+      const others = searchChineseNames(query, 8)
+        .map((hit) => hit.symbol)
+        .filter((symbol) => symbol !== exact);
+      const bar = await typeCommand(page, query);
+      await expect(bar.selected).toHaveAccessibleName(new RegExp(`^${esc(en.command.open)} ${esc(exact)}(?: |$)`));
+      const symbols = bar.dialog.getByRole("group", { name: en.command.sections.symbols }).getByRole("option");
+      await expect(symbols).toHaveCount(others.length);
+      for (const [index, symbol] of others.entries()) await expect(symbols.nth(index)).toHaveAccessibleName(new RegExp(`^${esc(symbol)}(?: |$)`));
+      return { bar, others };
+    };
+    const tencent = await nameSearch("腾讯");
+    expect(tencent.others, "other symbols whose Chinese names contain 腾讯").not.toEqual([]);
+    await page.keyboard.press("Escape");
+    await expect(tencent.bar.dialog).toBeHidden();
+    await nameSearch(chineseName("AAPL"));
     await page.keyboard.press("Enter");
     await expectPage(page, stockPath("AAPL"));
 
@@ -107,7 +126,7 @@ test.describe("desktop", () => {
     const gpHref = functionHref(byCode("GP"), "AAPL");
     await page.getByRole("main").evaluate((main) => main.scrollTo(0, 0));
     expect(await hashLanding(page, gpHref), "the chart below the quote header").not.toBe("landed");
-    bar = await typeCommand(page, "AAPL GP");
+    let bar = await typeCommand(page, "AAPL GP");
     await expect(bar.selected).toHaveAccessibleName(functionRow("GP", "AAPL"));
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(gpHref);
@@ -132,7 +151,7 @@ test.describe("desktop", () => {
       return url.pathname === "/api/search" && url.searchParams.get("q") === "ZZZZ";
     });
     const bar = await typeCommand(page, "ZZZZ");
-    expect((await (await searched).json()) as SearchResponse).toEqual({ results: [] });
+    expect(((await (await searched).json()) as SearchResponse).results).toEqual([]);
     await expect(bar.status).toHaveText(en.command.empty);
     await expect(bar.options).toHaveCount(1);
     await expect(bar.selected).toHaveAccessibleName("ZZZZ");

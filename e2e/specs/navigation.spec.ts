@@ -239,7 +239,7 @@ test("the keyboard: ? lists the page's own keys, / and Ctrl+K open the command b
   // "g" and a letter: the status bar shows that the letter is awaited, and the quote page's own W (why is it moving,
   // which opens the assistant) stands aside. The clock stands still while the letter is awaited, so a slow machine
   // cannot make it late.
-  const pending = page.locator("footer").getByText(`G · ${en.shell.goPending}`, { exact: true });
+  const pending = page.getByRole("contentinfo").getByText(`G · ${en.shell.goPending}`, { exact: true });
   const pauseClock = async () => page.clock.pauseAt((await page.evaluate(() => Date.now())) + 5_000);
   for (const key of ["w", "p"]) {
     const fn = GO_SHORTCUTS.get(key);
