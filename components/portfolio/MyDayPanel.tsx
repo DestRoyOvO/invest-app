@@ -2,6 +2,7 @@
 
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
+import { useId } from "react";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { useUi } from "@/components/providers/UiProvider";
@@ -25,14 +26,18 @@ import { SignedMoney } from "./money";
 export const LINK_BUTTON =
   "inline-flex h-7 shrink-0 items-center justify-center gap-1.5 rounded-xs border border-line-2 bg-panel-2 px-2 text-xs font-medium whitespace-nowrap text-fg transition-colors hover:bg-hover max-sm:h-10 max-sm:px-3";
 
-function MoverList({ title, rows, quotes, lang, empty }: { title: string; rows: ValuedPosition[]; quotes: ReadonlyMap<string, Quote>; lang: Lang; empty: string }) {
+/** The largest gains or losses in money: a list named by its heading. */
+export function MoverList({ title, rows, quotes, lang, empty }: { title: string; rows: ValuedPosition[]; quotes: ReadonlyMap<string, Quote>; lang: Lang; empty: string }) {
+  const titleId = useId();
   return (
     <div className="min-w-0 bg-panel px-3 py-2.5">
-      <h3 className="col-head">{title}</h3>
+      <h3 id={titleId} className="col-head">
+        {title}
+      </h3>
       {rows.length === 0 ? (
         <p className="mt-1.5 text-xs text-fg-3">{empty}</p>
       ) : (
-        <ul className="mt-1">
+        <ul aria-labelledby={titleId} className="mt-1">
           {rows.map((row) => (
             <li key={row.symbol} className="flex h-7 items-center gap-3 text-data max-sm:h-10">
               <Link href={stockPath(row.symbol)} className="mono w-16 shrink-0 font-medium text-fg hover:text-accent max-sm:inline-flex max-sm:h-10 max-sm:items-center">

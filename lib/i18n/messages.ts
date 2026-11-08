@@ -40,6 +40,7 @@ export const en = {
     less: "Show less",
     disclaimer: "For research only. Not investment advice.",
     staleData: "Showing the last data received. Retrying…",
+    dismiss: "Dismiss",
   },
   nav: {
     market: "Market",
@@ -744,6 +745,7 @@ export const zh: Messages = {
     less: "收起",
     disclaimer: "仅供研究参考，不构成投资建议。",
     staleData: "显示上次获取的数据，正在重试…",
+    dismiss: "关闭提示",
   },
   nav: {
     market: "市场",

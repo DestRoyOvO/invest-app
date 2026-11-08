@@ -197,3 +197,61 @@ export async function hitAtCenter(locator: Locator): Promise<string> {
     return hit?.closest("[data-toast]")?.textContent ?? hit?.tagName ?? "nothing";
   });
 }
+
+/** How a toast entered the page, as a screen reader meets it. */
+export interface ToastArrival {
+  /** The toast's text: its message, then its action's label if it has one. */
+  text: string;
+  /**
+   * Whether it went into a polite live region that was in the document before it: a live region announces what is
+   * added to it, so that is what gets the toast read out. One that arrives together with its live region, or outside
+   * any, is not announced (reliably).
+   */
+  announced: boolean;
+  /** Whether it sits inside a modal dialog (role="dialog" with aria-modal="true"). */
+  inDialog: boolean;
+  /** Whether a modal dialog was open; a screen reader that honours aria-modal ignores what lies outside it. */
+  modalOpen: boolean;
+}
+
+interface ToastProbe {
+  __e2eToastArrivals?: ToastArrival[];
+}
+
+/**
+ * Records, from the next document on, every toast (`[data-toast]`, the attribute components/ui/Toast.tsx sets) that
+ * enters the page and how: see ToastArrival. Read the record with `toastArrivals`. What one change of the page adds
+ * (one batch of mutations, such as a drawer opening with the toasts carried into it) counts as arriving together: each
+ * toast once, and a live region added in the same change is not one that was there before. A toast moved to another
+ * place is a new element there and is recorded again.
+ */
+export async function watchToasts(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const arrivals: ToastArrival[] = [];
+    (window as unknown as ToastProbe).__e2eToastArrivals = arrivals;
+    const modal = '[role="dialog"][aria-modal="true"]';
+    new MutationObserver((records) => {
+      // Skipped: what was inserted into a part of the page removed meanwhile, such as a closing dialog.
+      const added = records.flatMap((record) => Array.from(record.addedNodes)).filter((node): node is Element => node instanceof Element && node.isConnected);
+      const seen = new Set<Element>();
+      for (const node of added) {
+        for (const toast of node.matches("[data-toast]") ? [node] : Array.from(node.querySelectorAll("[data-toast]"))) {
+          if (seen.has(toast)) continue;
+          seen.add(toast);
+          const region = toast.parentElement?.closest("[aria-live]") ?? null;
+          arrivals.push({
+            text: toast.textContent ?? "",
+            announced: region !== null && region.getAttribute("aria-live") === "polite" && !added.some((other) => other.contains(region)),
+            inDialog: toast.closest(modal) !== null,
+            modalOpen: document.querySelector(modal) !== null,
+          });
+        }
+      }
+    }).observe(document, { childList: true, subtree: true });
+  });
+}
+
+/** The toasts that entered this document since `watchToasts`, in order. */
+export async function toastArrivals(page: Page): Promise<ToastArrival[]> {
+  return page.evaluate(() => (window as unknown as ToastProbe).__e2eToastArrivals ?? []);
+}

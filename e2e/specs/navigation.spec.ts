@@ -202,7 +202,7 @@ test("the keyboard: ? lists the page's own keys, / and Ctrl+K open the command b
 
   // "?" opens the shortcuts sheet with the keys of the page: the chart's and the quote page's own.
   const sheet = page.getByRole("dialog", { name: en.help.shortcuts.title });
-  const pageKeys = sheet.getByRole("heading", { name: en.help.shortcuts.page, exact: true }).locator("xpath=following-sibling::*[1]");
+  const pageKeys = sheet.getByRole("list", { name: en.help.shortcuts.page, exact: true });
   await page.keyboard.press("?");
   await expect(sheet).toBeVisible();
   await expect(sheet.getByRole("button", { name: en.common.close })).toBeFocused();
@@ -268,10 +268,11 @@ test("the keyboard: ? lists the page's own keys, / and Ctrl+K open the command b
   await expect(page).toHaveURL(at);
   expect(await page.evaluate(() => history.length), "no navigation").toBe(entries);
 
-  // The sheet lists the keys of the page it opens on: the portfolio has none of its own.
+  // The sheet lists the keys of the page it opens on: the portfolio has none of its own, so no list but a line saying so.
   await page.keyboard.press("?");
   await expect(sheet).toBeVisible();
-  await expect(pageKeys).toHaveText(en.help.shortcuts.pageNone);
+  await expect(sheet.getByText(en.help.shortcuts.pageNone, { exact: true })).toBeVisible();
+  await expect(pageKeys).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(sheet).toBeHidden();
 });

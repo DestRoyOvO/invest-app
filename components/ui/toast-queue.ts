@@ -1,4 +1,4 @@
-// Queue and timer rules for Toast, kept free of React so they can be tested.
+// Queue, timer and outlet rules for Toast, kept free of React so they can be tested.
 
 export interface QueuedToast {
   id: string;
@@ -134,4 +134,35 @@ export function createToastStore<T extends TimedToast>(onChange: (toasts: T[]) =
       holds.clear();
     },
   };
+}
+
+/**
+ * The outlets that can host the toasts while a modal layer is open (every open Drawer has one), oldest first. The
+ * newest one hosts them; when it goes, the one below takes over, and with none left the toasts return to the screen's
+ * edge. Registering an outlet again moves it to the top.
+ */
+export function addOutlet<T>(outlets: readonly T[], outlet: T): readonly T[] {
+  return [...outlets.filter((item) => item !== outlet), outlet];
+}
+
+/** Drops an outlet; the same list when it was not registered, so a state setter skips the render. */
+export function removeOutlet<T>(outlets: readonly T[], outlet: T): readonly T[] {
+  return outlets.includes(outlet) ? outlets.filter((item) => item !== outlet) : outlets;
+}
+
+/** The outlet that hosts the toasts: the newest, or null for the screen's edge. */
+export function activeOutlet<T>(outlets: readonly T[]): T | null {
+  return outlets.length > 0 ? outlets[outlets.length - 1] : null;
+}
+
+/**
+ * The toasts that move to another host without being announced again, worked out as the host changes (a drawer opens
+ * or closes): every toast on screen that a live region has already shown, besides those carried before. A toast shown
+ * in the same moment, such as the confirmation of a drawer's Save as it closes, has not been shown in a live region
+ * yet, so it stays out and gets announced in its new host. Toasts no longer on screen drop out.
+ */
+export function carryOver<T>(onScreen: readonly T[], announced: (toast: T) => boolean, carried: ReadonlySet<T>): ReadonlySet<T> {
+  const next = new Set<T>();
+  for (const toast of onScreen) if (carried.has(toast) || announced(toast)) next.add(toast);
+  return next;
 }

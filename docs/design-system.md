@@ -22,8 +22,8 @@ every token pair; `lib/design-tokens.test.ts` fails when a pair drops below its 
   加载/空状态，可关闭行悬停高亮，列可按视口隐藏，也可按表格自身宽度隐藏：`hideBelowContainer`，容器查询）、
   Segmented、Select、Switch、Field/Input、Checkbox、Badge/AiChip、Sparkline（中性线条 + 按当日涨跌着色的端点）、Delta（价格
   变动取旁边价格的小数位）与热力图分档（heatStep/heatStyle）、TickNumber（只闪变化的那个数字）、Whisker（置信区间须线，
-  `neutral` 时整体变灰）、Meter（当前标记带 1px 面板色描边）、StatTile、HoverCard/Tooltip、Toast（可撤销）、Drawer（右侧或
-  底部）、EmptyState（左对齐 + 快捷代码按钮）、Wordmark。
+  `neutral` 时整体变灰）、Meter（当前标记带 1px 面板色描边）、StatTile（以标签命名的 group）、HoverCard/Tooltip、
+  Toast（可撤销）、Drawer（右侧或底部，打开时提示条显示在抽屉内）、EmptyState（左对齐 + 快捷代码按钮）、Wordmark。
 - **无障碍**：文字对比度 ≥ 4.5:1、图形 ≥ 3:1（两套主题、三种配色全部实测通过，含悬停状态；带透明度的颜色先按透明度
   叠加到底色上再测，如评级色阶 `bg-fg/85` 到 `/50`）；`--fg-3` 只用在面板上，直接放在画布上的文字用 `--fg-2`；桌面点击区
   ≥ 24px、手机 ≥ 40px：Button、IconButton、Segmented、Select、Tabs、Input 在手机上自带 40px 高度，页面不再加覆盖
@@ -31,8 +31,10 @@ every token pair; `lib/design-tokens.test.ts` fails when a pair drops below its 
   控件在手机上也留在标题栏；紧凑密度下行内小图标按钮为 24px，带操作的行也保持约 24px；可排序表头带 aria-sort；表格横向或
   纵向放不下时，滚动框成为以表格标题命名、可用 Tab 聚焦的区域，方向键即可滚动，所以表格标题要描述表格内容，不能与所在
   面板或分区的名称相同（lib/i18n/captions.test.ts 和 conventions.test.ts 检查）；Esc 只关闭最内层（先关悬停卡片，再关
-  抽屉）；提示条在悬停或键盘焦点时暂停，键盘关闭后焦点移到下一条或回到原处；实时更新用礼貌型 live region；尊重"减少
-  动态效果"。
+  抽屉）；提示条在悬停或键盘焦点时暂停，键盘关闭后焦点移到下一条或回到原处；抽屉打开时提示条移到抽屉里自己的一栏（侧栏在
+  内容与底栏之间，底部弹层在顶部），不遮挡抽屉的输入框和按钮，仍可用 Tab 操作并被读屏播报；提示条来去时抽屉内容在屏幕上
+  保持不动（底部弹层到达高度上限后，内容滚动同样的距离），被这一栏挡住的焦点控件会滚回视野；提示条的关闭按钮叫"关闭提示"，
+  与抽屉的"关闭"区分；实时更新用礼貌型 live region；尊重"减少动态效果"。
 - **缺失值**：一律显示 `lib/format.ts` 的 `DASH`（U+2014），格式化函数遇到 null 也返回它；不用 U+2013、连字符或
   "N/A"。它只是数据占位符，文案里仍然不用破折号。
 - **非价格的正负读数**（相关系数、z 分数、因子倾向）：只按绝对值深浅着色，用一种中性色阶并标出带符号的数字，不用红绿或
@@ -423,7 +425,9 @@ rules grey out, such as a reading concentrated in too few episodes: pass it wher
 Meter is a neutral 0 to 100 bar with a midline and an optional accent marker (role="meter"). The marker has a 1px
 `--panel` halo (`shadow-[0_0_0_1px_var(--panel)]`, as on the risk band), so it stays visible where it sits on the
 `--fg-3` fill: accent on `--fg-3` is about 1.1:1 in the light theme. StatTile is one KPI: column-head label, 20px
-figure (30px with `size="lg"`), optional delta and sub-line.
+figure (30px with `size="lg"`), optional delta and sub-line. The tile is a `role="group"` labelled by its label
+(`aria-labelledby`, an id from `useId`), so a screen reader names the figure it enters and a spec finds the tile with
+`getByRole("group", { name })`. Give the tiles of one page distinct labels, so no two groups share a name.
 
 ### DataTable
 
@@ -528,9 +532,28 @@ toast.show({ message: tpl(t.watchlist.removed, { symbol }), action: { label: t.c
 `ToastProvider` is mounted in `components/providers/Providers.tsx`. Toasts sit above the phone tab bar or the status
 bar, in a polite live region, at most three at a time; they close after 5s (8s with an action). The countdowns pause
 while the pointer is over the toasts or keyboard focus is inside them, and resume with the time that was left (at
-least 1.5s). When a toast closes under keyboard focus (Undo, Close), focus moves to the toast that took its place, or
+least 1.5s). When a toast closes under keyboard focus (Undo, Dismiss), focus moves to the toast that took its place, or
 back to where it was before the toasts. The list and countdowns live in `createToastStore` (`toast-queue.ts`, unit
-tested).
+tested). A toast's action and its Dismiss button (the X) are described by its message (`aria-describedby`), so they say
+what they act on. Dismiss is not called Close (`t.common.dismiss`), so it differs from the Close of a drawer the toast
+sits in, for a screen reader's list of buttons and for voice control alike.
+
+While a Drawer is open the toasts show inside it, in the `ToastOutlet` the Drawer renders: a strip of their own in the
+dialog's layout. There they cover none of the drawer's fields or buttons, stay reachable with Tab (the drawer traps
+focus) and are announced (under `aria-modal`, assistive technology may ignore a live region outside the dialog). In a
+side panel the strip sits between the content and the footer, and the content gives up the room at its bottom edge.
+In a bottom sheet it sits at the top (after the content in the reading and Tab order), and the sheet grows past 85dvh
+into the backdrop while it shows toasts, up to 2.75rem below the top of the screen. Once a sheet is at that limit, a
+toast that comes or goes moves the top edge of the content, and the drawer scrolls the content by as much (as far as
+its scroll range allows), so what is on screen stays where it is. If the strip takes the room where the focused control
+sat, the content scrolls just enough to show it again. The outlet's `watch` does this: the provider calls it before
+and after every change of the toasts (`createContentKeeper` in `Drawer.tsx`, unit tested). Hover and focus pause the
+toasts, Undo and the focus return work as at the screen's edge. A toast is announced once, where it first shows: toasts that move as a drawer
+opens or closes sit beside the live region of their new place, not in it (`ToastStacks`). The live region at the
+screen's edge stays mounted meanwhile, so a toast shown as a drawer closes (Save, Delete) lands in a live region that
+already existed and is announced. The specs check what reaches a screen reader with `watchToasts`
+(`e2e/support/notes.ts`). With two drawers open, the newer one hosts the toasts. Another modal layer can render a
+`ToastOutlet` the same way.
 
 ### Drawer
 
@@ -541,7 +564,9 @@ tested).
 `side="right"` (default) is a side panel, `"bottom"` a sheet, `"auto"` a sheet on phones and a side panel from `sm`.
 Focus moves in, Tab is trapped, Escape closes and focus returns. Mark the first field with `data-autofocus`. The title
 bar is a `div` with the `h2` that labels the dialog, not a `<header>`: inside `role="dialog"` a header would be a
-second banner landmark next to the top bar's.
+second banner landmark next to the top bar's. While open, the drawer hosts the toasts in its own strip (see Toast):
+between the content and the footer of a side panel, at the top of a sheet. Its scrolling content (`data-drawer-content`)
+stays where it is on screen as they come and go.
 
 ### States
 
@@ -608,6 +633,7 @@ unless `alwaysShowName` is set (the unlock page). `<BrandMark className="size-5 
   the caption never repeats the name of the panel around it.
 - **Escape**: closes the innermost layer only (a hover card before the drawer it sits in).
 - **Live regions**: toasts and the stale banner are polite; errors use `role="alert"`. Ticking prices are not announced.
+  While a drawer is open, the toasts' live region is inside its dialog.
 - **Motion**: flashes and pulses are off with `prefers-reduced-motion`.
 - **Language**: CJK column heads are 12px; never letter-space Chinese prose; keep the CJK fallbacks in `--font-sans`.
 - **Color is never alone**: direction also shows as a sign (+ or −), state as a word, identity as a legend.

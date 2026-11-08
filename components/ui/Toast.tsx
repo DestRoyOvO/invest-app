@@ -1,12 +1,28 @@
 "use client";
 
 import { X } from "lucide-react";
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type FocusEvent, type PointerEvent, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent,
+  type PointerEvent,
+  type ReactNode,
+  type Ref,
+} from "react";
+import { createPortal } from "react-dom";
 
 import { useT } from "@/components/providers/PrefsProvider";
+import { cn } from "@/lib/cn";
 
 import { IconButton } from "./Button";
-import { createToastStore } from "./toast-queue";
+import { activeOutlet, addOutlet, carryOver, createToastStore, removeOutlet } from "./toast-queue";
 
 export interface ToastOptions {
   message: ReactNode;
@@ -24,6 +40,32 @@ export interface ToastApi {
   dismiss: (id: string) => void;
 }
 
+/**
+ * What the dialog around a ToastOutlet does while the toasts in it change, given the outlet element: `before` runs
+ * while the old toasts are still on screen, `after` once the new ones are, before the browser paints. Drawer uses it
+ * to keep its content where it was on screen when the strip of toasts takes room from it or gives it back.
+ */
+export interface ToastOutletWatch {
+  before: (outlet: HTMLElement) => void;
+  after: (outlet: HTMLElement) => void;
+}
+
+/** The outlets that have a watch, told before and after the toasts change: a registry kept outside React's state. */
+function createWatchList() {
+  const watches = new Map<HTMLElement, ToastOutletWatch>();
+  return {
+    add(outlet: HTMLElement, watch: ToastOutletWatch) {
+      watches.set(outlet, watch);
+    },
+    remove(outlet: HTMLElement) {
+      watches.delete(outlet);
+    },
+    tell(moment: keyof ToastOutletWatch) {
+      for (const [outlet, watch] of watches) watch[moment](outlet);
+    },
+  };
+}
+
 interface ToastEntry extends ToastOptions {
   id: string;
   duration: number;
@@ -31,20 +73,147 @@ interface ToastEntry extends ToastOptions {
 
 const MAX_TOASTS = 3;
 
-const ToastContext = createContext<ToastApi | null>(null);
+/** The toasts at the screen's edge: bottom center on phones above the tab bar, bottom right from md above the status bar. */
+const EDGE_REGION =
+  "pointer-events-none fixed inset-x-0 bottom-16 z-[60] flex flex-col items-center px-4 md:inset-x-auto md:right-4 md:bottom-10 md:items-end md:px-0";
 
 /**
- * Hosts the toasts (bottom center on phones above the tab bar, bottom right on wider screens) in a polite live region.
- * Countdowns pause while the pointer is over the toasts or keyboard focus is inside them. When a toast that has
- * keyboard focus closes, focus moves to the toast that took its place, or back to where it was before the toasts.
- * Mounted once in components/providers/Providers.tsx.
+ * The toasts in an open dialog's outlet: a strip of the dialog's own layout, so they take room from its content instead
+ * of covering it. Without toasts it has no height.
+ */
+export function dockedRegionClass(count: number): string {
+  return cn("flex flex-col px-3", count > 0 && "py-2");
+}
+
+/**
+ * A stack of toasts in a host: the toasts carried in from another host, then the live stack of those first shown
+ * here. Cards sit 8px apart, and the live stack keeps 8px from a carried stack above it.
+ */
+export function stackClass(docked: boolean, spaced = false): string {
+  return cn(docked ? "flex flex-col gap-2" : "flex w-full flex-col items-center gap-2 md:items-end", spaced && "mt-2");
+}
+
+/** A toast: at the screen's edge a card as wide as its text, with a shadow; in a dialog's outlet, as wide as the strip. */
+export function toastCardClass(docked: boolean): string {
+  return cn(
+    "pointer-events-auto flex w-full items-center gap-3 rounded-xs border border-line-2 bg-panel-2 py-1.5 pr-1.5 pl-3 text-sm text-fg",
+    !docked && "max-w-sm shadow-xl md:w-auto md:min-w-72",
+  );
+}
+
+const ToastContext = createContext<ToastApi | null>(null);
+/** Registers an outlet element (with what its dialog does around changes) and returns the function that removes it again. */
+const ToastOutletContext = createContext<((element: HTMLElement, watch?: ToastOutletWatch) => () => void) | null>(null);
+
+type ShownToast = ToastOptions & { id: string };
+
+interface ToastCardProps {
+  toast: ShownToast;
+  docked: boolean;
+  /** The name of the button that closes the toast: Dismiss, not Close, so it differs from a dialog's own Close. */
+  dismissLabel: string;
+  onDismiss: (id: string) => void;
+}
+
+/**
+ * One toast: the message, its action and Dismiss. The buttons are described by the message, so "Undo" and "Dismiss"
+ * say what they act on.
+ */
+export function ToastCard({ toast, docked, dismissLabel, onDismiss }: ToastCardProps) {
+  const messageId = useId();
+  return (
+    <div data-toast className={toastCardClass(docked)}>
+      <div id={messageId} className="min-w-0 flex-1">
+        {toast.message}
+      </div>
+      {toast.action ? (
+        <button
+          type="button"
+          aria-describedby={messageId}
+          onClick={() => {
+            toast.action?.onAction();
+            onDismiss(toast.id);
+          }}
+          className="h-7 shrink-0 rounded-xs px-2 text-sm font-medium text-accent transition-colors hover:bg-hover max-sm:h-10"
+        >
+          {toast.action.label}
+        </button>
+      ) : null}
+      <IconButton size="sm" label={dismissLabel} aria-describedby={messageId} icon={<X className="size-3.5" strokeWidth={1.75} />} onClick={() => onDismiss(toast.id)} />
+    </div>
+  );
+}
+
+interface ToastStacksProps {
+  /** In a dialog's outlet, or at the screen's edge. */
+  docked: boolean;
+  /** Whether this host shows the toasts now. */
+  active: boolean;
+  /** Toasts carried in from another host, where a live region already showed them. */
+  carried: readonly ShownToast[];
+  /** Toasts first shown here. */
+  fresh: readonly ShownToast[];
+  liveRef?: Ref<HTMLDivElement>;
+  dismissLabel: string;
+  onDismiss: (id: string) => void;
+}
+
+/**
+ * One host's toasts: those carried in from another host (oldest, so first), outside the live region, so they are not
+ * announced again; then the polite live region with the toasts first shown here. A host that shows no toasts keeps
+ * its live region, empty: a toast that lands there later goes into a region that already exists, which is what gets
+ * it announced.
+ */
+export function ToastStacks({ docked, active, carried, fresh, liveRef, dismissLabel, onDismiss }: ToastStacksProps) {
+  const cards = (list: readonly ShownToast[]) =>
+    list.map((toast) => <ToastCard key={toast.id} toast={toast} docked={docked} dismissLabel={dismissLabel} onDismiss={onDismiss} />);
+  return (
+    <>
+      {active && carried.length > 0 ? <div className={stackClass(docked)}>{cards(carried)}</div> : null}
+      <div ref={liveRef} aria-live="polite" className={stackClass(docked, active && carried.length > 0 && fresh.length > 0)}>
+        {active ? cards(fresh) : null}
+      </div>
+    </>
+  );
+}
+
+/**
+ * Hosts the toasts, announced through a polite live region: at the screen's edge (bottom center on phones above the tab
+ * bar, bottom right on wider screens), or, while a modal layer is open, in that layer's ToastOutlet. A toast is
+ * announced once, where it first shows; toasts that move with a layer opening or closing sit beside the live region of
+ * their new host, so they are not announced again. Countdowns pause while the pointer is over the toasts or keyboard
+ * focus is inside them. When a toast that has keyboard focus closes, focus moves to the toast that took its place, or
+ * back to where it was before the toasts. Mounted once in components/providers/Providers.tsx.
  */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const t = useT();
   const [toasts, setToasts] = useState<ToastEntry[]>([]);
-  // The list and its countdowns live in one store that hands each new list to React.
-  const [store] = useState(() => createToastStore<ToastEntry>(setToasts, { max: MAX_TOASTS }));
-  const regionRef = useRef<HTMLDivElement>(null);
+  // The dialogs around the outlets, told before and after the toasts in them change.
+  const [watches] = useState(createWatchList);
+  // The list and its countdowns live in one store that hands each new list to React, once the dialogs have noted
+  // where their content is.
+  const [store] = useState(() =>
+    createToastStore<ToastEntry>(
+      (next) => {
+        watches.tell("before");
+        setToasts(next);
+      },
+      { max: MAX_TOASTS },
+    ),
+  );
+  const [outlets, setOutlets] = useState<readonly HTMLElement[]>([]);
+  const outlet = activeOutlet(outlets);
+  // Toasts a live region has shown (they were in a live stack in the document after a commit), and the ones carried to
+  // another host since, which stay out of its live stack. A toast shown again is a new entry and is announced again.
+  const announced = useRef(new WeakSet<ToastEntry>());
+  const [carried, setCarried] = useState<ReadonlySet<ToastEntry>>(() => new Set());
+  // The hosts (screen's edge, outlet) and their live stacks. The edge's live stack stays mounted while an outlet hosts
+  // the toasts: a toast shown as a dialog closes (Save, Delete) then lands in a live region that already existed, which
+  // is what gets it announced.
+  const edgeRef = useRef<HTMLDivElement>(null);
+  const dockedRef = useRef<HTMLDivElement>(null);
+  const edgeLiveRef = useRef<HTMLDivElement>(null);
+  const dockedLiveRef = useRef<HTMLDivElement>(null);
   // Where keyboard focus came from before it entered the toasts, which toast holds it, and whether it got there by
   // keyboard: enough to put focus somewhere sensible when that toast closes under it.
   const returnFocus = useRef<HTMLElement | null>(null);
@@ -64,11 +233,49 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [store],
   );
 
+  // The host changes: the toasts already announced by then move along without being announced again.
+  const carry = useCallback(() => {
+    const onScreen = store.toasts();
+    const shown = new Set(onScreen.filter((toast) => announced.current.has(toast)));
+    setCarried((before) => carryOver(onScreen, (toast) => shown.has(toast), before));
+  }, [store]);
+
+  const registerOutlet = useCallback(
+    (element: HTMLElement, watch?: ToastOutletWatch) => {
+      carry();
+      // The toasts leave the dialogs open so far. The new one is added after: it is never seen without them.
+      watches.tell("before");
+      if (watch) watches.add(element, watch);
+      setOutlets((list) => addOutlet(list, element));
+      return () => {
+        watches.remove(element);
+        carry();
+        watches.tell("before");
+        setOutlets((list) => removeOutlet(list, element));
+      };
+    },
+    [carry, watches],
+  );
+
+  useLayoutEffect(() => {
+    // A toast counts as announced once it is in a live stack that is in the document. One rendered into the outlet of a
+    // dialog that closes in the same commit is not: it is announced at the screen's edge on the next render.
+    const live = outlet ? dockedLiveRef.current : edgeLiveRef.current;
+    if (!live?.isConnected) return;
+    for (const toast of toasts) if (!carried.has(toast)) announced.current.add(toast);
+  }, [toasts, carried, outlet]);
+
+  // The toasts are in place in their host: the dialogs put their content back where it was on screen.
+  useLayoutEffect(() => {
+    watches.tell("after");
+  }, [toasts, outlets, watches]);
+
   useEffect(() => {
     // The focusout of a toast that closes under keyboard focus fires while React deletes it and never reaches onBlur,
-    // and a pointer can be left over the gap it leaves. So the holds are checked after every change; otherwise the
-    // countdowns would stay paused and later toasts would never close by themselves.
-    const region = regionRef.current;
+    // and a pointer can be left over the gap it leaves. The same goes for toasts that move between the screen's edge
+    // and an outlet. So the holds are checked after every change; otherwise the countdowns would stay paused and later
+    // toasts would never close by themselves.
+    const region = outlet ? dockedRef.current : edgeRef.current;
     if (!region) return;
     if (store.isHeld("focus") && !region.contains(document.activeElement)) {
       store.hold("focus", false);
@@ -85,7 +292,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       }
     }
     if (store.isHeld("hover") && !region.matches(":hover")) store.hold("hover", false);
-  }, [toasts, store]);
+  }, [toasts, store, outlet]);
 
   useEffect(() => () => store.clear(), [store]);
 
@@ -117,43 +324,42 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const api = useMemo<ToastApi>(() => ({ show, dismiss }), [show, dismiss]);
 
+  const region = { onPointerEnter, onPointerLeave, onFocus, onBlur };
+  const moved = toasts.filter((toast) => carried.has(toast));
+  const fresh = toasts.filter((toast) => !carried.has(toast));
+  const stacks = { carried: moved, fresh, dismissLabel: t.common.dismiss, onDismiss: dismiss };
+
   return (
     <ToastContext value={api}>
-      {children}
-      <div
-        ref={regionRef}
-        aria-live="polite"
-        onPointerEnter={onPointerEnter}
-        onPointerLeave={onPointerLeave}
-        onFocus={onFocus}
-        onBlur={onBlur}
-        className="pointer-events-none fixed inset-x-0 bottom-16 z-[60] flex flex-col items-center gap-2 px-4 md:inset-x-auto md:right-4 md:bottom-10 md:items-end md:px-0"
-      >
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            data-toast
-            className="pointer-events-auto flex w-full max-w-sm items-center gap-3 rounded-xs border border-line-2 bg-panel-2 py-1.5 pr-1.5 pl-3 text-sm text-fg shadow-xl md:w-auto md:min-w-72"
-          >
-            <div className="min-w-0 flex-1">{toast.message}</div>
-            {toast.action ? (
-              <button
-                type="button"
-                onClick={() => {
-                  toast.action?.onAction();
-                  dismiss(toast.id);
-                }}
-                className="h-7 shrink-0 rounded-xs px-2 text-sm font-medium text-accent transition-colors hover:bg-hover max-sm:h-10"
-              >
-                {toast.action.label}
-              </button>
-            ) : null}
-            <IconButton size="sm" label={t.common.close} icon={<X className="size-3.5" strokeWidth={1.75} />} onClick={() => dismiss(toast.id)} />
-          </div>
-        ))}
-      </div>
+      <ToastOutletContext value={registerOutlet}>
+        {children}
+        <div ref={edgeRef} {...region} className={EDGE_REGION}>
+          <ToastStacks docked={false} active={outlet === null} liveRef={edgeLiveRef} {...stacks} />
+        </div>
+        {outlet
+          ? createPortal(
+              <div ref={dockedRef} {...region} className={dockedRegionClass(toasts.length)}>
+                <ToastStacks docked active liveRef={dockedLiveRef} {...stacks} />
+              </div>,
+              outlet,
+            )
+          : null}
+      </ToastOutletContext>
     </ToastContext>
   );
+}
+
+/**
+ * Where the toasts show while a modal layer is open; Drawer renders one between its content and its footer. Inside the
+ * dialog the toasts stay reachable with Tab and get announced (under aria-modal, assistive technology treats the rest
+ * of the page as inert), and in a strip of their own they never cover the dialog's fields or buttons. The newest
+ * outlet hosts the toasts; with none, they show at the screen's edge. `watch` (keep it the same object for the life of
+ * the outlet) lets the dialog keep its content in place while the strip changes size.
+ */
+export function ToastOutlet({ className, watch }: { className?: string; watch?: ToastOutletWatch }) {
+  const register = useContext(ToastOutletContext);
+  const ref = useCallback((element: HTMLDivElement | null) => (element && register ? register(element, watch) : undefined), [register, watch]);
+  return <div ref={ref} data-toast-outlet className={className} />;
 }
 
 /** Shows short confirmations with an optional Undo, e.g. `toast.show({ message: "Removed NVDA", action: { label: "Undo", onAction } })`. */
