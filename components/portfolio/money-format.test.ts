@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { currencyDigits, displayedSign, signedMoneyText } from "./money-format";
+import { currencyDigits, signedMoneyText } from "./money-format";
 
 describe("currencyDigits", () => {
   it("uses the currency's minor unit", () => {
@@ -39,16 +39,5 @@ describe("signedMoneyText", () => {
     expect(signedMoneyText(null, "en")).toBe("—");
     expect(signedMoneyText(undefined, "zh")).toBe("—");
     expect(signedMoneyText(Number.NaN, "en")).toBe("—");
-  });
-});
-
-describe("displayedSign", () => {
-  it("is zero for amounts that round to zero and for missing values", () => {
-    expect(displayedSign(5)).toBe(1);
-    expect(displayedSign(-5)).toBe(-1);
-    expect(displayedSign(-0.004)).toBe(0);
-    expect(displayedSign(-0.004, 3)).toBe(-1);
-    expect(displayedSign(null)).toBe(0);
-    expect(displayedSign(Number.POSITIVE_INFINITY)).toBe(0);
   });
 });

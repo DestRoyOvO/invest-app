@@ -10,6 +10,18 @@ export function directionOf(value: number | null | undefined): Direction {
   return sign > 0 ? "up" : sign < 0 ? "down" : "flat";
 }
 
+/**
+ * The number a Delta shows, which its color and arrow follow: a percent or a ratio rounded to the decimals of its text
+ * (formatPercent leaves the sign off a figure that rounds to zero, so "0.00%" is flat, not red), a price change as it is
+ * (formatChange signs every change but zero). Null when there is no number.
+ */
+export function shownValue(value: number | null | undefined, kind: "percent" | "ratio" | "change", digits?: number): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  if (kind === "change") return value;
+  const rounded = Number((kind === "ratio" ? value * 100 : value).toFixed(digits ?? 2));
+  return rounded === 0 ? 0 : rounded;
+}
+
 /** Replaces a leading ASCII hyphen with U+2212, which is as wide as "+" in tabular figures and reads as "minus". */
 export function withTrueMinus(text: string): string {
   return text.startsWith("-") ? `−${text.slice(1)}` : text;

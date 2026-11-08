@@ -1,7 +1,7 @@
 // Pure formatting for money amounts, kept free of React so it can be tested.
 
 import { withTrueMinus } from "@/components/ui/delta-utils";
-import { DASH, formatNumber } from "@/lib/format";
+import { DASH, displayedSign, formatNumber } from "@/lib/format";
 import type { Lang } from "@/types/api";
 
 const currencyDigitCache = new Map<string, number>();
@@ -22,13 +22,6 @@ export function currencyDigits(currency: string | null | undefined): number {
     currencyDigitCache.set(currency, digits);
   }
   return digits;
-}
-
-/** Sign of an amount as shown with `digits` decimals: 0 when it rounds to zero, so −0.004 never shows as "−0.00". */
-export function displayedSign(value: number | null | undefined, digits = 2): -1 | 0 | 1 {
-  if (typeof value !== "number" || !Number.isFinite(value)) return 0;
-  const rounded = Number(value.toFixed(digits));
-  return rounded > 0 ? 1 : rounded < 0 ? -1 : 0;
 }
 
 /** A signed money amount as text with a true minus, e.g. "+1,234.50" or "−12.00"; a dash when missing. */

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DASH,
+  displayedSign,
   formatChange,
   formatCompact,
   formatMultiple,
@@ -69,5 +70,21 @@ describe("format", () => {
     expect(signOf(-0.1)).toBe(-1);
     expect(signOf(null)).toBe(0);
     expect(tpl("{n} trades", { n: 12 })).toBe("12 trades");
+  });
+
+  it("gives the sign a number shows: zero when it rounds to zero, and for missing values", () => {
+    expect(displayedSign(5)).toBe(1);
+    expect(displayedSign(-5)).toBe(-1);
+    expect(displayedSign(-0.004)).toBe(0);
+    expect(displayedSign(-0.004, 3)).toBe(-1);
+    expect(displayedSign(0.0049)).toBe(0);
+    expect(displayedSign(0.006)).toBe(1);
+    expect(displayedSign(null)).toBe(0);
+    expect(displayedSign(Number.POSITIVE_INFINITY)).toBe(0);
+    // formatPercent signs what it shows.
+    for (const value of [-0.0027, -0.004, -0.006, 0, 0.004, 0.006, 1.234, -12.5]) {
+      const text = formatPercent(value);
+      expect(text.startsWith("+") ? 1 : text.startsWith("-") ? -1 : 0, text).toBe(displayedSign(value));
+    }
   });
 });

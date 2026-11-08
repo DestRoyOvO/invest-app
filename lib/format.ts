@@ -28,6 +28,16 @@ export function signOf(value: number | null | undefined): -1 | 0 | 1 {
   return value > 0 ? 1 : -1;
 }
 
+/**
+ * The sign of `value` as it is shown with `digits` decimals: 0 when it rounds to zero, so −0.004 never shows as
+ * "−0.00" and is neither up nor down. The sign, color and arrow of a signed figure follow it.
+ */
+export function displayedSign(value: number | null | undefined, digits = 2): -1 | 0 | 1 {
+  if (!isNum(value)) return 0;
+  const rounded = Number(value.toFixed(digits));
+  return rounded > 0 ? 1 : rounded < 0 ? -1 : 0;
+}
+
 /** Plain number with fixed decimals and grouping, e.g. 7,376.86. */
 export function formatNumber(value: number | null | undefined, digits = 2, lang: Lang = "en"): string {
   if (!isNum(value)) return DASH;
@@ -57,7 +67,7 @@ export function formatPercent(value: number | null | undefined, options: { digit
   const sign = options.sign ?? true;
   const fixed = Math.abs(value).toFixed(digits);
   // The sign of the number shown: a change that rounds to zero reads "0.00%", not "-0.00%".
-  const shown = Number(fixed) === 0 ? 0 : value;
+  const shown = displayedSign(value, digits);
   const prefix = sign ? (shown > 0 ? "+" : shown < 0 ? "-" : "") : shown < 0 ? "-" : "";
   return `${prefix}${fixed}%`;
 }

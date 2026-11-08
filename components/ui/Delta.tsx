@@ -2,7 +2,7 @@ import { cn } from "@/lib/cn";
 import { formatChange, formatPercent, formatRatio, signOf } from "@/lib/format";
 import type { Lang } from "@/types/api";
 
-import { withTrueMinus } from "./delta-utils";
+import { shownValue, withTrueMinus } from "./delta-utils";
 
 export { directionOf, heatStep, heatStyle, HEAT_EDGES, HEAT_STEPS, withTrueMinus, type Direction, type HeatStep } from "./delta-utils";
 
@@ -21,7 +21,7 @@ interface DeltaProps {
  * sign. Only for prices, returns and P&L: model readings, percentiles and risk use neutral text.
  */
 export function Delta({ value, kind = "percent", digits, arrow = false, lang = "en", className }: DeltaProps) {
-  const sign = signOf(value);
+  const sign = signOf(shownValue(value, kind, digits));
   const color = sign > 0 ? "text-up" : sign < 0 ? "text-down" : "text-fg-3";
   const text =
     kind === "percent"

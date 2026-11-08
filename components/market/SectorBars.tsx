@@ -4,12 +4,16 @@ import Link from "next/link";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Delta } from "@/components/ui/Delta";
+import { shownValue } from "@/components/ui/delta-utils";
 import { getSector } from "@/lib/universe";
 import type { SectorSnapshot } from "@/types/api";
 
-/** A bar growing left (down) or right (up) from a center line, scaled to the largest move in the list. Decorative. */
+/**
+ * A bar growing left (down) or right (up) from a center line, scaled to the largest move in the list. Decorative. It
+ * follows the change as the percent beside it shows it, so a change that reads "0.00%" draws no bar.
+ */
 export function DivergingBar({ change, maxAbs }: { change: number | null; maxAbs: number }) {
-  const value = change ?? 0;
+  const value = shownValue(change, "percent") ?? 0;
   const width = `${(Math.min(Math.abs(value), maxAbs) / maxAbs) * 50}%`;
   return (
     <span aria-hidden className="relative h-2.5">
