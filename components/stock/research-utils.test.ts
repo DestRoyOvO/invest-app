@@ -1,6 +1,22 @@
 import { describe, expect, it } from "vitest";
 
-import { barWidths, dividendIncome, FINANCIAL_ROWS, fiscalYear, perShareDigits, readableName, yearAgoIndex, yearOverYear } from "./research-utils";
+import { barWidths, dividendIncome, FINANCIAL_ROWS, fiscalYear, perShareDigits, readableName, signedFigure, yearAgoIndex, yearOverYear } from "./research-utils";
+
+describe("signedFigure", () => {
+  it("signs a figure by its value, with a true minus", () => {
+    expect(signedFigure("2.0%", 0.0201)).toBe("+2.0%");
+    expect(signedFigure("10.2%", -0.102)).toBe("−10.2%");
+    expect(signedFigure("0.4", 0.41)).toBe("+0.4");
+  });
+
+  it("leaves a figure that shows as zero unsigned", () => {
+    // AAPL's capital spending in the fixture data: 89.27B after 89.31B, a change of -0.05% that shows as 0.0%.
+    expect(signedFigure("0.0%", 89.269 / 89.31 - 1)).toBe("0.0%");
+    expect(signedFigure("0.0", 0.04)).toBe("0.0");
+    expect(signedFigure("0.0%", 0)).toBe("0.0%");
+    expect(signedFigure("0.05%", -0.0005)).toBe("−0.05%");
+  });
+});
 
 describe("yearOverYear", () => {
   const years = ["2023-09-30", "2024-09-30", "2025-09-30", "2026-09-30"];

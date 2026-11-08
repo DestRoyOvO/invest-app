@@ -15,7 +15,7 @@ import { formatCompact, formatNumber, formatRatio, tpl } from "@/lib/format";
 import type { Lang } from "@/types/api";
 import type { FinancialPeriod } from "@/types/research";
 
-import { barWidths, FINANCIAL_ROWS, fiscalYear, yearOverYear, type FinancialRowSpec } from "./research-utils";
+import { barWidths, FINANCIAL_ROWS, fiscalYear, signedFigure, yearOverYear, type FinancialRowSpec } from "./research-utils";
 
 type Period = "annual" | "quarterly";
 
@@ -32,11 +32,6 @@ function formatValue(value: number | null, format: FinancialRowSpec["format"], l
   if (format === "ratio") return withTrueMinus(formatRatio(value, { digits: 1 }));
   if (format === "perShare") return withTrueMinus(formatNumber(value, 2, lang));
   return withTrueMinus(formatCompact(value, lang));
-}
-
-/** Prefixes an unsigned figure with + or a true minus by the sign of `value`. */
-function signed(text: string, value: number): string {
-  return value > 0 ? `+${text}` : value < 0 ? `−${text}` : text;
 }
 
 /**
@@ -98,9 +93,9 @@ export function FinancialsPanel({ symbol, quoteCurrency, className }: { symbol: 
         row.yoy === null ? (
           <span className="num text-fg-3">{formatRatio(null)}</span>
         ) : row.spec.change === "points" ? (
-          <span className="num text-fg">{tpl(r.points, { n: signed(Math.abs(row.yoy).toFixed(1), row.yoy) })}</span>
+          <span className="num text-fg">{tpl(r.points, { n: signedFigure(Math.abs(row.yoy).toFixed(1), row.yoy) })}</span>
         ) : (
-          <span className="num text-fg">{signed(formatRatio(Math.abs(row.yoy), { digits: 1 }), row.yoy)}</span>
+          <span className="num text-fg">{signedFigure(formatRatio(Math.abs(row.yoy), { digits: 1 }), row.yoy)}</span>
         ),
     },
   ];
