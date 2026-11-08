@@ -232,7 +232,7 @@ function Actions({ actions }: { actions: readonly AnalystAction[] }) {
       <DataTable rows={rows} columns={columns} rowKey={(row) => `${row.date}:${row.firm}`} caption={a.actions} empty={a.noActions} />
       {actions.length > ACTIONS_SHOWN ? (
         <div className="border-t border-line px-2 py-1.5">
-          <Button size="sm" variant="ghost" aria-expanded={all} onClick={() => setAll((value) => !value)}>
+          <Button size="sm" className="max-sm:h-10" variant="ghost" aria-expanded={all} onClick={() => setAll((value) => !value)}>
             {all ? a.showLess : tpl(a.showAll, { n: actions.length })}
           </Button>
         </div>

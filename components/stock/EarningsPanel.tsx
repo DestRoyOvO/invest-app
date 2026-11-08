@@ -6,6 +6,7 @@ import { agendaTimeEt } from "@/components/calendar/agenda-format";
 import {
   daysUntil,
   estimateTrend,
+  hasUsOptions,
   intoReportNote,
   isNonEquity,
   relativeWhen,
@@ -49,7 +50,7 @@ export function EarningsPanel({ symbol, className }: { symbol: string; className
   const { data, error, isLoading, mutate } = useEarnings(noEarnings ? null : symbol);
   const now = useClock();
   const { openChat } = useUi();
-  const wantsImplied = Boolean(data?.nextDate && now !== null && withinDays(data.nextDate, now, IMPLIED_DAYS));
+  const wantsImplied = Boolean(data?.nextDate && now !== null && hasUsOptions(symbol) && withinDays(data.nextDate, now, IMPLIED_DAYS));
   const implied = useImpliedMove(wantsImplied ? symbol : null);
 
   const trading = stock.data?.quote.currency ?? null;
@@ -83,7 +84,7 @@ export function EarningsPanel({ symbol, className }: { symbol: string; className
       footer={
         data ? (
           <div className="border-t border-line px-2 py-1.5">
-            <Button size="sm" variant="ghost" onClick={() => openChat({ text: tpl(e.askText, { symbol }), intent: { kind: "earnings", symbol } })}>
+            <Button size="sm" className="max-sm:h-10" variant="ghost" onClick={() => openChat({ text: tpl(e.askText, { symbol }), intent: { kind: "earnings", symbol } })}>
               <AiChip tone="current" />
               {e.ask}
             </Button>

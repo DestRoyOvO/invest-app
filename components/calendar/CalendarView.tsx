@@ -83,7 +83,7 @@ export function CalendarView() {
     body = <ErrorState error={feed.error} onRetry={() => feed.mutate()} />;
   } else if (active.size === 0) {
     body = (
-      <EmptyState actions={<Button size="sm" onClick={() => enable(["holdings", "watchlist", "universe", "macro"])}>{c.empty.showAll}</Button>}>{c.empty.noFilters}</EmptyState>
+      <EmptyState actions={<Button size="sm" className="max-sm:h-10" onClick={() => enable(["holdings", "watchlist", "universe", "macro"])}>{c.empty.showAll}</Button>}>{c.empty.noFilters}</EmptyState>
     );
   } else if (!agenda || agenda.shown === 0) {
     const showTop = !active.has("universe");
@@ -91,11 +91,11 @@ export function CalendarView() {
       <EmptyState
         actions={
           <>
-            <Button size="sm" variant="primary" onClick={openCommand}>
+            <Button size="sm" className="max-sm:h-10" variant="primary" onClick={openCommand}>
               {c.empty.addTickers}
             </Button>
             {showTop ? (
-              <Button size="sm" onClick={() => enable(["universe"])}>
+              <Button size="sm" className="max-sm:h-10" onClick={() => enable(["universe"])}>
                 {c.empty.showTop}
               </Button>
             ) : null}
@@ -109,12 +109,12 @@ export function CalendarView() {
         actions={
           <>
             {prefs.range === "week" ? (
-              <Button size="sm" onClick={() => setRange("next")}>
+              <Button size="sm" className="max-sm:h-10" onClick={() => setRange("next")}>
                 {c.empty.nextWeek}
               </Button>
             ) : null}
             {showTop ? (
-              <Button size="sm" onClick={() => enable(["universe"])}>
+              <Button size="sm" className="max-sm:h-10" onClick={() => enable(["universe"])}>
                 {c.empty.showTop}
               </Button>
             ) : null}
@@ -132,11 +132,11 @@ export function CalendarView() {
             className="border-b border-line"
             actions={
               <>
-                <Button size="sm" onClick={openCommand}>
+                <Button size="sm" className="max-sm:h-10" onClick={openCommand}>
                   {c.empty.addTickers}
                 </Button>
                 {active.has("universe") ? null : (
-                  <Button size="sm" onClick={() => enable(["universe"])}>
+                  <Button size="sm" className="max-sm:h-10" onClick={() => enable(["universe"])}>
                     {c.empty.showTop}
                   </Button>
                 )}
@@ -168,7 +168,7 @@ export function CalendarView() {
           }
         >
           <div className="flex flex-col gap-2 border-b border-line px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
-            <Segmented label={c.range.label} hideLabel size="sm" value={prefs.range} options={rangeOptions} onChange={setRange} className="w-full lg:w-80" />
+            <Segmented label={c.range.label} hideLabel size="sm" value={prefs.range} options={rangeOptions} onChange={setRange} className="w-full lg:w-80 max-sm:[&_button]:h-10" />
             <FilterChips counts={agenda?.counts ?? null} active={active} onToggle={toggle} />
           </div>
           {summary ? <p className="border-b border-line px-3 py-2 text-sm text-fg-2">{summary}</p> : null}

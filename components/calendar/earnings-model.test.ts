@@ -7,6 +7,7 @@ import {
   daysUntil,
   estimateTrend,
   formatTarget,
+  hasUsOptions,
   intoReportNote,
   isNonEquity,
   lastSurprises,
@@ -220,5 +221,24 @@ describe("isNonEquity", () => {
     expect(isNonEquity("EQUITY")).toBe(false);
     expect(isNonEquity(null)).toBe(false);
     expect(isNonEquity(undefined)).toBe(false);
+  });
+});
+
+describe("reports outside the New York session", () => {
+  const hk: EarningsDetail = { ...NVDA, symbol: "0700.HK", nextDate: "2026-11-18T08:10:00.000Z", nextDateEstimated: false, nextTiming: null, consensus: null, estimates: [], history: [] };
+
+  it("gives the ET time of a confirmed report and says when only the day is known", () => {
+    expect(intoReportNote(hk, null, NOW, earningsMessages.en, "en")).toEqual(["Reports in 11 days (Wed, Nov 18), 03:10 ET."]);
+    expect(intoReportNote(hk, null, NOW, earningsMessages.zh, "zh")).toEqual(["11 天后（11月18日周三）美东 03:10发布财报。"]);
+    const dayOnly = { ...hk, nextDate: "2026-11-18T00:00:00.000Z" };
+    expect(intoReportNote(dayOnly, null, NOW, earningsMessages.en, "en")).toEqual(["Reports in 11 days (Wed, Nov 18); the time is not announced."]);
+  });
+
+  it("asks for an implied move only where US options are listed", () => {
+    expect(hasUsOptions("NVDA")).toBe(true);
+    expect(hasUsOptions("BRK-B")).toBe(true);
+    expect(hasUsOptions("0700.HK")).toBe(false);
+    expect(hasUsOptions("^GSPC")).toBe(false);
+    expect(hasUsOptions("EURUSD=X")).toBe(false);
   });
 });

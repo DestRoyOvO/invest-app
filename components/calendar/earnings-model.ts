@@ -1,12 +1,17 @@
 // Pure view helpers for the earnings and analyst panels and the calendar rows: surprise marks, estimate changes, the
 // "Into the report" note, rating bars and the price-target scale. No React; tested in earnings-model.test.ts.
 
-import { daysBetween, eventDayKey, nyDayKey } from "@/lib/events";
+import { daysBetween, eventDayKey, isDateOnly, nyClock, nyDayKey } from "@/lib/events";
 import { formatCompact, formatNumber, formatPrice, formatRatio, tpl } from "@/lib/format";
 import type { Lang } from "@/types/api";
 import type { EarningsDetail, EarningsEstimate, EarningsQuarter, ImpliedMove, RatingCounts } from "@/types/earnings";
 
 const LOCALES: Record<Lang, string> = { en: "en-US", zh: "zh-CN" };
+
+/** Listed options (and so an implied move) exist for US listings only; Yahoo suffixes others (0700.HK, SAP.DE). */
+export function hasUsOptions(symbol: string): boolean {
+  return !symbol.includes(".") && !symbol.startsWith("^") && !symbol.includes("=");
+}
 
 /** True for a known quote type other than a stock (ETF, INDEX, CRYPTOCURRENCY, ...): no earnings or analyst coverage. */
 export function isNonEquity(quoteType: string | null | undefined): boolean {
@@ -117,9 +122,12 @@ export function weekdayDay(iso: string, lang: Lang): string {
 export interface NoteLabels {
   when: { today: string; tomorrow: string; inDays: string; daysAgo: string };
   slot: { pre: string; post: string; intraday: string; tbd: string };
+  /** "{time} ET" */
+  timeEt: string;
   note: {
     reports: string;
     reportsTbd: string;
+    reportsDay: string;
     consensus: string;
     consensusPlain: string;
     revenue: string;
@@ -148,11 +156,16 @@ export function intoReportNote(detail: EarningsDetail, implied: ImpliedMove | nu
   const when = relativeWhen(days, labels.when, lang, true);
   const date = weekdayDay(detail.nextDate, lang);
   const sentences: string[] = [];
-  if (detail.nextDateEstimated || !detail.nextTiming) {
+  if (detail.nextDateEstimated) {
     sentences.push(tpl(labels.note.reportsTbd, { when, date }));
-  } else {
+  } else if (detail.nextTiming) {
     const slot = labels.slot[detail.nextTiming];
     sentences.push(tpl(labels.note.reports, { when, date, slot: lang === "en" ? slot.toLowerCase() : slot }));
+  } else if (!isDateOnly(detail.nextDate)) {
+    // A confirmed time outside the New York session (a listing elsewhere): give the ET time.
+    sentences.push(tpl(labels.note.reports, { when, date, slot: tpl(labels.timeEt, { time: nyClock(Date.parse(detail.nextDate)) }) }));
+  } else {
+    sentences.push(tpl(labels.note.reportsDay, { when, date }));
   }
 
   const consensus = detail.consensus;

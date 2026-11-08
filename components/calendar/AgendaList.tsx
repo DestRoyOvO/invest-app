@@ -16,7 +16,7 @@ import { formatRatio, tpl } from "@/lib/format";
 import { MACRO_SOURCES } from "@/lib/macro-calendar";
 
 import { dayHeading, formatDividend, formatMoney, localLabel, macroDetail, markGlyph, marksLabel, relativeLabel, timeLabel } from "./agenda-format";
-import { lastSurprises, shortDay, signedPercent, withinDays } from "./earnings-model";
+import { hasUsOptions, lastSurprises, shortDay, signedPercent, withinDays } from "./earnings-model";
 
 // The day-grouped agenda of the events calendar. One DOM serves both layouts: on phones each event is a two-line card
 // (time and money on top, the name and the report context below); from sm up the same cells line up in columns.
@@ -87,7 +87,7 @@ function AgendaRow({ item, zone, now, grid }: { item: AgendaItem; zone: string |
   const { event } = item;
   const local = localLabel(item, zone, c);
   const symbol = event.symbol;
-  const wantsMove = event.kind === "earnings" && symbol !== null && (item.shares !== null || item.filters.includes("watchlist")) && withinDays(event.at, now, IMPLIED_MOVE_DAYS);
+  const wantsMove = event.kind === "earnings" && symbol !== null && hasUsOptions(symbol) && (item.shares !== null || item.filters.includes("watchlist")) && withinDays(event.at, now, IMPLIED_MOVE_DAYS);
   const wantsMarks = event.kind === "earnings" && symbol !== null;
   const [ref, seen] = useSeen<HTMLLIElement>();
 
@@ -95,9 +95,20 @@ function AgendaRow({ item, zone, now, grid }: { item: AgendaItem; zone: string |
     <li ref={ref} className={cn("relative border-b border-line/70 last:border-b-0", symbol && "hover:bg-hover", ROW, grid)}>
       <span className="min-w-0 truncate text-data text-fg-2 [grid-area:time]">
         {timeLabel(item, c)}
-        {local ? <span className="num text-fg-3 sm:hidden"> · {local}</span> : null}
+        {local ? (
+          <span className="num text-fg-3 sm:hidden">
+            {" · "}
+            <span className="sr-only">{c.columns.local}: </span>
+            {local}
+          </span>
+        ) : null}
       </span>
-      {zone ? <span className="num hidden truncate text-data text-fg-3 sm:block sm:[grid-area:local]">{local}</span> : null}
+      {zone ? (
+        <span className="num hidden truncate text-data text-fg-3 sm:block sm:[grid-area:local]">
+          {local ? <span className="sr-only">{c.columns.local}: </span> : null}
+          {local}
+        </span>
+      ) : null}
 
       <span className="flex min-w-0 items-center gap-2 [grid-area:main] sm:contents">
         <span className="shrink-0 sm:[grid-area:symbol]">

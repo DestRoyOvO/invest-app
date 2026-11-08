@@ -13,6 +13,7 @@ export const earningsMessages = defineMessages(
     when: { today: "Today", tomorrow: "Tomorrow", inDays: "In {n} days", daysAgo: "{n} days ago" },
     slot: { pre: "Before open", post: "After close", intraday: "During session", tbd: "Time TBD" },
     intoReport: "Into the report",
+    timeEt: "{time} ET",
     consensus: "Consensus",
     quarterEnding: "Quarter ending {date}",
     eps: "EPS",
@@ -42,6 +43,7 @@ export const earningsMessages = defineMessages(
     note: {
       reports: "Reports {when} ({date}), {slot}.",
       reportsTbd: "Expected {when} ({date}); the company has not confirmed the date or time.",
+      reportsDay: "Reports {when} ({date}); the time is not announced.",
       consensus: "Consensus EPS is {eps} from {n} analysts, with estimates from {low} to {high}.",
       consensusPlain: "Consensus EPS is {eps}.",
       revenue: "Revenue consensus is {revenue}.",
@@ -89,6 +91,7 @@ export const earningsMessages = defineMessages(
     when: { today: "今天", tomorrow: "明天", inDays: "{n} 天后", daysAgo: "{n} 天前" },
     slot: { pre: "盘前", post: "盘后", intraday: "盘中", tbd: "时间待定" },
     intoReport: "财报前瞻",
+    timeEt: "美东 {time}",
     consensus: "一致预期",
     quarterEnding: "截至 {date} 的季度",
     eps: "每股收益",
@@ -118,6 +121,7 @@ export const earningsMessages = defineMessages(
     note: {
       reports: "{when}（{date}）{slot}发布财报。",
       reportsTbd: "预计{when}（{date}）发布；公司尚未确认日期和时间。",
+      reportsDay: "{when}（{date}）发布财报，具体时间未公布。",
       consensus: "每股收益一致预期为 {eps}，来自 {n} 位分析师，预测区间 {low} 至 {high}。",
       consensusPlain: "每股收益一致预期为 {eps}。",
       revenue: "营收一致预期为 {revenue}。",
