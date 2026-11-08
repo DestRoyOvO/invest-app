@@ -124,10 +124,6 @@ test.describe("adding symbols", () => {
 
   test("refuses an unknown symbol typed in the add form", async ({ page, app }) => {
     test.skip(app.isPhone, "The add form is the same on phones.");
-    test.fixme(
-      true,
-      "app bug or product decision: AddSymbolForm checks only the format, so ZZZZ is saved and listed as a row of dashes under the 'Not found' notice instead of being refused as the brief expects",
-    );
     await app.seedStorage({ watchlist: ["NVDA", "AAPL"], holdings: {} });
     await app.goto("/watchlist");
     const panel = watchlistPanel(page);
