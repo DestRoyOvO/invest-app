@@ -9,6 +9,7 @@ import {
   clearAllData,
   countEntries,
   createBackup,
+  defaultRestoreMode,
   diffHoldings,
   formatBytes,
   hasChanges,
@@ -315,13 +316,39 @@ describe("parseBackup and the restore preview", () => {
     expect(await parseBackup("nope", current, STORES)).toEqual({ ok: false, error: "not_json" });
   });
 
-  it("measures a missing watchlist against the starter list the app shows", () => {
-    const merge = planRestore({}, backupOf({ [WL]: ["TSLA"] }), "merge", { stores: STORES });
-    expect(JSON.parse(merge.writes[WL] as string)).toEqual([...DEFAULT_WATCHLIST, "TSLA"]);
-    expect(find(merge.diffs, WL).added).toEqual(["TSLA"]);
+  it("measures a missing watchlist against the starter list the app shows, but does not merge into it", () => {
+    // The starter list is not the user's: with no saved list, Merge takes the file's list as it is.
+    const merge = planRestore({ "investseek:recents:v1": '["AAPL"]' }, backupOf({ [WL]: ["TSLA", "NVDA"] }), "merge", { stores: STORES });
+    expect(JSON.parse(merge.writes[WL] as string)).toEqual(["TSLA", "NVDA"]);
+    expect(find(merge.diffs, WL)).toMatchObject({ added: ["TSLA"], removed: DEFAULT_WATCHLIST.filter((symbol) => symbol !== "NVDA") });
+    // An unreadable saved list is shown as the starter list too.
+    expect(JSON.parse(planRestore({ [WL]: "{oops" }, backupOf({ [WL]: ["TSLA"] }), "merge", { stores: STORES }).writes[WL] as string)).toEqual(["TSLA"]);
+    // A saved list is the user's, even when it holds the starter symbols.
+    const saved = planRestore({ [WL]: JSON.stringify(DEFAULT_WATCHLIST) }, backupOf({ [WL]: ["TSLA"] }), "merge", { stores: STORES });
+    expect(JSON.parse(saved.writes[WL] as string)).toEqual([...DEFAULT_WATCHLIST, "TSLA"]);
     const replace = planRestore({ [WL]: '["TSLA"]' }, backupOf({}), "replace", { stores: STORES });
     expect(replace.writes).toEqual({ [WL]: null });
     expect(find(replace.diffs, WL)).toMatchObject({ added: DEFAULT_WATCHLIST, removed: ["TSLA"] });
+  });
+
+  it("counts a new watchlist order as a change, so Replace can apply it", () => {
+    const current = { [WL]: '["AAPL","MSFT","NVDA"]' };
+    const reordered = backupOf({ [WL]: ["NVDA", "AAPL", "MSFT"] });
+    const replace = planRestore(current, reordered, "replace", { stores: STORES });
+    expect(find(replace.diffs, WL)).toMatchObject({ added: [], changed: ["NVDA", "AAPL", "MSFT"], removed: [] });
+    expect(replace.writes[WL]).toBe('["NVDA","AAPL","MSFT"]');
+    // Merge keeps this browser's order.
+    const merge = planRestore(current, reordered, "merge", { stores: STORES });
+    expect(merge.writes).toEqual({});
+    expect(merge.diffs.some(hasChanges)).toBe(false);
+  });
+
+  it("offers Replace first only when nothing but browsing history is stored", () => {
+    expect(defaultRestoreMode({})).toBe("replace");
+    expect(defaultRestoreMode({ "investseek:last-symbol": "AAPL", "investseek:recents:v1": '["AAPL"]', "investseek:last-sector:v1": '"tech"', [META_STORAGE_KEY]: "{}" })).toBe("replace");
+    expect(defaultRestoreMode({ "investseek:last-symbol": "AAPL", [WL]: '["AAPL"]' })).toBe("merge");
+    expect(defaultRestoreMode({ "investseek:chart:v1": '{"log":true}' })).toBe("merge");
+    expect(defaultRestoreMode({ "investseek:mystery:v1": "1" })).toBe("merge");
   });
 
   it("keeps this browser's copy of a store the file has in the wrong shape", () => {

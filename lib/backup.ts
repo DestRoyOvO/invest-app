@@ -12,9 +12,10 @@
 // key is written, or after a failure (a full storage) the keys already written are put back and nothing has changed;
 // only then are the stores in this tab told. Other tabs follow through the browser's own storage events.
 //
-// Merge rules: the watchlist becomes the union (this browser's order first, capped at MAX_WATCHLIST); positions from
-// the file win per symbol; per symbol, the note with the newer updatedAt wins; every other store is replaced by the
-// file's copy. Replace makes this browser match the file, removing keys the file does not have.
+// Merge rules: the watchlist becomes the union (this browser's order first, capped at MAX_WATCHLIST), or the file's
+// list when this browser has none saved (it only shows the starter list); positions from the file win per symbol; per
+// symbol, the note with the newer updatedAt wins; every other store is replaced by the file's copy. Replace makes this
+// browser match the file, removing keys the file does not have, in the file's watchlist order.
 //
 // The file is validated with zod (components/data/backup-schema.ts), which is loaded only when a file is checked, so
 // validateBackup is async: the settings menu on every page imports this module for the backup age, and should not
@@ -415,14 +416,16 @@ function restoreState(current: StorageSnapshot, backup: Backup, mode: RestoreMod
     }
 
     if (kind === "watchlist") {
-      // Without a stored list the app shows the starter list, so that is what a change is measured against.
-      const before = raw === undefined ? [...DEFAULT_WATCHLIST] : sanitizeWatchlist(parsedOr(raw, null));
+      // Without a saved list (or with an unreadable one) the app shows the starter list, so that is what a change is
+      // measured against; but the starter list is not the user's, so Merge then takes the file's list as it is.
+      const ownList = Array.isArray(parsedOr(raw, null));
+      const before = ownList ? sanitizeWatchlist(parsedOr(raw, null)) : [...DEFAULT_WATCHLIST];
       let after = before;
       if (inFile) {
         const list = sanitizeWatchlist(incoming);
         diff.invalid = Math.max(0, (incoming as unknown[]).length - list.length);
         if (mode === "merge") {
-          const merged = mergeWatchlist(before, list);
+          const merged = mergeWatchlist(ownList ? before : [], list);
           after = merged.list;
           diff.overflow = merged.overflow;
         } else {
@@ -434,7 +437,10 @@ function restoreState(current: StorageSnapshot, backup: Backup, mode: RestoreMod
       } else {
         keep();
       }
-      diffs.push({ ...diff, ...diffArrays(before, after) });
+      const changes = diffArrays(before, after);
+      // The same symbols in another order: the moved ones count as changed, so a restore can apply the file's order.
+      if (changes.added.length === 0 && changes.removed.length === 0) changes.changed = after.filter((symbol, index) => before[index] !== symbol);
+      diffs.push({ ...diff, ...changes });
     } else if (kind === "holdings") {
       const before = raw === undefined ? {} : sanitizeHoldings(parsedOr(raw, null));
       let after: Holdings = mode === "replace" ? {} : before;
@@ -495,6 +501,17 @@ function restoreState(current: StorageSnapshot, backup: Backup, mode: RestoreMod
 
   diffs.sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind] || a.key.localeCompare(b.key));
   return { next, diffs };
+}
+
+/** Keys the app writes while browsing (the last symbol and sector viewed, recent symbols): nothing a restore loses. */
+const BROWSING_STORES = new Set(["last-symbol", "last-sector", "recents"]);
+
+/**
+ * The restore mode offered first: Replace when this browser holds nothing but browsing history (a new device, which
+ * a restore simply moves into), Merge as soon as anything else is stored.
+ */
+export function defaultRestoreMode(current: StorageSnapshot): RestoreMode {
+  return Object.keys(current).every((key) => key === META_STORAGE_KEY || BROWSING_STORES.has(storeName(key))) ? "replace" : "merge";
 }
 
 /** What a restore in the given mode would change in the given storage, per store. */
