@@ -150,6 +150,22 @@ describe("summaries, bars and search", () => {
     expect(news).toHaveLength(6);
     for (const item of news) expect(item.link).toMatch(/^https:\/\/example\.com\/fixtures\/news\//);
   });
+
+  it("give funds, indices, yields, crypto, currencies and futures market headlines, not press releases", async () => {
+    const PRESS_RELEASE = /quarterly results|largest division|supply agreement|industry conference|next report|business lines|latest quarterly update|shares (?:rise|slip|edge|trade|hold|climb)/;
+    const named: Record<string, RegExp> = { SPY: /SPDR S&P 500 ETF/, XLK: /Technology Select Sector SPDR Fund/, "^GSPC": /S&P 500/, "^TNX": /10-year Treasury yield/, "BTC-USD": /Bitcoin/, "EURUSD=X": /EUR\/USD/, "GC=F": /Gold/ };
+    for (const symbol of ["SPY", "XLK", "^GSPC", "^VIX", "^TNX", "DX-Y.NYB", "BTC-USD", "EURUSD=X", "GC=F"]) {
+      const news = await searchNews(symbol, 8);
+      expect(news, symbol).toHaveLength(8);
+      for (const item of news) {
+        expect(item.title, symbol).not.toMatch(PRESS_RELEASE);
+        if (named[symbol]) expect(item.title, symbol).toMatch(named[symbol]);
+        expect(item.relatedTickers, item.title).toEqual([symbol]);
+      }
+    }
+    // A stock's ticker still brings the company's own stories.
+    expect((await searchNews("AAPL", 8)).filter((item) => PRESS_RELEASE.test(item.title)).length).toBeGreaterThan(3);
+  });
 });
 
 describe("pages", () => {

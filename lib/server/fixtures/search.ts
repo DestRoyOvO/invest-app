@@ -10,7 +10,9 @@ import { latestCompletedSession, PROFILES, sessionClose } from "./sessions";
 // search() of the fixture data: name and ticker matches from the securities table (plus the ticker itself for any
 // well-formed symbol, as Yahoo does) and a few synthetic news stories per query. Story links point at
 // https://example.com/fixtures/news/<id>, which the article reader answers from fixture text without a network call.
-// Headlines name the company for company searches, so the app's relevance scoring treats them as company news.
+// Headlines name the company for company searches, so the app's relevance scoring treats them as company news; the
+// ticker of a fund, index, Treasury yield, crypto pair, currency pair or future gets market headlines about that
+// instrument (flows, levels, rates), never a company's press releases.
 
 export interface FixtureSearchOptions {
   quotesCount?: number;
@@ -105,6 +107,94 @@ const COMPANY_TEMPLATES: ReadonlyArray<(brand: string, symbol: string, topic: st
   (brand) => `${brand} sets the date for its quarterly results`,
 ];
 
+/** Moves with a singular subject ("the S&P 500 rises"); MOVES go with "shares" and "futures". */
+const MOVES_SINGULAR = ["rises", "slips", "edges higher", "trades lower", "holds steady", "climbs"];
+const MARKET_TOPICS = ["rate expectations", "the latest economic data", "the dollar", "bond yields", "the growth outlook", "central bank signals"];
+
+type InstrumentKind = "fund" | "index" | "volatility" | "rate" | "currency" | "crypto" | "future";
+type InstrumentTemplate = (label: string, topic: string, move: string, moves: string) => string;
+
+/** Headlines about an instrument: `move` agrees with a plural subject, `moves` with a singular one. No colons (see seriesKey in lib/server/news.ts). */
+const INSTRUMENT_TEMPLATES: Readonly<Record<InstrumentKind, readonly InstrumentTemplate[]>> = {
+  fund: [
+    (label, topic, _move, moves) => `${label} ${moves} as investors weigh ${topic}`,
+    (label) => `${label} draws inflows as investors add exposure`,
+    (label) => `Investors pull money from ${label} after a strong run`,
+    (label) => `Trading in ${label} picks up as investors reposition`,
+    (label, topic) => `How ${topic} could shape flows into ${label}`,
+    (label) => `${label} sees heavy volume as the session wraps up`,
+  ],
+  index: [
+    (label, topic, _move, moves) => `The ${label} ${moves} as investors weigh ${topic}`,
+    (label) => `Strategists revisit year-end targets for the ${label}`,
+    (label) => `Breadth narrows on the ${label} as large caps lead`,
+    (label, topic) => `What ${topic} could mean for the ${label}`,
+    (label) => `Futures tied to the ${label} point to a quiet open`,
+    (label, _topic, _move, moves) => `The ${label} ${moves} in a quiet session`,
+  ],
+  volatility: [
+    (label, topic, _move, moves) => `The ${label} ${moves} as investors weigh ${topic}`,
+    (label) => `Demand for hedges keeps the ${label} in focus`,
+    (label, topic) => `What ${topic} could mean for the ${label}`,
+    (label, _topic, _move, moves) => `The ${label} ${moves} ahead of key data`,
+    (label) => `Options traders watch the ${label} as the session wraps up`,
+    (label, _topic, _move, moves) => `The ${label} ${moves} in a quiet session`,
+  ],
+  rate: [
+    (label, topic, _move, moves) => `The ${label} ${moves} as investors weigh ${topic}`,
+    (label) => `Bond traders weigh the path of the ${label}`,
+    (label, _topic, _move, moves) => `The ${label} ${moves} after a Treasury auction`,
+    (label, topic) => `What ${topic} could mean for the ${label}`,
+    (label, _topic, _move, moves) => `The ${label} ${moves} ahead of key data`,
+    (label) => `Investors track the ${label} as the session wraps up`,
+  ],
+  currency: [
+    (label, topic, _move, moves) => `${label} ${moves} as traders weigh ${topic}`,
+    (label) => `${label} holds steady ahead of central bank remarks`,
+    (label, _topic, _move, moves) => `Rate differentials in focus as ${label} ${moves}`,
+    (label, _topic, _move, moves) => `${label} ${moves} after the latest inflation data`,
+    (label, topic) => `What ${topic} could mean for ${label}`,
+    (label) => `Investors track ${label} as the session wraps up`,
+  ],
+  crypto: [
+    (label, topic, _move, moves) => `${label} ${moves} as traders weigh ${topic}`,
+    (label) => `${label} trading volume climbs on major exchanges`,
+    (label) => `Funds that hold ${label} draw steady inflows`,
+    (label) => `${label} holds near a key level as volatility eases`,
+    (label, topic) => `What ${topic} could mean for ${label}`,
+    (label, _topic, _move, moves) => `${label} ${moves} in weekend trading`,
+  ],
+  future: [
+    (label, topic, move) => `${label} futures ${move} as traders weigh ${topic}`,
+    (label, _topic, move) => `${label} prices ${move} as traders weigh supply and demand`,
+    (label) => `${label} futures hold steady ahead of key data`,
+    (label, topic) => `What ${topic} could mean for ${label} prices`,
+    (label) => `Traders track ${label} futures as the session wraps up`,
+    (label, _topic, move) => `${label} futures ${move} in a quiet session`,
+  ],
+};
+
+function instrumentKind(security: Security): InstrumentKind {
+  if (security.model === "rate") return "rate";
+  if (security.model === "vix") return "volatility";
+  if (security.type === "CURRENCY" || /dollar index/i.test(security.name)) return "currency";
+  if (security.type === "INDEX") return "index";
+  if (security.type === "CRYPTOCURRENCY") return "crypto";
+  if (security.type === "FUTURE") return "future";
+  return "fund";
+}
+
+/** The name instrument headlines use: "SPDR S&P 500 ETF", "S&P 500", "10-year Treasury yield", "EUR/USD", "Bitcoin", "Gold". */
+export function instrumentLabel(security: Security): string {
+  if (security.model === "rate") {
+    const years = security.tenorYears ?? 10;
+    return years < 1 ? `${Math.round(years * 52)}-week Treasury bill yield` : `${years}-year Treasury yield`;
+  }
+  if (security.type === "CRYPTOCURRENCY") return security.name.replace(/\s+(?:USD|USDT|EUR|GBP|JPY|BTC)$/, "");
+  if (security.type === "ETF" || security.type === "MUTUALFUND") return brandOf({ ...security, name: security.name.replace(/,\s*Series \d+$/i, "") });
+  return security.name;
+}
+
 const TOPIC_TEMPLATES: ReadonlyArray<(query: string) => string> = [
   (query) => `Markets weigh ${query} ahead of key data`,
   (query) => `${capitalize(query)} in focus as investors assess the outlook`,
@@ -127,13 +217,17 @@ function storyId(...parts: Array<string | number>): string {
   return `${a}-${b.slice(0, 4)}-4${b.slice(5, 8)}-8${c.slice(1, 4)}-${c.slice(4)}${d}`;
 }
 
-/** The company a news query is about: an exact ticker, or a name the query starts. */
-function companyOf(q: string): Security | null {
+/**
+ * What a news query is about: a company (the exact ticker of a stock, or a name the query starts) or another instrument
+ * (the exact ticker of a fund, index, yield, crypto pair, currency pair or future).
+ */
+function subjectOf(q: string): { security: Security; company: boolean } | null {
   const symbol = normalizeSymbol(q);
   const bySymbol = symbol ? TABLE_SECURITIES.find((s) => s.symbol === symbol) : undefined;
-  if (bySymbol) return bySymbol;
+  if (bySymbol) return { security: bySymbol, company: bySymbol.type === "EQUITY" };
   const query = q.toLowerCase();
-  return TABLE_SECURITIES.find((s) => s.type === "EQUITY" && brandOf(s).toLowerCase() === query) ?? null;
+  const byName = TABLE_SECURITIES.find((s) => s.type === "EQUITY" && brandOf(s).toLowerCase() === query);
+  return byName ? { security: byName, company: true } : null;
 }
 
 function newsItems(q: string, count: number, now: number): Array<Record<string, unknown>> {
@@ -141,17 +235,23 @@ function newsItems(q: string, count: number, now: number): Array<Record<string, 
   const latest = latestCompletedSession(PROFILES.us, now);
   const close = sessionClose(PROFILES.us, latest);
   const key = q.toLowerCase();
-  const company = companyOf(q);
+  const subject = subjectOf(q);
   const offset = pick(8, key, "template");
   return Array.from({ length: count }, (_, i) => {
     const id = storyId(key, latest, i);
     let title: string;
     let related: string[];
-    if (company) {
+    if (subject?.company) {
+      const company = subject.security;
       const brand = brandOf(company);
       const template = COMPANY_TEMPLATES[(offset + i) % COMPANY_TEMPLATES.length];
       title = template(brand, company.symbol, TOPICS[pick(TOPICS.length, key, "topic", i)], MOVES[pick(MOVES.length, key, "move", i)]);
       related = [company.symbol];
+    } else if (subject) {
+      const templates = INSTRUMENT_TEMPLATES[instrumentKind(subject.security)];
+      const move = pick(MOVES.length, key, "move", i);
+      title = templates[(offset + i) % templates.length](instrumentLabel(subject.security), MARKET_TOPICS[pick(MARKET_TOPICS.length, key, "topic", i)], MOVES[move], MOVES_SINGULAR[move]);
+      related = [subject.security.symbol];
     } else {
       title = TOPIC_TEMPLATES[(offset + i) % TOPIC_TEMPLATES.length](q);
       related = i % 2 === 0 ? ["^GSPC"] : [];
