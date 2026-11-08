@@ -64,7 +64,10 @@ async function expectNextExDate(page: Page, dividends: DividendHistory): Promise
   await expect(panel(page, "Dividends")).toContainText(inOrder(["Next ex-date", longDate(`${next.exDate}T00:00:00Z`), `${perShare(amount)} · Pay date ${longDate(`${pay}T00:00:00Z`)}`]));
 }
 
-/** The first row of the analysts' table: the latest rating action, with its date, firm, new grade and price target. */
+/**
+ * The first row of the analysts' table: the latest rating action, with its date, firm, new grade and price target. The
+ * cells are read as shown: the firm's cell also holds the date it shows under the firm in a narrow box, hidden here.
+ */
 async function expectLatestAction(page: Page, analysts: AnalystActivity): Promise<void> {
   const action = known(analysts.actions[0], "rating action");
   const target = known(action.currentTarget, "price target");
@@ -73,7 +76,7 @@ async function expectLatestAction(page: Page, analysts: AnalystActivity): Promis
     action.firm,
     new RegExp(`${escapeRegExp(known(action.toGrade, "grade"))}$`),
     new RegExp(`(?:^|→ )${escapeRegExp(target >= 100 ? fixed(target, 0) : price(target))}$`),
-  ]);
+  ], { useInnerText: true });
 }
 
 test.describe("quote header", () => {
