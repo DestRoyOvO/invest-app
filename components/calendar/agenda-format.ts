@@ -1,9 +1,9 @@
 // Text for calendar rows and day headings: time slots, ET times, macro titles, money at stake. Pure, so the copy rules
 // (ET times, the viewer's clock only when it differs, true minus signs) are tested in agenda-format.test.ts.
 
-import { localTimeOf, nyClock, relativeDay, reportTimeKnown, type AgendaItem } from "@/lib/events";
+import { localTimeOf, nyClock, relativeDay, reportTimeKnown, type AgendaInput, type AgendaItem } from "@/lib/events";
 import { formatNumber, tpl } from "@/lib/format";
-import { DEFAULT_CURRENCY, pickBaseCurrency } from "@/lib/portfolio";
+import { DEFAULT_CURRENCY } from "@/lib/portfolio";
 import type { Messages } from "@/lib/i18n/messages";
 import type { Lang } from "@/types/api";
 
@@ -109,25 +109,48 @@ export interface Amount {
 }
 
 /**
- * The total of the amounts in the base currency: the most common one, US dollars on a tie (lib/portfolio.ts rules).
- * Amounts in other currencies are left out, never converted; an unknown currency counts as US dollars.
+ * Totals per currency, never converted: the currency with the most amounts first, US dollars on a tie, then by name
+ * (the lib/portfolio.ts base-currency rules). An unknown currency counts as US dollars.
  */
-export function baseAmount(amounts: readonly Amount[]): Amount | null {
-  if (amounts.length === 0) return null;
-  const base = pickBaseCurrency(amounts.map((a) => a.currency ?? DEFAULT_CURRENCY));
-  const value = amounts.filter((a) => (a.currency ?? DEFAULT_CURRENCY) === base).reduce((sum, a) => sum + a.value, 0);
-  return { value, currency: base };
+export function totalsByCurrency(amounts: readonly Amount[]): Amount[] {
+  const totals = new Map<string, { value: number; count: number }>();
+  for (const amount of amounts) {
+    const currency = amount.currency ?? DEFAULT_CURRENCY;
+    const entry = totals.get(currency) ?? { value: 0, count: 0 };
+    totals.set(currency, { value: entry.value + amount.value, count: entry.count + 1 });
+  }
+  return [...totals.entries()]
+    .sort((a, b) => b[1].count - a[1].count || Number(b[0] === DEFAULT_CURRENCY) - Number(a[0] === DEFAULT_CURRENCY) || a[0].localeCompare(b[0]))
+    .map(([currency, { value }]) => ({ value, currency }));
+}
+
+/** Value of every position (last price, or average cost while no price is known, as on the agenda rows) per currency. */
+export function portfolioTotals(input: AgendaInput): Amount[] {
+  const amounts: Amount[] = [];
+  for (const [symbol, holding] of Object.entries(input.holdings)) {
+    const quote = input.prices?.get(symbol);
+    const price = quote?.price ?? null;
+    const priced = price !== null && Number.isFinite(price) && price > 0;
+    amounts.push({ value: holding.shares * (priced ? price : holding.cost), currency: quote?.currency ?? null });
+  }
+  return totalsByCurrency(amounts);
+}
+
+/** `part` as a share of `whole`, only when both are in one and the same currency (amounts are never converted). */
+export function shareOfPositions(part: readonly Amount[], whole: readonly Amount[]): number | null {
+  if (part.length !== 1 || whole.length !== 1 || part[0].currency !== whole[0].currency || !(whole[0].value > 0)) return null;
+  return part[0].value / whole[0].value;
 }
 
 export interface Glance {
   /** Held symbols with a report in the period. */
   reporting: string[];
-  /** Value of those positions (base currency). */
-  reportingValue: Amount | null;
+  /** Value of those positions per currency, the largest group first. */
+  reportingValues: Amount[];
   /** Watchlist symbols (not held) with a report. */
   watchReporting: string[];
-  /** Approximate dividend cash for holders (base currency). */
-  dividendCash: Amount | null;
+  /** Approximate dividend cash for holders per currency, the largest group first. */
+  dividendCash: Amount[];
   exDividend: string[];
   macro: AgendaItem[];
 }
@@ -153,9 +176,9 @@ export function glance(items: readonly AgendaItem[]): Glance {
   const values = [...reporting.values()].filter((v): v is Amount => v !== null);
   return {
     reporting: [...reporting.keys()],
-    reportingValue: baseAmount(values),
+    reportingValues: totalsByCurrency(values),
     watchReporting: [...watch],
-    dividendCash: baseAmount(cash),
+    dividendCash: totalsByCurrency(cash),
     exDividend: [...exDividend],
     macro,
   };

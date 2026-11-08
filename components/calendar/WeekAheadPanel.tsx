@@ -5,16 +5,18 @@ import Link from "next/link";
 import { useMemo } from "react";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
+import { useUi } from "@/components/providers/UiProvider";
 import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
 import { Panel } from "@/components/ui/Panel";
 import { EmptyState, ErrorState, SkeletonRows } from "@/components/ui/States";
-import { TickNumber } from "@/components/ui/TickNumber";
 import { stockPath } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { buildAgenda, formatWeekSummary, nyDayKey, pickTopItems, rangeWindow, relativeDay, summarizeWeek, type AgendaItem, type EventFilter } from "@/lib/events";
 import { tpl } from "@/lib/format";
 
-import { dayShort, formatMoney, macroDetail, timeLabel } from "./agenda-format";
+import { dayShort, macroDetail, timeLabel } from "./agenda-format";
+import { PositionText } from "./AgendaList";
 import { useAgendaData } from "./use-agenda";
 import { useClock } from "./use-clock";
 
@@ -29,8 +31,9 @@ const GROUPS: ReadonlySet<EventFilter> = new Set<EventFilter>(["holdings", "watc
 export function WeekAheadPanel({ className }: { className?: string }) {
   const { t, lang } = usePrefs();
   const c = t.calendar;
+  const { openCommand } = useUi();
   const now = useClock();
-  const { feed, input, hydrated } = useAgendaData(FETCH_DAYS, false);
+  const { feed, input, hydrated, names } = useAgendaData(FETCH_DAYS, false);
   const span = useMemo(() => (now === null ? null : rangeWindow("week", now)), [now]);
   const agenda = useMemo(() => (feed.data && span ? buildAgenda(feed.data.events, input, span, GROUPS) : null), [feed.data, span, input]);
   const shown = useMemo(() => (agenda ? pickTopItems(agenda.days.flatMap((day) => day.items), MAX_ROWS) : null), [agenda]);
@@ -39,6 +42,18 @@ export function WeekAheadPanel({ className }: { className?: string }) {
   let body;
   if (!hydrated || today === null || (!feed.data && !feed.error)) body = <SkeletonRows rows={4} />;
   else if (feed.error && !feed.data) body = <ErrorState error={feed.error} onRetry={() => feed.mutate()} compact />;
+  else if ((!shown || shown.items.length === 0) && names === 0)
+    body = (
+      <EmptyState
+        actions={
+          <Button size="sm" className="max-sm:h-10" onClick={openCommand}>
+            {c.empty.addTickers}
+          </Button>
+        }
+      >
+        {c.empty.noNames}
+      </EmptyState>
+    );
   else if (!shown || shown.items.length === 0) body = <EmptyState>{c.overview.empty}</EmptyState>;
   else
     body = (
@@ -82,12 +97,6 @@ function WeekRow({ item, today }: { item: AgendaItem; today: string }) {
     event.kind === "macro" && event.macro
       ? [c.macro[event.macro], macroDetail(item, c, lang)].filter(Boolean).join(" ")
       : `${name} · ${event.kind === "dividend" ? c.dividendNoAmount : c.earnings}`;
-  const value =
-    event.kind === "dividend" && item.dividendCash !== null
-      ? tpl(c.cash, { amount: formatMoney(item.dividendCash, item.currency, lang, true) })
-      : event.kind === "earnings" && item.positionValue !== null
-        ? formatMoney(item.positionValue, item.currency, lang)
-        : null;
   return (
     <li className={cn("relative grid h-row grid-cols-[3.75rem_6.25rem_minmax(0,1fr)_auto] items-center gap-x-2.5 border-b border-line/70 px-3 text-data last:border-b-0 max-sm:h-11", event.symbol && "hover:bg-hover")}>
       <span className="truncate text-fg-2">{dayText}</span>
@@ -110,15 +119,7 @@ function WeekRow({ item, today }: { item: AgendaItem; today: string }) {
         ) : null}
       </span>
       <span className="num text-right text-fg">
-        {value ? (
-          event.kind === "earnings" ? (
-            <TickNumber key={item.valueAtCost ? "cost" : "market"} value={item.positionValue}>
-              {value}
-            </TickNumber>
-          ) : (
-            value
-          )
-        ) : null}
+        <PositionText item={item} />
       </span>
     </li>
   );

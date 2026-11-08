@@ -18,23 +18,27 @@ import { MACRO_SOURCES } from "@/lib/macro-calendar";
 import { dayHeading, formatDividend, formatMoney, localLabel, macroDetail, markGlyph, marksLabel, relativeLabel, timeLabel } from "./agenda-format";
 import { hasUsOptions, lastSurprises, shortDay, signedPercent, withinDays } from "./earnings-model";
 
-// The day-grouped agenda of the events calendar. One DOM serves both layouts: on phones each event is a two-line card
-// (time and money on top, the name and the report context below); from sm up the same cells line up in columns.
+// The day-grouped agenda of the events calendar. One DOM serves both layouts: in a narrow panel each event is a two-line
+// card (time and money on top, the name and the report context below); once the panel itself is 45rem wide (a container
+// query, since the page splits into two columns at xl) the same cells line up in columns, with at least about 12rem left
+// for the event. The viewer's clock, when it differs from New York, follows the ET time in the time cell instead of
+// taking a column: only macro releases and listings outside the US have an exact time to convert (US report times only
+// mark the session slot).
 
 /** Implied moves are requested for holdings and watchlist names reporting within this many days. */
 export const IMPLIED_MOVE_DAYS = 14;
 
 const ROW =
-  "grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 px-3 py-2 sm:gap-x-2.5 [grid-template-areas:'time_position'_'main_extra'] sm:h-row sm:items-center sm:gap-y-0 sm:py-0";
-const GRID = "sm:grid-cols-[6.25rem_4.5rem_minmax(0,1fr)_5.5rem_5rem_4.75rem] sm:[grid-template-areas:'time_symbol_event_position_move_marks']";
-const GRID_LOCAL =
-  "sm:grid-cols-[6.25rem_5.75rem_4.5rem_minmax(0,1fr)_5.5rem_5rem_4.75rem] sm:[grid-template-areas:'time_local_symbol_event_position_move_marks']";
+  "grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 px-3 py-2 @min-[45rem]:gap-x-2.5 [grid-template-areas:'time_position'_'main_extra'] @min-[45rem]:h-row @min-[45rem]:items-center @min-[45rem]:gap-y-0 @min-[45rem]:py-0";
+const GRID = "@min-[45rem]:grid-cols-[6.25rem_4.5rem_minmax(0,1fr)_5.5rem_5rem_4.75rem] @min-[45rem]:[grid-template-areas:'time_symbol_event_position_move_marks']";
+/** A wider time track when the viewer's clock follows the ET time ("14:00 ET · 03:00 +1 day"). */
+const GRID_LOCAL = "@min-[45rem]:grid-cols-[8.75rem_4.5rem_minmax(0,1fr)_5.5rem_5rem_4.75rem] @min-[45rem]:[grid-template-areas:'time_symbol_event_position_move_marks']";
 
 interface AgendaListProps {
   days: readonly AgendaDay[];
   /** Today's New York date, for the relative day labels. */
   today: string;
-  /** The viewer's time zone when it differs from New York: adds the "Your time" column. */
+  /** The viewer's time zone when it differs from New York: timed events also show the viewer's clock. */
   zone: string | null;
   now: number;
 }
@@ -44,10 +48,9 @@ export function AgendaList({ days, today, zone, now }: AgendaListProps) {
   const c = t.calendar;
   const grid = zone ? GRID_LOCAL : GRID;
   return (
-    <div>
-      <div aria-hidden className={cn("hidden h-8 items-center gap-x-2.5 border-b border-line px-3 sm:grid", grid)}>
+    <div className="@container">
+      <div aria-hidden className={cn("hidden h-8 items-center gap-x-2.5 border-b border-line px-3 @min-[45rem]:grid", grid)}>
         <span className="col-head truncate [grid-area:time]">{c.columns.time}</span>
-        {zone ? <span className="col-head truncate [grid-area:local]">{c.columns.local}</span> : null}
         <span className="col-head truncate [grid-area:symbol]">{c.columns.symbol}</span>
         <span className="col-head truncate [grid-area:event]">{c.columns.event}</span>
         <span className="col-head truncate text-right [grid-area:position]">{c.columns.position}</span>
@@ -96,22 +99,16 @@ function AgendaRow({ item, zone, now, grid }: { item: AgendaItem; zone: string |
       <span className="min-w-0 truncate text-data text-fg-2 [grid-area:time]">
         {timeLabel(item, c)}
         {local ? (
-          <span className="num text-fg-3 sm:hidden">
+          <span className="num text-fg-3 @min-[45rem]:text-micro" title={c.columns.local}>
             {" · "}
             <span className="sr-only">{c.columns.local}: </span>
             {local}
           </span>
         ) : null}
       </span>
-      {zone ? (
-        <span className="num hidden truncate text-data text-fg-3 sm:block sm:[grid-area:local]">
-          {local ? <span className="sr-only">{c.columns.local}: </span> : null}
-          {local}
-        </span>
-      ) : null}
 
-      <span className="flex min-w-0 items-center gap-2 [grid-area:main] sm:contents">
-        <span className="shrink-0 sm:[grid-area:symbol]">
+      <span className="flex min-w-0 items-center gap-2 [grid-area:main] @min-[45rem]:contents">
+        <span className="shrink-0 @min-[45rem]:[grid-area:symbol]">
           {symbol ? (
             <Link
               href={stockPath(symbol)}
@@ -123,7 +120,7 @@ function AgendaRow({ item, zone, now, grid }: { item: AgendaItem; zone: string |
             <span className="mono text-data font-medium text-fg">{c.macroCode[event.macro]}</span>
           ) : null}
         </span>
-        <span className="flex min-w-0 items-center gap-1.5 text-data sm:[grid-area:event]">
+        <span className="flex min-w-0 items-center gap-1.5 text-data @min-[45rem]:[grid-area:event]">
           <EventText item={item} />
         </span>
       </span>
@@ -132,9 +129,9 @@ function AgendaRow({ item, zone, now, grid }: { item: AgendaItem; zone: string |
         <PositionText item={item} />
       </span>
 
-      <span className="flex items-center justify-end gap-3 [grid-area:extra] sm:contents">
-        <span className="num relative text-right text-data sm:[grid-area:move]">{wantsMove ? <MoveText symbol={symbol} enabled={seen} /> : null}</span>
-        <span className="relative flex justify-end sm:[grid-area:marks]">{wantsMarks ? <SurpriseMarks symbol={symbol} enabled={seen} /> : null}</span>
+      <span className="flex items-center justify-end gap-3 [grid-area:extra] @min-[45rem]:contents">
+        <span className="num relative text-right text-data @min-[45rem]:[grid-area:move]">{wantsMove ? <MoveText symbol={symbol} enabled={seen} /> : null}</span>
+        <span className="relative flex justify-end @min-[45rem]:[grid-area:marks]">{wantsMarks ? <SurpriseMarks symbol={symbol} enabled={seen} /> : null}</span>
       </span>
     </li>
   );
@@ -186,13 +183,15 @@ function EventText({ item }: { item: AgendaItem }) {
     );
   }
   const kindText = event.kind === "dividend" ? (event.amount !== null ? tpl(c.dividend, { amount: formatDividend(event.amount, lang) }) : c.dividendNoAmount) : c.earnings;
-  // The company name gives way first, so the dividend amount stays readable on narrow rows.
+  // The company name gives way first and takes its separator with it, so a narrow row never shows a dangling "·". The
+  // event text keeps its width (shrink-0) and truncates only when it alone is wider than the cell (max-w-full).
   return (
     <>
       <span className="min-w-0 truncate text-fg-2" title={event.name ?? undefined}>
         {event.name ?? event.symbol}
+        <span className="text-fg-3"> ·</span>
       </span>
-      <span className="-ml-1 shrink-0 whitespace-nowrap text-fg-3">· {kindText}</span>
+      <span className="-ml-0.5 max-w-full shrink-0 truncate text-fg-3">{kindText}</span>
       {event.kind === "earnings" && event.estimated ? (
         <span className="relative shrink-0" title={c.estTitle}>
           <Badge>{c.est}</Badge>
@@ -202,7 +201,8 @@ function EventText({ item }: { item: AgendaItem }) {
   );
 }
 
-function PositionText({ item }: { item: AgendaItem }) {
+/** Money at stake on a row: the dividend cash or the position value (marked when it is at cost), with a spoken label. */
+export function PositionText({ item }: { item: AgendaItem }) {
   const { t, lang } = usePrefs();
   const c = t.calendar;
   if (item.event.kind === "dividend" && item.dividendCash !== null) {

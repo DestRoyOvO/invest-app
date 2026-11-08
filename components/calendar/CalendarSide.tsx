@@ -10,13 +10,13 @@ import { formatDate, formatRatio, tpl } from "@/lib/format";
 import { MACRO_CALENDAR_ENDS, MACRO_EVENTS, MACRO_SOURCES } from "@/lib/macro-calendar";
 
 import { SourceLink } from "./AgendaList";
-import { formatMoney, glance, periodMonthName, type Amount } from "./agenda-format";
+import { formatMoney, glance, periodMonthName, shareOfPositions, type Amount } from "./agenda-format";
 import { weekdayDay } from "./earnings-model";
 
 // The calendar's side column: totals for the period, the next macro releases, and how to read the agenda.
 
-function money(amount: Amount | null, lang: "en" | "zh", cents = false): string {
-  return amount ? formatMoney(amount.value, amount.currency, lang, cents) : "—";
+function money(amount: Amount, lang: "en" | "zh", cents = false): string {
+  return formatMoney(amount.value, amount.currency, lang, cents);
 }
 
 function tickers(symbols: readonly string[], max = 4): string {
@@ -26,20 +26,25 @@ function tickers(symbols: readonly string[], max = 4): string {
 interface GlanceStripProps {
   /** The period's events before the group filters; null while loading. */
   items: readonly AgendaItem[] | null;
-  /** Value of all positions in the base currency, for the share reporting. */
-  portfolioValue: number | null;
+  /** Value of all positions per currency (portfolioTotals), for the share that reports. */
+  portfolio: readonly Amount[];
   rangeLabel: string;
   /** Name macro days by weekday (one week) or by date (four weeks). */
   dayStyle?: "weekday" | "date";
   className?: string;
 }
 
-/** Four figures for the period above the agenda: holdings and watchlist names reporting, dividend cash, macro releases. */
-export function GlanceStrip({ items, portfolioValue, rangeLabel, dayStyle = "weekday", className }: GlanceStripProps) {
+/**
+ * Four figures for the period above the agenda: holdings and watchlist names reporting, dividend cash, macro releases.
+ * Amounts in different currencies are listed side by side ("11,587 + HKD 41,980"), never added up or converted, and
+ * the share of positions appears only when everything is in one currency.
+ */
+export function GlanceStrip({ items, portfolio, rangeLabel, dayStyle = "weekday", className }: GlanceStripProps) {
   const { t, lang } = usePrefs();
   const g = t.calendar.glance;
   const figures = items ? glance(items) : null;
-  const share = figures?.reportingValue && portfolioValue ? figures.reportingValue.value / portfolioValue : null;
+  const share = figures ? shareOfPositions(figures.reportingValues, portfolio) : null;
+  const [cash, ...otherCash] = figures?.dividendCash ?? [];
   return (
     <div role="group" aria-label={`${g.title}: ${rangeLabel}`} className={className}>
       {figures ? (
@@ -47,13 +52,21 @@ export function GlanceStrip({ items, portfolioValue, rangeLabel, dayStyle = "wee
           <StatTile
             label={g.reporting}
             value={figures.reporting.length}
-            sub={figures.reporting.length > 0 ? [money(figures.reportingValue, lang), share !== null ? tpl(g.ofPortfolio, { pct: formatRatio(share, { digits: 0 }) }) : null].filter(Boolean).join(" · ") : g.none}
+            sub={
+              figures.reporting.length > 0
+                ? [figures.reportingValues.map((amount) => money(amount, lang)).join(" + "), share !== null ? tpl(g.ofPortfolio, { pct: formatRatio(share, { digits: 0 }) }) : null]
+                    .filter(Boolean)
+                    .join(" · ")
+                : g.none
+            }
           />
           <StatTile label={g.watchReporting} value={figures.watchReporting.length} sub={figures.watchReporting.length > 0 ? tickers(figures.watchReporting) : g.none} />
           <StatTile
             label={g.dividendCash}
-            value={figures.dividendCash ? tpl(t.calendar.cash, { amount: money(figures.dividendCash, lang, true) }) : "—"}
-            sub={figures.exDividend.length > 0 ? tickers(figures.exDividend) : g.none}
+            value={cash ? tpl(t.calendar.cash, { amount: money(cash, lang, true) }) : "—"}
+            sub={
+              figures.exDividend.length > 0 ? [...otherCash.map((amount) => `+ ${money(amount, lang, true)}`), tickers(figures.exDividend)].join(" · ") : g.none
+            }
           />
           <StatTile
             label={g.macro}
@@ -120,11 +133,11 @@ export function MacroPanel({ now }: { now: number | null }) {
   );
 }
 
-/** How to read the agenda: time zones, estimates, implied moves and the surprise marks. */
+/** How to read the agenda: session slots, estimates, implied moves and the surprise marks. */
 export function ReadingNotes() {
   const { t } = usePrefs();
   const n = t.calendar.notes;
-  const notes = [n.est, n.move, n.surprises, n.source];
+  const notes = [n.slots, n.est, n.move, n.surprises, n.source];
   return (
     <Panel title={n.title}>
       <ul className="space-y-1.5 px-3 py-2.5 text-xs leading-5 text-fg-2">

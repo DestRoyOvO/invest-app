@@ -4,7 +4,23 @@ import { toAgendaItem, type AgendaInput } from "@/lib/events";
 import { calendarMessages } from "@/lib/i18n/calendar";
 import type { CalendarEvent } from "@/types/api";
 
-import { dayHeading, dayShort, formatMoney, glance, localLabel, macroDetail, markGlyph, marksLabel, periodMonthName, relativeLabel, reportTimeEt, timeLabel } from "./agenda-format";
+import {
+  dayHeading,
+  dayShort,
+  formatMoney,
+  glance,
+  localLabel,
+  macroDetail,
+  markGlyph,
+  marksLabel,
+  periodMonthName,
+  portfolioTotals,
+  relativeLabel,
+  reportTimeEt,
+  shareOfPositions,
+  timeLabel,
+  totalsByCurrency,
+} from "./agenda-format";
 
 const en = calendarMessages.en;
 const zh = calendarMessages.zh;
@@ -124,11 +140,51 @@ describe("glance", () => {
       ev("6", "macro", null, { macro: "cpi" }),
     ]);
     expect(g.reporting).toEqual(["NVDA", "JPM", "0700.HK"]);
-    expect(g.reportingValue).toEqual({ value: 40 * 186.64 + 3000, currency: "USD" });
+    // The Hong Kong position is listed in its own currency, never dropped or converted.
+    expect(g.reportingValues).toEqual([
+      { value: 40 * 186.64 + 3000, currency: "USD" },
+      { value: 41980, currency: "HKD" },
+    ]);
     expect(g.watchReporting).toEqual(["AAPL"]);
-    expect(g.dividendCash).toEqual({ value: 15, currency: "USD" });
+    expect(g.dividendCash).toEqual([{ value: 15, currency: "USD" }]);
     expect(g.exDividend).toEqual(["JPM"]);
     expect(g.macro).toHaveLength(1);
-    expect(glance([]).reportingValue).toBeNull();
+    expect(glance([]).reportingValues).toEqual([]);
+  });
+
+  it("totals by currency, the largest group first", () => {
+    expect(totalsByCurrency([])).toEqual([]);
+    expect(
+      totalsByCurrency([
+        { value: 10, currency: "HKD" },
+        { value: 5, currency: null },
+        { value: 7, currency: "USD" },
+        { value: 1, currency: "HKD" },
+        { value: 2, currency: "EUR" },
+        { value: 4, currency: "HKD" },
+      ]),
+    ).toEqual([
+      { value: 15, currency: "HKD" },
+      { value: 12, currency: "USD" },
+      { value: 2, currency: "EUR" },
+    ]);
+    // A tie goes to US dollars.
+    expect(totalsByCurrency([{ value: 1, currency: "EUR" }, { value: 2, currency: "USD" }]).map((a) => a.currency)).toEqual(["USD", "EUR"]);
+  });
+
+  it("gives the share of positions only when everything is in one currency", () => {
+    const usdOnly = { ...input, holdings: { NVDA: input.holdings.NVDA, JPM: input.holdings.JPM } };
+    const whole = portfolioTotals(usdOnly);
+    expect(whole).toEqual([{ value: 40 * 186.64 + 3000, currency: "USD" }]);
+    const nvda = [{ value: 40 * 186.64, currency: "USD" }];
+    expect(shareOfPositions(nvda, whole)).toBeCloseTo((40 * 186.64) / (40 * 186.64 + 3000), 10);
+    // Holdings in two currencies: no share, since amounts are never converted.
+    const mixed = portfolioTotals(input);
+    expect(mixed.map((a) => a.currency)).toEqual(["USD", "HKD"]);
+    expect(shareOfPositions(nvda, mixed)).toBeNull();
+    expect(shareOfPositions([{ value: 41980, currency: "HKD" }], whole)).toBeNull();
+    expect(shareOfPositions([], whole)).toBeNull();
+    // A position without a price counts at its average cost.
+    expect(portfolioTotals({ ...input, holdings: { ZZZ: { shares: 3, cost: 50 } }, prices: new Map() })).toEqual([{ value: 150, currency: "USD" }]);
   });
 });

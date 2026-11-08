@@ -23,8 +23,8 @@ import {
   type EventFilter,
 } from "@/lib/events";
 import { formatDate, formatTime, tpl } from "@/lib/format";
-import { DEFAULT_CURRENCY, pickBaseCurrency } from "@/lib/portfolio";
 
+import { portfolioTotals } from "./agenda-format";
 import { AgendaList } from "./AgendaList";
 import { GlanceStrip, MacroPanel, ReadingNotes } from "./CalendarSide";
 import { calendarPrefsStore } from "./calendar-prefs";
@@ -40,7 +40,7 @@ export function CalendarView() {
   const now = useClock();
   const zone = useViewerZone();
   const prefs = useLocalStore(calendarPrefsStore);
-  const { feed, input, hydrated, held, watchlist, quotes } = useAgendaData(AGENDA_FETCH_DAYS, true);
+  const { feed, input, hydrated, held, watchlist, names, namesCovered } = useAgendaData(AGENDA_FETCH_DAYS, true);
   const active = useMemo(() => new Set<EventFilter>(prefs.filters), [prefs.filters]);
 
   const span = useMemo(() => (now === null ? null : rangeWindow(prefs.range, now)), [now, prefs.range]);
@@ -58,13 +58,8 @@ export function CalendarView() {
   );
   const enable = useCallback((filters: readonly EventFilter[]) => calendarPrefsStore.update((current) => ({ ...current, filters: [...new Set([...current.filters, ...filters])] })), []);
 
-  // Value of every position in the base currency, for the share of the portfolio that reports.
-  const portfolioValue = useMemo(() => {
-    const priced = (quotes ?? []).filter((q) => q.price !== null && q.price > 0 && input.holdings[q.symbol]);
-    if (priced.length === 0) return null;
-    const base = pickBaseCurrency(priced.map((q) => q.currency ?? DEFAULT_CURRENCY));
-    return priced.filter((q) => (q.currency ?? DEFAULT_CURRENCY) === base).reduce((sum, q) => sum + input.holdings[q.symbol].shares * (q.price ?? 0), 0);
-  }, [quotes, input.holdings]);
+  // Value of every position per currency, for the share of positions that reports.
+  const portfolio = useMemo(() => portfolioTotals(input), [input]);
 
   const rangeOptions = [
     { value: "week" as const, label: c.range.week },
@@ -155,7 +150,7 @@ export function CalendarView() {
   return (
     <div className="grid gap-px bg-line p-px xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
       <h1 className="sr-only">{c.title}</h1>
-      <GlanceStrip items={agenda?.items ?? null} portfolioValue={portfolioValue} rangeLabel={rangeLabel} dayStyle={dayStyle} className="xl:col-span-2" />
+      <GlanceStrip items={agenda?.items ?? null} portfolio={portfolio} rangeLabel={rangeLabel} dayStyle={dayStyle} className="xl:col-span-2" />
       <div className="flex min-w-0 flex-col gap-px">
         <Panel
           code="EVTS"
@@ -173,6 +168,7 @@ export function CalendarView() {
             <FilterChips counts={agenda?.counts ?? null} active={active} onToggle={toggle} />
           </div>
           {summary ? <p className="border-b border-line px-3 py-2 text-sm text-fg-2">{summary}</p> : null}
+          {namesCovered < names ? <p className="border-b border-line px-3 py-1.5 text-xs text-fg-3">{tpl(c.capped, { shown: namesCovered, n: names })}</p> : null}
           <StaleBanner show={Boolean(feed.error && feed.data)} since={feed.data?.asOf} />
           {macroEnding && feed.data ? (
             <p role="status" className="flex items-center gap-2 border-b border-line bg-panel-2 px-3 py-1.5 text-xs text-warn">
