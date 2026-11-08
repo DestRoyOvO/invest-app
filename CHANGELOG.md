@@ -18,6 +18,7 @@ Every screen gets a function code, your positions move to the center (home page,
 - **AI.** Positions in the chat context behind an "Include my positions" switch that says they go to DeepSeek; earnings and analyst facts; "Why is it moving?" with a market, sector and peer breakdown and cited headlines; precomputed portfolio facts; saved notes and up to 20 chats; suggested questions; note outlines per asset class; a 15-minute server note cache; time and token limits that suit reasoning models.
 - **Preferences.** The System theme by default, color-blind price colors (blue up, orange down) and a compact density.
 - **Self-hosting and operations.** A Docker image and Compose file with optional automatic HTTPS through Caddy, one validated settings schema with startup checks, `/api/health` with version, commit, uptime and an upstream readiness check, structured JSON logs (`LOG_LEVEL`), `DEEPSEEK_BASE_URL`, an installable web app manifest with icons and a social card, a weekday Yahoo canary, Dependabot and issue forms.
+- **End-to-end and accessibility tests.** `npm run e2e` runs the production build in Chrome against deterministic synthetic market data (`MARKET_DATA_SOURCE=fixtures`) and a mock model, with the server's network blocked and its clock pinned. It opens every page route on a desktop and a phone viewport and runs axe on every page, the command bar and the AI chat in both themes; CI runs it on every pull request.
 
 ### Changed
 - **The technical score is described, not sold.** It is shown in neutral ink as short-term relative strength, and its track record comes from a pinned, reproducible evaluation: a fixed 2016–2026 window, the all-dates rank IC with a Newey-West t, timing and selection split apart, block-bootstrap intervals, a 2014–2024 holdout and the hindsight gap. None of it shows a reliable edge, and the app says so.
@@ -43,7 +44,7 @@ Every screen gets a function code, your positions move to the center (home page,
 
 ### Docs
 - README rewritten in English and Chinese at parity: what the numbers say, a tour by function code, the command grammar and keys, architecture diagrams, data sources and limits, and self-hosting.
-- New: the [deployment guide](docs/deployment.md), the [design system](docs/design-system.md), [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) and a [docs index](docs/README.md).
+- New: the [deployment guide](docs/deployment.md), the [testing guide](docs/testing.md), the [design system](docs/design-system.md), [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md) and a [docs index](docs/README.md).
 - Generated reports for the [evaluation](docs/evaluation.md) and the [factor research](docs/factor-research.md), the [signal model](docs/signal-model.md) updated to v4, and the [v0.3 roadmap](docs/roadmap-v0.3.md) with its status.
 - `scripts/check-links.ts` checks every relative link and image in the Markdown docs.
 

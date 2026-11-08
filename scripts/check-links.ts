@@ -6,8 +6,8 @@
 //   npx tsx scripts/check-links.ts README.md docs   (only these files or folders)
 //
 // EXPECTED_LATER lists targets that are referenced on purpose before they exist: the README screenshots, which a script
-// regenerates once the end-to-end harness lands, and docs/testing.md, which arrives with the end-to-end suite. They are
-// reported as expected instead of failing. Remove an entry once its file is committed.
+// regenerates from the end-to-end fixture data. They are reported as expected instead of failing. Remove an entry once
+// its file is committed.
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -22,7 +22,6 @@ const EXPECTED_LATER: readonly string[] = [
   "docs/screenshots/markets-dark-en.png",
   "docs/screenshots/overview-light-zh.png",
   "docs/screenshots/mobile-light-zh.png",
-  "docs/testing.md",
 ];
 
 const ROOT = process.cwd();

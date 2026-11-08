@@ -346,10 +346,10 @@ Other tools, run with `npx tsx`: `scripts/check-contrast.ts` (WCAG contrast of e
 ## Testing
 
 - **Unit tests:** more than 1,700 Vitest tests (`npm test`). They cover the signal engine and its statistics, the evaluation and research cores, portfolio and risk math, alerts, backup and CSV import, the command parser, AI context building and streaming, the SSRF guard, sessions, rate limits, settings validation, route handlers and the contrast of the design tokens. They never call Yahoo or DeepSeek.
-- **CI:** lint, typecheck, unit tests, a production build and an audit of production dependencies on every pull request and every push to `main`. A second workflow builds the Docker image and waits for its health check when deployment files change, and a weekday canary checks the live Yahoo contract.
+- **CI:** lint, typecheck, unit tests, a production build, an audit of production dependencies and the end-to-end suite on every pull request and every push to `main`. A second workflow builds the Docker image and waits for its health check when deployment files change, and a weekday canary checks the live Yahoo contract.
 
-<!-- e2e: the end-to-end suite is described only in this block and its twin in README.zh-CN.md; other docs link here. When the suite lands, update both blocks, remove docs/testing.md from EXPECTED_LATER in scripts/check-links.ts and update the roadmap's 待完成 list. -->
-**End-to-end and accessibility:** `npm run e2e` runs the Playwright suite with axe checks against synthetic fixture data (`MARKET_DATA_SOURCE=fixtures`) and a mock LLM, so it never calls Yahoo or DeepSeek. [docs/testing.md](docs/testing.md) is the reference.
+<!-- e2e: the end-to-end suite is described only in this block and its twin in README.zh-CN.md; other docs link here. Keep both blocks in step. -->
+**End-to-end and accessibility:** `npm run e2e` builds the app and runs the Playwright suite against synthetic fixture data (`MARKET_DATA_SOURCE=fixtures`) and a mock LLM, with the server's network blocked and its clock pinned, so it never calls Yahoo or DeepSeek. It opens every page route on a desktop and a phone viewport and runs axe on each page, the command bar and the AI chat in both themes. [docs/testing.md](docs/testing.md) is the reference.
 <!-- /e2e -->
 
 ## Project structure

@@ -12,7 +12,7 @@ What each document in this folder covers. Start with the project [README](../REA
 | [testing.md](testing.md) | End-to-end and accessibility tests; the README's [Testing](../README.md#testing) section has the summary. | 端到端与无障碍测试；摘要见 README 的[测试](../README.zh-CN.md#测试)一节。 |
 | [roadmap-v0.3.md](roadmap-v0.3.md) | The v0.3 plan from the eight-lens audit, with what shipped in 0.3.0, what stays deferred and what remains (in Chinese). | v0.3 路线图：八个角度审查后的计划，以及 0.3.0 已交付、暂缓和待完成的部分。 |
 | [optimization-plan.md](optimization-plan.md) | Historical: the audit of the 0.1 app (122 verified findings) and how the 0.2.0 rewrite implemented it. Superseded by the v0.3 roadmap; kept for reference. | 历史文档：对 0.1 版的审查（122 条已核实的问题）及 0.2.0 重写中的实施情况，已由 v0.3 路线图取代，留作参考。 |
-| [screenshots/](screenshots/) | Images for the READMEs (regenerated after the end-to-end suite lands). | README 使用的截图（端到端测试合并后重新生成）。 |
+| [screenshots/](screenshots/) | Images for the READMEs (regenerated from the end-to-end fixture data). | README 使用的截图（基于端到端测试的合成数据重新生成）。 |
 
 `evaluation.md` and `factor-research.md` are generated: change the scripts or the pinned settings in `scripts/evaluation.config.json` and re-run them instead of editing the files. `npx tsx scripts/check-links.ts` checks every relative link and image in these documents and in the root Markdown files.
 

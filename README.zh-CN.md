@@ -346,10 +346,10 @@ npm start          # 端口 3000；放在自己的 TLS 反向代理后面时，�
 ## 测试
 
 - **单元测试：** 超过 1700 个 Vitest 测试（`npm test`），覆盖信号引擎及其统计、评估和研究的核心逻辑、组合与风险计算、提醒、备份和 CSV 导入、命令解析、AI 上下文构建与流式处理、SSRF 防护、会话、频率限制、配置校验、路由处理器以及设计令牌的对比度。测试从不调用雅虎或 DeepSeek。
-- **CI：** 每个 Pull Request 和每次推送到 `main` 都会运行 lint、类型检查、单元测试、生产构建和生产依赖审计。部署相关文件变动时，另一个工作流会构建 Docker 镜像并等待健康检查通过；每个工作日还有巡检任务检查雅虎接口。
+- **CI：** 每个 Pull Request 和每次推送到 `main` 都会运行 lint、类型检查、单元测试、生产构建、生产依赖审计和端到端测试。部署相关文件变动时，另一个工作流会构建 Docker 镜像并等待健康检查通过；每个工作日还有巡检任务检查雅虎接口。
 
-<!-- e2e：端到端测试只在这一段和 README.md 中对应的一段里描述，其他文档都链接到这里。测试套件合并后，请同时更新这两段，从 scripts/check-links.ts 的 EXPECTED_LATER 中删去 docs/testing.md，并更新路线图的“待完成”列表。 -->
-**端到端与无障碍测试：** `npm run e2e` 运行 Playwright 测试套件和 axe 无障碍检查，使用合成的测试数据（`MARKET_DATA_SOURCE=fixtures`）和模拟的 LLM，从不调用雅虎或 DeepSeek。详细说明以 [docs/testing.md](docs/testing.md) 为准。
+<!-- e2e：端到端测试只在这一段和 README.md 中对应的一段里描述，其他文档都链接到这里。两段请同步修改。 -->
+**端到端与无障碍测试：** `npm run e2e` 先构建应用，再用合成的测试数据（`MARKET_DATA_SOURCE=fixtures`）和模拟的 LLM 运行 Playwright 测试套件。测试期间服务器不能联网、时钟固定，从不调用雅虎或 DeepSeek。套件在桌面和手机两种视口下逐一打开每个页面，并在深浅两种主题下对每个页面、命令栏和 AI 对话框运行 axe 无障碍检查。详细说明以 [docs/testing.md](docs/testing.md) 为准。
 <!-- /e2e -->
 
 ## 项目结构
