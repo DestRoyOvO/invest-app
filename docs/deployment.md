@@ -46,8 +46,8 @@ docker compose up -d --build    # http://127.0.0.1:3000
 What `docker-compose.yml` sets up:
 
 - The `app` service builds the multi-stage `Dockerfile` (Node 22 on Alpine). The final image contains only Next.js's
-  standalone server, its static assets and `public/`, runs as the unprivileged `node` user with `NODE_ENV=production`,
-  and listens on port 3000.
+  standalone server and its static assets, runs as the unprivileged `node` user with `NODE_ENV=production`, and
+  listens on port 3000.
 - Settings come from `.env.local`, the same file `npm run dev` uses. No setting is baked into the image: `.dockerignore`
   keeps every `.env*` file out of the build.
 - The port is published on `127.0.0.1` only. To reach the app from other devices, use the [Caddy profile](#https-with-caddy)
@@ -77,8 +77,8 @@ docker run -d --name investseek --restart unless-stopped --env-file .env.local -
 
 `npm ci && npm run build && npm start` runs the same server on port 3000; put it behind a TLS reverse proxy and set
 `TRUST_PROXY=1`. The build also writes the standalone server that the image uses. To run that one directly, copy
-`public/` to `.next/standalone/public` and `.next/static` to `.next/standalone/.next/static`, then run
-`node .next/standalone/server.js` with `PORT` and `HOSTNAME` set.
+`.next/static` to `.next/standalone/.next/static`, then run `node .next/standalone/server.js` with `PORT` and
+`HOSTNAME` set.
 
 ### Plain HTTP on a local network
 

@@ -24,7 +24,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN --mount=type=cache,target=/app/.next/cache npm run build
 
-# 3. Runtime: the standalone server with its static assets and public/, nothing else.
+# 3. Runtime: the standalone server and its static assets, nothing else (the app has no public/ folder).
 FROM node:${NODE_VERSION}-alpine AS runner
 WORKDIR /app
 # HOSTNAME must be set: Docker would otherwise put the container id there and the server would not listen on
@@ -33,7 +33,6 @@ ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0 \
     NEXT_TELEMETRY_DISABLED=1
-COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
 # Shown by /api/health as "commit". Set last, so a new commit does not invalidate the layers above.
