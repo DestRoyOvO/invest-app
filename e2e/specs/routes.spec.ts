@@ -1,6 +1,8 @@
 import { readdirSync } from "node:fs";
 import path from "node:path";
 
+import { MESSAGES } from "@/lib/i18n/messages";
+
 import { BASE_URL } from "../support/env";
 import { expectedNoise, ROUTES, SAMPLE_DATA, type RouteCase } from "../support/routes";
 import { expect, test, type Page } from "../support/test";
@@ -72,12 +74,13 @@ function expectStatus(route: RouteCase, status: number | undefined): void {
 
 /**
  * No error state on screen: ErrorState and the error boundary are alerts, and StaleBanner is the status line that
- * says older data is shown because a refresh failed. Next.js keeps an empty alert region of its own for announcing
- * client-side navigations (#__next-route-announcer__), which is not an error.
+ * says older data is shown because a refresh failed (its text comes from the app's own messages, so a reworded banner
+ * is still found). Next.js keeps an empty alert region of its own for announcing client-side navigations
+ * (#__next-route-announcer__), which is not an error.
  */
 async function expectNoErrorStates(page: Page): Promise<void> {
   await expect(page.locator('[role="alert"]:not(#__next-route-announcer__)').filter({ visible: true })).toHaveCount(0);
-  await expect(page.getByRole("status").filter({ hasText: "Showing the last data received" })).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: MESSAGES.en.common.staleData })).toHaveCount(0);
 }
 
 test("every page under app/ has a case in the sweep", async () => {
