@@ -7,7 +7,7 @@ import { MESSAGES } from "@/lib/i18n/messages";
 import { ShortcutList } from "./ShortcutsSheet";
 
 // Server-rendered markup of the keyboard reference: each list is named by its heading, so the page's own keys are found
-// and announced as "This page" rather than by where they sit. The keys a page registers come from the hotkey registry,
+// and announced as "On this page" rather than by where they sit. The keys a page registers come from the hotkey registry,
 // which is empty on the server, so it is stubbed with two.
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: () => undefined }), usePathname: () => "/" }));
 vi.mock("@/components/providers/PrefsProvider", async () => {
@@ -35,7 +35,7 @@ function lists(markup: string) {
 }
 
 describe("ShortcutList", () => {
-  it("names every list by its heading, the page's own keys as This page", () => {
+  it("names every list by its heading, the page's own keys as On this page", () => {
     const found = lists(renderToStaticMarkup(createElement(ShortcutList)));
     expect(found.map((list) => list.name)).toEqual([s.global, `${s.goTo} · ${s.goHint}`, s.page]);
     expect(found[2].items).toBe(2);

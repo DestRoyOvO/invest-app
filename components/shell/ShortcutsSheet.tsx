@@ -82,7 +82,7 @@ export function ShortcutList({ query = "", pageKeys = true, onNavigate }: { quer
   });
 
   const page = active.filter((hotkey) => hit(q, hotkey.description, hotkey.key));
-  // Each list is named by its heading, so "This page" and the others can be told apart without reading around them.
+  // Each list is named by its heading, so "On this page" and the others can be told apart without reading around them.
   const id = useId();
 
   return (
