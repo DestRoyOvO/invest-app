@@ -73,6 +73,15 @@ export function yearOverYear(values: ReadonlyArray<number | null>, ends: readonl
   return prior > 0 ? latest / prior - 1 : null;
 }
 
+/**
+ * Prefixes an unsigned figure ("2.0%", "0.4") with + or a true minus by the sign of `value`, and with neither when the
+ * figure shows as zero, so a change that rounds to zero reads "0.0%" rather than "−0.0%".
+ */
+export function signedFigure(text: string, value: number): string {
+  if (!/[1-9]/.test(text)) return text;
+  return value > 0 ? `+${text}` : value < 0 ? `−${text}` : text;
+}
+
 /** Bar lengths for one row (percent of the largest magnitude in it); null for missing values. */
 export function barWidths(values: ReadonlyArray<number | null>): Array<number | null> {
   const most = Math.max(0, ...values.map((v) => (v === null ? 0 : Math.abs(v))));
