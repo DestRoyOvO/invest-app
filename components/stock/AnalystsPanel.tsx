@@ -5,15 +5,16 @@ import { useMemo, useState } from "react";
 import {
   formatTarget,
   isNonEquity,
+  knownNonEquity,
   periodMonth,
   RATING_KEYS,
+  RATING_SHADES,
   ratingSegments,
   ratingTotal,
   relativeChange,
   scalePosition,
   signedPercent,
   targetScale,
-  type RatingKey,
 } from "@/components/calendar/earnings-model";
 import { useClock } from "@/components/calendar/use-clock";
 import { usePrefs } from "@/components/providers/PrefsProvider";
@@ -30,16 +31,8 @@ import { formatNumber, formatShortDate, tpl } from "@/lib/format";
 import type { AnalystAction, AnalystActivity } from "@/types/earnings";
 
 // Rating distribution by month, the price-target range against the price, and recent rating and target actions (ANR).
-// Ratings are opinions: one neutral hue (a lighter shade for each step away from "strong buy"), no buy or sell colors.
-
-/** Shades of the rating segments, strong buy to strong sell. */
-const SHADES: Record<RatingKey, string> = {
-  strongBuy: "bg-fg-2",
-  buy: "bg-fg-2/75",
-  hold: "bg-fg-2/50",
-  sell: "bg-fg-2/30",
-  strongSell: "bg-fg-2/15",
-};
+// Ratings are opinions: one neutral hue (a lighter shade for each step away from "strong buy", RATING_SHADES), no buy or
+// sell colors.
 
 const ACTIONS_SHOWN = 8;
 
@@ -49,9 +42,9 @@ export function AnalystsPanel({ symbol, className }: { symbol: string; className
   const { t } = usePrefs();
   const a = t.earnings.analysts;
   // Shares the quote page's request: the live price for the target marker, and the quote type, so funds and indices
-  // (which have no analyst coverage) are not asked for once the quote is known.
+  // (which have no analyst coverage) are not asked for. The app's own funds and index symbols are known up front.
   const stock = useStock(symbol);
-  const noCoverage = isNonEquity(stock.data?.quote.quoteType);
+  const noCoverage = knownNonEquity(symbol) || isNonEquity(stock.data?.quote.quoteType);
   const { data, error, isLoading, mutate } = useAnalysts(noCoverage ? null : symbol);
   const now = useClock();
   const price = stock.data?.quote.price ?? data?.currentPrice ?? null;
@@ -119,7 +112,7 @@ function Ratings({ activity, now }: { activity: AnalystActivity; now: number }) 
                 {segments
                   .filter((s) => s.count > 0)
                   .map((s) => (
-                    <span key={s.key} className={cn("h-full", SHADES[s.key])} style={{ width: `${s.share * 100}%` }} />
+                    <span key={s.key} className={cn("h-full", RATING_SHADES[s.key])} style={{ width: `${s.share * 100}%` }} />
                   ))}
               </span>
               <span className="num text-right text-micro text-fg-2">{ratingTotal(row)}</span>
@@ -130,7 +123,7 @@ function Ratings({ activity, now }: { activity: AnalystActivity; now: number }) 
       <ul aria-label={a.ratings} className="mt-2.5 flex flex-wrap gap-x-3 gap-y-1">
         {RATING_KEYS.map((key) => (
           <li key={key} className="inline-flex items-center gap-1.5 text-micro text-fg-2">
-            <span aria-hidden className={cn("size-2.5 rounded-xs", SHADES[key])} />
+            <span aria-hidden className={cn("size-2.5 rounded-xs", RATING_SHADES[key])} />
             {a.rating[key]}
             <span className="num text-fg">{current[key]}</span>
           </li>
@@ -208,7 +201,8 @@ function Actions({ actions }: { actions: readonly AnalystAction[] }) {
   const rows = useMemo(() => (all ? actions : actions.slice(0, ACTIONS_SHOWN)), [actions, all]);
   const actionLabels = a.action as Record<string, string>;
   const columns: Array<DataTableColumn<AnalystAction>> = [
-    { key: "date", header: a.columns.date, width: lang === "zh" ? "5rem" : "4.5rem", render: (row) => <span className="num text-fg-2">{formatShortDate(row.date, lang, "America/New_York")}</span> },
+    // "10月15日" needs more room than "Oct 15".
+    { key: "date", header: a.columns.date, width: lang === "zh" ? "5.75rem" : "4.5rem", render: (row) => <span className="num text-fg-2">{formatShortDate(row.date, lang, "America/New_York")}</span> },
     { key: "firm", header: a.columns.firm, render: (row) => <span className="text-fg" title={row.firm}>{row.firm}</span> },
     {
       key: "rating",

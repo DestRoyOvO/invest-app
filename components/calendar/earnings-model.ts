@@ -1,8 +1,9 @@
 // Pure view helpers for the earnings and analyst panels and the calendar rows: surprise marks, estimate changes, the
 // "Into the report" note, rating bars and the price-target scale. No React; tested in earnings-model.test.ts.
 
-import { daysBetween, eventDayKey, isDateOnly, nyClock, nyDayKey } from "@/lib/events";
+import { daysBetween, eventDayKey, nyClock, nyDayKey, reportTimeKnown } from "@/lib/events";
 import { formatCompact, formatNumber, formatPrice, formatRatio, tpl } from "@/lib/format";
+import { BROAD_ETFS, SECTORS } from "@/lib/universe";
 import type { Lang } from "@/types/api";
 import type { EarningsDetail, EarningsEstimate, EarningsQuarter, ImpliedMove, RatingCounts } from "@/types/earnings";
 
@@ -16,6 +17,17 @@ export function hasUsOptions(symbol: string): boolean {
 /** True for a known quote type other than a stock (ETF, INDEX, CRYPTOCURRENCY, ...): no earnings or analyst coverage. */
 export function isNonEquity(quoteType: string | null | undefined): boolean {
   return typeof quoteType === "string" && quoteType !== "EQUITY";
+}
+
+/** The funds the app itself lists (broad market, sector and related ETFs). */
+const KNOWN_FUNDS: ReadonlySet<string> = new Set([...BROAD_ETFS, ...SECTORS.flatMap((sector) => [sector.etf, ...sector.relatedEtfs])]);
+
+/**
+ * True for symbols known to have no earnings or analyst coverage before their quote arrives: the app's own ETF lists,
+ * indices (^GSPC), currencies and futures (EURUSD=X, CL=F) and crypto pairs (BTC-USD). Others wait for the quote type.
+ */
+export function knownNonEquity(symbol: string): boolean {
+  return KNOWN_FUNDS.has(symbol) || symbol.startsWith("^") || symbol.includes("=") || symbol.endsWith("-USD");
 }
 
 export interface FigureCurrencies {
@@ -148,12 +160,12 @@ export function weekdayDay(iso: string, lang: Lang): string {
 }
 
 export interface NoteLabels {
-  when: { today: string; tomorrow: string; inDays: string; daysAgo: string };
+  when: { today: string; tomorrow: string; inDays: string; daysAgoOne: string; daysAgo: string };
   slot: { pre: string; post: string; intraday: string; tbd: string };
-  /** "{time} ET" */
-  timeEt: string;
   note: {
     reports: string;
+    /** "Reports {when} ({date}) at {time} ET." */
+    reportsAt: string;
     reportsTbd: string;
     reportsDay: string;
     consensus: string;
@@ -170,7 +182,8 @@ export interface NoteLabels {
 
 /** "today", "tomorrow", "in 5 days" in the sentence's case (lower-cased in English). */
 export function relativeWhen(days: number, labels: NoteLabels["when"], lang: Lang, sentence = false): string {
-  const text = days === 0 ? labels.today : days === 1 ? labels.tomorrow : days > 1 ? tpl(labels.inDays, { n: days }) : tpl(labels.daysAgo, { n: -days });
+  const text =
+    days === 0 ? labels.today : days === 1 ? labels.tomorrow : days > 1 ? tpl(labels.inDays, { n: days }) : days === -1 ? labels.daysAgoOne : tpl(labels.daysAgo, { n: -days });
   return sentence && lang === "en" ? text.charAt(0).toLowerCase() + text.slice(1) : text;
 }
 
@@ -197,9 +210,9 @@ export function intoReportNote(
   } else if (detail.nextTiming) {
     const slot = labels.slot[detail.nextTiming];
     sentences.push(tpl(labels.note.reports, { when, date, slot: lang === "en" ? slot.toLowerCase() : slot }));
-  } else if (!isDateOnly(detail.nextDate)) {
-    // A confirmed time outside the New York session (a listing elsewhere): give the ET time.
-    sentences.push(tpl(labels.note.reports, { when, date, slot: tpl(labels.timeEt, { time: nyClock(Date.parse(detail.nextDate)) }) }));
+  } else if (reportTimeKnown(detail.symbol, detail.nextDate)) {
+    // A confirmed release time of a listing outside the US: give it in ET.
+    sentences.push(tpl(labels.note.reportsAt, { when, date, time: nyClock(Date.parse(detail.nextDate)) }));
   } else {
     sentences.push(tpl(labels.note.reportsDay, { when, date }));
   }
@@ -237,6 +250,18 @@ export function intoReportNote(
 
 export const RATING_KEYS = ["strongBuy", "buy", "hold", "sell", "strongSell"] as const;
 export type RatingKey = (typeof RATING_KEYS)[number];
+
+/**
+ * Fills of the rating segments and legend swatches, strong buy to strong sell: one neutral ink in lighter steps, each at
+ * least 3:1 against the panel in both themes (checked in earnings-model.test.ts against app/globals.css).
+ */
+export const RATING_SHADES: Record<RatingKey, string> = {
+  strongBuy: "bg-fg",
+  buy: "bg-fg/85",
+  hold: "bg-fg/72",
+  sell: "bg-fg/60",
+  strongSell: "bg-fg/50",
+};
 
 export function ratingTotal(row: RatingCounts): number {
   return RATING_KEYS.reduce((sum, key) => sum + row[key], 0);

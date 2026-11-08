@@ -1,7 +1,7 @@
 // Text for calendar rows and day headings: time slots, ET times, macro titles, money at stake. Pure, so the copy rules
 // (ET times, the viewer's clock only when it differs, true minus signs) are tested in agenda-format.test.ts.
 
-import { isDateOnly, localTimeOf, nyClock, relativeDay, type AgendaItem } from "@/lib/events";
+import { localTimeOf, nyClock, relativeDay, reportTimeKnown, type AgendaItem } from "@/lib/events";
 import { formatNumber, tpl } from "@/lib/format";
 import { DEFAULT_CURRENCY, pickBaseCurrency } from "@/lib/portfolio";
 import type { Messages } from "@/lib/i18n/messages";
@@ -25,10 +25,10 @@ export function timeLabel(item: AgendaItem, t: CalendarText): string {
   return tpl(t.timeEt, { time: nyClock(Date.parse(event.at)) });
 }
 
-/** "HH:MM ET" for a timed value; null for a date-only one. */
-export function agendaTimeEt(iso: string, t: CalendarText): string | null {
+/** "HH:MM ET" of a confirmed report when Yahoo gives its release time (see reportTimeKnown); null otherwise. */
+export function reportTimeEt(symbol: string, iso: string, t: CalendarText): string | null {
   const ms = Date.parse(iso);
-  if (!Number.isFinite(ms) || isDateOnly(iso)) return null;
+  if (!Number.isFinite(ms) || !reportTimeKnown(symbol, iso)) return null;
   return tpl(t.timeEt, { time: nyClock(ms) });
 }
 

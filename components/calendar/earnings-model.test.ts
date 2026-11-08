@@ -1,5 +1,9 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
+import { composite, contrastRatio, extractTokenSources, parseColor, resolveTokens, THEMES } from "@/lib/design-tokens";
 import { earningsMessages } from "@/lib/i18n/earnings";
 import type { EarningsDetail, EarningsEstimate, EarningsQuarter, ImpliedMove } from "@/types/earnings";
 
@@ -11,11 +15,15 @@ import {
   hasUsOptions,
   intoReportNote,
   isNonEquity,
+  knownNonEquity,
   lastSurprises,
   periodMonth,
+  RATING_KEYS,
+  RATING_SHADES,
   ratingSegments,
   ratingTotal,
   relativeChange,
+  relativeWhen,
   scalePosition,
   shortDay,
   signedPercent,
@@ -188,6 +196,17 @@ describe("intoReportNote", () => {
     const baba = intoReportNote({ ...tsm, epsCurrency: "CNY", revenueCurrency: "CNY" }, null, NOW, earningsMessages.en, "en", { eps: "CNY", revenue: "CNY" });
     expect(baba).toContain("Consensus EPS is CNY 2.47 from 44 analysts, with estimates from 2.34 to 2.70.");
   });
+
+  it("gives no clock time for a US report outside a session slot (a Saturday release)", () => {
+    const saturday: EarningsDetail = { ...NVDA, symbol: "BRK-B", nextDate: "2026-11-14T21:00:00.000Z", nextTiming: null, consensus: null, estimates: [], history: [] };
+    expect(intoReportNote(saturday, null, NOW, earningsMessages.en, "en")).toEqual(["Reports in 7 days (Sat, Nov 14); the time is not announced."]);
+  });
+
+  it("says one day ago in the singular", () => {
+    expect(relativeWhen(-1, earningsMessages.en.when, "en")).toBe("1 day ago");
+    expect(relativeWhen(-2, earningsMessages.en.when, "en")).toBe("2 days ago");
+    expect(relativeWhen(-1, earningsMessages.zh.when, "zh")).toBe("1 天前");
+  });
 });
 
 describe("figureCurrencies", () => {
@@ -207,6 +226,26 @@ describe("figureCurrencies", () => {
     // Before the quote (and its trading currency) arrives, only a split between EPS and revenue is certain.
     expect(figureCurrencies(null, { financialCurrency: "CNY", epsCurrency: "CNY" }).note).toBeNull();
     expect(figureCurrencies(null, { financialCurrency: "TWD", epsCurrency: "USD" }).note).toEqual({ kind: "split", eps: "USD", revenue: "TWD" });
+  });
+});
+
+describe("rating shades", () => {
+  const sources = extractTokenSources(readFileSync(join(process.cwd(), "app/globals.css"), "utf8"));
+
+  it("keep every step at 3:1 or more against the panel in both themes, in order from dark to light ink", () => {
+    for (const theme of THEMES) {
+      const tokens = resolveTokens(sources, theme, "intl");
+      const panel = parseColor(tokens.get("--panel")!)!;
+      const ink = parseColor(tokens.get("--fg")!)!;
+      const ratios = RATING_KEYS.map((key) => {
+        const match = /^bg-fg(?:\/(\d+))?$/.exec(RATING_SHADES[key]);
+        expect(match, RATING_SHADES[key]).not.toBeNull();
+        const alpha = match![1] === undefined ? 1 : Number(match![1]) / 100;
+        return contrastRatio(composite({ ...ink, a: alpha }, panel), panel);
+      });
+      for (const ratio of ratios) expect(ratio).toBeGreaterThanOrEqual(3);
+      expect([...ratios].sort((a, b) => b - a)).toEqual(ratios);
+    }
   });
 });
 
@@ -252,14 +291,19 @@ describe("isNonEquity", () => {
     expect(isNonEquity(null)).toBe(false);
     expect(isNonEquity(undefined)).toBe(false);
   });
+
+  it("knows the app's funds, indices, currencies and crypto pairs before the quote arrives", () => {
+    for (const symbol of ["SPY", "QQQ", "XLK", "^GSPC", "EURUSD=X", "CL=F", "BTC-USD"]) expect(knownNonEquity(symbol)).toBe(true);
+    for (const symbol of ["NVDA", "BRK-B", "0700.HK", "TSM"]) expect(knownNonEquity(symbol)).toBe(false);
+  });
 });
 
 describe("reports outside the New York session", () => {
   const hk: EarningsDetail = { ...NVDA, symbol: "0700.HK", nextDate: "2026-11-18T08:10:00.000Z", nextDateEstimated: false, nextTiming: null, consensus: null, estimates: [], history: [] };
 
   it("gives the ET time of a confirmed report and says when only the day is known", () => {
-    expect(intoReportNote(hk, null, NOW, earningsMessages.en, "en")).toEqual(["Reports in 11 days (Wed, Nov 18), 03:10 ET."]);
-    expect(intoReportNote(hk, null, NOW, earningsMessages.zh, "zh")).toEqual(["11 天后（11月18日周三）美东 03:10发布财报。"]);
+    expect(intoReportNote(hk, null, NOW, earningsMessages.en, "en")).toEqual(["Reports in 11 days (Wed, Nov 18) at 03:10 ET."]);
+    expect(intoReportNote(hk, null, NOW, earningsMessages.zh, "zh")).toEqual(["11 天后（11月18日周三）美东 03:10 发布财报。"]);
     const dayOnly = { ...hk, nextDate: "2026-11-18T00:00:00.000Z" };
     expect(intoReportNote(dayOnly, null, NOW, earningsMessages.en, "en")).toEqual(["Reports in 11 days (Wed, Nov 18); the time is not announced."]);
   });

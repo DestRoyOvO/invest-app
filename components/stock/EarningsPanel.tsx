@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 
-import { agendaTimeEt } from "@/components/calendar/agenda-format";
+import { reportTimeEt } from "@/components/calendar/agenda-format";
 import {
   daysUntil,
   estimateTrend,
@@ -10,6 +10,7 @@ import {
   hasUsOptions,
   intoReportNote,
   isNonEquity,
+  knownNonEquity,
   relativeWhen,
   shortDay,
   signedPercent,
@@ -47,9 +48,9 @@ export function EarningsPanel({ symbol, className }: { symbol: string; className
   const { t } = usePrefs();
   const e = t.earnings;
   // Shares the quote page's request: the trading currency, and the quote type, so funds and indices (which do not
-  // report earnings) are not asked for once the quote is known.
+  // report earnings) are not asked for. The app's own funds and index symbols are known before the quote arrives.
   const stock = useStock(symbol);
-  const noEarnings = isNonEquity(stock.data?.quote.quoteType);
+  const noEarnings = knownNonEquity(symbol) || isNonEquity(stock.data?.quote.quoteType);
   const { data, error, isLoading, mutate } = useEarnings(noEarnings ? null : symbol);
   const now = useClock();
   const { openChat } = useUi();
@@ -169,11 +170,26 @@ function EarningsBody({ detail, implied, now, currencies }: { detail: EarningsDe
 function slotText(detail: EarningsDetail, t: Messages): string {
   if (detail.nextDateEstimated || !detail.nextDate) return t.earnings.slot.tbd;
   if (detail.nextTiming) return t.earnings.slot[detail.nextTiming];
-  return agendaTimeEt(detail.nextDate, t.calendar) ?? t.earnings.slot.tbd;
+  return reportTimeEt(detail.symbol, detail.nextDate, t.calendar) ?? t.earnings.slot.tbd;
 }
 
 function rangeText(low: number | null, high: number | null, format: (value: number) => string, template: string): string | null {
   return low !== null && high !== null ? tpl(template, { low: format(low), high: format(high) }) : null;
+}
+
+/** A tile sub-line split into lines (range, then analysts), so neither is cut off at half width or in Chinese. */
+function subLines(lines: ReadonlyArray<string | null>) {
+  const shown = lines.filter((line): line is string => line !== null);
+  if (shown.length === 0) return undefined;
+  return (
+    <>
+      {shown.map((line) => (
+        <span key={line} className="block truncate">
+          {line}
+        </span>
+      ))}
+    </>
+  );
 }
 
 function Consensus({ detail, currencies }: { detail: EarningsDetail; currencies: FigureCurrencies }) {
@@ -194,16 +210,15 @@ function Consensus({ detail, currencies }: { detail: EarningsDetail; currencies:
           <StatTile
             label={labelIn(e.eps, currencies.eps)}
             value={eps(consensus.epsAvg)}
-            sub={[rangeText(consensus.epsLow, consensus.epsHigh, eps, e.range), consensus.analysts ? tpl(e.analystCount, { n: consensus.analysts }) : null].filter(Boolean).join(" · ") || undefined}
+            sub={subLines([rangeText(consensus.epsLow, consensus.epsHigh, eps, e.range), consensus.analysts ? tpl(e.analystCount, { n: consensus.analysts }) : null])}
           />
           <StatTile
             label={labelIn(e.revenue, currencies.revenue)}
             value={consensus.revenueAvg !== null ? revenue(consensus.revenueAvg) : "—"}
-            sub={
-              [rangeText(consensus.revenueLow, consensus.revenueHigh, revenue, e.range), consensus.revenueAnalysts ? tpl(e.analystCount, { n: consensus.revenueAnalysts }) : null]
-                .filter(Boolean)
-                .join(" · ") || undefined
-            }
+            sub={subLines([
+              rangeText(consensus.revenueLow, consensus.revenueHigh, revenue, e.range),
+              consensus.revenueAnalysts ? tpl(e.analystCount, { n: consensus.revenueAnalysts }) : null,
+            ])}
           />
         </div>
       ) : (

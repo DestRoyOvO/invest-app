@@ -4,7 +4,7 @@ import { toAgendaItem, type AgendaInput } from "@/lib/events";
 import { calendarMessages } from "@/lib/i18n/calendar";
 import type { CalendarEvent } from "@/types/api";
 
-import { dayHeading, dayShort, formatMoney, glance, localLabel, macroDetail, markGlyph, marksLabel, periodMonthName, relativeLabel, timeLabel } from "./agenda-format";
+import { dayHeading, dayShort, formatMoney, glance, localLabel, macroDetail, markGlyph, marksLabel, periodMonthName, relativeLabel, reportTimeEt, timeLabel } from "./agenda-format";
 
 const en = calendarMessages.en;
 const zh = calendarMessages.zh;
@@ -25,6 +25,16 @@ describe("timeLabel", () => {
     expect(timeLabel(item({ kind: "macro", at: "2026-11-10T13:30:00.000Z", macro: "cpi" }), en)).toBe("08:30 ET");
     expect(timeLabel(item({ kind: "macro", at: "2026-12-09T19:00:00.000Z", macro: "fomc" }), zh)).toBe("美东 14:00");
     expect(timeLabel(item({ kind: "dividend", at: "2026-11-12T05:00:00.000Z", symbol: "AAPL", amount: 0.27 }), en)).toBe("Ex-date");
+    // A Saturday report of a US listing has no slot and no known time.
+    expect(timeLabel(item({ kind: "earnings", at: "2026-11-07T21:00:00.000Z", symbol: "BRK-B" }), en)).toBe("Time TBD");
+  });
+
+  it("gives a report's ET clock time only where it is the release time", () => {
+    expect(reportTimeEt("0700.HK", "2026-11-18T08:10:00.000Z", en)).toBe("03:10 ET");
+    expect(reportTimeEt("0700.HK", "2026-11-18T08:10:00.000Z", zh)).toBe("美东 03:10");
+    expect(reportTimeEt("0700.HK", "2026-11-18T00:00:00.000Z", en)).toBeNull();
+    expect(reportTimeEt("BRK-B", "2026-11-07T21:00:00.000Z", en)).toBeNull();
+    expect(reportTimeEt("X", "not a date", en)).toBeNull();
   });
 });
 
