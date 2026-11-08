@@ -73,6 +73,11 @@ interface DataTableProps<Row> {
   /** Width below sm, where icon buttons grow to 40px (default fits two). */
   actionsTouchWidth?: string;
   rowClassName?: (row: Row) => string | undefined;
+  /**
+   * Highlights the row under the pointer (default). Turn it off for rows that are not links and carry status colors
+   * that were measured on --panel, so the text always sits on the panel color.
+   */
+  rowHover?: boolean;
   /** Shows skeleton rows under the header while there are no rows yet. */
   loading?: boolean;
   loadingRows?: number;
@@ -113,6 +118,7 @@ export function DataTable<Row>({
   actionsWidth = "4.5rem",
   actionsTouchWidth = "5.5rem",
   rowClassName,
+  rowHover = true,
   loading = false,
   loadingRows = 6,
   empty,
@@ -177,7 +183,7 @@ export function DataTable<Row>({
         <tr
           key={rowKey(row)}
           onClick={href ? (event) => onRowClick(event, href) : undefined}
-          className={cn("group/row h-row border-b border-line/70 transition-colors last:border-b-0 hover:bg-hover", href && "cursor-pointer", rowClassName?.(row))}
+          className={cn("group/row h-row border-b border-line/70 transition-colors last:border-b-0", rowHover && "hover:bg-hover", href && "cursor-pointer", rowClassName?.(row))}
         >
           {columns.map((column, columnIndex) => {
             const content = column.render(row, index);
