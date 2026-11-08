@@ -1,8 +1,18 @@
+import { getSector, SECTORS, UNIVERSE_STOCKS } from "@/lib/universe";
+
 import { DEFAULT_NOW, E2E_NOW, PINNED_NOW } from "../support/env";
 import { expect, test } from "../support/test";
 
 // Smoke tests of the harness: the production build serves fixture data on the pinned clock, the shell says so, and
 // the main pages render from it. Selectors use roles and accessible names, so they survive layout changes.
+
+/** A change in percent as the app writes it: +0.39%, −0.36% (a true minus), 0.00%. */
+const CHANGE = String.raw`[+−]?\d+\.\d{2}%`;
+
+/** Names that start with one of the symbols, followed by `rest` (a regular expression source). */
+function symbolsPattern(symbols: readonly string[], rest: string): RegExp {
+  return new RegExp(`^(?:${symbols.map((symbol) => symbol.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})${rest}`);
+}
 
 test.describe("fixture data", () => {
   test("the server reports the fixture data source", async ({ request }) => {
@@ -24,9 +34,22 @@ test.describe("fixture data", () => {
     await app.goto("/");
     const heatmap = page.getByRole("region", { name: "Sector heatmap" });
     await expect(heatmap).toBeVisible();
-    // One tile per universe stock, named by symbol, company, price and change.
-    await expect(heatmap.getByRole("link", { name: /^NVDA NVIDIA Corporation \d/ })).toBeVisible();
-    await expect(heatmap.getByRole("link", { name: /^[A-Z.-]+ .+ [\d,.]+ [+−-]?\d/ })).toHaveCount(78);
+    if (app.isPhone) {
+      // Phones get the sectors as a list, each expanding to its stocks (largest first) with name, price and change.
+      await expect(heatmap.getByRole("button", { expanded: false })).toHaveCount(SECTORS.length);
+      const technology = heatmap.getByRole("button", { name: new RegExp(`^Information Technology ${CHANGE}$`) });
+      await technology.click();
+      await expect(technology).toHaveAttribute("aria-expanded", "true");
+      const constituents = heatmap.getByRole("list", { name: "Information Technology constituents" });
+      await expect(constituents.getByRole("link", { name: new RegExp(`^NVDA .* [\\d,]+\\.\\d{2} ${CHANGE}$`) })).toBeVisible();
+      const stocks = getSector("technology")?.stocks ?? [];
+      await expect(constituents.getByRole("link", { name: symbolsPattern(stocks, " ") })).toHaveCount(stocks.length);
+    } else {
+      // The treemap is one listbox: an option per universe stock named "<symbol> <change>", plus the sector headers.
+      const treemap = heatmap.getByRole("listbox", { name: /^Sector heatmap\./ });
+      await expect(treemap.getByRole("option", { name: new RegExp(`^NVDA ${CHANGE}$`) })).toBeVisible();
+      await expect(treemap.getByRole("option", { name: symbolsPattern(UNIVERSE_STOCKS, ` ${CHANGE}$`) })).toHaveCount(UNIVERSE_STOCKS.length);
+    }
   });
 
   test("the status bar says the data is fixture data", async ({ page, app }) => {
