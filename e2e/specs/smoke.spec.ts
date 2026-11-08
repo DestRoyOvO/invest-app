@@ -32,7 +32,7 @@ test.describe("fixture data", () => {
   test("the status bar says the data is fixture data", async ({ page, app }) => {
     test.skip(app.isPhone, "The status bar is a tablet and desktop element.");
     await app.goto("/");
-    await expect(page.locator("footer").filter({ hasText: "Fixture data" })).toBeVisible();
+    await expect(page.locator("footer").getByText("Fixture data", { exact: true })).toBeVisible();
     await expect(page.getByText("Yahoo Finance · delayed")).toHaveCount(0);
   });
 });
@@ -54,7 +54,8 @@ test.describe("quote page", () => {
   });
 
   test("shows the not-found page for an unknown symbol", async ({ page, app, consoleErrors }) => {
-    consoleErrors.allow(/status of 404/, "The stock API answers 404 for a symbol the data source does not know.");
+    // Only the stock API's own answers: a 404 for anything else (a missing script, say) still fails the test.
+    consoleErrors.allow(/status of 404 \(Not Found\) \(http:\/\/[^/]+\/api\/stock\/ZZZZ[/?)]/, "The stock API answers 404 for a symbol the data source does not know.");
     await app.goto("/stock/ZZZZ");
     await expect(page.getByRole("heading", { name: "No match for ZZZZ" })).toBeVisible();
   });
