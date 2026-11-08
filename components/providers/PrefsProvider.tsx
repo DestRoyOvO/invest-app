@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { MESSAGES, type Messages } from "@/lib/i18n/messages";
 import { htmlLang, prefCookie, themeColorMetas, type Density, type Prefs, type Theme, type UpDown } from "@/lib/prefs";
@@ -27,20 +27,17 @@ function subscribeScheme(listener: () => void): () => void {
 }
 
 /**
- * Points the theme-color meta tags at the new theme. The tags Next rendered are updated in place (React owns them, so
- * they are never removed); one more is added when System needs a tag per color scheme.
+ * Points the theme-color meta tags at the theme on screen. Next renders them for the theme in the cookie (one tag, or
+ * one per color scheme for System) and React owns them, so they are only updated in place, never added or removed:
+ * the next navigation renders them afresh from the new cookie. Until then, System with a single tag shows the color of
+ * the scheme in use, and follows it when the scheme changes.
  */
-function applyThemeColor(theme: Theme) {
-  const wanted = themeColorMetas(theme);
+function applyThemeColor(theme: Theme, systemDark: boolean) {
   const metas = Array.from(document.head.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]'));
-  while (metas.length < wanted.length) {
-    const meta = document.createElement("meta");
-    meta.name = "theme-color";
-    document.head.appendChild(meta);
-    metas.push(meta);
-  }
+  const wanted = themeColorMetas(theme);
+  const fitted = wanted.length > metas.length ? themeColorMetas(theme === "system" ? (systemDark ? "dark" : "light") : theme) : wanted;
   metas.forEach((meta, i) => {
-    const { color, media } = wanted[Math.min(i, wanted.length - 1)];
+    const { color, media } = fitted[Math.min(i, fitted.length - 1)];
     meta.content = color;
     if (media) meta.media = media;
     else meta.removeAttribute("media");
@@ -51,15 +48,16 @@ export function PrefsProvider({ initial, children }: { initial: Prefs; children:
   const [prefs, setPrefs] = useState<Prefs>(initial);
   const systemDark = useSyncExternalStore(subscribeScheme, () => window.matchMedia(DARK_SCHEME).matches, () => true);
 
+  useEffect(() => {
+    applyThemeColor(prefs.theme, systemDark);
+  }, [prefs.theme, systemDark]);
+
   const update = useCallback(<K extends keyof Prefs>(key: K, value: Prefs[K]) => {
     setPrefs((current) => ({ ...current, [key]: value }));
     document.cookie = prefCookie(key, value);
     const root = document.documentElement;
     if (key === "lang") root.lang = htmlLang(value as Lang);
-    if (key === "theme") {
-      root.dataset.theme = value as Theme;
-      applyThemeColor(value as Theme);
-    }
+    if (key === "theme") root.dataset.theme = value as Theme;
     if (key === "updown") root.dataset.updown = value as UpDown;
     if (key === "density") root.dataset.density = value as Density;
   }, []);
