@@ -517,6 +517,97 @@ describe("backup bookkeeping and display helpers", () => {
   });
 });
 
+const SCREENS = "investseek:screens:v1";
+
+describe("saved screens in a restore", () => {
+  const fileScreens = [
+    { id: "s1", name: "  Cheap   value ", query: "pe=..15", savedAt: "2026-11-01T00:00:00.000Z" },
+    // The same name ignoring case, and a broken entry: both left out by sanitizeSavedScreens.
+    { id: "s2", name: "cheap VALUE", query: "yield=3..", savedAt: "2026-11-02T00:00:00.000Z" },
+    { id: "bad id!", name: "Broken", query: 42 },
+  ];
+  const current = { [SCREENS]: JSON.stringify([{ id: "s0", name: "Old", query: "", savedAt: "2026-10-01T00:00:00.000Z" }]) };
+
+  it("loads the saved screens store for the preview, so screens are sanitized and diffed like other stores", async () => {
+    vi.resetModules();
+    const fresh = await import("./backup");
+    const stores = (await import("./local-store")).registeredLocalStores();
+    // Nothing on /data imports the screener: until a file is checked, its store is not registered.
+    expect(stores.has(SCREENS)).toBe(false);
+    const result = await fresh.parseBackup(serializeBackup(backupOf({ [SCREENS]: fileScreens })), current);
+    if (!result.ok) throw new Error(result.error);
+    expect(stores.has(SCREENS)).toBe(true);
+    expect(find(result.value.diff.merge, SCREENS)).toMatchObject({ kind: "store", added: ["s1"], removed: ["s0"] });
+    const written = JSON.parse(fresh.planRestore(current, result.value.backup, "replace").writes[SCREENS] as string);
+    const { sanitizeSavedScreens } = await import("./screens");
+    expect(written).toEqual(sanitizeSavedScreens(fileScreens));
+    expect(written).toMatchObject([{ id: "s1", name: "Cheap value" }]);
+  });
+
+  it("restores screens as an unknown key when the store cannot load, and loads it for the next file", async () => {
+    vi.resetModules();
+    let loads = 0;
+    vi.doMock("./screens", async () => {
+      loads += 1;
+      if (loads === 1) throw new Error("Failed to fetch dynamically imported module");
+      return vi.importActual("./screens");
+    });
+    const fresh = await import("./backup");
+    const file = serializeBackup(backupOf({ [SCREENS]: fileScreens }));
+    const first = await fresh.parseBackup(file, current);
+    if (!first.ok) throw new Error(first.error);
+    expect(find(first.value.diff.merge, SCREENS).kind).toBe("other");
+    const second = await fresh.parseBackup(file, current);
+    if (!second.ok) throw new Error(second.error);
+    expect(find(second.value.diff.merge, SCREENS).kind).toBe("store");
+    expect(loads).toBe(2);
+    vi.doUnmock("./screens");
+  });
+});
+
+describe("backups made before the merged formats", () => {
+  it("restores old alert rules and log entries, notes and AI note keys without errors", async () => {
+    const { alertLogStore, alertsStore: rulesStore } = await import("./alerts");
+    const { aiNotesStore } = await import("./ai-store");
+    const stores: StoreRegistry = new Map<string, LocalStore<unknown>>([
+      [rulesStore.key, rulesStore as LocalStore<unknown>],
+      [alertLogStore.key, alertLogStore as LocalStore<unknown>],
+      [aiNotesStore.key, aiNotesStore as LocalStore<unknown>],
+    ]);
+    const longKey = JSON.stringify({ kind: "portfolio", lang: "en", positions: Array.from({ length: 12 }, (_, i) => ({ symbol: `S${i}`, shares: i + 1, cost: 100 + i })) });
+    const old = backupOf(
+      {
+        // checkedAt became lastCheckedAt; the session fields did not exist yet.
+        [ALERTS]: [{ id: "r1", symbol: "aapl", kind: "above", value: 200, repeat: "once", createdAt: "2026-10-01T14:00:00.000Z", checkedAt: "2026-10-02T14:00:00.000Z" }],
+        "investseek:alert-log:v1": [{ id: "e1", ruleId: "r1", symbol: "AAPL", kind: "above", value: 200, observed: 201.5, at: "2026-10-03T15:00:00.000Z" }],
+        // A review date stored before only whole dates were kept, and tags in two cases.
+        [NOTES]: { AAPL: { thesis: "Services keep growing", reviewBy: "2026-12", tags: ["AI", "ai"], entries: [{ at: "2026-10-01T00:00:00.000Z", price: 230, text: "Bought" }], updatedAt: "2026-10-01T00:00:00.000Z" } },
+        // Saved AI notes were keyed by the whole request before the short keys.
+        "investseek:ai-notes:v1": {
+          [longKey]: { text: "Old portfolio scan", generatedAt: "2026-10-01T00:00:00.000Z" },
+          "stock:AAPL:en:1x2y3z": { text: "Apple note", generatedAt: "2026-10-02T00:00:00.000Z" },
+        },
+      },
+      { text: { "investseek:last-symbol": "MSFT" } },
+    );
+    expect(longKey.length).toBeGreaterThan(120);
+
+    const parsed = await parseBackup(serializeBackup(old), {}, stores);
+    if (!parsed.ok) throw new Error(parsed.error);
+    expect(find(parsed.value.diff.replace, "investseek:ai-notes:v1")).toMatchObject({ kind: "store", added: ["stock:AAPL:en:1x2y3z"] });
+    expect(find(parsed.value.diff.replace, ALERTS)).toMatchObject({ kind: "store", added: ["r1"] });
+
+    const storage = new MemoryStorage();
+    const env: BackupEnv = { ...makeEnv(storage).env, stores };
+    expect(() => applyBackup(parsed.value.backup, "replace", env)).not.toThrow();
+    expect(JSON.parse(storage.getItem(ALERTS)!)).toMatchObject([{ id: "r1", symbol: "AAPL", lastCheckedAt: null, checkedSession: null, triggerCount: 0 }]);
+    expect(JSON.parse(storage.getItem("investseek:alert-log:v1")!)).toMatchObject([{ id: "e1", session: null, missed: null }]);
+    expect(JSON.parse(storage.getItem(NOTES)!).AAPL).toMatchObject({ reviewBy: null, tags: ["ai"], entries: [{ text: "Bought", kind: "note" }] });
+    expect(Object.keys(JSON.parse(storage.getItem("investseek:ai-notes:v1")!))).toEqual(["stock:AAPL:en:1x2y3z"]);
+    expect(storage.getItem("investseek:last-symbol")).toBe("MSFT");
+  });
+});
+
 describe("module side effects", () => {
   it("registers the bookkeeping store without touching storage", async () => {
     const { registeredLocalStores } = await import("./local-store");

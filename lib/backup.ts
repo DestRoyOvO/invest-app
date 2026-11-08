@@ -19,7 +19,8 @@
 //
 // The file is validated with zod (components/data/backup-schema.ts), which is loaded only when a file is checked, so
 // validateBackup is async: the settings menu on every page imports this module for the backup age, and should not
-// download a validator.
+// download a validator. For the same reason the saved screens store is loaded when a file is checked
+// (loadRestoreStores), so a restore on /data sanitizes and previews saved screens like the stores the page imports.
 //
 // Display preferences are restored only with values this version can show (isKnownPrefValue); the page applies them
 // through the preferences provider (components/data/prefs-sync.ts), as the settings menu does.
@@ -541,7 +542,27 @@ export interface ParsedBackup {
   diff: Record<RestoreMode, StoreDiff[]>;
 }
 
-/** Validates a backup file and previews both restore modes against the current storage. */
+let restoreStores: Promise<unknown> | null = null;
+
+/**
+ * Registers the stores a restore needs even on a page that never imported them, so their values are sanitized and
+ * diffed like every other registered store: saved screens (lib/screens.ts, sanitizeSavedScreens) belong to the
+ * screener, not to /data. Loaded on demand like the schema, so the settings menu on every page does not download the
+ * screener model. A failed load is tried again with the next file; until then those keys restore as unknown keys,
+ * and their store still sanitizes them when it reads them.
+ */
+export function loadRestoreStores(): Promise<void> {
+  restoreStores ??= import("./screens").catch((error: unknown) => {
+    restoreStores = null;
+    throw error;
+  });
+  return restoreStores.then(() => undefined);
+}
+
+/**
+ * Validates a backup file and previews both restore modes against the current storage. The default registry gains
+ * the stores of loadRestoreStores first, so the preview and the restore that follows treat saved screens as a store.
+ */
 export async function parseBackup(
   text: string,
   current: StorageSnapshot,
@@ -549,6 +570,7 @@ export async function parseBackup(
 ): Promise<{ ok: true; value: ParsedBackup } | { ok: false; error: BackupError }> {
   const result = await validateBackup(text);
   if (!result.ok) return result;
+  await loadRestoreStores().catch(() => undefined);
   const { backup } = result;
   return { ok: true, value: { backup, diff: { merge: diffRestore(current, backup, "merge", stores), replace: diffRestore(current, backup, "replace", stores) } } };
 }
