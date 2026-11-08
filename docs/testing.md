@@ -174,9 +174,12 @@ or one started without the preloads fails there with the reason. Uncommitted cha
 
 **No network, enforced.** Besides writing `[no-network]` lines to the server output, the preload appends each refused
 connection to `E2E_NO_NETWORK_LOG`, a temporary file per app port (`<tmp>/investseek-e2e-no-network-<port>.log`, the same
-for a server Playwright starts and one from `e2e:serve`). The global setup notes the file's length, and the teardown it
-returns, which runs after the last test while the servers are still up, fails the run when refusals were added
-meanwhile and lists them ("The app server tried to reach the network ..."). A reused server's earlier runs do not count.
+for a server Playwright starts and one from `e2e:serve`). Each server process first writes a guard line with the time it
+started, and the global setup requires the guard line of the server under test (no older than its uptime says, so a line
+an earlier server on the same port left behind does not count). The teardown the setup returns, which runs after the
+last test while the servers are still up, fails the run when refusals were logged and lists them ("The app server tried
+to reach the network ..."): for a server Playwright started, every refusal since its guard line (its start-up
+included); for a reused server, those since the setup, so its earlier runs do not count.
 
 **The clock.** `E2E_NOW` defaults to Saturday 2026-11-07 10:00 in New York (`2026-11-07T15:00:00Z`): the market is closed
 after Friday's session, Friday's after-hours trade shows, and every scheduled event lies ahead. Any ISO date-time

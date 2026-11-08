@@ -1,4 +1,4 @@
-import { closeSync, mkdirSync, openSync, readSync, statSync } from "node:fs";
+import { closeSync, mkdirSync, openSync, readFileSync, readSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { request, type FullConfig } from "@playwright/test";
@@ -11,7 +11,8 @@ import { BASE_URL, E2E_NOW, gitHead, NO_NETWORK_LOG, PINNED_NOW, REUSE, STORAGE_
 //
 // At the end of the run (the teardown this setup returns, which runs while the servers are still up), the run fails if
 // the app server refused an outbound connection meanwhile: the no-network preload appends each refusal to
-// NO_NETWORK_LOG, and only the lines written since this setup count, so a reused server's earlier runs do not.
+// NO_NETWORK_LOG. For a server Playwright started, every line since that server's guard line counts (refusals while it
+// started too); for a reused server, only the lines written since this setup, so its earlier runs do not.
 //
 // The production build names the cookie __Host-is_session and marks it Secure. Browsers treat http://127.0.0.1 as a
 // secure context, so Chrome keeps and sends it there; Playwright's request context does the same for loopback hosts.
@@ -27,19 +28,24 @@ const MAX_CLOCK_RUN_MS = 6 * 60 * 60 * 1000;
 /** With E2E_NOW=real, how far the server's clock may be from this machine's (the same clock, read twice). */
 const REAL_CLOCK_TOLERANCE_MS = 5 * 60 * 1000;
 
+/** How much earlier than its uptime says a server process may have started (its guard line's time). */
+const START_SLACK_MS = 10_000;
+
 interface Health {
   dataSource?: string;
   aiConfigured?: boolean;
   commit?: string | null;
   time?: string;
+  uptimeSeconds?: number;
 }
 
 /**
  * Throws unless the app answers as the fixture-mode server of this checkout: fixture data, the mock model, this
  * commit, and a clock started at E2E_NOW (or the real clock, with E2E_NOW=real). A server left running from another
- * branch, in Yahoo mode, on another clock or without the preloads would otherwise be tested by mistake.
+ * branch, in Yahoo mode, on another clock or without the preloads would otherwise be tested by mistake. Resolves to
+ * the time the server process started (this machine's clock, from its uptime).
  */
-async function checkServer(baseURL: string): Promise<void> {
+async function checkServer(baseURL: string): Promise<number> {
   const context = await request.newContext({ baseURL });
   try {
     const response = await context.get("/api/health");
@@ -58,10 +64,13 @@ async function checkServer(baseURL: string): Promise<void> {
     } else if (!(Math.abs(serverNow - Date.now()) < REAL_CLOCK_TOLERANCE_MS)) {
       problems.push(`its clock reads ${health.time ?? "nothing"}, but E2E_NOW=real expects the real clock (start it with E2E_NOW=real)`);
     }
+    const uptime = health.uptimeSeconds;
+    if (typeof uptime !== "number" || !Number.isFinite(uptime)) problems.push("its /api/health reports no uptime");
     if (problems.length > 0) {
       const advice = REUSE ? "Restart it with `npm run e2e:serve`, or run without E2E_REUSE so Playwright starts its own." : "";
       throw new Error(`The server on ${baseURL} is not the one this suite tests: ${problems.join("; ")}. ${advice}`.trim());
     }
+    return Date.now() - (uptime as number) * 1000;
   } finally {
     await context.dispose();
   }
@@ -81,21 +90,40 @@ function readLogFrom(offset: number): string {
   return buffer.toString("utf8");
 }
 
+/** The guard lines of the no-network log: where each starts (in bytes) and when the process that wrote it started. */
+function guardLines(log: Buffer): Array<{ offset: number; startedAt: number }> {
+  const lines: Array<{ offset: number; startedAt: number }> = [];
+  for (let offset = 0; offset < log.length; ) {
+    const newline = log.indexOf(0x0a, offset);
+    const end = newline === -1 ? log.length : newline;
+    const match = /^\[no-network\] guard active in process \d+ since (\S+)$/.exec(log.toString("utf8", offset, end).trimEnd());
+    if (match) lines.push({ offset, startedAt: Date.parse(match[1]) });
+    offset = end + 1;
+  }
+  return lines;
+}
+
 /**
- * The current length of the no-network log. Throws when the server under test does not write one: without it, a
- * refused connection would only show in the server output and the run would still pass.
+ * Where this run's part of the no-network log starts. Throws unless the server under test writes the log: its process
+ * (started at `serverStartedAt`) must have added a guard line, or a refused connection would only show in the server
+ * output and the run would still pass; a line an earlier server on the same port wrote does not count. A server that
+ * Playwright started counts from its guard line on, so refusals while it started count too; a reused server counts
+ * from the current end of the log, so its earlier runs do not.
  */
-function noNetworkLogOffset(): number {
-  let size: number;
+function noNetworkLogOffset(serverStartedAt: number): number {
+  let log: Buffer;
   try {
-    size = statSync(NO_NETWORK_LOG).size;
+    log = readFileSync(NO_NETWORK_LOG);
   } catch {
-    size = -1;
+    log = Buffer.alloc(0);
   }
-  if (size <= 0 || !readLogFrom(0).includes("[no-network] guard active")) {
-    throw new Error(`The app server keeps no no-network log at ${NO_NETWORK_LOG}: it was not started with this checkout's e2e/support/env.ts. ${REUSE ? "Restart `npm run e2e:serve`." : ""}`.trim());
+  const own = guardLines(log).filter((line) => line.startedAt >= serverStartedAt - START_SLACK_MS);
+  if (own.length === 0) {
+    throw new Error(
+      `The app server (started ${new Date(serverStartedAt).toISOString()}) wrote no guard line to the no-network log ${NO_NETWORK_LOG}: it was not started with this checkout's e2e/support/env.ts. ${REUSE ? "Restart `npm run e2e:serve`." : ""}`.trim(),
+    );
   }
-  return size;
+  return REUSE ? log.length : own[0].offset;
 }
 
 /** Fails the run when the app server refused an outbound connection after `offset`. */
@@ -128,8 +156,8 @@ async function isSignedIn(baseURL: string): Promise<boolean> {
 
 export default async function globalSetup(config: FullConfig): Promise<() => Promise<void>> {
   const baseURL = config.projects[0]?.use.baseURL ?? BASE_URL;
-  await checkServer(baseURL);
-  const logOffset = noNetworkLogOffset();
+  const serverStartedAt = await checkServer(baseURL);
+  const logOffset = noNetworkLogOffset(serverStartedAt);
   const teardown = async () => checkNoNetworkLog(logOffset);
   mkdirSync(path.dirname(STORAGE_STATE), { recursive: true });
   if (await isSignedIn(baseURL)) return teardown;

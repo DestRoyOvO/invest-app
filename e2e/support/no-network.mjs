@@ -6,7 +6,8 @@
 //
 // With E2E_NO_NETWORK_LOG set (e2e/support/env.ts sets it), each refusal is also appended to that file, and the
 // suite fails at the end of a run that logged one (e2e/support/global-setup.ts). The file first gets a "guard active"
-// line, so the global setup can tell that the server it tests records its refusals there.
+// line with the time the process started, so the global setup can tell that the server it tests (and not an earlier
+// one on the same port) records its refusals there.
 
 import { appendFileSync } from "node:fs";
 import net from "node:net";
@@ -22,7 +23,8 @@ function appendToLog(line) {
   }
 }
 
-appendToLog(`[no-network] guard active in process ${process.pid}`);
+// performance.timeOrigin is the real start of the process: the clock preload (clock.mjs) shifts Date only.
+appendToLog(`[no-network] guard active in process ${process.pid} since ${new Date(performance.timeOrigin).toISOString()}`);
 
 function isLocal(host) {
   if (host === undefined || host === null || host === "") return true; // Node connects to localhost by default
