@@ -40,6 +40,7 @@ import { MAX_WATCHLIST, SECTORS } from "@/lib/universe";
 import type { Lang } from "@/types/api";
 
 import { CodeChip } from "./CodeChip";
+import { openHref } from "./HashLanding";
 import { buildPalette, shouldSearch, type PaletteItem, type SettingChoice } from "./palette";
 
 const iconClass = "size-4 shrink-0 text-fg-3";
@@ -218,8 +219,9 @@ function PaletteDialog({ initialQuery }: { initialQuery: string }) {
   }, [safeIndex]);
 
   const go = (href: string) => {
-    router.push(href);
     close();
+    // Once the dialog has closed and handed focus back, so a page that focuses its anchor (PASTE) keeps the focus.
+    window.setTimeout(() => openHref(router, href));
   };
 
   const watch = (symbol: string) => {

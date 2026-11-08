@@ -16,7 +16,7 @@ import { rememberSector, useLastSector } from "@/hooks/useRecents";
 import { GO_SHORTCUTS, safeDecode } from "@/lib/functions";
 
 import { CommandPalette } from "./CommandPalette";
-import { HashLanding } from "./HashLanding";
+import { HashLanding, openHref } from "./HashLanding";
 import { MobileTabBar } from "./MobileTabBar";
 import { navGroups } from "./nav";
 import { NavRail } from "./NavRail";
@@ -74,7 +74,7 @@ export function TerminalShell({ children }: { children: ReactNode }) {
       if (target) {
         event.preventDefault();
         event.stopPropagation();
-        router.push(target.scope === "security" ? target.href(lastSymbol) : target.href(undefined, { lastSector }));
+        openHref(router, target.scope === "security" ? target.href(lastSymbol) : target.href(undefined, { lastSector }));
       }
       return;
     }

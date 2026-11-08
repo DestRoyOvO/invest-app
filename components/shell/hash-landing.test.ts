@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { follow, hashId, type FollowEnv } from "./hash-landing";
+import { anchorOnPage, follow, hashId, landingFor, lastFragment, type FollowEnv, type Place } from "./hash-landing";
 
 /**
  * A scrolling area 800px tall whose target starts `position` px down the content. Each step runs one frame 16 ms
@@ -52,6 +52,93 @@ describe("hashId", () => {
     expect(hashId("#")).toBeNull();
     expect(hashId("")).toBeNull();
     expect(hashId("#%E0%A4%A")).toBeNull();
+  });
+
+  it("reads the last fragment of a hash the router prefixed", () => {
+    expect(lastFragment("#risk#chart")).toBe("#chart");
+    expect(lastFragment("#import#paste")).toBe("#paste");
+    expect(lastFragment("#risk")).toBe("#risk");
+    expect(lastFragment("")).toBe("");
+    expect(hashId("#risk#notes")).toBe("notes");
+    expect(hashId("#risk#%E7%AC%94%E8%AE%B0")).toBe("笔记");
+    expect(hashId("#risk#")).toBeNull();
+  });
+});
+
+describe("landingFor", () => {
+  const place = (href: string): Place => {
+    const url = new URL(href, "http://localhost");
+    return { pathname: url.pathname, search: url.search, hash: url.hash };
+  };
+  const first = place("/stock/AAPL#risk");
+
+  it("takes the address as it is when the router cannot have prefixed it", () => {
+    expect(landingFor(place("/markets#rates"), null)).toEqual({ hash: "#rates", first: null });
+    expect(landingFor(place("/markets"), first)).toEqual({ hash: "", first });
+    expect(landingFor(place("/markets#rates"), first)).toEqual({ hash: "#rates", first });
+    // The first address had a search of its own: other searches on that path have entries of their own.
+    const withSearch = place("/portfolio?tab=correlation#x");
+    expect(landingFor(place("/portfolio#x"), withSearch)).toEqual({ hash: "#x", first: withSearch });
+  });
+
+  it("strips the hash of the first address from a plain link back to it", () => {
+    // Quote in the rail, the overview tab, a watchlist row: the router writes /stock/AAPL#risk.
+    expect(landingFor(place("/stock/AAPL#risk"), first)).toEqual({ hash: "", first });
+    // Another tab of the same quote, built from the first entry while that tab is not cached yet.
+    expect(landingFor(place("/stock/AAPL?tab=financials#risk"), first)).toEqual({ hash: "", first });
+    expect(landingFor(place("/stock/AAPL?compare=MSFT#risk"), first)).toEqual({ hash: "", first });
+  });
+
+  it("keeps what a hash link asked for after the prefix", () => {
+    expect(landingFor(place("/stock/AAPL#risk#chart"), first)).toEqual({ hash: "#chart", first });
+    expect(landingFor(place("/stock/AAPL#risk#risk"), first)).toEqual({ hash: "#risk", first });
+    expect(landingFor(place("/stock/AAPL#risk#notes"), first)).toEqual({ hash: "#notes", first });
+    // A first address with two fragments (reloaded from a prefixed one) is prefixed whole.
+    const twice = place("/data#import#paste");
+    expect(landingFor(place("/data#import#paste"), twice)).toEqual({ hash: "", first: twice });
+    expect(landingFor(place("/data#import#paste#restore"), twice)).toEqual({ hash: "#restore", first: twice });
+  });
+
+  it("follows the link or command that started the navigation when it is known", () => {
+    expect(landingFor(place("/stock/AAPL#risk"), first, "")).toEqual({ hash: "", first });
+    expect(landingFor(place("/stock/AAPL#risk#chart"), first, "#chart")).toEqual({ hash: "#chart", first });
+    // Exactly what was asked for: the router has dropped the first entry, so nothing is stripped from now on.
+    expect(landingFor(place("/stock/AAPL#risk"), first, "#risk")).toEqual({ hash: "#risk", first: null });
+    expect(landingFor(place("/stock/AAPL"), first, "")).toEqual({ hash: "", first: null });
+    // Another search may have come from an entry of its own: that says nothing about the first one.
+    expect(landingFor(place("/stock/AAPL?tab=financials"), first, "")).toEqual({ hash: "", first });
+  });
+
+  it("forgets the first address once the router writes that page without its hash", () => {
+    expect(landingFor(place("/stock/AAPL"), first)).toEqual({ hash: "", first: null });
+    expect(landingFor(place("/stock/AAPL#chart"), first)).toEqual({ hash: "#chart", first: null });
+    // A hash that only starts with the same letters is another anchor, not the prefix.
+    expect(landingFor(place("/stock/AAPL#riskier"), first)).toEqual({ hash: "#riskier", first: null });
+    expect(landingFor(place("/stock/AAPL?tab=financials"), first)).toEqual({ hash: "", first });
+  });
+
+  it("returns to a history entry as it was written", () => {
+    expect(landingFor(place("/stock/AAPL#risk"), first, undefined, true)).toEqual({ hash: "#risk", first });
+    expect(landingFor(place("/stock/AAPL"), first, "#chart", true)).toEqual({ hash: "", first });
+  });
+});
+
+describe("anchorOnPage", () => {
+  const here = "http://localhost/stock/AAPL";
+
+  it("finds an anchor on the page that is open", () => {
+    expect(anchorOnPage("/stock/AAPL#risk", here)?.hash).toBe("#risk");
+    expect(anchorOnPage("/stock/AAPL#risk", `${here}#risk`)?.hash).toBe("#risk");
+    expect(anchorOnPage("#paste", "http://localhost/data")?.href).toBe("http://localhost/data#paste");
+  });
+
+  it("leaves other pages, other searches and plain addresses to the router", () => {
+    expect(anchorOnPage("/stock/MSFT#risk", here)).toBeNull();
+    expect(anchorOnPage("/stock/AAPL?tab=financials#risk", here)).toBeNull();
+    expect(anchorOnPage("/stock/AAPL#risk", "http://localhost/stock/AAPL?tab=financials")).toBeNull();
+    expect(anchorOnPage("/stock/AAPL", `${here}#risk`)).toBeNull();
+    expect(anchorOnPage("/stock/AAPL#", here)).toBeNull();
+    expect(anchorOnPage("https://example.com/stock/AAPL#risk", here)).toBeNull();
   });
 });
 
@@ -121,6 +208,27 @@ describe("follow", () => {
     for (let i = 0; i < 3; i++) step();
     expect(ended).toBe(1);
     expect(page.queue).toHaveLength(0);
+  });
+
+  it("rests at the top when the target already sits above its place there", () => {
+    // /markets#rates on a desktop: the panel starts 1px below the top and lands 8px below it, with nothing to scroll.
+    const { page, env, step } = fakePage(-7);
+    let ended = 0;
+    follow(env, { settled: 100 }, () => ended++);
+    for (let i = 0; i < 6; i++) step();
+    expect(page.scrollTop).toBe(0);
+    expect(ended).toBe(0);
+    step();
+    expect(ended).toBe(1);
+    expect(page.queue).toHaveLength(0);
+  });
+
+  it("follows a target that rested above its place once the content above it grows", () => {
+    const { page, env, step } = fakePage(-7);
+    follow(env, { settled: 100 });
+    step();
+    step(() => page.shift(400));
+    expect(page.scrollTop).toBe(393);
   });
 
   it("ends after the duration and calls onEnd once", () => {

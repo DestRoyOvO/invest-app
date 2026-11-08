@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useId } from "react";
 
 import { useT } from "@/components/providers/PrefsProvider";
+import { openAnchorHere } from "@/components/shell/HashLanding";
 import { useToast } from "@/components/ui/Toast";
 import { useLocalStore } from "@/hooks/useLocalStore";
 import { backupAgeDays, backupMetaStore } from "@/lib/backup";
@@ -59,7 +60,15 @@ export function DataMenuSection({ onNavigate }: { onNavigate?: () => void }) {
           </button>
         </li>
         <li>
-          <Link href="/data#import" onClick={onNavigate} className={ITEM}>
+          <Link
+            href="/data#import"
+            onClick={(event) => {
+              onNavigate?.();
+              // Already on /data: land on the imports even when the address names them already.
+              if (openAnchorHere("/data#import")) event.preventDefault();
+            }}
+            className={ITEM}
+          >
             <Upload aria-hidden className="size-3.5 shrink-0 text-fg-3" strokeWidth={1.75} />
             {t.data.menu.import}
           </Link>

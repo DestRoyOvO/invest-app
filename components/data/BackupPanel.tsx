@@ -186,7 +186,7 @@ export function BackupPanel() {
       : [];
 
   return (
-    <Panel id="restore" code="DATA" title={t.data.backup.title} actions={<PanelMeta>{lastBackup}</PanelMeta>}>
+    <Panel id="restore" code="DATA" title={t.data.backup.title} className="scroll-mt-2" actions={<PanelMeta>{lastBackup}</PanelMeta>}>
       <div className="space-y-3 px-3 py-3">
         <p className="text-sm text-fg-2">{t.data.privacy}</p>
         <div className="flex flex-wrap items-center gap-2">
