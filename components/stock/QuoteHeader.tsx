@@ -11,12 +11,13 @@ import { Button } from "@/components/ui/Button";
 import { Delta } from "@/components/ui/Delta";
 import { TickNumber } from "@/components/ui/TickNumber";
 import type { Position } from "@/hooks/useHoldings";
+import { useChartSeries } from "@/hooks/useQuoteApi";
 import { eventDayKey } from "@/lib/events";
 import { formatCompact, formatNumber, formatRatio, formatTime, tpl } from "@/lib/format";
 import { formatQuotePrice, priceDigits } from "@/lib/quote-figures";
 import type { Lang, StockDetail } from "@/types/api";
 
-import { earningsTiming, futureDate, instrumentKind, isUsListing, positionFigures, upcomingExDividend } from "./quote-utils";
+import { earningsTiming, futureDate, instrumentKind, isUsListing, positionFigures, quoteRanges, rangesNeedBars, upcomingExDividend } from "./quote-utils";
 import { perShareDigits } from "./research-utils";
 import { RangeBar } from "./RangeBar";
 
@@ -89,8 +90,11 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, 
   const showExDividend = upcomingExDividend(quote.exDividendDate);
   const kind = instrumentKind(quote.quoteType);
   // A currency pair keeps its pips (EURUSD=X 1.1143). Figures Yahoo does not report arrive as null from the server and
-  // show as dashes (^TNX has no open or day range, ^VIX and EURUSD=X no volume).
+  // show as dashes (^VIX and EURUSD=X have no volume), except where the 2Y daily bars the chart loads hold them: ^TNX
+  // quotes no open, day range or 52-week low, but its bars have them (quoteRanges).
   const digits = priceDigits(symbol, quote.quoteType);
+  const bars = useChartSeries(rangesNeedBars(quote) ? symbol : null, "2y");
+  const ranges = quoteRanges(quote, bars.data?.bars ?? null, bars.data?.timezone ?? null);
 
   const why = () => openChat({ text: tpl(a.whyMovingPrompt, { symbol }), intent: { kind: "move", symbol } });
 
@@ -228,7 +232,7 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, 
       ) : null}
 
       <div className="grid grid-cols-2 gap-px border-t border-line bg-line sm:grid-cols-3 lg:grid-cols-6">
-        <Stat label={t.stock.stats.open}>{formatQuotePrice(quote.open, digits, lang)}</Stat>
+        <Stat label={t.stock.stats.open}>{formatQuotePrice(ranges.open, digits, lang)}</Stat>
         <Stat label={t.stock.stats.prevClose}>{formatQuotePrice(quote.previousClose, digits, lang)}</Stat>
         <Stat label={t.stock.stats.volume}>{formatCompact(quote.volume, lang)}</Stat>
         {/* Market cap (stocks, crypto), net assets (funds), or the 52-week change where neither exists (indices, currencies, futures). */}
@@ -243,11 +247,11 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, 
         )}
         <div className="min-w-0 bg-panel px-3 py-2">
           <div className="col-head truncate">{t.stock.stats.dayRange}</div>
-          <RangeBar low={quote.dayLow} high={quote.dayHigh} value={quote.price} digits={digits} lang={lang} />
+          <RangeBar low={ranges.dayLow} high={ranges.dayHigh} value={quote.price} digits={digits} lang={lang} />
         </div>
         <div className="min-w-0 bg-panel px-3 py-2">
           <div className="col-head truncate">{t.stock.stats.range52w}</div>
-          <RangeBar low={quote.fiftyTwoWeekLow} high={quote.fiftyTwoWeekHigh} value={quote.price} digits={digits} lang={lang} />
+          <RangeBar low={ranges.low52} high={ranges.high52} value={quote.price} digits={digits} lang={lang} />
         </div>
       </div>
     </section>
