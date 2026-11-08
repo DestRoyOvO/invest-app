@@ -1,194 +1,323 @@
 "use client";
 
+import { ChevronRight } from "lucide-react";
+import Link from "next/link";
+
+import {
+  backtestTiming,
+  COMMON_READING_DATE_SHARE,
+  EPISODE_SHARE_LIMIT,
+  isConcentrated,
+  rateDomain,
+  rsiState,
+  scoreText,
+  selectionTone,
+  symmetricDomain,
+} from "@/components/lab/evidence";
+import { formatIc, formatP, formatT, pct, yearSpan } from "@/components/lab/stats-format";
+import { keepSymbols } from "@/components/lab/text";
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Badge } from "@/components/ui/Badge";
-import { Delta } from "@/components/ui/Delta";
+import { DataTable, type DataTableColumn } from "@/components/ui/DataTable";
+import { Tooltip } from "@/components/ui/HoverCard";
 import { Panel, PanelMeta } from "@/components/ui/Panel";
-import { ErrorState, SkeletonRows } from "@/components/ui/States";
+import { EmptyState, ErrorState, SkeletonRows, StaleBanner } from "@/components/ui/States";
+import { Whisker } from "@/components/ui/Whisker";
 import { cn } from "@/lib/cn";
-import { evaluationVerdict, excludesZero, findHorizon } from "@/lib/evaluation";
+import { evaluationVerdict, findHorizon, type HorizonOutcome, type LabelOutcome } from "@/lib/evaluation";
 import { EVALUATION_DAYS, SIGNAL_EVALUATION } from "@/lib/evaluation-data";
-import { formatMultiple, formatNumber, formatRatio, tpl } from "@/lib/format";
+import { DASH, formatInteger, formatMultiple, formatShortDate, tpl } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/messages";
-import { labelForScore } from "@/lib/signal";
+import { labelForScore, SIGNAL_THRESHOLDS } from "@/lib/signal";
 import type { BacktestResult, FactorResult, Lang, SignalCode, SignalReport } from "@/types/api";
 
-const THRESHOLDS = [28, 42, 58, 72];
+// The technical reading of one stock: short-term relative strength, drawn in neutral ink because the universe
+// evaluation (lib/signal-evaluation.json) found that it describes the setup without predicting returns. The evidence
+// (track record, holdout, per-stock backtest with its permutation test) sits in a collapsed section below.
 
-function codeTone(code: SignalCode | null): "up" | "down" | "neutral" {
-  if (code === "bullish" || code === "strong_bullish") return "up";
-  if (code === "bearish" || code === "strong_bearish") return "down";
-  return "neutral";
-}
+const TICKS = [SIGNAL_THRESHOLDS.strongBearish, SIGNAL_THRESHOLDS.bearish, SIGNAL_THRESHOLDS.bullish, SIGNAL_THRESHOLDS.strongBullish];
 
 function formatRaw(factor: FactorResult): string {
-  if (factor.raw === null) return "—";
-  if (factor.rawUnit === "percent") return formatRatio(factor.raw, { digits: 1, sign: factor.key === "momentum" || factor.key === "trend" });
+  if (factor.raw === null) return DASH;
+  if (factor.rawUnit === "percent") return pct(factor.raw, 1, factor.key === "momentum" || factor.key === "trend");
   if (factor.rawUnit === "multiple") return formatMultiple(factor.raw, factor.key === "volume" ? 2 : 1);
   return factor.raw.toFixed(1);
 }
 
-function ScoreGauge({ score }: { score: number }) {
+/** Neutral 0-100 track with the four reading cut-offs as ticks and an accent marker at the score. */
+function ScoreGauge({ score, label, valueText, weak, strong }: { score: number; label: string; valueText: string; weak: string; strong: string }) {
+  const x = Math.min(Math.max(score, 0), 100);
   return (
-    <div className="relative h-2 w-full" aria-hidden>
-      <div className="absolute inset-0 flex">
-        <span className="h-full bg-down/35" style={{ width: "28%" }} />
-        <span className="h-full bg-down/15" style={{ width: "14%" }} />
-        <span className="h-full bg-line-2" style={{ width: "16%" }} />
-        <span className="h-full bg-up/15" style={{ width: "14%" }} />
-        <span className="h-full bg-up/35" style={{ width: "28%" }} />
+    <div>
+      <div
+        role="meter"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(x)}
+        aria-valuetext={valueText}
+        className="relative h-2 w-full bg-line-2"
+      >
+        {TICKS.map((tick) => (
+          <span key={tick} aria-hidden className="absolute inset-y-0 w-px bg-panel" style={{ left: `${tick}%` }} />
+        ))}
+        <span aria-hidden className="absolute -inset-y-1 w-0.5 -translate-x-1/2 bg-accent" style={{ left: `${x}%` }} />
       </div>
-      {THRESHOLDS.map((x) => (
-        <span key={x} className="absolute inset-y-0 w-px bg-panel" style={{ left: `${x}%` }} />
-      ))}
-      <span className="absolute -top-1 h-4 w-0.5 -translate-x-1/2 bg-fg" style={{ left: `${Math.min(Math.max(score, 0), 100)}%` }} />
+      <div aria-hidden className="mt-1.5 flex justify-between text-micro text-fg-3">
+        <span>{weak}</span>
+        <span>{strong}</span>
+      </div>
     </div>
   );
 }
 
-function FactorRow({ factor, t }: { factor: FactorResult; t: Messages }) {
+/** An input of the reading: its raw value and its 0-100 score as a neutral bar from the midline (Meter colors). */
+function InputRow({ factor, t }: { factor: FactorResult; t: Messages }) {
   const offset = factor.score - 50;
   const width = `${(Math.min(Math.abs(offset), 50) / 50) * 50}%`;
+  const state = factor.key === "rsi" && !factor.imputed ? rsiState(factor.raw) : null;
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_5.5rem_2rem] items-center gap-3 py-1.5 text-xs">
+    <li className="grid grid-cols-[minmax(0,1fr)_minmax(4.5rem,7rem)_1.75rem] items-center gap-3 py-1.5">
       <div className="min-w-0">
-        <div className="truncate text-fg-2">{t.signal.factors[factor.key]}</div>
-        <div className="num truncate text-fg-3">
+        <div className="truncate text-xs text-fg-2">{t.signal.factors[factor.key]}</div>
+        <div className="num truncate text-xs text-fg-3">
           {factor.imputed ? (
             t.signal.imputed
-          ) : factor.key === "value" && factor.raw === null ? (
-            // A non-imputed valuation without a P/E means negative earnings.
-            <span className="text-fg-2">{t.signal.lossMaking}</span>
           ) : (
             <>
               {t.signal.rawLabels[factor.key]} <span className="text-fg-2">{formatRaw(factor)}</span>
+              {state ? <span> · {t.signal.rsiState[state]}</span> : null}
             </>
           )}
         </div>
       </div>
-      <div aria-hidden className="relative h-2">
-        <span className="absolute inset-y-0 left-1/2 w-px bg-line-2" />
-        {!factor.imputed ? (
-          <span className={cn("absolute inset-y-0", offset >= 0 ? "left-1/2 bg-up/70" : "right-1/2 bg-down/70")} style={{ width }} />
-        ) : null}
+      <div aria-hidden className="relative h-1.5 bg-line-2">
+        <span className="absolute -inset-y-0.5 left-1/2 w-px -translate-x-1/2 bg-fg-2" />
+        {!factor.imputed ? <span className={cn("absolute inset-y-0 bg-fg-3", offset >= 0 ? "left-1/2" : "right-1/2")} style={{ width }} /> : null}
       </div>
-      <div className={cn("num text-right", factor.imputed ? "text-fg-3" : "text-fg")}>{factor.imputed ? "—" : Math.round(factor.score)}</div>
-    </div>
+      <div className={cn("num text-right text-xs", factor.imputed ? "text-fg-3" : "text-fg")}>{factor.imputed ? DASH : Math.round(factor.score)}</div>
+    </li>
   );
 }
 
-function BacktestTable({ results, t }: { results: BacktestResult[]; t: Messages }) {
-  const c = t.signal.cols;
+/** Valuation, quality and the zero-weight volatility regime: shown for context, not part of the reading. */
+function ContextRow({ factor, t }: { factor: FactorResult; t: Messages }) {
+  const riskOnly = factor.group === "technical" && factor.weight === 0;
+  let value;
+  if (factor.imputed) value = t.signal.imputed;
+  // A non-imputed valuation without a P/E means negative earnings.
+  else if (factor.key === "value" && factor.raw === null) value = <span className="text-fg-2">{t.signal.lossMaking}</span>;
+  else
+    value = (
+      <>
+        {t.signal.rawLabels[factor.key]} <span className="text-fg-2">{formatRaw(factor)}</span>
+      </>
+    );
   return (
-    <table className="w-full border-collapse text-data">
-      <thead>
-        <tr className="border-b border-line">
-          <th scope="col" className="col-head h-7 px-3 text-left" />
-          <th scope="col" className="col-head h-7 px-2 text-right">{c.trades}</th>
-          <th scope="col" className="col-head h-7 px-2 text-right">{c.winRate}</th>
-          <th scope="col" className="col-head h-7 px-2 text-right">{c.avgReturn}</th>
-          <th scope="col" className="col-head hidden h-7 px-2 text-right sm:table-cell">{c.baseline}</th>
-          <th scope="col" className="col-head h-7 px-2 text-right">{c.edge}</th>
-          <th scope="col" className="col-head hidden h-7 px-2 text-right md:table-cell">{c.sharpe}</th>
-          <th scope="col" className="col-head hidden h-7 px-3 text-right md:table-cell">{c.maxDD}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {results.map((r) => (
-          <tr key={r.holdDays} className={cn("border-b border-line/60 last:border-b-0", r.lowSample && "text-fg-3")}>
-            <th scope="row" className="num h-8 px-3 text-left font-normal text-fg-2">
-              {tpl(t.signal.hold, { n: r.holdDays })}
-              {r.lowSample ? <span title={t.signal.lowSample}>*</span> : null}
-            </th>
-            <td className="num px-2 text-right">{r.trades}</td>
-            <td className="num px-2 text-right" title={r.winRateCI ? `95% CI ${formatRatio(r.winRateCI[0], { digits: 0 })}–${formatRatio(r.winRateCI[1], { digits: 0 })}` : undefined}>
-              {formatRatio(r.winRate, { digits: 0 })}
-              {r.winRateCI ? (
-                <span className="ml-1 hidden text-xs text-fg-3 lg:inline">
-                  {Math.round(r.winRateCI[0] * 100)}–{Math.round(r.winRateCI[1] * 100)}
-                </span>
-              ) : null}
-            </td>
-            <td className="px-2 text-right">{r.lowSample ? <span className="num">{formatRatio(r.avgReturn, { digits: 2, sign: true })}</span> : <Delta value={r.avgReturn} kind="ratio" />}</td>
-            <td className="num hidden px-2 text-right text-fg-3 sm:table-cell">{formatRatio(r.baselineAvgReturn, { digits: 2, sign: true })}</td>
-            <td className="px-2 text-right">{r.lowSample ? <span className="num">{formatRatio(r.edge, { digits: 2, sign: true })}</span> : <Delta value={r.edge} kind="ratio" />}</td>
-            <td className="num hidden px-2 text-right md:table-cell">{formatNumber(r.sharpe, 2)}</td>
-            <td className="num hidden px-3 text-right md:table-cell">{formatRatio(r.maxDrawdown, { digits: 1 })}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <li className="flex min-h-9 items-center justify-between gap-3 py-1.5 text-xs">
+      <span className="min-w-0 truncate text-fg-2">{t.signal.factors[factor.key]}</span>
+      <span className="num flex shrink-0 items-center gap-2 text-fg-3">
+        <span>{value}</span>
+        {riskOnly ? <Badge>{t.signal.riskOnly}</Badge> : null}
+      </span>
+    </li>
   );
 }
 
-/** The universe evaluation measures the technical-only score, so the highlighted row is this stock's technical reading. */
-function TrackRecord({ technicalScore, t, lang }: { technicalScore: number | null; t: Messages; lang: Lang }) {
-  const evaluation = SIGNAL_EVALUATION;
-  const horizon = findHorizon(evaluation, EVALUATION_DAYS);
-  if (!horizon) return null;
-  const verdict = evaluationVerdict(horizon);
+function SelectionCell({ row, tone, domain, t }: { row: LabelOutcome; tone: "up" | "down" | "neutral"; domain: [number, number]; t: Messages }) {
   const tr = t.signal.track;
-  const code: SignalCode | null = technicalScore === null ? null : labelForScore(technicalScore);
+  const interval = row.ci.selection;
+  const raw = tpl(tr.rawExcess, {
+    value: pct(row.excess, 2, true),
+    lo: pct(row.ci.excess?.[0], 2, true),
+    hi: pct(row.ci.excess?.[1], 2, true),
+    timing: pct(row.timing, 2, true),
+  });
+  return (
+    <span className="inline-flex items-center justify-end gap-2">
+      {/* The trigger is a tap target too: 24px tall on desktop, 40px on phones (the row grows with it). */}
+      <Tooltip label={raw}>
+        <button
+          type="button"
+          className={cn(
+            "num min-h-6 rounded-xs focus-visible:outline-offset-[-2px] max-sm:min-h-10 max-sm:min-w-10",
+            tone === "up" ? "text-up" : tone === "down" ? "text-down" : undefined,
+          )}
+        >
+          {pct(row.selection, 2, true)}
+        </button>
+      </Tooltip>
+      <Whisker
+        estimate={row.selection}
+        low={interval?.[0]}
+        high={interval?.[1]}
+        base={0}
+        min={domain[0]}
+        max={domain[1]}
+        label={tpl(tr.whisker, { reading: t.signal.codes[row.code], value: pct(row.selection, 2, true), lo: pct(interval?.[0], 2, true), hi: pct(interval?.[1], 2, true) })}
+      />
+    </span>
+  );
+}
+
+/** What followed each reading across the universe, the current reading marked. */
+function TrackRecord({ horizon, code, t, lang }: { horizon: HorizonOutcome; code: SignalCode; t: Messages; lang: Lang }) {
+  const tr = t.signal.track;
+  const totalDates = horizon.ic.dates;
+  const domain = symmetricDomain(horizon.labels.map((label) => label.ci.selection));
+  const columns: DataTableColumn<LabelOutcome>[] = [
+    {
+      key: "reading",
+      header: tr.reading,
+      render: (row) => {
+        const current = row.code === code;
+        return (
+          <span className="inline-flex items-center gap-1.5">
+            {current ? <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-accent" /> : null}
+            <span className={current ? "text-fg" : undefined}>{t.signal.codes[row.code]}</span>
+            {current ? <span className="sr-only"> ({tr.current})</span> : null}
+          </span>
+        );
+      },
+    },
+    { key: "n", header: tr.sessions, align: "right", width: "5.25rem", hideBelow: "sm", render: (row) => <span className="num">{formatInteger(row.n, lang)}</span> },
+    {
+      key: "selection",
+      header: tr.vsUniverse,
+      align: "right",
+      width: "10rem",
+      render: (row) => <SelectionCell row={row} tone={selectionTone(row, totalDates)} domain={domain} t={t} />,
+    },
+    { key: "beat", header: tr.beatMedian, align: "right", width: "6rem", render: (row) => <span className="num">{pct(row.beatMedian, 0)}</span> },
+    {
+      key: "episodes",
+      header: tr.episodes,
+      align: "right",
+      // Fits "41（13%）" with the Chinese full-width parentheses.
+      width: "6rem",
+      hideBelow: "sm",
+      render: (row) => <span className="num">{tpl(tr.episodeCell, { n: formatInteger(row.episodes, lang), share: pct(row.largestEpisodeShare, 0) })}</span>,
+    },
+  ];
+  return (
+    <DataTable
+      rows={horizon.labels}
+      columns={columns}
+      rowKey={(row) => row.code}
+      caption={tpl(tr.caption, { n: SIGNAL_EVALUATION.universe, days: horizon.days })}
+      rowClassName={(row) => cn(row.code === code && "bg-panel-2", isConcentrated(row, totalDates) ? "text-fg-3" : "text-fg-2")}
+    />
+  );
+}
+
+function Backtest({ results, costBps, t, lang }: { results: BacktestResult[]; costBps: number; t: Messages; lang: Lang }) {
+  const b = t.signal.backtest;
+  const domain = rateDomain(results.flatMap((r) => [r.winRate, r.winRateCI?.[0], r.winRateCI?.[1], r.baselineWinRate]));
+  const returnCell = (value: number | null, row: BacktestResult) => {
+    const colored = backtestTiming(row) === "unlikely" && value !== null && value !== 0;
+    return <span className={cn("num", colored ? (value > 0 ? "text-up" : "text-down") : "text-fg-3")}>{pct(value, 2, true)}</span>;
+  };
+  const columns: DataTableColumn<BacktestResult>[] = [
+    {
+      key: "hold",
+      header: b.cols.hold,
+      width: "3.5rem",
+      render: (r) => (
+        <span className="num text-fg-2">{tpl(b.hold, { n: r.holdDays })}</span>
+      ),
+    },
+    { key: "trades", header: b.cols.trades, align: "right", width: "4rem", render: (r) => <span className="num text-fg-2">{formatInteger(r.trades, lang)}</span> },
+    { key: "win", header: b.cols.winRate, align: "right", width: "4.5rem", render: (r) => <span className="num text-fg-2">{pct(r.winRate, 0)}</span> },
+    {
+      key: "winRange",
+      header: <span className="sr-only">{b.cols.range}</span>,
+      width: "6rem",
+      hideBelow: "sm",
+      render: (r) => (
+        <Whisker
+          estimate={r.winRate}
+          low={r.winRateCI?.[0]}
+          high={r.winRateCI?.[1]}
+          base={r.baselineWinRate}
+          min={domain[0]}
+          max={domain[1]}
+          label={tpl(b.winWhisker, { rate: pct(r.winRate, 0), lo: pct(r.winRateCI?.[0], 0), hi: pct(r.winRateCI?.[1], 0), base: pct(r.baselineWinRate, 0) })}
+        />
+      ),
+    },
+    { key: "avg", header: b.cols.avgReturn, align: "right", width: "5.5rem", hideBelow: "sm", render: (r) => returnCell(r.avgReturn, r) },
+    {
+      key: "baseline",
+      header: b.cols.baseline,
+      align: "right",
+      width: "5.5rem",
+      hideBelow: "md",
+      render: (r) => <span className="num text-fg-3">{pct(r.baselineAvgReturn, 2, true)}</span>,
+    },
+    { key: "edge", header: b.cols.edge, align: "right", width: "5.5rem", render: (r) => returnCell(r.edge, r) },
+    { key: "p", header: keepSymbols(b.cols.p), align: "right", width: "4rem", render: (r) => <span className="num text-fg-2">{formatP(r.pValue)}</span> },
+  ];
   return (
     <div className="border-t border-line">
-      <div className="flex items-center justify-between gap-2 px-3 pt-2.5 pb-1.5">
-        <h3 className="label">{tpl(tr.title, { n: evaluation.universe, days: horizon.days })}</h3>
-        <Badge tone={verdict === "predictive" ? "info" : "warn"}>{tr.verdict[verdict]}</Badge>
-      </div>
-      <table className="w-full border-collapse text-data">
-        <thead>
-          <tr className="border-b border-line">
-            <th scope="col" className="col-head h-7 px-3 text-left">{tr.reading}</th>
-            <th scope="col" className="col-head h-7 px-2 text-right">{tr.sessions}</th>
-            <th scope="col" className="col-head h-7 px-2 text-right">{tr.excess}</th>
-            <th scope="col" className="col-head h-7 px-3 text-right">{tr.upRate}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {horizon.labels.map((row) => {
-            const current = row.code === code;
-            return (
-              <tr key={row.code} className={cn("border-b border-line/60 last:border-b-0", current && "bg-panel-2")}>
-                <th scope="row" className={cn("h-7 px-3 text-left font-normal", current ? "text-fg" : "text-fg-2")}>
-                  {current ? <span aria-hidden className="mr-1.5 inline-block size-1.5 rounded-full bg-accent align-middle" /> : null}
-                  {t.signal.codes[row.code]}
-                  {current ? <span className="sr-only"> ({tr.current})</span> : null}
-                </th>
-                <td className="num px-2 text-right text-fg-2">{formatNumber(row.n, 0, lang)}</td>
-                <td className="px-2 text-right">
-                  {/* Return against the same-day universe (market moves removed), coloured only when its interval excludes 0. */}
-                  {excludesZero(row.ci.selection) ? (
-                    <Delta value={row.selection} kind="ratio" />
-                  ) : (
-                    <span className="num text-fg-2">{formatRatio(row.selection, { digits: 2, sign: true })}</span>
-                  )}
-                  {row.ci.selection ? (
-                    <span className="num ml-1 hidden text-xs text-fg-3 lg:inline">
-                      [{formatRatio(row.ci.selection[0], { digits: 2, sign: true })}, {formatRatio(row.ci.selection[1], { digits: 2, sign: true })}]
-                    </span>
-                  ) : null}
-                </td>
-                <td className="num px-3 text-right text-fg-2">{formatRatio(row.hitRate, { digits: 0 })}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      <div className="space-y-1 px-3 py-2 text-xs text-fg-3">
-        {technicalScore !== null && code !== null ? (
-          <p className="text-fg-2">{tpl(tr.thisStock, { score: formatNumber(technicalScore, 1, lang), reading: t.signal.codes[code] })}</p>
-        ) : null}
-        <p>{tpl(tr.note[verdict], { n: evaluation.universe, days: horizon.days, ic: formatNumber(horizon.ic.mean, 3, lang), t: formatNumber(horizon.ic.t, 2, lang) })}</p>
-        <p>
-          {tpl(tr.foot, {
-            from: evaluation.from,
-            to: evaluation.to,
-            base: formatRatio(horizon.base.mean, { digits: 2, sign: true }),
-            hit: formatRatio(horizon.base.hitRate, { digits: 0 }),
-          })}
-        </p>
+      <h3 className="col-head px-3 pt-2.5 pb-1">{b.title}</h3>
+      <DataTable rows={results} columns={columns} rowKey={(r) => String(r.holdDays)} caption={b.caption} />
+      <ul className="space-y-0.5 px-3 pt-2 text-xs text-fg-2">
+        {results.map((r) => (
+          <li key={r.holdDays} className="num">
+            {tpl(b.timing[backtestTiming(r)], { hold: tpl(b.hold, { n: r.holdDays }), p: formatP(r.pValue), n: r.trades })}
+          </li>
+        ))}
+      </ul>
+      <div className="space-y-1 px-3 pt-1.5 pb-2.5 text-xs text-fg-3">
+        <p>{tpl(b.note, { n: results[0]?.windowDays ?? 0, bps: costBps })}</p>
+        <p>{tpl(b.chance, { n: SIGNAL_EVALUATION.universe })}</p>
       </div>
     </div>
+  );
+}
+
+function Evidence({ report, code, t, lang }: { report: SignalReport; code: SignalCode; t: Messages; lang: Lang }) {
+  const evaluation = SIGNAL_EVALUATION;
+  const horizon = findHorizon(evaluation, EVALUATION_DAYS);
+  const tr = t.signal.track;
+  const holdout = evaluation.holdout;
+  const passed = holdout.factors.filter((f) => f.pass).length;
+  const verdict = horizon ? evaluationVerdict(horizon) : null;
+  return (
+    <details className="group border-t border-line">
+      <summary className="flex min-h-9 cursor-pointer list-none items-center gap-2 px-3 py-1.5 text-xs font-medium text-fg-2 select-none hover:text-fg max-sm:min-h-10 [&::-webkit-details-marker]:hidden">
+        <ChevronRight aria-hidden className="size-3.5 shrink-0 transition-transform group-open:rotate-90" strokeWidth={2} />
+        <span className="min-w-0 flex-1">{t.signal.evidence}</span>
+        {verdict ? <Badge tone={verdict === "predictive" ? "info" : "warn"}>{tr.verdict[verdict]}</Badge> : null}
+      </summary>
+      {horizon ? (
+        <div className="border-t border-line">
+          <h3 className="col-head px-3 pt-2.5 pb-1">{tpl(tr.title, { n: evaluation.universe, days: horizon.days })}</h3>
+          <TrackRecord horizon={horizon} code={code} t={t} lang={lang} />
+          <div className="space-y-1 px-3 py-2 text-xs text-fg-3">
+            <p>{tpl(tr.foot, { days: horizon.days, n: evaluation.universe, from: evaluation.from, to: evaluation.to })}</p>
+            <p>{tpl(tr.colors, { limit: pct(EPISODE_SHARE_LIMIT, 0), share: pct(COMMON_READING_DATE_SHARE, 0) })}</p>
+            <p className="text-fg-2">
+              {tpl(tr.holdout, {
+                years: yearSpan(holdout.period.from, holdout.period.to),
+                ic: formatIc(holdout.composite.mean),
+                lo: formatIc(holdout.composite.ci?.[0]),
+                hi: formatIc(holdout.composite.ci?.[1]),
+                t: formatT(holdout.composite.t),
+                result: holdout.composite.pass ? tr.holdoutPass : tr.holdoutFail,
+                factors: tpl(tr.holdoutFactors, { passed, total: holdout.factors.length }),
+              })}
+            </p>
+            {horizon.ic.fragile && horizon.ic.phaseT ? (
+              <p className="text-warn">{tpl(tr.fragile, { lo: formatT(horizon.ic.phaseT[0]), hi: formatT(horizon.ic.phaseT[1]) })}</p>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+      {report.backtest && report.backtest.results.length > 0 ? (
+        <Backtest results={report.backtest.results} costBps={report.backtest.costBps} t={t} lang={lang} />
+      ) : null}
+    </details>
   );
 }
 
@@ -197,91 +326,107 @@ interface SignalPanelProps {
   error: unknown;
   onRetry: () => void;
   className?: string;
+  /** Section id, e.g. for an in-page anchor. */
+  id?: string;
 }
 
-export function SignalPanel({ report, error, onRetry, className }: SignalPanelProps) {
+export function SignalPanel({ report, error, onRetry, className, id }: SignalPanelProps) {
   const { t, lang } = usePrefs();
+  const title = t.signal.title;
 
   if (!report) {
     return (
-      <Panel title={t.signal.title} className={className}>
+      <Panel title={title} code="SIG" className={className} id={id}>
         {error ? <ErrorState error={error} onRetry={onRetry} /> : <SkeletonRows rows={9} />}
       </Panel>
     );
   }
 
-  if (report.status !== "ok" || report.code === null || report.score === null) {
+  const score = report.technicalScore;
+  if (report.status !== "ok" || score === null) {
     return (
-      <Panel title={t.signal.title} className={className}>
-        <p className="px-3 py-6 text-sm text-fg-3">{t.signal.insufficient}</p>
+      <Panel title={title} code="SIG" className={className} id={id}>
+        <EmptyState>{t.signal.insufficient}</EmptyState>
       </Panel>
     );
   }
 
-  const tone = codeTone(report.code);
-  const technical = report.factors.filter((f) => f.group === "technical");
-  const fundamental = report.factors.filter((f) => f.group === "fundamental");
-  const five = report.backtest?.results.find((r) => r.holdDays === 5);
+  const code = labelForScore(score);
+  const reading = t.signal.codes[code];
+  const shown = scoreText(score);
+  const evaluation = SIGNAL_EVALUATION;
+  const horizon = findHorizon(evaluation, EVALUATION_DAYS);
+  const verdict = horizon ? evaluationVerdict(horizon) : null;
+  const inputs = report.factors.filter((f) => f.group === "technical" && f.weight > 0);
+  const context = report.factors.filter((f) => !(f.group === "technical" && f.weight > 0));
+  const closeDate = report.meta.lastBarDate ? formatShortDate(report.meta.lastBarDate, lang, "UTC") : null;
 
   return (
-    <Panel title={t.signal.title} actions={report.confidence ? <PanelMeta>{t.signal.confidence[report.confidence]}</PanelMeta> : null} className={className}>
-      <div className="space-y-3 border-b border-line px-3 py-3">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <Badge tone={tone === "neutral" ? "neutral" : tone} className="h-6 px-2 text-sm">
-            {t.signal.codes[report.code]}
-          </Badge>
-          <span className="text-xs text-fg-3">
-            {t.signal.score} <span className="num text-base text-fg">{formatNumber(report.score, 1, lang)}</span>
-            <span className="num">/100</span>
+    <Panel
+      title={title}
+      code="SIG"
+      actions={closeDate ? <PanelMeta>{tpl(t.signal.asOf, { date: closeDate })}</PanelMeta> : null}
+      className={className}
+      id={id}
+    >
+      <StaleBanner show={Boolean(error)} since={report.asOf} />
+      <div className="space-y-3 border-b border-line px-3 pt-3 pb-3">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span className="text-sm text-fg-2">{t.signal.headline}</span>
+          <span className="num text-figure text-fg">
+            {shown}
+            <span className="text-sm text-fg-3">{t.signal.outOf}</span>
           </span>
-          <span className="text-xs text-fg-3">
-            {t.signal.consensus} <span className="num text-fg-2">{report.consensus === null ? "—" : `${Math.round(report.consensus)}%`}</span>
+          <span aria-hidden className="text-fg-3">
+            ·
           </span>
-          <span className="text-xs text-fg-3">
-            {t.signal.coverage} <span className="num text-fg-2">{report.coverage === null ? "—" : `${Math.round(report.coverage)}%`}</span>
-          </span>
+          <Badge className="self-center">{reading}</Badge>
         </div>
-        <ScoreGauge score={report.score} />
+        <ScoreGauge
+          score={score}
+          label={t.signal.headline}
+          valueText={tpl(t.signal.gauge, { score: shown, reading })}
+          weak={t.signal.weak}
+          strong={t.signal.strong}
+        />
+        {horizon && verdict ? (
+          <p className="text-xs leading-5 text-fg-2">
+            {tpl(t.signal.verdict[verdict], {
+              n: evaluation.universe,
+              years: yearSpan(evaluation.period.from, evaluation.period.to),
+              days: horizon.days,
+              ic: formatIc(horizon.ic.mean),
+              t: formatT(horizon.ic.t),
+            })}{" "}
+            <Link href="/lab#method" className="whitespace-nowrap text-info underline decoration-info/50 underline-offset-2 hover:decoration-info">
+              {t.signal.howItWorks}
+            </Link>
+          </p>
+        ) : null}
       </div>
 
       <div className="grid gap-px bg-line md:grid-cols-2 [&>*]:bg-panel">
         <div className="px-3 py-2">
-          <h3 className="label mb-1">{t.signal.technical}</h3>
-          {technical.map((f) => (
-            <FactorRow key={f.key} factor={f} t={t} />
-          ))}
+          <h3 className="col-head mb-0.5">{t.signal.inputs}</h3>
+          <ul>
+            {inputs.map((f) => (
+              <InputRow key={f.key} factor={f} t={t} />
+            ))}
+          </ul>
         </div>
         <div className="px-3 py-2">
-          <h3 className="label mb-1">{t.signal.fundamental}</h3>
-          {fundamental.map((f) => (
-            <FactorRow key={f.key} factor={f} t={t} />
-          ))}
+          <h3 className="col-head mb-0.5">{t.signal.context}</h3>
+          <ul>
+            {context.map((f) => (
+              <ContextRow key={f.key} factor={f} t={t} />
+            ))}
+          </ul>
         </div>
       </div>
 
-      {report.backtest && report.backtest.results.length > 0 ? (
-        <div className="border-t border-line">
-          <h3 className="label px-3 pt-2.5 pb-1.5">{t.signal.backtest}</h3>
-          <BacktestTable results={report.backtest.results} t={t} />
-          <div className="space-y-1 px-3 py-2 text-xs text-fg-3">
-            <p>{tpl(t.signal.backtestNote, { n: report.backtest.results[0]?.windowDays ?? 0, bps: report.backtest.costBps })}</p>
-            {report.backtest.results.some((r) => r.lowSample) ? <p>* {t.signal.lowSample}</p> : null}
-            {five && five.bearishSignals > 0 ? (
-              <p>
-                {tpl(t.signal.bearish, {
-                  n: five.bearishSignals,
-                  hit: formatRatio(five.bearishHitRate, { digits: 0 }),
-                  base: formatRatio(five.baselineWinRate === null ? null : 1 - five.baselineWinRate, { digits: 0 }),
-                })}
-              </p>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
+      <Evidence report={report} code={code} t={t} lang={lang} />
 
-      <TrackRecord technicalScore={report.technicalScore} t={t} lang={lang} />
-
-      <div className="mt-auto space-y-1 border-t border-line px-3 py-2 text-xs text-fg-3">
+      <div className="space-y-1 border-t border-line px-3 py-2 text-xs text-fg-3">
         {report.meta.droppedPartialBar ? <p>{t.signal.partialBar}</p> : null}
         <p>{t.signal.disclaimer}</p>
       </div>
