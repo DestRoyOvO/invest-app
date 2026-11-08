@@ -91,7 +91,7 @@
 
 | 代码 | 按键 | 功能 |
 |---|---|---|
-| `DATA` | `g d` | 我的数据：把 InvestSeek 存在浏览器里的全部内容备份为 JSON 文件，并可恢复（合并或替换，先预览）；从券商 CSV 文件或粘贴的文本导入持仓（支持中英文表头）；导出 CSV；清除数据。 |
+| `DATA` | `g d` | 我的数据：把 InvestSeek 存在浏览器里的全部内容备份为 JSON 文件，并可恢复（合并或替换，先预览）；从券商 CSV 文件或粘贴的文本导入持仓（支持中英文表头）；导出 CSV；清除数据。备份到期时（从未备份，或上次备份已超过 30 天），状态栏（手机上是“更多”面板）会出现一条不打扰的提醒。 |
 | `HELP` | `g h` | 每个功能的路径和按键、命令语法、快捷键，以及数据来源和延迟说明。 |
 
 ### AI 助手
@@ -340,6 +340,8 @@ npm start          # 端口 3000；放在自己的 TLS 反向代理后面时，�
 | `npm test` | 运行一次 Vitest 单元测试 |
 | `npm run test:watch` | Vitest 监听模式 |
 | `npm run check` | 依次运行 lint、类型检查和单元测试，与 CI 相同 |
+| `npm run e2e` | 在 Chrome 中用测试数据运行端到端与无障碍测试（见[测试](#测试)） |
+| `npm run screenshots` | 用测试数据重新生成上面的截图（[说明](docs/testing.md#screenshots)） |
 | `npm run evaluate` | 技术评分的全股票池评估：下载 78 只股票及 SPY、RSP 自 2013 年起的日线，重写 `docs/evaluation.md` 和 `lib/signal-evaluation.json`（加 `-- --offline` 用缓存重跑） |
 | `npm run research` | 事先登记的因子研究和风险校准：重写 `docs/factor-research.md`、`lib/factor-research.json` 和 `lib/risk-calibration.json`（在 `evaluate` 之后加 `-- --offline` 运行，使用同一份日线） |
 
@@ -347,11 +349,11 @@ npm start          # 端口 3000；放在自己的 TLS 反向代理后面时，�
 
 ## 测试
 
-- **单元测试：** 超过 1700 个 Vitest 测试（`npm test`），覆盖信号引擎及其统计、评估和研究的核心逻辑、组合与风险计算、提醒、备份和 CSV 导入、命令解析、AI 上下文构建与流式处理、SSRF 防护、会话、频率限制、配置校验、路由处理器以及设计令牌的对比度。测试从不调用雅虎或 DeepSeek。
+- **单元测试：** 超过 2100 个 Vitest 测试（`npm test`），覆盖信号引擎及其统计、评估和研究的核心逻辑、组合与风险计算、提醒、备份和 CSV 导入、命令解析、AI 上下文构建与流式处理、SSRF 防护、会话、频率限制、配置校验、路由处理器以及设计令牌的对比度。测试从不调用雅虎或 DeepSeek。
 - **CI：** 每个 Pull Request 和每次推送到 `main` 都会运行 lint、类型检查、单元测试、生产构建、生产依赖审计和端到端测试。部署相关文件变动时，另一个工作流会构建 Docker 镜像并等待健康检查通过；每个工作日还有巡检任务检查雅虎接口。
 
 <!-- e2e：端到端测试只在这一段和 README.md 中对应的一段里描述，其他文档都链接到这里。两段请同步修改。 -->
-**端到端与无障碍测试：** `npm run e2e` 先构建应用，再用合成的测试数据（`MARKET_DATA_SOURCE=fixtures`）和模拟的 LLM 运行 Playwright 测试套件。测试期间服务器不能联网、时钟固定，从不调用雅虎或 DeepSeek。套件在桌面和手机两种视口下逐一打开每个页面，并在深浅两种主题下对每个页面、命令栏和 AI 对话框运行 axe 无障碍检查。详细说明以 [docs/testing.md](docs/testing.md) 为准。
+**端到端与无障碍测试：** `npm run e2e` 先构建应用，再用合成的测试数据（`MARKET_DATA_SOURCE=fixtures`）和模拟的 LLM 运行 Playwright 测试套件。测试期间服务器不能联网、时钟固定，从不调用雅虎或 DeepSeek。套件在桌面和手机两种视口下逐一打开每个页面，在深浅两种主题下对每个页面、命令栏和 AI 对话框运行 axe 无障碍检查，另有 17 个功能测试逐项检查各页面的实际表现（我的今日、图表工作台、持仓与风险、备份与导入、财经日历、筛选器、笔记、提醒、显示设置、AI 对话等），预期的每个数字都由应用自己的 API 返回值算出。详细说明以 [docs/testing.md](docs/testing.md) 为准。
 <!-- /e2e -->
 
 ## 项目结构

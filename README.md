@@ -91,7 +91,7 @@ Security functions take a ticker and, typed alone, use the last symbol you viewe
 
 | Code | Keys | What it does |
 |---|---|---|
-| `DATA` | `g d` | Your data: back up everything InvestSeek keeps in the browser to a JSON file and restore it (merge or replace, with a preview), import positions from broker CSV files or pasted text (English and Chinese headers), export CSV, and clear data. |
+| `DATA` | `g d` | Your data: back up everything InvestSeek keeps in the browser to a JSON file and restore it (merge or replace, with a preview), import positions from broker CSV files or pasted text (English and Chinese headers), export CSV, and clear data. While a backup is due (never made, or older than 30 days), a quiet reminder shows in the status bar (on phones, in the More sheet). |
 | `HELP` | `g h` | Every function with its route and keys, the command grammar, the shortcuts, and the data sources and their delays. |
 
 ### AI assistant
@@ -340,6 +340,8 @@ Please report vulnerabilities privately, as described in [SECURITY.md](SECURITY.
 | `npm test` | Vitest unit tests, once |
 | `npm run test:watch` | Vitest in watch mode |
 | `npm run check` | Lint, typecheck and unit tests, as CI runs them |
+| `npm run e2e` | The end-to-end and accessibility suite in Chrome, against fixture data (see [Testing](#testing)) |
+| `npm run screenshots` | Regenerates the screenshots above from the fixture data ([how](docs/testing.md#screenshots)) |
 | `npm run evaluate` | Universe evaluation of the technical score: downloads daily bars from 2013 for the 78 stocks, SPY and RSP, and rewrites `docs/evaluation.md` and `lib/signal-evaluation.json` (`-- --offline` reruns from the cache) |
 | `npm run research` | Pre-registered factor study and risk calibration: rewrites `docs/factor-research.md`, `lib/factor-research.json` and `lib/risk-calibration.json` (run `-- --offline` after `evaluate` to use the same bars) |
 
@@ -347,11 +349,11 @@ Other tools, run with `npx tsx`: `scripts/check-contrast.ts` (WCAG contrast of e
 
 ## Testing
 
-- **Unit tests:** more than 1,700 Vitest tests (`npm test`). They cover the signal engine and its statistics, the evaluation and research cores, portfolio and risk math, alerts, backup and CSV import, the command parser, AI context building and streaming, the SSRF guard, sessions, rate limits, settings validation, route handlers and the contrast of the design tokens. They never call Yahoo or DeepSeek.
+- **Unit tests:** more than 2,100 Vitest tests (`npm test`). They cover the signal engine and its statistics, the evaluation and research cores, portfolio and risk math, alerts, backup and CSV import, the command parser, AI context building and streaming, the SSRF guard, sessions, rate limits, settings validation, route handlers and the contrast of the design tokens. They never call Yahoo or DeepSeek.
 - **CI:** lint, typecheck, unit tests, a production build, an audit of production dependencies and the end-to-end suite on every pull request and every push to `main`. A second workflow builds the Docker image and waits for its health check when deployment files change, and a weekday canary checks the live Yahoo contract.
 
 <!-- e2e: the end-to-end suite is described only in this block and its twin in README.zh-CN.md; other docs link here. Keep both blocks in step. -->
-**End-to-end and accessibility:** `npm run e2e` builds the app and runs the Playwright suite against synthetic fixture data (`MARKET_DATA_SOURCE=fixtures`) and a mock LLM, with the server's network blocked and its clock pinned, so it never calls Yahoo or DeepSeek. It opens every page route on a desktop and a phone viewport and runs axe on each page, the command bar and the AI chat in both themes. [docs/testing.md](docs/testing.md) is the reference.
+**End-to-end and accessibility:** `npm run e2e` builds the app and runs the Playwright suite against synthetic fixture data (`MARKET_DATA_SOURCE=fixtures`) and a mock LLM, with the server's network blocked and its clock pinned, so it never calls Yahoo or DeepSeek. It opens every page route on a desktop and a phone viewport, runs axe on each page, the command bar and the AI chat in both themes, and walks through what each page does in 17 functional specs (My day, the chart workstation, positions and risk, backups and imports, the calendar, the screener, notes, alerts, settings, the AI chat and more), computing every figure it expects from the app's own API answers. [docs/testing.md](docs/testing.md) is the reference.
 <!-- /e2e -->
 
 ## Project structure
