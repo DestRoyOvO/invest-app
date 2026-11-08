@@ -35,6 +35,8 @@ describe("timeLabel", () => {
   it("shows the session slot for reports, the ET time for macro releases and the ex-date for dividends", () => {
     expect(timeLabel(item({ kind: "earnings", at: "2026-11-17T21:00:00.000Z", timing: "post", symbol: "NVDA" }), en)).toBe("After close");
     expect(timeLabel(item({ kind: "earnings", at: "2027-01-28T21:00:00.000Z", estimated: true, symbol: "AAPL" }), en)).toBe("Time TBD");
+    // An estimated date keeps the usual session the server found for it (the row's "est." badge marks the estimate).
+    expect(timeLabel(item({ kind: "earnings", at: "2027-01-28T21:00:00.000Z", estimated: true, timing: "post", symbol: "AAPL" }), en)).toBe("After close");
     // A listing outside the US: no session slot, but the time is known.
     expect(timeLabel(item({ kind: "earnings", at: "2026-11-18T08:10:00.000Z", symbol: "0700.HK" }), en)).toBe("03:10 ET");
     expect(timeLabel(item({ kind: "earnings", at: "2026-11-18T00:00:00.000Z", symbol: "X" }), en)).toBe("Time TBD");

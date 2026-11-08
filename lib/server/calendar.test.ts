@@ -7,13 +7,16 @@ vi.mock("server-only", () => ({}));
 
 const yahoo = vi.hoisted(() => ({
   getQuotes: vi.fn<(symbols: string[]) => Promise<Map<string, Quote>>>(),
+  /** The quote-cache probe behind the route's charging (lib/server/charging.ts). */
+  hasFreshQuote: vi.fn<(symbol: string) => boolean>(() => false),
 }));
 vi.mock("./yahoo", () => yahoo);
 
 import { GET as calendarRoute } from "@/app/api/calendar/route";
 
-import { earningsTiming, getCalendar, macroCalendarEvents, quoteEvents } from "./calendar";
-import { resetRateLimits } from "./rate-limit";
+import { earningsTiming, getCalendar, macroCalendarEvents, quoteEvents, reportSession } from "./calendar";
+import { clientIp } from "./http";
+import { clientKey, consumeRateLimit, RATE_LIMITS, resetRateLimits } from "./rate-limit";
 
 const NOW = Date.parse("2026-11-07T15:00:00Z");
 const DAY = 24 * 60 * 60 * 1000;
@@ -79,9 +82,11 @@ describe("earningsTiming", () => {
     expect(earningsTiming("2027-01-28T21:00:00Z", true)).toBeNull();
   });
 
-  it("gives no slot to date-only values or to listings outside the US", () => {
+  it("gives no slot to date-only values, to midnight or to listings outside the US", () => {
     // UTC midnight is how Yahoo sends a date without a time; it is not a 19:00 ET release.
     expect(earningsTiming("2026-11-18T00:00:00.000Z", false)).toBeNull();
+    // New York midnight is the other placeholder of an unknown time, not a release before the open.
+    expect(earningsTiming("2026-11-18T05:00:00.000Z", false)).toBeNull();
     expect(earningsTiming("2026-11-18T08:10:00.000Z", false, "0700.HK")).toBeNull();
     expect(earningsTiming("2026-11-18T13:30:00.000Z", false, "BRK-B")).toBe("pre");
     expect(earningsTiming("not a date", false)).toBeNull();
@@ -93,6 +98,23 @@ describe("earningsTiming", () => {
     expect(earningsTiming("2026-11-08T13:30:00.000Z", false, "XYZ")).toBeNull();
     // 01:00Z on Saturday is still Friday evening in New York.
     expect(earningsTiming("2026-11-07T01:00:00.000Z", false, "XYZ")).toBe("post");
+  });
+});
+
+describe("reportSession", () => {
+  it("gives an estimated date the session it carries, which is the company's usual one", () => {
+    // Apple's estimated next report: 16:00 in New York (Yahoo, 7 Nov 2026), after the close like its last one.
+    expect(reportSession("2027-01-28T21:00:00.000Z", "AAPL")).toBe("post");
+    expect(reportSession("2027-01-14T13:30:00.000Z", "JPM")).toBe("pre");
+    expect(earningsTiming("2027-01-28T21:00:00.000Z", false, "AAPL")).toBe("post");
+  });
+
+  it("leaves out the same placeholders, weekends and foreign listings as earningsTiming", () => {
+    expect(reportSession("2027-01-28T00:00:00.000Z", "AAPL")).toBeNull();
+    expect(reportSession("2027-01-28T05:00:00.000Z", "AAPL")).toBeNull();
+    expect(reportSession("2026-11-07T21:00:00.000Z", "BRK-B")).toBeNull();
+    expect(reportSession("2026-11-18T08:10:00.000Z", "0700.HK")).toBeNull();
+    expect(reportSession("not a date")).toBeNull();
   });
 });
 
@@ -129,6 +151,11 @@ describe("quoteEvents", () => {
       NOW + 30 * DAY,
     );
     expect(events.map((e) => [e.id, e.timing])).toEqual([["earnings:XYZ:2026-11-09", "post"]]);
+  });
+
+  it("marks an estimated report and keeps its usual session", () => {
+    const events = quoteEvents(quote("AAPL", { nextEarningsDate: "2026-11-19T21:00:00.000Z", earningsDateEstimated: true }), NOW, NOW + 30 * DAY);
+    expect(events.map((e) => [e.id, e.timing, e.estimated])).toEqual([["earnings:AAPL:2026-11-19", "post", true]]);
   });
 
   it("skips dates outside the window", () => {
@@ -196,5 +223,42 @@ describe("GET /api/calendar", () => {
     expect(requested[0]).toBe("SHOP");
     expect(requested).toHaveLength(UNIVERSE_STOCKS.length + 1);
     expect(((await res.json()) as CalendarResponse).missing).toContain("SHOP");
+  });
+
+  describe("charging", () => {
+    // 100 symbols outside the stock universe: with scope=universe the list passes 100 and getQuotes sends two batches.
+    const LIST = Array.from({ length: 100 }, (_, i) => `ZQ${i}`).join(",");
+    /** Units left in this client's market budget (reading it costs one more). */
+    const remaining = () => {
+      const result = consumeRateLimit(RATE_LIMITS.market, clientKey(clientIp(new Request("http://localhost/api/calendar"))));
+      return result.ok ? result.remaining : 0;
+    };
+
+    beforeEach(() => {
+      yahoo.hasFreshQuote.mockReset();
+      yahoo.hasFreshQuote.mockReturnValue(false);
+    });
+
+    it("charges one unit for the second quote batch when the universe takes the list past 100 symbols", async () => {
+      expect((await call(`?symbols=${LIST}&scope=universe`)).status).toBe(200);
+      expect(yahoo.getQuotes.mock.calls[0][0]).toHaveLength(100 + UNIVERSE_STOCKS.length);
+      expect(remaining()).toBe(RATE_LIMITS.market.limit - 1 - 1 - 1);
+    });
+
+    it("charges nothing extra for one batch or when the quotes are cached", async () => {
+      await call(`?symbols=${LIST}`);
+      expect(remaining()).toBe(RATE_LIMITS.market.limit - 1 - 1);
+      resetRateLimits();
+      yahoo.hasFreshQuote.mockReturnValue(true);
+      await call(`?symbols=${LIST}&scope=universe`);
+      expect(remaining()).toBe(RATE_LIMITS.market.limit - 1 - 1);
+    });
+
+    it("answers 429 without calling Yahoo when the budget cannot cover the second batch", async () => {
+      for (let i = 0; i < RATE_LIMITS.market.limit - 1; i++) remaining();
+      const res = await call(`?symbols=${LIST}&scope=universe`);
+      expect(res.status).toBe(429);
+      expect(yahoo.getQuotes).not.toHaveBeenCalled();
+    });
   });
 });

@@ -18,12 +18,16 @@ const NY_HOUR = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York",
 export { isUsListing };
 
 /**
- * Session timing of an earnings release from its New York time. Null for estimates (Yahoo uses placeholder times), for
- * date-only values (UTC midnight), for listings outside the US, where the New York session says nothing, and for
- * weekend dates, when there is no session (Berkshire reports on Saturdays).
+ * Session of a US earnings release from its New York time: before the open, during the session or after the close.
+ * Yahoo's US times only mark the session (see reportTimeKnown), estimated dates included: on 2026-11-07 each of the
+ * 39 estimated next reports in the heatmap universe carried the session of the company's last report (Apple after the
+ * close, JPMorgan before the open), so an estimate gets its session too and is marked "est." beside it, as on the
+ * quote page (earningsTiming in components/stock/quote-utils.ts reads the quote's dates the same way). Null for
+ * listings outside the US, where the New York session says nothing, for weekend dates, when there is no session
+ * (Berkshire reports on Saturdays), and for Yahoo's placeholders of an unknown time: a date without a time (UTC
+ * midnight) and New York midnight.
  */
-export function earningsTiming(iso: string, estimated: boolean, symbol?: string): CalendarEvent["timing"] {
-  if (estimated) return null;
+export function reportSession(iso: string, symbol?: string): CalendarEvent["timing"] {
   if (symbol !== undefined && !isUsListing(symbol)) return null;
   const ms = Date.parse(iso);
   if (!Number.isFinite(ms) || ms % DAY_MS === 0) return null;
@@ -34,9 +38,18 @@ export function earningsTiming(iso: string, estimated: boolean, symbol?: string)
   const minute = Number(parts.find((p) => p.type === "minute")?.value);
   if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
   const minutes = hour * 60 + minute;
+  if (minutes === 0) return null;
   if (minutes < 9 * 60 + 30) return "pre";
   if (minutes >= 16 * 60) return "post";
   return "intraday";
+}
+
+/**
+ * The session of a confirmed release: reportSession, but null for an estimated date. The earnings detail's nextTiming
+ * and the implied move use it, so an unconfirmed report is priced with an expiry after its day (lib/server/options.ts).
+ */
+export function earningsTiming(iso: string, estimated: boolean, symbol?: string): CalendarEvent["timing"] {
+  return estimated ? null : reportSession(iso, symbol);
 }
 
 function inWindow(iso: string | null, from: number, to: number): iso is string {
@@ -57,7 +70,7 @@ export function quoteEvents(quote: Quote, from: number, to: number): CalendarEve
     const id = `earnings:${quote.symbol}:${iso.slice(0, 10)}`;
     // Around a report Yahoo's next and last timestamps can fall on the same day: keep one event so ids stay unique.
     if (events.some((event) => event.id === id)) continue;
-    events.push({ ...base, id, kind: "earnings", at: iso, timing: earningsTiming(iso, estimated, quote.symbol), estimated, amount: null });
+    events.push({ ...base, id, kind: "earnings", at: iso, timing: reportSession(iso, quote.symbol), estimated, amount: null });
   }
   // Ex-dividend dates (you must hold the shares before this date to receive the dividend). Payment dates are left
   // out: Yahoo often keeps a past one, and the ex-date is the one that matters for a holder.

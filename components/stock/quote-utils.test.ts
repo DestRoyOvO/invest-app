@@ -3,13 +3,19 @@ import { describe, expect, it } from "vitest";
 import {
   daysUntil,
   earningsTiming,
+  formatQuotePrice,
   futureDate,
+  instrumentKind,
   isUsListing,
   liveTitle,
   parseCompare,
   positionFigures,
+  priceDigits,
   quoteQuery,
+  reportedPrice,
+  reportedVolume,
   resolveTab,
+  showsCoverage,
   tabsFor,
   upcomingExDividend,
 } from "./quote-utils";
@@ -24,11 +30,34 @@ describe("tabs", () => {
     expect(tabsFor(undefined)).toHaveLength(6);
   });
 
+  it("sorts quote types into stocks, funds and other instruments", () => {
+    expect(instrumentKind("EQUITY")).toBe("equity");
+    expect(instrumentKind(null)).toBe("equity");
+    expect(instrumentKind(undefined)).toBe("equity");
+    expect(instrumentKind("ETF")).toBe("fund");
+    expect(instrumentKind("MUTUALFUND")).toBe("fund");
+    for (const type of ["INDEX", "CURRENCY", "FUTURE", "CRYPTOCURRENCY"]) expect(instrumentKind(type)).toBe("other");
+  });
+
   it("falls back to the overview for a tab that is missing or does not apply", () => {
     expect(resolveTab("financials", tabsFor("EQUITY"))).toBe("financials");
     expect(resolveTab("financials", tabsFor("ETF"))).toBe("overview");
     expect(resolveTab("nonsense", tabsFor("EQUITY"))).toBe("overview");
     expect(resolveTab(null, tabsFor("EQUITY"))).toBe("overview");
+  });
+
+  it("shows the earnings and analyst panels for stocks only, and for the app's own funds and indices not even while loading", () => {
+    // Known up front: the app's broad and sector ETFs, indices, currencies, futures and crypto pairs.
+    for (const symbol of ["SPY", "QQQ", "XLK", "^GSPC", "EURUSD=X", "CL=F", "BTC-USD"]) expect(showsCoverage(symbol, undefined)).toBe(false);
+    // Other symbols keep the panels while the quote loads (no layout jump for stocks), then follow the quote type.
+    expect(showsCoverage("AAPL", undefined)).toBe(true);
+    expect(showsCoverage("AAPL", "EQUITY")).toBe(true);
+    expect(showsCoverage("VTI", undefined)).toBe(true);
+    expect(showsCoverage("VTI", "ETF")).toBe(false);
+    expect(showsCoverage("VFIAX", "MUTUALFUND")).toBe(false);
+    expect(showsCoverage("^N225", "INDEX")).toBe(false);
+    // Yahoo without a type: treated as a stock, like tabsFor.
+    expect(showsCoverage("XYZ", null)).toBe(true);
   });
 
   it("builds the query string with readable commas", () => {
@@ -53,9 +82,14 @@ describe("events", () => {
     expect(earningsTiming("2026-07-30T16:00:00.000Z")).toBe("intraday");
     // Apple's estimated next report keeps its usual 16:00 release time (Yahoo, 7 Nov 2026), in winter time too.
     expect(earningsTiming("2027-01-28T21:00:00.000Z")).toBe("post");
-    // Midnight in New York is Yahoo's placeholder for an unknown time.
+    // Midnight in New York is Yahoo's placeholder for an unknown time, and so is a date without a time (UTC midnight),
+    // which would otherwise read as the evening before, after the close.
     expect(earningsTiming("2026-11-05T05:00:00.000Z")).toBeNull();
     expect(earningsTiming("2027-01-14T05:00:00.000Z")).toBeNull();
+    expect(earningsTiming("2027-01-28T00:00:00.000Z")).toBeNull();
+    // No session on a weekend: Berkshire's Saturday-morning report gets none.
+    expect(earningsTiming("2027-05-01T12:00:00.000Z")).toBeNull();
+    expect(earningsTiming("2026-11-07T21:00:00.000Z")).toBeNull();
     // New York hours mean nothing for a Hong Kong listing.
     expect(earningsTiming("2026-11-18T08:00:00.000Z", false)).toBeNull();
     expect(earningsTiming("garbage")).toBeNull();
@@ -92,6 +126,51 @@ describe("liveTitle", () => {
     expect(liveTitle("DOGE-USD", 0.12345, 0)).toBe("DOGE-USD 0.1235 0.00% · InvestSeek");
     expect(liveTitle("XYZ", null, null)).toBe("XYZ · InvestSeek");
     expect(liveTitle("XYZ", 10, null)).toBe("XYZ 10.00 · InvestSeek");
+  });
+
+  it("keeps a currency pair's decimals", () => {
+    expect(liveTitle("EURUSD=X", 1.1143303, -0.6686)).toBe("EURUSD=X 1.1143 ▼0.67% · InvestSeek");
+    expect(liveTitle("USDJPY=X", 158.425, 0.49)).toBe("USDJPY=X 158.425 ▲0.49% · InvestSeek");
+  });
+});
+
+describe("price decimals", () => {
+  it("gives the world board's instruments its digits, other currency pairs four and the rest none", () => {
+    expect(priceDigits("EURUSD=X", "CURRENCY")).toBe(4);
+    expect(priceDigits("USDJPY=X", "CURRENCY")).toBe(3);
+    expect(priceDigits("HG=F", "FUTURE")).toBe(4);
+    expect(priceDigits("^GSPC", "INDEX")).toBe(2);
+    // A pair the world board does not list, by quote type or by Yahoo's "=X" before the quote arrives.
+    expect(priceDigits("AUDUSD=X", "CURRENCY")).toBe(4);
+    expect(priceDigits("AUDUSD=X", null)).toBe(4);
+    expect(priceDigits("AAPL", "EQUITY")).toBeNull();
+    expect(priceDigits("ES=F", "FUTURE")).toBeNull();
+  });
+
+  it("formats with those decimals, or with formatPrice's rule", () => {
+    expect(formatQuotePrice(1.1143303, 4, "en")).toBe("1.1143");
+    expect(formatQuotePrice(158.425, 3, "en")).toBe("158.425");
+    expect(formatQuotePrice(1.1143303, null, "en")).toBe("1.11");
+    expect(formatQuotePrice(0.12345, null, "en")).toBe("0.1235");
+    expect(formatQuotePrice(null, 4, "en")).toBe("—");
+  });
+});
+
+describe("Yahoo placeholders", () => {
+  it("reads a zero open, day range or 52-week end as not reported", () => {
+    expect(reportedPrice(0)).toBeNull();
+    expect(reportedPrice(null)).toBeNull();
+    expect(reportedPrice(4.859)).toBe(4.859);
+    // A negative futures price is a price (WTI, April 2020).
+    expect(reportedPrice(-37.63)).toBe(-37.63);
+  });
+
+  it("drops a zero volume only where none is reported", () => {
+    expect(reportedVolume(0, "other")).toBeNull();
+    expect(reportedVolume(166_431, "other")).toBe(166_431);
+    // A stock before its first trade of the day has traded nothing yet.
+    expect(reportedVolume(0, "equity")).toBe(0);
+    expect(reportedVolume(null, "fund")).toBeNull();
   });
 });
 

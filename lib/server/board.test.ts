@@ -39,7 +39,7 @@ vi.mock("./yahoo", async (importOriginal) => {
 
 import { GET as boardRoute } from "@/app/api/market/board/route";
 
-import { BOARD_SYMBOLS, boardItems, getBoard, staleSince, uncachedBoardCalls } from "./board";
+import { BOARD_SYMBOLS, getBoard, uncachedBoardCalls } from "./board";
 import { clearCache } from "./cache";
 import { clientIp } from "./http";
 import { clientKey, consumeRateLimit, RATE_LIMITS, resetRateLimits } from "./rate-limit";
@@ -71,22 +71,6 @@ beforeEach(() => {
   fake.failSparks.clear();
 });
 
-describe("boardItems and staleSince", () => {
-  it("keeps the board order, skips missing quotes and finds the oldest stale fetch", () => {
-    const quotes = new Map([
-      ["BTC-USD", quote("BTC-USD", { stale: true, fetchedAt: "2026-11-09T17:00:00.000Z" })],
-      ["^GSPC", quote("^GSPC", { stale: true, fetchedAt: "2026-11-09T18:05:00.000Z" })],
-      ["^VIX", quote("^VIX")],
-    ]);
-    const items = boardItems(quotes, new Map([["^GSPC", [1, 2]]]));
-    expect(items.map((item) => item.quote.symbol)).toEqual(["^GSPC", "^VIX", "BTC-USD"]);
-    expect(items[0].spark).toEqual([1, 2]);
-    expect(items[1].spark).toEqual([]);
-    expect(staleSince(items)).toEqual({ stale: true, since: "2026-11-09T17:00:00.000Z" });
-    expect(staleSince(boardItems(new Map([["^VIX", quote("^VIX")]]), new Map()))).toEqual({ stale: false, since: null });
-  });
-});
-
 describe("getBoard", () => {
   it("returns the ten board instruments in order with the S&P 500 market state", async () => {
     serveAll({ "^GSPC": { marketState: "POST" } });
@@ -94,6 +78,7 @@ describe("getBoard", () => {
     expect(board.board.map((item) => item.quote.symbol)).toEqual(MARKET_BOARD.map((b) => b.symbol));
     expect(board.marketState).toBe("POST");
     expect(board.warnings).toEqual([]);
+    expect(board.staleSince).toBeNull();
     expect(board.quotesAsOf).toBeNull();
     expect(board.board[0].spark).toEqual([1, 2, 3]);
     expect(fake.calls.filter((call) => call.startsWith("quotes:"))).toEqual([`quotes:${BOARD_SYMBOLS.length}`]);
@@ -105,9 +90,18 @@ describe("getBoard", () => {
     fake.failSparks.add("^VIX");
     const board = await getBoard();
     expect(board.warnings.sort()).toEqual(["board", "quotes_stale", "sparklines"]);
+    // The oldest fetch time among the stale quotes, like MarketOverview.staleSince (quotesAsOf is the old name).
+    expect(board.staleSince).toBe("2026-11-09T18:01:00.000Z");
     expect(board.quotesAsOf).toBe("2026-11-09T18:01:00.000Z");
     expect(board.board).toHaveLength(BOARD_SYMBOLS.length - 1);
     expect(board.board.find((item) => item.quote.symbol === "^VIX")?.spark).toEqual([]);
+  });
+
+  it("flags a stale quote without a fetch time, and then gives no time", async () => {
+    serveAll({ "^VIX": { stale: true, fetchedAt: null } });
+    const board = await getBoard();
+    expect(board.warnings).toEqual(["quotes_stale"]);
+    expect(board.staleSince).toBeNull();
   });
 
   it("serves every visitor from one load for 10 seconds", async () => {

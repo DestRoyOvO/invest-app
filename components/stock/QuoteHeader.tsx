@@ -11,10 +11,22 @@ import { Button } from "@/components/ui/Button";
 import { Delta } from "@/components/ui/Delta";
 import { TickNumber } from "@/components/ui/TickNumber";
 import type { Position } from "@/hooks/useHoldings";
-import { formatCompact, formatNumber, formatPrice, formatRatio, formatTime, tpl } from "@/lib/format";
+import { eventDayKey } from "@/lib/events";
+import { formatCompact, formatNumber, formatRatio, formatTime, tpl } from "@/lib/format";
 import type { Lang, StockDetail } from "@/types/api";
 
-import { earningsTiming, futureDate, isUsListing, positionFigures, upcomingExDividend } from "./quote-utils";
+import {
+  earningsTiming,
+  formatQuotePrice,
+  futureDate,
+  instrumentKind,
+  isUsListing,
+  positionFigures,
+  priceDigits,
+  reportedPrice,
+  reportedVolume,
+  upcomingExDividend,
+} from "./quote-utils";
 import { perShareDigits } from "./research-utils";
 import { RangeBar } from "./RangeBar";
 
@@ -30,11 +42,12 @@ interface QuoteHeaderProps {
 
 const LOCALES: Record<Lang, string> = { en: "en-US", zh: "zh-CN" };
 
-/** "Thu Nov 12" / "11月12日周四", the date in New York. */
+/** "Thu Nov 12" / "11月12日周四": the date in New York, or the date itself when Yahoo sent one without a time. */
 function eventDate(iso: string, lang: Lang): string {
-  const format = new Intl.DateTimeFormat(LOCALES[lang], { weekday: "short", month: "short", day: "numeric", timeZone: "America/New_York" });
-  if (lang === "zh") return format.format(new Date(iso));
-  const part = (type: Intl.DateTimeFormatPartTypes) => format.formatToParts(new Date(iso)).find((p) => p.type === type)?.value ?? "";
+  const date = new Date(`${eventDayKey(iso)}T12:00:00Z`);
+  const format = new Intl.DateTimeFormat(LOCALES[lang], { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+  if (lang === "zh") return format.format(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => format.formatToParts(date).find((p) => p.type === type)?.value ?? "";
   return `${part("weekday")} ${part("month")} ${part("day")}`;
 }
 
@@ -84,6 +97,10 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, 
   const estimated = quote.earningsDateEstimated === true;
   const timing = nextEarnings ? earningsTiming(nextEarnings, isUsListing(symbol)) : null;
   const showExDividend = upcomingExDividend(quote.exDividendDate);
+  const kind = instrumentKind(quote.quoteType);
+  // A currency pair keeps its pips (EURUSD=X 1.1143); Yahoo's zeros for what an index or a pair does not report show
+  // as dashes (^TNX has no open or day range, ^VIX and EURUSD=X no volume).
+  const digits = priceDigits(symbol, quote.quoteType);
 
   const why = () => openChat({ text: tpl(a.whyMovingPrompt, { symbol }), intent: { kind: "move", symbol } });
 
@@ -104,7 +121,7 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, 
           </div>
           <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <TickNumber value={quote.price} className="text-display font-medium text-fg">
-              {formatPrice(quote.price, lang)}
+              {formatQuotePrice(quote.price, digits, lang)}
             </TickNumber>
             <TickNumber value={quote.change}>
               <Delta value={quote.change} kind="change" lang={lang} className="text-base" />
@@ -122,7 +139,7 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, 
             <div className="mt-1 flex items-baseline gap-2 text-sm text-fg-3">
               <span>{quote.extendedSession === "PRE" ? t.stock.preMarket : t.stock.afterHours}</span>
               <TickNumber value={quote.extendedPrice} className="text-fg-2">
-                {formatPrice(quote.extendedPrice, lang)}
+                {formatQuotePrice(quote.extendedPrice, digits, lang)}
               </TickNumber>
               <Delta value={quote.extendedChangePercent} />
             </div>
@@ -176,7 +193,7 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, 
       {figures ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-4 py-2 text-sm">
           <span className="col-head">{t.stock.position.label}</span>
-          <span className="num text-fg">{tpl(t.stock.position.shares, { shares: formatShares(figures.shares, lang), cost: formatPrice(figures.cost, lang) })}</span>
+          <span className="num text-fg">{tpl(t.stock.position.shares, { shares: formatShares(figures.shares, lang), cost: formatQuotePrice(figures.cost, digits, lang) })}</span>
           <span className="text-fg-3" aria-hidden>
             ·
           </span>
@@ -221,17 +238,26 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, 
       ) : null}
 
       <div className="grid grid-cols-2 gap-px border-t border-line bg-line sm:grid-cols-3 lg:grid-cols-6">
-        <Stat label={t.stock.stats.open}>{formatPrice(quote.open, lang)}</Stat>
-        <Stat label={t.stock.stats.prevClose}>{formatPrice(quote.previousClose, lang)}</Stat>
-        <Stat label={t.stock.stats.volume}>{formatCompact(quote.volume, lang)}</Stat>
-        <Stat label={quote.marketCap !== null ? t.stock.stats.marketCap : t.stock.stats.netAssets}>{formatCompact(quote.marketCap ?? quote.netAssets, lang)}</Stat>
+        <Stat label={t.stock.stats.open}>{formatQuotePrice(reportedPrice(quote.open), digits, lang)}</Stat>
+        <Stat label={t.stock.stats.prevClose}>{formatQuotePrice(quote.previousClose, digits, lang)}</Stat>
+        <Stat label={t.stock.stats.volume}>{formatCompact(reportedVolume(quote.volume, kind), lang)}</Stat>
+        {/* Market cap (stocks, crypto), net assets (funds), or the 52-week change where neither exists (indices, currencies, futures). */}
+        {quote.marketCap !== null || kind === "equity" ? (
+          <Stat label={t.stock.stats.marketCap}>{formatCompact(quote.marketCap, lang)}</Stat>
+        ) : kind === "fund" ? (
+          <Stat label={t.stock.stats.netAssets}>{formatCompact(quote.netAssets, lang)}</Stat>
+        ) : (
+          <Stat label={t.stock.stats.change52w}>
+            <Delta value={quote.fiftyTwoWeekChangePercent} digits={1} />
+          </Stat>
+        )}
         <div className="min-w-0 bg-panel px-3 py-2">
           <div className="col-head truncate">{t.stock.stats.dayRange}</div>
-          <RangeBar low={quote.dayLow} high={quote.dayHigh} value={quote.price} lang={lang} />
+          <RangeBar low={reportedPrice(quote.dayLow)} high={reportedPrice(quote.dayHigh)} value={quote.price} digits={digits} lang={lang} />
         </div>
         <div className="min-w-0 bg-panel px-3 py-2">
           <div className="col-head truncate">{t.stock.stats.range52w}</div>
-          <RangeBar low={quote.fiftyTwoWeekLow} high={quote.fiftyTwoWeekHigh} value={quote.price} lang={lang} />
+          <RangeBar low={reportedPrice(quote.fiftyTwoWeekLow)} high={reportedPrice(quote.fiftyTwoWeekHigh)} value={quote.price} digits={digits} lang={lang} />
         </div>
       </div>
     </section>

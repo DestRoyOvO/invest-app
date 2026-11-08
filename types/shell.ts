@@ -16,6 +16,11 @@ export interface BoardResponse {
    * missing; "board" when some instruments have no quote.
    */
   warnings: string[];
-  /** The oldest fetchedAt among stale board quotes (ISO), or null when every quote is fresh. */
+  /**
+   * With "quotes_stale": the oldest fetchedAt among the stale board quotes (ISO), or null when every quote is fresh
+   * (or the time is unknown). Same meaning as MarketOverview.staleSince, so staleSinceOf() reads either payload.
+   */
+  staleSince: string | null;
+  /** @deprecated Same value as staleSince, kept until the shell's board-status.ts reads staleSince. */
   quotesAsOf: string | null;
 }

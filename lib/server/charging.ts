@@ -36,6 +36,15 @@ function uncachedCompanyNewsSearches(symbol: string): number {
   return planCompanyQueries(matcher, profile).filter((query) => !hasCachedNewsSearch(query.term, query.count)).length;
 }
 
+/** Mirrors QUOTE_BATCH in lib/server/yahoo.ts: getQuotes fetches the symbols it has no fresh quote for 100 at a time. */
+const QUOTE_BATCH = 100;
+
+/** Uncached Yahoo calls behind getQuotes(symbols): one batched request per 100 symbols without a fresh quote. */
+export function uncachedQuoteCalls(symbols: readonly string[]): number {
+  const misses = new Set(symbols.filter((symbol) => !hasFreshQuote(symbol)));
+  return Math.ceil(misses.size / QUOTE_BATCH);
+}
+
 /** Uncached Yahoo calls behind getStockDetail(symbol): the quote and the summary (news has its own route). */
 export function uncachedStockDetailCalls(symbol: string): number {
   return (hasFreshQuote(symbol) ? 0 : 1) + (hasCachedSummary(symbol) ? 0 : 1);

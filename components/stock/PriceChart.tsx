@@ -59,6 +59,7 @@ import {
 } from "./chart-utils";
 import { RangePicker, StudiesMenu } from "./ChartToolbar";
 import { CompareBar, SeriesKey } from "./CompareBar";
+import { formatQuotePrice, priceDigits } from "./quote-utils";
 import { useGSequenceGuard } from "./use-g-guard";
 
 type Lwc = typeof import("lightweight-charts");
@@ -366,7 +367,9 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
   const sessionClose = range === "1d" ? (data?.previousClose ?? null) : null;
   // Round-the-clock markets have no close: their 1D window starts 24 hours back, unlike the header's previous close.
   const sessionCloseTitle = data?.continuous ? t.chart.priceLine.dayAgo : t.chart.priceLine.prevClose;
-  const precision = (lastBar?.c ?? quote?.price ?? 2) < 1 ? 4 : 2;
+  // A currency pair keeps its pips on the axis and in the legend (EURUSD=X 1.1143), as in the quote header.
+  const digits = priceDigits(symbol, quote?.quoteType);
+  const precision = digits ?? ((lastBar?.c ?? quote?.price ?? 2) < 1 ? 4 : 2);
 
   // --- Chart instance ---------------------------------------------------------------------------------------------
   const containerRef = useRef<HTMLDivElement>(null);
@@ -437,14 +440,14 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
     if (!isLive(handles)) return;
     const { lib, chart } = handles;
     const c = readColors();
-    const formatPriceFn = (price: number) => formatPrice(price, lang);
+    const formatPriceFn = (price: number) => formatQuotePrice(price, digits, lang);
     const priceFormat = {
       type: "custom" as const,
-      minMove: precision === 4 ? 0.0001 : 0.01,
+      minMove: 10 ** -precision,
       formatter: formatPriceFn,
       tickmarksFormatter: (prices: number[]) => {
-        const digits = tickDigits(prices, precision);
-        return prices.map((p, i) => p.toLocaleString(LOCALES[lang], { minimumFractionDigits: digits[i], maximumFractionDigits: digits[i] }));
+        const decimals = tickDigits(prices, precision);
+        return prices.map((p, i) => p.toLocaleString(LOCALES[lang], { minimumFractionDigits: decimals[i], maximumFractionDigits: decimals[i] }));
       },
     };
     const percentText = (value: number, digits = 2) => `${value > 0 ? "+" : value < 0 ? "−" : ""}${Math.abs(value).toFixed(digits)}%`;
@@ -497,7 +500,7 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
     handles.volume?.applyOptions({ color: withAlpha(c.fg3, 0.35), priceFormat: { type: "custom", minMove: 1, formatter: (v: number) => formatCompact(v, lang) } });
     handles.rsi?.applyOptions({ color: c.fg2, priceFormat: { type: "custom", minMove: 1, formatter: (v: number) => v.toFixed(0) } });
     for (const line of handles.rsiLines) line.applyOptions({ color: c.line2 });
-  }, [handles, themeKey, slots, theme, updown, lang, intraday, scaleMode, precision]);
+  }, [handles, themeKey, slots, theme, updown, lang, intraday, scaleMode, precision, digits]);
 
   // --- Data into the chart --------------------------------------------------------------------------------------------
   const viewKey = `${symbol}|${range}|${structure}|${settings.extended}|${compare.join(",")}`;
@@ -682,9 +685,9 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
     ? tpl(t.chart.summary, {
         symbol,
         range: t.stock.ranges[range],
-        low: formatPrice(low, lang),
-        high: formatPrice(high, lang),
-        last: formatPrice(lastBar.c, lang),
+        low: formatQuotePrice(low, digits, lang),
+        high: formatQuotePrice(high, digits, lang),
+        last: formatQuotePrice(lastBar.c, digits, lang),
         date: intraday ? `${formatShortDate(lastBar.t, lang, timezone ?? undefined)} ${formatTime(lastBar.t, lang, timezone ?? undefined)}` : formatDate(lastBar.t, lang, "UTC"),
       })
     : symbol;
@@ -779,16 +782,16 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
             </span>
             <span className="mono flex flex-wrap gap-x-3">
               <span>
-                {ohlc.open} <span className="num text-fg-2">{formatPrice(shown.o, lang)}</span>
+                {ohlc.open} <span className="num text-fg-2">{formatQuotePrice(shown.o, digits, lang)}</span>
               </span>
               <span>
-                {ohlc.high} <span className="num text-fg-2">{formatPrice(shown.h, lang)}</span>
+                {ohlc.high} <span className="num text-fg-2">{formatQuotePrice(shown.h, digits, lang)}</span>
               </span>
               <span>
-                {ohlc.low} <span className="num text-fg-2">{formatPrice(shown.l, lang)}</span>
+                {ohlc.low} <span className="num text-fg-2">{formatQuotePrice(shown.l, digits, lang)}</span>
               </span>
               <span>
-                {ohlc.close} <span className="num text-fg-2">{formatPrice(shown.c, lang)}</span>
+                {ohlc.close} <span className="num text-fg-2">{formatQuotePrice(shown.c, digits, lang)}</span>
               </span>
             </span>
             <Delta value={shownChange} />
@@ -811,7 +814,7 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
               {hiddenLevels.map((level) => (
                 <span key={level.key} className="flex items-center gap-1">
                   <LevelSwatch level={level.key} />
-                  <span>{tpl(t.chart.offscreen[level.side], { label: t.chart.priceLine[level.key], price: formatPrice(level.price, lang) })}</span>
+                  <span>{tpl(t.chart.offscreen[level.side], { label: t.chart.priceLine[level.key], price: formatQuotePrice(level.price, digits, lang) })}</span>
                 </span>
               ))}
             </span>

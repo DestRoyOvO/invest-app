@@ -33,7 +33,7 @@ import { OwnershipTab } from "./OwnershipTab";
 import { PriceChart } from "./PriceChart";
 import { ProfilePanel } from "./ProfilePanel";
 import { QuoteHeader } from "./QuoteHeader";
-import { liveTitle, parseCompare, QUOTE_TABS, quoteQuery, resolveTab, tabsFor, type QuoteTab } from "./quote-utils";
+import { liveTitle, parseCompare, QUOTE_TABS, quoteQuery, resolveTab, showsCoverage, tabsFor, type QuoteTab } from "./quote-utils";
 import { QuoteTabs } from "./QuoteTabs";
 import { RiskPanel } from "./RiskPanel";
 import { SignalPanel } from "./SignalPanel";
@@ -219,6 +219,8 @@ export function StockView({ symbol, rawInput }: { symbol: string | null; rawInpu
   }
 
   const stale = Boolean(quote?.stale || (error && data));
+  // No earnings or analyst panels for funds, indices, currencies and crypto (see showsCoverage).
+  const coverage = showsCoverage(symbol, quote?.quoteType);
 
   return (
     <div>
@@ -259,8 +261,8 @@ export function StockView({ symbol, rawInput }: { symbol: string | null; rawInpu
                 <SkeletonRows rows={14} />
               </Panel>
             )}
-            <EarningsPanel symbol={symbol} className={ORDER.earnings} />
-            <AnalystsPanel symbol={symbol} className={ORDER.analysts} />
+            {coverage ? <EarningsPanel symbol={symbol} className={ORDER.earnings} /> : null}
+            {coverage ? <AnalystsPanel symbol={symbol} className={ORDER.analysts} /> : null}
             <NewsPanel symbol={symbol} ready={Boolean(data)} className={ORDER.news} />
             {data ? <ProfilePanel profile={data.profile} className={ORDER.company} /> : null}
           </div>

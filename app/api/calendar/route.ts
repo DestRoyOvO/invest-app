@@ -1,6 +1,7 @@
 import { getCalendar } from "@/lib/server/calendar";
+import { extraUnits, uncachedQuoteCalls } from "@/lib/server/charging";
 import { jsonError, jsonOk, upstreamError } from "@/lib/server/http";
-import { limitPublicRequest } from "@/lib/server/request-guard";
+import { chargePublicRequest, limitPublicRequest } from "@/lib/server/request-guard";
 import { parseSymbolList } from "@/lib/symbols";
 import { UNIVERSE_STOCKS } from "@/lib/universe";
 
@@ -24,6 +25,11 @@ export async function GET(request: Request): Promise<Response> {
   const { symbols, tooMany } = parseSymbolList(params.get("symbols"), MAX_SYMBOLS);
   if (tooMany) return jsonError(400, "bad_request", `Request at most ${MAX_SYMBOLS} symbols at a time.`);
   const all = scope === "universe" ? [...new Set([...symbols, ...UNIVERSE_STOCKS])] : symbols;
+
+  // One unit per uncached Yahoo call beyond the first, like /api/sparklines: the universe added to a long list passes
+  // 100 symbols, and getQuotes then sends a second batch.
+  const charged = chargePublicRequest(request, extraUnits(uncachedQuoteCalls(all)));
+  if (charged) return charged;
 
   try {
     return jsonOk(await getCalendar(all, days), { cacheSeconds: CACHE_SECONDS });

@@ -199,7 +199,11 @@ export interface MarketOverview {
   asOf: string;
   /** Market state of the US cash session, taken from ^GSPC. */
   marketState: MarketState | null;
-  /** Indices, rates, FX, commodities and crypto, in the order of MARKET_BOARD (lib/universe.ts). */
+  /**
+   * Indices, rates, FX, commodities and crypto, in the order of MARKET_BOARD (lib/universe.ts). The overview page's
+   * board panel reads the lighter /api/market/board (types/shell.ts) first, which carries the same items, and falls
+   * back to these when that request fails.
+   */
   board: BoardItem[];
   /** In the order of SECTORS (lib/universe.ts). */
   sectors: SectorSnapshot[];
@@ -517,7 +521,10 @@ export interface CalendarEvent {
   kind: CalendarEventKind;
   /** ISO timestamp. Dividend payment dates are dates only (UTC midnight). */
   at: string;
-  /** Earnings: reported before the open, after the close or during the session (New York time); null when unknown. */
+  /**
+   * Earnings: reported before the open, after the close or during the session (New York time), for an estimated date
+   * the company's usual session; null when unknown (see reportSession in lib/server/calendar.ts).
+   */
   timing: "pre" | "post" | "intraday" | null;
   /** The company has not confirmed the date (Yahoo's estimate), or a tentative FOMC date. */
   estimated: boolean;

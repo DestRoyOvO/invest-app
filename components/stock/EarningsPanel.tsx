@@ -35,6 +35,8 @@ import { formatCompact, formatDate, formatNumber, formatRatio, tpl } from "@/lib
 import type { Messages } from "@/lib/i18n/messages";
 import type { EarningsDetail, EarningsQuarter, ImpliedMove } from "@/types/earnings";
 
+import { earningsTiming, isUsListing } from "./quote-utils";
+
 // Next report, the "Into the report" note, consensus, estimate revisions, the implied move and the reported quarters
 // for one symbol (ERN). Laid out in one column at half width and in two columns when its container is wide (the quote
 // page's Earnings tab). Surprises are facts about past quarters, drawn in neutral ink.
@@ -168,7 +170,13 @@ function EarningsBody({ detail, implied, now, currencies }: { detail: EarningsDe
 }
 
 function slotText(detail: EarningsDetail, t: Messages): string {
-  if (detail.nextDateEstimated || !detail.nextDate) return t.earnings.slot.tbd;
+  if (!detail.nextDate) return t.earnings.slot.tbd;
+  // An estimated date keeps the company's usual release session (marked "est." beside it), as the quote header's chip
+  // and the calendar say: "Reports Thu Jan 28 · after close · est." over "Thu, Jan 28 · After close · EST.".
+  if (detail.nextDateEstimated) {
+    const usual = earningsTiming(detail.nextDate, isUsListing(detail.symbol));
+    return usual ? t.earnings.slot[usual] : t.earnings.slot.tbd;
+  }
   if (detail.nextTiming) return t.earnings.slot[detail.nextTiming];
   return reportTimeEt(detail.symbol, detail.nextDate, t.calendar) ?? t.earnings.slot.tbd;
 }

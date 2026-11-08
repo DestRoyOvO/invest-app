@@ -13,12 +13,14 @@ const LOCALES: Record<Lang, string> = { en: "en-US", zh: "zh-CN" };
 
 type CalendarText = Messages["calendar"];
 
-/** The time column: a session slot for reports, the ET time for macro releases, "Ex-date" for dividends. */
+/**
+ * The time column: a session slot for reports (an estimated date's usual one, its "est." badge beside the name), the
+ * ET time for macro releases, "Ex-date" for dividends.
+ */
 export function timeLabel(item: AgendaItem, t: CalendarText): string {
   const { event } = item;
   if (event.kind === "dividend") return t.exDate;
   if (event.kind === "earnings") {
-    if (event.estimated) return t.slot.tbd;
     if (event.timing) return t.slot[event.timing];
     return item.minute !== null ? tpl(t.timeEt, { time: nyClock(Date.parse(event.at)) }) : t.slot.tbd;
   }

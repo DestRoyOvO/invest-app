@@ -24,6 +24,8 @@ import { getChart, getQuote, getQuotes, getSparkline, getSummary } from "./yahoo
 
 // Assembles the market overview, stock detail and chart payloads from the cached Yahoo getters.
 // Partial upstream failures degrade a section (listed in `warnings`) instead of failing the response.
+// The markets board helpers (BOARD_SYMBOLS, loadBoardSparks, buildBoard, oldestStaleFetch) are shared with the shell's
+// lighter board payload (lib/server/board.ts).
 
 const MOVERS_COUNT = 8;
 /** The overview is shared by every visitor, so it is assembled at most once per this interval. */
@@ -31,7 +33,8 @@ const OVERVIEW_TTL_MS = 10_000;
 /** A stock within this distance of its 52-week high (or low) counts as near it in the breadth figures. */
 export const NEAR_EXTREME = 0.03;
 
-const BOARD_SYMBOLS = MARKET_BOARD.map((b) => b.symbol);
+/** The instruments of the markets board (indices, rates, FX, commodities, crypto), in MARKET_BOARD order. */
+export const BOARD_SYMBOLS: readonly string[] = MARKET_BOARD.map((b) => b.symbol);
 const BREADTH_SYMBOLS = [BREADTH_REFERENCES.equalWeight, BREADTH_REFERENCES.capWeight];
 /**
  * Everything the overview shows, fetched in one batched quote request (lib/server/yahoo.ts sends at most 100 symbols
@@ -297,7 +300,8 @@ export function summaryFromQuote(quote: Quote): { profile: StockProfile; stats: 
 // Market overview
 // ---------------------------------------------------------------------------
 
-async function loadBoardSparks(): Promise<{ sparks: Map<string, number[]>; failed: boolean }> {
+/** One-month sparklines of the board instruments (each cached by getSparkline); `failed` when some could not load. */
+export async function loadBoardSparks(): Promise<{ sparks: Map<string, number[]>; failed: boolean }> {
   const settled = await Promise.allSettled(BOARD_SYMBOLS.map((symbol) => getSparkline(symbol)));
   const sparks = new Map<string, number[]>();
   let failed = false;

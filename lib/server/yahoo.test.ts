@@ -3,9 +3,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import { clearCache } from "./cache";
+import { uncachedQuoteCalls } from "./charging";
 import {
   analystRating,
   announcedDividend,
+  displayName,
   earningsDates,
   getQuotes,
   getSummary,
@@ -15,6 +17,7 @@ import {
   hasFreshQuote,
   isYahooAnswer,
   mapQuote,
+  mapSummary,
   peekQuote,
   peekSummary,
   resetUpstreamStats,
@@ -88,7 +91,51 @@ describe("analystRating", () => {
   });
 });
 
+describe("displayName", () => {
+  it("takes the long name when Yahoo cut the short one", () => {
+    expect(displayName("State Street SPDR S&P 500 ETF T", "State Street SPDR S&P 500 ETF Trust")).toBe("State Street SPDR S&P 500 ETF Trust");
+    // Yahoo can cut at a space, which str() trims.
+    expect(displayName("State Street Technology Select ", "State Street Technology Select Sector SPDR ETF")).toBe("State Street Technology Select Sector SPDR ETF");
+    expect(displayName("Taiwan Semiconductor Manufactur", "Taiwan Semiconductor Manufacturing Company Limited")).toBe("Taiwan Semiconductor Manufacturing Company Limited");
+  });
+
+  it("takes the shorter long name when the cut short name runs past it", () => {
+    expect(displayName("Booking Holdings Inc. Common St", "Booking Holdings Inc.")).toBe("Booking Holdings Inc.");
+    expect(displayName("Duke Energy Corporation (Holdin", "Duke Energy Corporation")).toBe("Duke Energy Corporation");
+    expect(displayName("American Tower Corporation (REI", "American Tower Corporation")).toBe("American Tower Corporation");
+    // Short names under the cut stay, even when they extend the long name.
+    expect(displayName("Invesco QQQ Trust, Series 1", "Invesco QQQ Trust")).toBe("Invesco QQQ Trust, Series 1");
+    // A long name that ends inside a word of the short one is a different name.
+    expect(displayName("Exampleco Worldwide Holdings Co", "Example")).toBe("Exampleco Worldwide Holdings Co");
+  });
+
+  it("drops a trailing New share-class marker the long name does not have", () => {
+    expect(displayName("Berkshire Hathaway Inc. New", "Berkshire Hathaway Inc.")).toBe("Berkshire Hathaway Inc.");
+    expect(displayName("Example Holdings New", "Example Holdings New")).toBe("Example Holdings New");
+    // Without a long name to compare with, the short name stays as it is.
+    expect(displayName("Berkshire Hathaway Inc. New", undefined)).toBe("Berkshire Hathaway Inc. New");
+  });
+
+  it("keeps the short name otherwise and falls back to whichever name exists", () => {
+    expect(displayName("Invesco QQQ Trust, Series 1", "Invesco QQQ Trust")).toBe("Invesco QQQ Trust, Series 1");
+    expect(displayName("JP Morgan Chase & Co.", "JPMorgan Chase & Co.")).toBe("JP Morgan Chase & Co.");
+    expect(displayName("Apple Inc.", "Apple Inc.")).toBe("Apple Inc.");
+    expect(displayName(null, "Apple Inc.")).toBe("Apple Inc.");
+    expect(displayName("  ", {})).toBeNull();
+  });
+});
+
 describe("mapQuote", () => {
+  it("shows the full name of funds whose short name Yahoo cut, and Berkshire without the share-class marker", () => {
+    expect(mapQuote({ symbol: "SPY", shortName: "State Street SPDR S&P 500 ETF T", longName: "State Street SPDR S&P 500 ETF Trust" }).name).toBe(
+      "State Street SPDR S&P 500 ETF Trust",
+    );
+    expect(mapQuote({ symbol: "BRK-B", shortName: "Berkshire Hathaway Inc. New", longName: "Berkshire Hathaway Inc." }).name).toBe("Berkshire Hathaway Inc.");
+    expect(mapQuote({ symbol: "BKNG", shortName: "Booking Holdings Inc. Common St", longName: "Booking Holdings Inc." }).name).toBe("Booking Holdings Inc.");
+    expect(mapQuote({ symbol: "ES=F", displayName: "E-Mini S&P 500" }).name).toBe("E-Mini S&P 500");
+    expect(mapQuote({ symbol: "XYZ" }).name).toBe("XYZ");
+  });
+
   it("maps averages, valuation, dividends and fund fields with the documented units", () => {
     const quote = mapQuote({
       symbol: "KO",
@@ -141,6 +188,17 @@ describe("mapQuote", () => {
       expenseRatio: null,
       ytdReturnPercent: null,
     });
+  });
+});
+
+describe("mapSummary", () => {
+  it("names the profile like the quote and keeps Yahoo's long name", () => {
+    const { profile } = mapSummary("BRK-B", { price: { shortName: "Berkshire Hathaway Inc. New", longName: "Berkshire Hathaway Inc." } });
+    expect(profile).toMatchObject({ name: "Berkshire Hathaway Inc.", longName: "Berkshire Hathaway Inc." });
+    expect(mapSummary("SPY", { price: { shortName: "State Street SPDR S&P 500 ETF T", longName: "State Street SPDR S&P 500 ETF Trust" } }).profile.name).toBe(
+      "State Street SPDR S&P 500 ETF Trust",
+    );
+    expect(mapSummary("ZZZ", {}).profile.name).toBe("ZZZ");
   });
 });
 
@@ -264,6 +322,18 @@ describe("cache probes for rate-limit charging", () => {
     vi.setSystemTime(new Date("2026-11-07T15:06:00Z"));
     expect(hasFreshQuote("PROBE1")).toBe(false);
     expect(peekQuote("PROBE1")?.name).toBe("Probe Inc.");
+  });
+
+  it("predicts the batched quote requests getQuotes sends, 100 symbols at a time", async () => {
+    const symbols = Array.from({ length: 178 }, (_, i) => `BATCH${i}`);
+    const quote = vi
+      .spyOn(yf, "quote")
+      .mockImplementation((async (batch: string[]) => batch.map((symbol) => ({ symbol, regularMarketPrice: 1, marketState: "CLOSED" }))) as never);
+    expect(uncachedQuoteCalls(symbols)).toBe(2);
+    await getQuotes(symbols);
+    expect(quote).toHaveBeenCalledTimes(2);
+    expect(uncachedQuoteCalls(symbols)).toBe(0);
+    expect(uncachedQuoteCalls([...symbols.slice(0, 3), "BATCHNEW", "BATCHNEW"])).toBe(1);
   });
 
   it("keeps Yahoo's answer that it does not know a symbol as a fresh null", async () => {
