@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Delta } from "@/components/ui/Delta";
 import { Panel } from "@/components/ui/Panel";
 import { formatCompact, formatDate, formatMultiple, formatNumber, formatPercent, formatPrice, formatRatio, tpl } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 import { formatQuotePrice, priceDigits } from "@/lib/quote-figures";
 import type { KeyStats as KeyStatsData, Quote } from "@/types/api";
 
@@ -149,7 +150,7 @@ export function KeyStats({ stats, quote, className }: { stats: KeyStatsData; quo
             </Row>
             <Row label={s.consensus}>
               <span className="font-sans">{recommendation}</span>
-              {stats.numberOfAnalysts ? <span className="ml-1.5 text-xs text-fg-3">{tpl(s.analysts, { n: stats.numberOfAnalysts })}</span> : null}
+              {stats.numberOfAnalysts ? <span className="ml-1.5 text-xs text-fg-3">{plural(s.analysts, stats.numberOfAnalysts)}</span> : null}
             </Row>
           </Group>
         </>

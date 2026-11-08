@@ -5,6 +5,7 @@ import { localTimeOf, nyClock, relativeDay, reportTimeKnown, type AgendaInput, t
 import { formatNumber, tpl } from "@/lib/format";
 import { DEFAULT_CURRENCY } from "@/lib/portfolio";
 import type { Messages } from "@/lib/i18n/messages";
+import { plural } from "@/lib/i18n/plural";
 import type { Lang } from "@/types/api";
 
 import type { SurpriseEntry } from "./earnings-model";
@@ -101,7 +102,7 @@ export function markGlyph(entry: SurpriseEntry): string {
 export function marksLabel(entries: readonly SurpriseEntry[], t: CalendarText): string {
   if (entries.length === 0) return t.surprises.none;
   const words = entries.map((e) => (e.mark === "beat" ? t.surprises.beat : e.mark === "miss" ? t.surprises.miss : t.surprises.inline));
-  return tpl(t.surprises.label, { n: entries.length, list: words.join(", ") });
+  return plural(t.surprises.label, entries.length, { list: words.join(", ") });
 }
 
 export interface Amount {

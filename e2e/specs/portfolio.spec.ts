@@ -425,7 +425,6 @@ test.describe("portfolio page", () => {
 
   test("counts a single position in the singular", async ({ page, app }) => {
     test.skip(app.isPhone, "The same tiles on phones.");
-    test.fixme(true, "app bug: the '{n} positions' message has no singular, so one position reads '1 positions' (and 'of 1 positions') in the tiles of /portfolio and /watchlist");
     await app.seedStorage({ watchlist: ["NVDA"], holdings: { AAPL: { shares: 10, cost: 150 } } });
     await app.goto("/portfolio");
     await expect.poll(async () => (await tileLines(page, "Value · USD"))[1]).toBe("1 position");

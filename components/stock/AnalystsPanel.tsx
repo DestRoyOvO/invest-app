@@ -26,6 +26,7 @@ import { useAnalysts } from "@/hooks/useEarningsApi";
 import { ApiError } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { formatNumber, formatShortDate, tpl } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 import { ratingWord } from "@/lib/i18n/yahoo-terms";
 import type { Lang } from "@/types/api";
 import type { AnalystAction, AnalystActivity } from "@/types/earnings";
@@ -65,7 +66,7 @@ export function AnalystsPanel({ symbol, className }: { symbol: string; className
       title={a.title}
       className={className}
       bodyClassName="@container"
-      actions={data?.numberOfAnalysts ? <PanelMeta>{tpl(a.analysts, { n: data.numberOfAnalysts })}</PanelMeta> : null}
+      actions={data?.numberOfAnalysts ? <PanelMeta>{plural(a.analysts, data.numberOfAnalysts)}</PanelMeta> : null}
       footer={data ? <p className="border-t border-line px-3 py-2 text-micro text-fg-3">{a.disclaimer}</p> : null}
     >
       {data && error ? <StaleBanner show since={data.asOf} /> : null}

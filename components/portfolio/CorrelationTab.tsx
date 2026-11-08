@@ -6,6 +6,7 @@ import { usePrefs } from "@/components/providers/PrefsProvider";
 import { stockPath } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { tpl } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 import { HIGH_CORRELATION, type RiskReport } from "@/lib/portfolio-analytics";
 
 import { correlationShade, formatCorrelation } from "./correlation-format";
@@ -87,7 +88,7 @@ export function CorrelationTab({ report }: { report: RiskReport }) {
       </div>
       <div className="space-y-1 border-t border-line px-3 py-2 text-xs text-fg-3">
         {average !== null ? <p>{tpl(c.average, { r: formatCorrelation(average) })}</p> : null}
-        <p>{tpl(c.note, { n: report.sessions })}</p>
+        <p>{plural(c.note, report.sessions)}</p>
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ import { detectHeader, mapRows, POSITIONAL_MAPPING, POSITIONS_TEMPLATE_ROWS, typ
 import { cn } from "@/lib/cn";
 import { decodeText, parseCsv, type CsvTable, type DecodedText } from "@/lib/csv";
 import { tpl } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 
 import { downloadCsv } from "./browser";
 import { ImportDone, ImportReview, useImportOutcome } from "./ImportReview";
@@ -97,9 +98,10 @@ export function CsvImportPanel() {
     });
   };
 
+  const dataRows = file ? Math.max(0, file.table.rows.length - headerRow - 1) : 0;
   const meta = file
     ? [
-        tpl(t.data.csv.fileMeta, { rows: Math.max(0, file.table.rows.length - headerRow - 1), delimiter: t.data.csv.delimiters[DELIMITER_KEYS[file.table.delimiter]] }),
+        plural(t.data.csv.fileMeta, dataRows, { rows: dataRows, delimiter: t.data.csv.delimiters[DELIMITER_KEYS[file.table.delimiter]] }),
         file.encoding === "utf-8" ? null : tpl(t.data.csv.encoding, { encoding: file.encoding.toUpperCase() }),
         file.detection && file.detection.headerRow > 0 ? tpl(t.data.csv.headerAt, { line: file.table.lines[file.detection.headerRow] }) : null,
       ]

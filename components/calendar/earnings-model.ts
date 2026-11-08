@@ -3,6 +3,7 @@
 
 import { daysBetween, eventDayKey, nyClock, nyDayKey, reportTimeKnown } from "@/lib/events";
 import { formatCompact, formatNumber, formatPrice, formatRatio, tpl } from "@/lib/format";
+import { plural, type CountMessage } from "@/lib/i18n/plural";
 import { BROAD_ETFS, SECTORS } from "@/lib/universe";
 import type { Lang } from "@/types/api";
 import type { EarningsDetail, EarningsEstimate, EarningsQuarter, ImpliedMove, RatingCounts } from "@/types/earnings";
@@ -168,14 +169,16 @@ export interface NoteLabels {
     reportsAt: string;
     reportsTbd: string;
     reportsDay: string;
-    consensus: string;
+    /** Counted by {n}, the analysts. */
+    consensus: CountMessage;
     consensusPlain: string;
     revenue: string;
     rose: string;
     fell: string;
     flat: string;
     revisions: string;
-    beats: string;
+    /** Counted by {n}, the quarters. */
+    beats: CountMessage;
     implied: string;
   };
 }
@@ -221,7 +224,7 @@ export function intoReportNote(
   if (consensus?.epsAvg !== null && consensus?.epsAvg !== undefined) {
     const eps = withCurrency(formatNumber(consensus.epsAvg, 2, lang), currencies?.eps);
     if (consensus.analysts && consensus.epsLow !== null && consensus.epsHigh !== null) {
-      sentences.push(tpl(labels.note.consensus, { eps, n: consensus.analysts, low: formatNumber(consensus.epsLow, 2, lang), high: formatNumber(consensus.epsHigh, 2, lang) }));
+      sentences.push(plural(labels.note.consensus, consensus.analysts, { eps, low: formatNumber(consensus.epsLow, 2, lang), high: formatNumber(consensus.epsHigh, 2, lang) }));
     } else {
       sentences.push(tpl(labels.note.consensusPlain, { eps }));
     }
@@ -241,7 +244,7 @@ export function intoReportNote(
 
   const surprises = lastSurprises(detail.history, 4);
   if (surprises.length > 0) {
-    sentences.push(tpl(labels.note.beats, { k: surprises.filter((s) => s.mark === "beat").length, n: surprises.length }));
+    sentences.push(plural(labels.note.beats, surprises.length, { k: surprises.filter((s) => s.mark === "beat").length }));
   }
 
   if (implied) sentences.push(tpl(labels.note.implied, { pct: formatRatio(implied.move, { digits: 1 }), date: shortDay(implied.expiry, lang) }));

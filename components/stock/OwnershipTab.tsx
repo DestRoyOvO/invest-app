@@ -12,6 +12,7 @@ import { EmptyState, ErrorState, SkeletonRows, StaleBanner } from "@/components/
 import { useOwnership } from "@/hooks/useQuoteApi";
 import { ApiError } from "@/lib/api-client";
 import { formatCompact, formatDate, formatInteger, formatPrice, formatRatio, tpl } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 import { insiderRole } from "@/lib/i18n/yahoo-terms";
 import type { Lang } from "@/types/api";
 import type { InsiderTrade, InstitutionHolder } from "@/types/research";
@@ -157,13 +158,13 @@ export function OwnershipTab({ symbol }: { symbol: string }) {
               <div className="flex items-baseline gap-2">
                 <dt className="text-fg-3">{o.acquired}</dt>
                 <dd className="num text-fg">
-                  {formatCompact(s.buyShares, lang)} <span className="text-xs text-fg-3">{s.buyCount !== null ? tpl(o.transactions, { n: s.buyCount }) : null}</span>
+                  {formatCompact(s.buyShares, lang)} <span className="text-xs text-fg-3">{s.buyCount !== null ? plural(o.transactions, s.buyCount) : null}</span>
                 </dd>
               </div>
               <div className="flex items-baseline gap-2">
                 <dt className="text-fg-3">{o.sold}</dt>
                 <dd className="num text-fg">
-                  {formatCompact(s.sellShares, lang)} <span className="text-xs text-fg-3">{s.sellCount !== null ? tpl(o.transactions, { n: s.sellCount }) : null}</span>
+                  {formatCompact(s.sellShares, lang)} <span className="text-xs text-fg-3">{s.sellCount !== null ? plural(o.transactions, s.sellCount) : null}</span>
                 </dd>
               </div>
               <div className="flex items-baseline gap-2">

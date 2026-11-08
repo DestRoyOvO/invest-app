@@ -1,4 +1,5 @@
 import { formatNumber, formatPrice, formatShortDate, tpl } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 import { getSector, MARKET_BOARD, UNIVERSE_STOCKS } from "@/lib/universe";
 import type { BreadthTally, DiscoverResponse, MarketOverview, Quote, QuotesResponse } from "@/types/api";
 import type { BoardResponse } from "@/types/shell";
@@ -75,7 +76,7 @@ test("My day values the positions at the page's quotes, beside the week ahead, t
   const cost = sum(positions.map((p) => p.cost));
   const dayPnl = sum(positions.map((p) => p.dayPnl));
   await expect(myDay).toContainText(
-    new RegExp(`${esc(tpl(en.watchlist.value, { currency: "USD" }))}\\s*${esc(formatNumber(value, 2, "en"))}\\s*${esc(tpl(en.watchlist.positionsCount, { n: positions.length }))}`),
+    new RegExp(`${esc(tpl(en.watchlist.value, { currency: "USD" }))}\\s*${esc(formatNumber(value, 2, "en"))}\\s*${esc(plural(en.watchlist.positionsCount, positions.length))}`),
   );
 
   // The day's change is the P&L over the value at the previous close (value-weighted). The seed moved enough that the same

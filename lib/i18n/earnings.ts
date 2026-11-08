@@ -17,7 +17,7 @@ export const earningsMessages = defineMessages(
     eps: "EPS",
     revenue: "Revenue",
     range: "{low} to {high}",
-    analystCount: "{n} analysts",
+    analystCount: { one: "{n} analyst", other: "{n} analysts" },
     noConsensus: "No consensus estimate for the next quarter yet.",
     trend: "EPS estimate",
     trendNow: "Now",
@@ -53,14 +53,18 @@ export const earningsMessages = defineMessages(
       reportsAt: "Reports {when} ({date}) at {time} ET.",
       reportsTbd: "Expected {when} ({date}); the company has not confirmed the date or time.",
       reportsDay: "Reports {when} ({date}); the time is not announced.",
-      consensus: "Consensus EPS is {eps} from {n} analysts, with estimates from {low} to {high}.",
+      consensus: {
+        one: "Consensus EPS is {eps} from {n} analyst, with estimates from {low} to {high}.",
+        other: "Consensus EPS is {eps} from {n} analysts, with estimates from {low} to {high}.",
+      },
       consensusPlain: "Consensus EPS is {eps}.",
       revenue: "Revenue consensus is {revenue}.",
       rose: "The EPS estimate rose {pct} over 90 days.",
       fell: "The EPS estimate fell {pct} over 90 days.",
       flat: "The EPS estimate is unchanged over 90 days.",
       revisions: "Revisions in the last 30 days: {up} up, {down} down.",
-      beats: "Reported EPS beat the estimate in {k} of the last {n} quarters.",
+      /** Counted by {n}, the quarters. */
+      beats: { one: "Reported EPS beat the estimate in {k} of the last {n} quarter.", other: "Reported EPS beat the estimate in {k} of the last {n} quarters." },
       implied: "Options imply about ±{pct} by the {date} expiry.",
     },
     analysts: {
@@ -87,7 +91,7 @@ export const earningsMessages = defineMessages(
       showLess: "Show fewer",
       disclaimer: "Analyst ratings are opinions, not facts about the future.",
       none: "No analyst coverage for this symbol.",
-      analysts: "{n} analysts",
+      analysts: { one: "{n} analyst", other: "{n} analysts" },
     },
   },
   {

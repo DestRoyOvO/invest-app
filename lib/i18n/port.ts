@@ -21,11 +21,14 @@ const en = {
     varSub: "1 day in 20 lost at least this",
     maxDrawdown: "Max drawdown 1y",
     effective: "Effective positions",
-    effectiveSub: "of {n} positions",
+    effectiveSub: { one: "of {n} position", other: "of {n} positions" },
   },
   basis: "Based on the last 12 months of daily prices and today's positions. Describes past behaviour, not a forecast.",
   betaNote: "Beta is the 1-year daily beta against SPY. Yahoo's beta uses 5 years of monthly returns, so the two differ.",
-  sessionsNote: "The statistics use {n} sessions since {date}, the first day every analyzed holding has a price.",
+  sessionsNote: {
+    one: "The statistics use {n} session since {date}, the first day every analyzed holding has a price.",
+    other: "The statistics use {n} sessions since {date}, the first day every analyzed holding has a price.",
+  },
   subsetNote: "Beta, volatility, VaR and max drawdown cover {n} of {m} positions.",
   historyDegraded: "Some price histories could not be loaded, so the figures below leave those holdings out.",
   tabs: { label: "Analytics view", overview: "Overview", exposure: "Exposure", risk: "Risk", correlation: "Correlation" },
@@ -69,7 +72,10 @@ const en = {
     beta: "Beta",
     volatility: "Volatility",
     sentence: "{symbol}: {weight} of value, {risk} of risk",
-    weightNote: "Weights here are shares of the {n} analyzed positions' value.",
+    weightNote: {
+      one: "Weights here are shares of the {n} analyzed position's value.",
+      other: "Weights here are shares of the {n} analyzed positions' value.",
+    },
     note: "Share of risk is each position's part of the variance of the holdings' daily returns over the same sessions (Euler allocation). Below 0 means the position lowered the total.",
   },
   correlation: {
@@ -78,13 +84,17 @@ const en = {
     high: "Pairs at 0.8 or more",
     none: "No pair reaches 0.8.",
     average: "Average pairwise correlation {r}",
-    note: "Shading shows strength only; the sign is printed. Based on {n} sessions.",
+    note: {
+      one: "Shading shows strength only; the sign is printed. Based on {n} session.",
+      other: "Shading shows strength only; the sign is printed. Based on {n} sessions.",
+    },
     needTwo: "Correlation needs at least two holdings with price history.",
     cell: "{a} and {b}: {r}",
   },
   coverage: {
     title: "Holdings analyzed",
-    count: "{n} of {m} positions",
+    /** Counted by {m}, the positions held. */
+    count: { one: "{n} of {m} position", other: "{n} of {m} positions" },
     excluded: "Not analyzed",
     beyond: "beyond the 24 largest",
     otherCurrency: "in {currency}, not converted",

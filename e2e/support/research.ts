@@ -3,6 +3,7 @@ import type { APIRequestContext } from "@playwright/test";
 import { formatDividend, formatMoney } from "@/components/calendar/agenda-format";
 import { tpl } from "@/lib/format";
 import { MESSAGES } from "@/lib/i18n/messages";
+import { plural } from "@/lib/i18n/plural";
 import type { CalendarEvent, CalendarResponse, MacroEventKey, Quote, ScreenerRow } from "@/types/api";
 
 import { expect, type Locator, type Page } from "./test";
@@ -255,7 +256,7 @@ export function cashAmount(value: number, currency: string | null): string {
 
 /** "About 2.70 for your 10 shares": the cash a holder receives, shares times the dividend per share. */
 export function cashText(shares: number, perShare: number, currency: string | null): string {
-  return tpl(CAL.cashLabel, { amount: cashAmount(shares * perShare, currency), shares });
+  return plural(CAL.cashLabel, shares, { amount: cashAmount(shares * perShare, currency), shares });
 }
 
 /** The spoken money of a row: the dividend cash of a holder, or the market value of a position that reports. */

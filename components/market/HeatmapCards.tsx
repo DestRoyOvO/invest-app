@@ -3,6 +3,7 @@
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Delta } from "@/components/ui/Delta";
 import { formatCompact, formatPrice, tpl } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 import { displayName } from "@/lib/names-zh";
 import { getSector } from "@/lib/universe";
 import { relativeVolume } from "@/lib/volume";
@@ -69,7 +70,7 @@ export function SectorCard({ sector }: { sector: SectorSnapshot }) {
         <Delta value={sector.changePercent} />
       </div>
       <div className="text-xs text-fg-2">
-        {tpl(t.markets.heatmap.stocks, { n: sector.stocks.length })} · {tpl(t.markets.heatmap.upDown, { up, down })}
+        {plural(t.markets.heatmap.stocks, sector.stocks.length)} · {tpl(t.markets.heatmap.upDown, { up, down })}
       </div>
       <div className="text-micro text-fg-3">{t.markets.heatmap.openSector}</div>
     </div>

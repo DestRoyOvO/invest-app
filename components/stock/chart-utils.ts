@@ -1,6 +1,7 @@
 // Pure helpers behind the price chart workstation (PriceChart.tsx), kept free of React and of lightweight-charts so
 // they can be tested: which data a range loads, the visible window, studies, time zones and axis labels.
 
+import { tpl } from "@/lib/format";
 import type { Bar, ChartRange, HistoryRange } from "@/types/api";
 
 export const RANGES: readonly ChartRange[] = ["1d", "5d", "1mo", "3mo", "6mo", "ytd", "1y", "2y", "5y", "max"];
@@ -121,6 +122,54 @@ export function offscreenLevels<K extends string>(
     else if (price > high + reach) out.push({ key, price, side: "above" });
   }
   return out;
+}
+
+/**
+ * Levels the chart draws as lines: those within LEVEL_REACH of the visible price span, which the autoscale stretches
+ * to (every other set level is in offscreenLevels), in the order given. None without prices in view.
+ */
+export function drawnLevels<K extends string>(levels: readonly PriceLevel<K>[], low: number | null, high: number | null): Array<{ key: K; price: number }> {
+  if (low === null || high === null || !Number.isFinite(low) || !Number.isFinite(high) || high < low) return [];
+  const reach = (high - low) * LEVEL_REACH;
+  const out: Array<{ key: K; price: number }> = [];
+  for (const { key, price } of levels) {
+    if (typeof price !== "number" || !Number.isFinite(price) || price <= 0) continue;
+    if (price >= low - reach && price <= high + reach) out.push({ key, price });
+  }
+  return out;
+}
+
+export interface LevelLineWords<K extends string> {
+  /** The sentence around the list: "Lines on the chart: {levels}". */
+  sentence: string;
+  /** One level: "{label} {price}". */
+  item: string;
+  /** Between two levels: ", ". */
+  separator: string;
+  /** Each level's name, as its price line is titled on the chart: "Target". */
+  labels: Readonly<Record<K, string>>;
+}
+
+/**
+ * The sentence that tells a screen reader which of the investor's lines the chart draws, with their prices ("Lines on
+ * the chart: Target 340.00, Stop 260.00"): the canvas is hidden from assistive technology, and the legend names only
+ * the levels beyond reach. It follows the prices in view (the range and any pan or zoom set `low` and `high`). Null
+ * when no line is drawn: no level set, every level off the chart, no prices in view, or a comparison, which draws no
+ * price lines.
+ */
+export function levelLinesText<K extends string>(
+  levels: readonly PriceLevel<K>[],
+  low: number | null,
+  high: number | null,
+  compare: boolean,
+  words: LevelLineWords<K>,
+  formatPrice: (price: number) => string,
+): string | null {
+  if (compare) return null;
+  const drawn = drawnLevels(levels, low, high);
+  if (drawn.length === 0) return null;
+  const items = drawn.map(({ key, price }) => tpl(words.item, { label: words.labels[key], price: formatPrice(price) }));
+  return tpl(words.sentence, { levels: items.join(words.separator) });
 }
 
 /** Hides pre- and post-market bars unless extended hours are on; daily bars have no session and always stay. */

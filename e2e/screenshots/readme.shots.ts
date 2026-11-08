@@ -1,5 +1,6 @@
 import { formatInteger, formatPrice, tpl } from "@/lib/format";
 import { MESSAGES } from "@/lib/i18n/messages";
+import { plural } from "@/lib/i18n/plural";
 
 import { routeCase } from "../support/routes";
 import { stage, type Look } from "../support/shots";
@@ -46,7 +47,7 @@ function dataRows(page: Page, panel: string) {
 /** The overview's panels with their data, in either language: My day with every position, the week ahead, the markets. */
 async function overviewReady(page: Page, lang: Lang): Promise<void> {
   const t = MESSAGES[lang];
-  await expect(region(page, t.port.myDay.title)).toContainText(tpl(t.watchlist.positionsCount, { n: POSITIONS }));
+  await expect(region(page, t.port.myDay.title)).toContainText(plural(t.watchlist.positionsCount, POSITIONS));
   await expect(region(page, t.calendar.weekAhead).getByRole("listitem").first()).toBeVisible();
   await expect(region(page, t.market.board)).toContainText(PRICE);
 }

@@ -52,7 +52,7 @@ export const marketsMessages = defineMessages(
       volume: "Volume",
       relVolume: "{x} of avg",
       range52w: "52-week range",
-      stocks: "{n} stocks",
+      stocks: { one: "{n} stock", other: "{n} stocks" },
       upDown: "{up} up, {down} down",
       openSector: "Click or press Enter for the sector page",
       allStocks: "All {sector} stocks",
@@ -93,7 +93,7 @@ export const marketsMessages = defineMessages(
       above50Col: "> 50D",
       above200Col: "> 200D",
       distribution: "Today's moves",
-      distributionLabel: "{n} stocks moved {band}",
+      distributionLabel: { one: "{n} stock moved {band}", other: "{n} stocks moved {band}" },
       bands: {
         downStrong: "down 3.5% or more",
         down3: "down 1.75 to 3.5%",

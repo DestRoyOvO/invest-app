@@ -6,6 +6,7 @@ import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Panel, PanelMeta } from "@/components/ui/Panel";
 import { stockPath } from "@/lib/api-client";
 import { formatRatio, tpl } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 import type { Portfolio } from "@/lib/portfolio";
 import type { RiskReport } from "@/lib/portfolio-analytics";
 
@@ -38,7 +39,7 @@ export function CoveragePanel({ portfolio, report, beyond, failed, loading }: Co
   const analyzed = loading ? portfolio.rows.slice(0, portfolio.rows.length - beyond.length) : portfolio.rows.filter((r) => report.symbols.includes(r.symbol));
 
   return (
-    <Panel title={c.title} actions={<PanelMeta>{tpl(c.count, { n: analyzed.length, m: total })}</PanelMeta>}>
+    <Panel title={c.title} actions={<PanelMeta>{plural(c.count, total, { n: analyzed.length, m: total })}</PanelMeta>}>
       <ul className="px-3 py-2 text-data">
         {analyzed.map((row) => (
           <li key={row.symbol} className="flex h-7 items-center justify-between gap-3 max-sm:h-10">

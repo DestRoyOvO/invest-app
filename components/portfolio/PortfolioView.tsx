@@ -19,6 +19,7 @@ import { useLocalStore } from "@/hooks/useLocalStore";
 import { useNow, usePortfolio } from "@/hooks/usePortfolio";
 import { useProfiles } from "@/hooks/usePortfolioApi";
 import { formatDate, formatNumber, formatRatio, formatShortDate, tpl } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 import { analyzeRisk, effectivePositionCount, fxSymbolsFor, historySymbols, projectedDividends, selectAnalyzed } from "@/lib/portfolio-analytics";
 import { sectorOfSymbol } from "@/lib/universe";
 
@@ -120,7 +121,7 @@ export function PortfolioView() {
       <StatTile
         label={tpl(k.value, { currency: figures.currency })}
         value={pending(quotesLoading, <TickNumber value={figures.value}>{formatNumber(figures.value, 2, lang)}</TickNumber>)}
-        sub={tpl(t.watchlist.positionsCount, { n: figures.positions })}
+        sub={plural(t.watchlist.positionsCount, figures.positions)}
       />
       <StatTile
         label={figures.sessionDate === null ? k.dayPnl : k.lastSessionPnl}
@@ -152,7 +153,7 @@ export function PortfolioView() {
         value={pending(historyLoading || quotesLoading, report.maxDrawdown ? pct(report.maxDrawdown.depth) : "—")}
         sub={report.maxDrawdown && report.maxDrawdown.depth < 0 ? formatShortDate(report.maxDrawdown.troughDate, lang, "UTC") : undefined}
       />
-      <StatTile label={k.effective} value={pending(quotesLoading, effective === null ? "—" : effective.toFixed(1))} sub={tpl(k.effectiveSub, { n: figures.positions })} />
+      <StatTile label={k.effective} value={pending(quotesLoading, effective === null ? "—" : effective.toFixed(1))} sub={plural(k.effectiveSub, figures.positions)} />
     </div>
   );
 
@@ -204,7 +205,7 @@ export function PortfolioView() {
         <p className="px-3 py-2 text-xs text-fg-2">
           {t.port.basis}
           {subset ? ` ${tpl(t.port.subsetNote, { n: report.symbols.length, m: figures.positions })}` : ""}
-          {shortHistory ? ` ${tpl(t.port.sessionsNote, { n: report.sessions, date: formatDate(report.since, lang, "UTC") })}` : ""}
+          {shortHistory ? ` ${plural(t.port.sessionsNote, report.sessions, { date: formatDate(report.since, lang, "UTC") })}` : ""}
         </p>
       </div>
       <div className="flex min-w-0 flex-col gap-px">

@@ -16,6 +16,7 @@ import { useNow } from "@/hooks/usePortfolio";
 import { stockPath } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { tpl } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 import { displayName } from "@/lib/names-zh";
 import type { Quote, Sparklines } from "@/types/api";
 
@@ -215,7 +216,7 @@ export function WatchlistTable({ symbols, quotes, holdings, sparklines, sort, on
     width: "7.25rem",
     sortValue: (row) => row.symbol,
     render: (row) => {
-      const posLabel = row.position ? tpl(t.watchlist.posLabel, { shares: formatShares(row.position.shares, lang) }) : "";
+      const posLabel = row.position ? plural(t.watchlist.posLabel, row.position.shares, { shares: formatShares(row.position.shares, lang) }) : "";
       return (
         <span className="block min-w-0 py-1">
           <span className="flex min-w-0 items-center gap-1.5">

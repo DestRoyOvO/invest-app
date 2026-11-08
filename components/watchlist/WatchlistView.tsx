@@ -22,6 +22,7 @@ import { useWatchlist } from "@/hooks/useWatchlist";
 import { cn } from "@/lib/cn";
 import { tpl } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/messages";
+import { plural } from "@/lib/i18n/plural";
 import { MAX_WATCHLIST, sectorOfSymbol } from "@/lib/universe";
 import type { AnalyzeRequest, Quote } from "@/types/api";
 
@@ -69,7 +70,7 @@ export function WatchlistView() {
   const { t, lang } = usePrefs();
   const toast = useToast();
   const { watchlist, holdings, quotes, portfolio, hydrated, loading, error, stale, staleSince, missing, refresh } = usePortfolio();
-  const { add, remove, insertAt, moveTo } = useWatchlist();
+  const { add, addTyped, remove, insertAt, moveTo } = useWatchlist();
   const view = useLocalStore(watchlistViewStore);
   const { data: sparks } = useSparklines(watchlist);
 
@@ -151,7 +152,7 @@ export function WatchlistView() {
           code="WL"
           actions={
             <>
-              <PanelMeta>{view.sort ? tpl(t.watchlist.sortedBy, { column: columnLabel(view.sort.key, t) }) : tpl(t.watchlist.count, { n: watchlist.length })}</PanelMeta>
+              <PanelMeta>{view.sort ? tpl(t.watchlist.sortedBy, { column: columnLabel(view.sort.key, t) }) : plural(t.watchlist.count, watchlist.length)}</PanelMeta>
               <button
                 type="button"
                 aria-pressed={view.sort === null}
@@ -166,7 +167,7 @@ export function WatchlistView() {
             </>
           }
         >
-          <AddSymbolForm onAdd={add} inputId={ADD_INPUT_ID} />
+          <AddSymbolForm onAdd={add} onAddTyped={addTyped} inputId={ADD_INPUT_ID} />
           <StaleBanner show={stale} since={staleSince} />
           {missingHere.length > 0 ? (
             <div role="status" className="flex flex-wrap items-center gap-2 border-t border-line bg-panel-2 px-3 py-1.5 text-xs text-warn">

@@ -36,12 +36,19 @@ export const calendarMessages = defineMessages(
     dividend: "Dividend {amount} per share",
     dividendNoAmount: "Dividend",
     cash: "≈ {amount}",
-    cashLabel: "About {amount} for your {shares} shares",
+    /** Counted by {shares}. */
+    cashLabel: { one: "About {amount} for your {shares} share", other: "About {amount} for your {shares} shares" },
     valueLabel: "Your position: {value}",
     atCost: "at cost",
     move: "±{pct}",
     moveLabel: "Options imply about ±{pct} by the {date} expiry (approx., ATM straddle)",
-    surprises: { label: "Last {n} reports vs the estimate: {list}", beat: "beat", miss: "missed", inline: "in line", none: "No reported quarters" },
+    surprises: {
+      label: { one: "Last {n} report vs the estimate: {list}", other: "Last {n} reports vs the estimate: {list}" },
+      beat: "beat",
+      miss: "missed",
+      inline: "in line",
+      none: "No reported quarters",
+    },
     days: { today: "Today", tomorrow: "Tomorrow", yesterday: "Yesterday", inDays: "In {n} days" },
     summary: {
       holdingsOne: "1 holding reports",

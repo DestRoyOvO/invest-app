@@ -14,6 +14,7 @@ import { applyWrites, diffHoldings, mergeHoldings, StorageWriteError, undoChange
 import { combinePositions, type ImportRow, type RowError, type SkipReason } from "@/lib/broker-import";
 import { cn } from "@/lib/cn";
 import { DASH, formatPrice, tpl } from "@/lib/format";
+import { plural } from "@/lib/i18n/plural";
 import { displayName } from "@/lib/names-zh";
 
 import { getEnv } from "./browser";
@@ -345,7 +346,7 @@ export function ImportReview({ rows, onImported }: { rows: readonly ImportRow[];
           </div>
         ) : (
           <Button ref={importRef} onClick={onImport} disabled={count === 0 || checking}>
-            {checking ? t.data.review.status.checking : count === 1 ? t.data.review.importOne : tpl(t.data.review.importMany, { n: count })}
+            {checking ? t.data.review.status.checking : plural(t.data.review.importCount, count)}
           </Button>
         )}
         {error ? (
