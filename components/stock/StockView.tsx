@@ -20,6 +20,7 @@ import { rememberSymbol } from "@/hooks/useLastSymbol";
 import { useWatchlist } from "@/hooks/useWatchlist";
 import { ApiError } from "@/lib/api-client";
 import { tpl } from "@/lib/format";
+import { symbolTitle } from "@/lib/names-zh";
 import { holdingGroup } from "@/lib/sectors";
 import { getSector } from "@/lib/universe";
 import type { AnalyzeRequest, Quote } from "@/types/api";
@@ -161,15 +162,16 @@ export function StockView({ symbol, rawInput }: { symbol: string | null; rawInpu
     if (data && symbol) rememberSymbol(symbol);
   }, [data, symbol]);
 
-  // Live tab title with arrows rather than colors, e.g. "NVDA 186.64 ▲2.78% · InvestSeek". Next.js writes the page's
-  // metadata title ("NVDA · InvestSeek") again on every navigation within the page (?tab=, ?compare=, Back), so a head
-  // observer puts the live title back whenever it is replaced while this quote is still the current page.
+  // Live tab title with arrows rather than colors, e.g. "NVDA 186.64 ▲2.78% · InvestSeek" ("英伟达 NVDA 186.64 ▲2.78%
+  // · InvestSeek" in Chinese). Next.js writes the page's metadata title ("NVDA · InvestSeek") again on every navigation
+  // within the page (?tab=, ?compare=, Back), so a head observer puts the live title back whenever it is replaced while
+  // this quote is still the current page.
   const titleSymbol = quote?.symbol;
   const titlePrice = quote?.price ?? null;
   const titleChange = quote?.changePercent ?? null;
   useEffect(() => {
     if (!titleSymbol) return;
-    const title = liveTitle(titleSymbol, titlePrice, titleChange);
+    const title = liveTitle(titleSymbol, titlePrice, titleChange, symbolTitle(titleSymbol, lang));
     const path = window.location.pathname;
     const apply = () => {
       if (window.location.pathname === path && document.title !== title) document.title = title;
@@ -178,7 +180,7 @@ export function StockView({ symbol, rawInput }: { symbol: string | null; rawInpu
     const observer = new MutationObserver(apply);
     observer.observe(document.head, { subtree: true, childList: true, characterData: true });
     return () => observer.disconnect();
-  }, [titleSymbol, titlePrice, titleChange]);
+  }, [titleSymbol, titlePrice, titleChange, lang]);
 
   const why = useCallback(() => {
     if (symbol) openChat({ text: tpl(t.stock.actions.whyMovingPrompt, { symbol }), intent: { kind: "move", symbol } });

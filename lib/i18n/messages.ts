@@ -19,6 +19,7 @@ import { alertsMessages } from "./alerts";
 import { dataMessages } from "./data";
 import { marketsMessages } from "./markets";
 import { accessMessages } from "./access";
+import { metaMessages } from "./meta";
 
 export const en = {
   common: {
@@ -710,6 +711,7 @@ export const en = {
   data: dataMessages.en,
   markets: marketsMessages.en,
   access: accessMessages.en,
+  meta: metaMessages.en,
 } as const;
 
 export type Messages = Widen<typeof en>;
@@ -1399,6 +1401,7 @@ export const zh: Messages = {
   data: dataMessages.zh,
   markets: marketsMessages.zh,
   access: accessMessages.zh,
+  meta: metaMessages.zh,
 };
 
 export const MESSAGES: Record<Lang, Messages> = { en, zh };

@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 
 import { Providers } from "@/components/providers/Providers";
 import { themeColorFor } from "@/components/ui/brand";
+import { MESSAGES } from "@/lib/i18n/messages";
 import { htmlAttributes, resolvePrefs } from "@/lib/prefs";
 import { readEnv } from "@/lib/server/env";
 
@@ -24,22 +25,24 @@ const plexMono = IBM_Plex_Mono({
   display: "swap",
 });
 
-const TITLE = "InvestSeek · Market terminal";
-const TAGLINE = "The market terminal that publishes its own track record.";
-
-export function generateMetadata(): Metadata {
+/**
+ * The default title (the overview has no title of its own), the title template every page title goes through, the
+ * description and the social card text, in the reader's language. The template keeps the product name in both.
+ */
+export async function generateMetadata(): Promise<Metadata> {
   const { siteUrl } = readEnv();
+  const { meta } = MESSAGES[(await requestPrefs()).lang];
   return {
     // Social cards need absolute URLs; without SITE_URL, Next falls back to localhost (or the Vercel URL).
     metadataBase: siteUrl ? new URL(siteUrl) : undefined,
-    title: { default: TITLE, template: "%s · InvestSeek" },
-    description: "A fast, honest market research terminal: live quotes, sector heatmap, quant signals with transparent backtests, and AI research notes.",
+    title: { default: meta.title, template: "%s · InvestSeek" },
+    description: meta.description,
     applicationName: "InvestSeek",
     // No `icons` here on purpose: app/icon.svg and app/apple-icon.tsx emit their own tags with sizes and cache-busting
     // hashes, and an `icons` entry would replace those tags with unhashed ones. app/opengraph-image.tsx adds og:image and
     // twitter:image the same way.
-    openGraph: { type: "website", siteName: "InvestSeek", title: TITLE, description: TAGLINE },
-    twitter: { card: "summary_large_image", title: TITLE, description: TAGLINE },
+    openGraph: { type: "website", siteName: "InvestSeek", title: meta.title, description: meta.tagline },
+    twitter: { card: "summary_large_image", title: meta.title, description: meta.tagline },
   };
 }
 

@@ -132,6 +132,12 @@ describe("liveTitle", () => {
     expect(liveTitle("EURUSD=X", 1.1143303, -0.6686)).toBe("EURUSD=X 1.1143 ▼0.67% · InvestSeek");
     expect(liveTitle("USDJPY=X", 158.425, 0.49)).toBe("USDJPY=X 158.425 ▲0.49% · InvestSeek");
   });
+
+  it("names the quote with the label it is given (the Chinese name in Chinese)", () => {
+    expect(liveTitle("NVDA", 186.64, 2.78, "英伟达 NVDA")).toBe("英伟达 NVDA 186.64 ▲2.78% · InvestSeek");
+    expect(liveTitle("EURUSD=X", 1.1143303, -0.6686, "欧元/美元 EURUSD=X")).toBe("欧元/美元 EURUSD=X 1.1143 ▼0.67% · InvestSeek");
+    expect(liveTitle("NVDA", null, null, "英伟达 NVDA")).toBe("英伟达 NVDA · InvestSeek");
+  });
 });
 
 describe("price decimals", () => {

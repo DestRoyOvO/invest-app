@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 
 import { LabView } from "@/components/lab/LabView";
+import { requestMessages } from "@/lib/i18n/request";
 
-export const metadata: Metadata = {
-  title: "Factor lab",
-  description: "What the prices in InvestSeek can and cannot forecast: pre-registered factor tests, the track record of the technical reading and the calibration of the risk forecast.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const { t } = await requestMessages();
+  return { title: t.lab.title, description: t.meta.labDescription };
+}
 
 export default function LabPage() {
   return <LabView />;

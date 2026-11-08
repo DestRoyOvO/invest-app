@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 
 import { StockView } from "@/components/stock/StockView";
+import { requestMessages } from "@/lib/i18n/request";
+import { symbolTitle } from "@/lib/names-zh";
 import { normalizeSymbol } from "@/lib/symbols";
 
 interface Props {
@@ -16,9 +18,12 @@ function safeDecode(value: string): string {
   }
 }
 
+/** "NVDA", or "英伟达 NVDA" in Chinese; StockView replaces it with the live title once the quote loads. */
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { symbol } = await params;
-  return { title: normalizeSymbol(safeDecode(symbol)) ?? "Quote" };
+  const { lang, t } = await requestMessages();
+  const normalized = normalizeSymbol(safeDecode(symbol));
+  return { title: normalized ? symbolTitle(normalized, lang) : t.meta.quote };
 }
 
 export default async function StockPage({ params }: Props) {

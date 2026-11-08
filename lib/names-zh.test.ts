@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { CHINESE_NAMES, chineseNameOf, displayName, hasCjk, searchChineseNames } from "./names-zh";
+import { CHINESE_NAMES, chineseNameOf, displayName, hasCjk, searchChineseNames, symbolTitle } from "./names-zh";
 import { ETF_UNIVERSE } from "./screens";
 import { normalizeSymbol } from "./symbols";
 import { BREADTH_REFERENCES, MARKET_BOARD, UNIVERSE_STOCKS, WORLD_BOARD } from "./universe";
@@ -93,5 +93,17 @@ describe("displayName", () => {
     expect(displayName("KRMN", null, "zh")).toBeNull();
     expect(displayName("AAPL", "  ", "en")).toBeNull();
     expect(displayName(undefined, undefined, "en")).toBeNull();
+  });
+});
+
+describe("symbolTitle", () => {
+  it("puts the Chinese name in front of the symbol in Chinese", () => {
+    expect(symbolTitle("NVDA", "zh")).toBe("英伟达 NVDA");
+    expect(symbolTitle("BRK-B", "zh")).toBe("伯克希尔·哈撒韦 BRK-B");
+  });
+
+  it("keeps the symbol alone in English and for symbols without a Chinese name", () => {
+    expect(symbolTitle("NVDA", "en")).toBe("NVDA");
+    expect(symbolTitle("KRMN", "zh")).toBe("KRMN");
   });
 });

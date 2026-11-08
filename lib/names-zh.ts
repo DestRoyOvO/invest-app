@@ -245,6 +245,15 @@ export function displayName(symbol: string | null | undefined, englishName: stri
   return chinese ?? (englishName?.trim() || null);
 }
 
+/**
+ * A symbol as a tab title names it: in Chinese with its Chinese name in front ("英伟达 NVDA"), since a Chinese reader
+ * knows the company by that name; otherwise the symbol alone, as English tabs show it.
+ */
+export function symbolTitle(symbol: string, lang: Lang): string {
+  const chinese = lang === "zh" ? BY_SYMBOL.get(symbol) : undefined;
+  return chinese ? `${chinese} ${symbol}` : symbol;
+}
+
 /** True when the text contains CJK characters (Yahoo search cannot handle those). */
 export function hasCjk(text: string): boolean {
   return /[㐀-鿿豈-﫿]/.test(text);
