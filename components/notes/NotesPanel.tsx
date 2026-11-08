@@ -164,7 +164,6 @@ export function NotesPanel({ symbol, price, className }: { symbol: string; price
 
   return (
     <Panel
-      id="notes"
       title={t.notes.title}
       code="NOTE"
       className={className}

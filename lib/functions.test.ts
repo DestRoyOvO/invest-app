@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
 import { describe, expect, it } from "vitest";
@@ -73,15 +73,20 @@ function pageRoutes(): Array<{ file: string; pattern: RegExp }> {
 const COMPONENTS = join(ROOT, "components");
 
 /**
- * True when the components of a page render an element with the id a #anchor scrolls to. A page's components live in
- * the folder named after its first path segment (/stock/NVDA in components/stock, / in components/market).
+ * The components of a page: the folder named after its first path segment (/stock/NVDA in components/stock, / in
+ * components/market) and the components those files import from other folders (the quote page imports NotesPanel).
  */
-function pageHasElementId(pathname: string, id: string): boolean {
+function pageComponentFiles(pathname: string): string[] {
   const folder = pathname.split("/")[1] || "market";
-  const dirs = readdirSync(COMPONENTS).includes(folder) ? [join(COMPONENTS, folder)] : [COMPONENTS];
-  return dirs
-    .flatMap((dir) => filesUnder(dir, (name) => name.endsWith(".tsx")))
-    .some((file) => readFileSync(file, "utf8").includes(`id="${id}"`));
+  const dir = readdirSync(COMPONENTS).includes(folder) ? join(COMPONENTS, folder) : COMPONENTS;
+  const own = filesUnder(dir, (name) => name.endsWith(".tsx"));
+  const imported = own.flatMap((file) => [...readFileSync(file, "utf8").matchAll(/from "@\/components\/([^"]+)"/g)].map((match) => join(COMPONENTS, `${match[1]}.tsx`)));
+  return [...new Set([...own, ...imported.filter((file) => existsSync(file))])];
+}
+
+/** How many elements with the id a #anchor scrolls to the components of a page declare: exactly one is right. */
+function elementIdCount(pathname: string, id: string): number {
+  return pageComponentFiles(pathname).reduce((count, file) => count + readFileSync(file, "utf8").split(`id="${id}"`).length - 1, 0);
 }
 
 /** Every href a function can produce: with typed and fallback symbols, comparisons, every sector and every anchor alias. */
@@ -209,7 +214,7 @@ describe("the registry", () => {
           expect(tab, where).toBeNull();
         }
         if (url.pathname.startsWith("/sector/")) expect(getSector(url.pathname.slice("/sector/".length)), where).toBeTruthy();
-        if (url.hash) expect(pageHasElementId(url.pathname, url.hash.slice(1)), `${where}: no element with id "${url.hash.slice(1)}"`).toBe(true);
+        if (url.hash) expect(elementIdCount(url.pathname, url.hash.slice(1)), `${where}: elements with id "${url.hash.slice(1)}"`).toBe(1);
       }
     }
   });
