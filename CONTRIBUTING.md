@@ -24,10 +24,12 @@ the private site mode.
 ```bash
 npm run check   # lint, typecheck and unit tests, the same as CI
 npm run build   # production build (also writes the standalone server used by the Docker image)
+npm run e2e     # end-to-end tests of the production build with fixture data and a mock model
 ```
 
-CI runs both on every pull request, plus `npm audit` for production dependencies. When the `Dockerfile`, the lockfile or
-`next.config.ts` change, a second workflow builds the image and waits for its health check.
+CI runs all three on every pull request, plus `npm audit` for production dependencies. When the `Dockerfile`, the
+lockfile or `next.config.ts` change, a second workflow builds the image and waits for its health check.
+[docs/testing.md](docs/testing.md) explains the end-to-end suite, the fixture data mode and the accessibility checks.
 
 Tests use Vitest and live next to the code as `*.test.ts`. Every new pure function gets tests. Server modules import
 `server-only`, so their tests start with `vi.mock("server-only", () => ({}))`. Tests never call Yahoo or DeepSeek: spy on
