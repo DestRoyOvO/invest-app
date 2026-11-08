@@ -171,7 +171,7 @@ export function StockView({ symbol, rawInput }: { symbol: string | null; rawInpu
     [
       { key: "a", description: t.stock.addToWatchlist, when: outsideSequence, handler: () => symbol && watchlist.toggle(symbol) },
       { key: "p", description: t.stock.actions.editPosition, when: outsideSequence, handler: () => symbol && openPositionEditor(symbol) },
-      { key: "n", description: t.stock.tabs.overview, when: outsideSequence, handler: goToNotes },
+      { key: "n", description: t.stock.actions.goToNotes, when: outsideSequence, handler: goToNotes },
       { key: "!", description: t.stock.actions.setAlert, handler: () => symbol && openAlertEditor(symbol) },
       { key: "w", description: t.stock.actions.whyMoving, when: outsideSequence, handler: why },
     ],

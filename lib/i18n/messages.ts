@@ -155,6 +155,7 @@ export const en = {
       setAlert: "Set alert",
       whyMoving: "Why is it moving?",
       whyMovingPrompt: "Why is {symbol} moving today?",
+      goToNotes: "Go to notes",
       withKey: "{label} (key {key})",
     },
     position: {
@@ -557,6 +558,7 @@ export const zh: Messages = {
       setAlert: "设置提醒",
       whyMoving: "为什么涨跌？",
       whyMovingPrompt: "{symbol} 今天为什么涨跌？",
+      goToNotes: "跳到笔记",
       withKey: "{label}（快捷键 {key}）",
     },
     position: {
