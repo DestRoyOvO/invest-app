@@ -14,6 +14,7 @@ import {
   isFunctionActive,
   NAV_LAYOUT,
   parseCommand,
+  safeDecode,
   shortcutKeys,
   suggestForPath,
   symbolOfToken,
@@ -267,6 +268,14 @@ describe("editDistance", () => {
     expect(editDistance("watchlst", "watchlist")).toBe(1);
     expect(editDistance("abc", "xyz", 2)).toBe(3);
     expect(editDistance("a", "abcdefgh", 3)).toBe(4);
+  });
+});
+
+describe("safeDecode", () => {
+  it("decodes percent-encoding and leaves malformed input as it is", () => {
+    expect(safeDecode("consumer%20staples")).toBe("consumer staples");
+    expect(safeDecode("%E4%BD%A0")).toBe("你");
+    expect(safeDecode("%E0%A4%A")).toBe("%E0%A4%A");
   });
 });
 

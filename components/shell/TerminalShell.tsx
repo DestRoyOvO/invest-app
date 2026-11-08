@@ -10,10 +10,10 @@ import { NewsDrawer } from "@/components/news/NewsDrawer";
 import { PositionEditorHost } from "@/components/portfolio/PositionEditorHost";
 import { useT } from "@/components/providers/PrefsProvider";
 import { useUi } from "@/components/providers/UiProvider";
-import { isComposing, isTypingTarget } from "@/hooks/useHotkeys";
+import { isComposing, isDialogOpen, isTypingTarget } from "@/hooks/useHotkeys";
 import { useLastSymbol } from "@/hooks/useLastSymbol";
 import { rememberSector, useLastSector } from "@/hooks/useRecents";
-import { GO_SHORTCUTS } from "@/lib/functions";
+import { GO_SHORTCUTS, safeDecode } from "@/lib/functions";
 
 import { CommandPalette } from "./CommandPalette";
 import { MobileTabBar } from "./MobileTabBar";
@@ -42,7 +42,7 @@ export function TerminalShell({ children }: { children: ReactNode }) {
   // SECT returns to the sector opened last.
   useEffect(() => {
     const match = /^\/sector\/([^/?#]+)/.exec(pathname);
-    if (match) rememberSector(decodeURIComponent(match[1]));
+    if (match) rememberSector(safeDecode(match[1]));
   }, [pathname]);
 
   const endGo = useEffectEvent(() => {
@@ -54,8 +54,8 @@ export function TerminalShell({ children }: { children: ReactNode }) {
   // function. The listener runs in the capture phase, so a "g" sequence wins over a page hotkey on the same letter.
   const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
     if (event.defaultPrevented || isComposing(event)) return;
-    // Shortcuts never act behind an open dialog (command bar, drawers, editors).
-    if (commandOpen || document.querySelector('[aria-modal="true"]')) {
+    // Shortcuts never act behind an open dialog (command bar, drawers, editors, the settings menu).
+    if (commandOpen || isDialogOpen()) {
       if (goPending) endGo();
       return;
     }

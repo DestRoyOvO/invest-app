@@ -4,7 +4,8 @@ import { useEffect, useEffectEvent, useSyncExternalStore } from "react";
 
 // Page-level single-key shortcuts (the shell owns the global "/", "?", Ctrl/Cmd+K and "g" sequences, so pages must not
 // use those keys). Keys never fire while the user types in a field, during IME composition (Chinese input), with
-// Ctrl, Cmd or Alt held (unless the hotkey asks for Alt), or while a modal dialog (command bar, drawer, editor) is open.
+// Ctrl, Cmd or Alt held (unless the hotkey asks for Alt), or while a dialog is open: modal ones (command bar, drawer,
+// editor) and popovers such as the settings menu.
 //
 // Hotkeys with a description are also listed, while their component is mounted, in the keyboard shortcuts sheet ("?"),
 // which reads them from hotkeyRegistry.
@@ -24,6 +25,14 @@ export interface Hotkey {
 export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
+}
+
+/** Open dialogs, modal or not. Dialogs in this app are unmounted when they close, so presence means open. */
+export const OPEN_DIALOG_SELECTOR = '[role="dialog"], [role="alertdialog"], [aria-modal="true"]';
+
+/** True while a dialog is open: neither page nor shell shortcuts act behind one. */
+export function isDialogOpen(root: Pick<ParentNode, "querySelector"> = document): boolean {
+  return root.querySelector(OPEN_DIALOG_SELECTOR) !== null;
 }
 
 /** True while an input method editor is composing (Chinese, Japanese and Korean input). */
@@ -139,8 +148,7 @@ export function hotkeyKeys(hotkey: Pick<HotkeyInfo, "key" | "alt">): string[] {
 /** Registers single-key shortcuts while the calling component is mounted (and `enabled`). */
 export function useHotkeys(hotkeys: readonly Hotkey[], enabled = true): void {
   const onKeyDown = useEffectEvent((event: KeyboardEvent) => {
-    if (event.defaultPrevented || isComposing(event) || isTypingTarget(event.target)) return;
-    if (document.querySelector('[aria-modal="true"]')) return;
+    if (event.defaultPrevented || isComposing(event) || isTypingTarget(event.target) || isDialogOpen()) return;
     const hotkey = hotkeys.find((h) => matchesHotkey(event, h) && (h.when ? h.when() : true));
     if (!hotkey) return;
     event.preventDefault();

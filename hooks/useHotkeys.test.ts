@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createHotkeyRegistry, hotkeyKeys, hotkeySignature, isComposing, matchesHotkey } from "./useHotkeys";
+import { createHotkeyRegistry, hotkeyKeys, hotkeySignature, isComposing, isDialogOpen, matchesHotkey, OPEN_DIALOG_SELECTOR } from "./useHotkeys";
 
 const key = (k: string, mods: Partial<{ altKey: boolean; ctrlKey: boolean; metaKey: boolean }> = {}) => ({ key: k, altKey: false, ctrlKey: false, metaKey: false, ...mods });
 
@@ -27,6 +27,24 @@ describe("isComposing", () => {
     expect(isComposing({ isComposing: true, keyCode: 65 })).toBe(true);
     expect(isComposing({ isComposing: false, keyCode: 229 })).toBe(true);
     expect(isComposing({ isComposing: false, keyCode: 65 })).toBe(false);
+  });
+});
+
+describe("isDialogOpen", () => {
+  it("counts modal dialogs and popovers such as the settings menu", () => {
+    const queried: string[] = [];
+    const root = (found: boolean) => ({
+      querySelector: (selector: string) => {
+        queried.push(selector);
+        return found ? ({} as Element) : null;
+      },
+    });
+    expect(isDialogOpen(root(true))).toBe(true);
+    expect(isDialogOpen(root(false))).toBe(false);
+    expect(queried).toEqual([OPEN_DIALOG_SELECTOR, OPEN_DIALOG_SELECTOR]);
+    // The settings menu is role="dialog" without aria-modal; the command bar and drawers are modal.
+    expect(OPEN_DIALOG_SELECTOR).toContain('[role="dialog"]');
+    expect(OPEN_DIALOG_SELECTOR).toContain('[aria-modal="true"]');
   });
 });
 
