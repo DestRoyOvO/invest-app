@@ -62,7 +62,10 @@ export interface RouteCase {
   knownStatus?: { status: number; reason: string };
 }
 
-/** A price as the app formats it: 1,234.56 (FX quotes keep four decimals). */
+/**
+ * A price as the app formats it: 1,234.56. Not anchored at the end, so it also finds the start of a price with more
+ * decimals (1.3062, as the world board shows EUR/USD).
+ */
 const PRICE = /\d{1,3}(?:,\d{3})*\.\d{2}/;
 /** A change in percent with its sign: +0.39%, −0.36%, 0.00%. */
 const CHANGE = String.raw`[+−]?\d+\.\d{2}%`;
