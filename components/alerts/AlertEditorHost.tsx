@@ -141,7 +141,7 @@ function EditorForm({ rule, initialSymbol, onClose }: EditorFormProps) {
 
         <Field label={editor.condition}>
           <Select
-            className="w-full"
+            className="w-full [&_select]:max-sm:h-10"
             value={kind}
             onChange={(event) => {
               const next = event.target.value as AlertKind;
@@ -182,6 +182,7 @@ function EditorForm({ rule, initialSymbol, onClose }: EditorFormProps) {
             { value: "once", label: t.alerts.repeat.once },
             { value: "daily", label: t.alerts.repeat.daily },
           ]}
+          className="[&_[role=radio]]:max-sm:h-10"
         />
         <p className="-mt-2 text-xs text-fg-3">{t.alerts.repeatHint[repeat]}</p>
 

@@ -165,7 +165,7 @@ export function NotesPanel({ symbol, price, className }: { symbol: string; price
       code="NOTE"
       className={className}
       actions={
-        <Link href="/notes" className="rounded-xs px-1.5 py-1 text-xs text-fg-2 transition-colors hover:bg-hover hover:text-fg">
+        <Link href="/notes" className="rounded-xs px-1.5 py-1 text-xs text-fg-2 transition-colors hover:bg-hover hover:text-fg max-sm:inline-flex max-sm:min-h-10 max-sm:items-center">
           {t.notes.allNotes}
         </Link>
       }
