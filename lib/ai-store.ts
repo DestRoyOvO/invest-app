@@ -46,6 +46,27 @@ export function setIncludePositions(includePositions: boolean): void {
 export const AI_NOTES_KEY = "investseek:ai-notes:v1";
 export const MAX_SAVED_NOTES = 20;
 const MAX_NOTE_CHARS = 12_000;
+/** Note keys are short ("watchlist::en:<hash>", see noteKey in hooks/useAiStream.ts); longer ones are dropped. */
+export const MAX_NOTE_KEY_CHARS = 120;
+
+/**
+ * A 53-bit hash of a string in base 36 (cyrb53, at most 11 characters): a short, stable key for a long request. With
+ * 20 saved notes a collision is vanishingly unlikely.
+ */
+export function requestHash(text: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ code, 2654435761);
+    h2 = Math.imul(h2 ^ code, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+  h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
 
 export interface SavedNote {
   text: string;
@@ -87,7 +108,7 @@ export function sanitizeSavedNotes(raw: unknown): SavedNotes {
   if (!isRecord(raw)) return EMPTY_NOTES;
   const entries: Array<[string, SavedNote]> = [];
   for (const [key, value] of Object.entries(raw)) {
-    const note = key.length <= 600 ? sanitizeNote(value) : null;
+    const note = key.length <= MAX_NOTE_KEY_CHARS ? sanitizeNote(value) : null;
     if (note) entries.push([key, note]);
   }
   return entries.length > 0 ? capNotes(entries) : EMPTY_NOTES;
@@ -95,7 +116,7 @@ export function sanitizeSavedNotes(raw: unknown): SavedNotes {
 
 /** The notes with `note` stored under `key` (replacing an older note for the same request), capped. */
 export function rememberNote(notes: SavedNotes, key: string, note: SavedNote): SavedNotes {
-  const clean = sanitizeNote(note);
+  const clean = key.length <= MAX_NOTE_KEY_CHARS ? sanitizeNote(note) : null;
   if (!clean) return notes;
   return capNotes([...Object.entries(notes).filter(([existing]) => existing !== key), [key, clean]]);
 }

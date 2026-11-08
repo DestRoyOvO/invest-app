@@ -11,8 +11,10 @@ import {
   conversationTitle,
   MAX_CHAT_MESSAGES,
   MAX_CONVERSATIONS,
+  MAX_NOTE_KEY_CHARS,
   MAX_SAVED_NOTES,
   rememberNote,
+  requestHash,
   restoreChatHistory,
   sanitizeAiPrefs,
   sanitizeChatHistory,
@@ -80,6 +82,22 @@ describe("saved notes", () => {
     notes = rememberNote(notes, "k24", note("2026-11-07T15:00:00.000Z", "## Newer"));
     expect(notes.k24.text).toBe("## Newer");
     expect(Object.keys(notes)).toHaveLength(MAX_SAVED_NOTES);
+  });
+
+  it("hash long requests into short, stable keys", () => {
+    const long = JSON.stringify({ kind: "watchlist", symbols: Array.from({ length: 50 }, (_, i) => `S${i}`) });
+    expect(requestHash(long)).toBe(requestHash(long));
+    expect(requestHash(long)).toMatch(/^[0-9a-z]{1,11}$/);
+    expect(requestHash(long)).not.toBe(requestHash(long.replace("S49", "S50")));
+    expect(requestHash("")).not.toBe(requestHash(" "));
+  });
+
+  it("accept the same keys when writing and when reading back", () => {
+    const tooLong = "k".repeat(MAX_NOTE_KEY_CHARS + 1);
+    expect(rememberNote({}, tooLong, note("2026-11-07T14:00:00.000Z"))).toEqual({});
+    expect(sanitizeSavedNotes({ [tooLong]: note("2026-11-07T14:00:00.000Z") })).toEqual({});
+    const longest = "k".repeat(MAX_NOTE_KEY_CHARS);
+    expect(Object.keys(sanitizeSavedNotes(rememberNote({}, longest, note("2026-11-07T14:00:00.000Z"))))).toEqual([longest]);
   });
 
   it("drop invalid entries from storage", () => {

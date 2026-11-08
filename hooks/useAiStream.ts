@@ -9,10 +9,12 @@ import {
   aiNotesStore,
   conversationTitle,
   newConversationId,
+  requestHash,
   saveConversation,
   saveNote,
   setActiveConversation,
   type ChatContextRef,
+  type ChatHistory,
   type StoredChatMessage,
 } from "@/lib/ai-store";
 import { isDailyLimit } from "@/lib/ai-wait";
@@ -127,11 +129,17 @@ export function noteMetaFromHeaders(headers: Headers, now: number = Date.now()):
   };
 }
 
-/** Key of a note request in the saved notes: the request without the regenerate flag. */
+/**
+ * Key of a note request in the saved notes: the kind, subject and language, then a hash of the whole request without
+ * the regenerate flag. The hash keeps the key short: a portfolio scan's request lists every symbol and position.
+ */
 export function noteKey(request: AnalyzeRequest): string {
   const rest: Record<string, unknown> = { ...request };
   delete rest.force;
-  return JSON.stringify(Object.fromEntries(Object.entries(rest).sort(([a], [b]) => a.localeCompare(b))));
+  const canonical = JSON.stringify(Object.fromEntries(Object.entries(rest).sort(([a], [b]) => a.localeCompare(b))));
+  const subject =
+    request.kind === "stock" || request.kind === "move" ? request.symbol : request.kind === "sector" ? request.sector : request.kind === "news" ? request.newsId : "";
+  return `${request.kind}:${subject.slice(0, 40)}:${request.lang}:${requestHash(canonical)}`;
 }
 
 interface NoteSession {
@@ -246,8 +254,15 @@ export interface UseAiChatOptions {
   buildContext: (intent?: ChatIntentInput) => ChatRequest["context"];
 }
 
+export interface SendOptions {
+  /** The question comes from elsewhere in the app (a "Why is it moving?" button, the command bar), not the chat box. */
+  seeded?: boolean;
+}
+
 /** Messages kept and sent: the server keeps the last 10 anyway. */
 const SENT_MESSAGES = 10;
+/** A conversation whose last message is older than this is not continued by a seeded question. */
+const STALE_CONVERSATION_MS = 3 * 3_600_000;
 
 function newMessageId(): string {
   return `m-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -273,22 +288,59 @@ export function chatHistory(turns: readonly ChatTurn[]): ChatRequest["messages"]
 }
 
 /**
+ * The conversation on screen is too old to take a seeded question: its last message is more than three hours old. Such
+ * a question starts a new conversation instead of sending old, unrelated messages along with it.
+ */
+export function isStaleConversation(turns: readonly ChatTurn[], now: number = Date.now()): boolean {
+  const last = turns[turns.length - 1];
+  if (!last) return false;
+  const at = Date.parse(last.at);
+  return !Number.isFinite(at) || now - at > STALE_CONVERSATION_MS;
+}
+
+/** The chat's working state. Until the investor acts (touched), the drawer shows the conversation open before a reload. */
+export interface ChatState {
+  turns: ChatTurn[];
+  conversationId: string | null;
+  touched: boolean;
+}
+
+export const INITIAL_CHAT: ChatState = { turns: [], conversationId: null, touched: false };
+
+/** The conversation the drawer shows: the working one, or until the investor acts, the one open before a reload. */
+export function shownChat(state: ChatState, history: ChatHistory): Pick<ChatState, "turns" | "conversationId"> {
+  if (!state.touched) {
+    const restored = history.conversations.find((conversation) => conversation.id === history.activeId);
+    if (restored) return { turns: restored.messages, conversationId: restored.id };
+  }
+  return { turns: state.turns, conversationId: state.conversationId };
+}
+
+/**
+ * The state the investor's first action changes: the conversation on screen becomes the working one, its id included,
+ * so that continuing a restored conversation saves it under its own id instead of as a copy.
+ */
+export function adoptShownChat(state: ChatState, history: ChatHistory): ChatState {
+  return state.touched ? state : { ...shownChat(state, history), touched: true };
+}
+
+/**
  * The research chat: sending, Retry after a failure (the question is not repeated), Regenerate of the last answer,
  * Stop, and the conversation history kept in this browser (up to 20 conversations of 20 messages).
  */
 export function useAiChat({ lang, page, buildContext }: UseAiChatOptions) {
   const history = useLocalStore(aiChatsStore);
-  const [state, setState] = useState<{ turns: ChatTurn[]; conversationId: string | null; touched: boolean }>({ turns: [], conversationId: null, touched: false });
+  const [state, setState] = useState<ChatState>(INITIAL_CHAT);
   const [busy, setBusy] = useState(false);
   const controllerRef = useRef<AbortController | null>(null);
-  // Until the investor does something here, the drawer shows the conversation that was open before a reload.
-  const active = state.touched ? undefined : history.conversations.find((conversation) => conversation.id === history.activeId);
-  const turns: ChatTurn[] = active && state.turns.length === 0 ? active.messages : state.turns;
-  const conversationId = active && state.conversationId === null ? active.id : state.conversationId;
+  const { turns, conversationId } = shownChat(state, history);
   const setTurns = useCallback((next: ChatTurn[] | ((all: ChatTurn[]) => ChatTurn[])) => {
-    setState((s) => ({ ...s, touched: true, turns: typeof next === "function" ? next(s.turns) : next }));
+    setState((s) => {
+      const working = adoptShownChat(s, aiChatsStore.getSnapshot());
+      return { ...working, turns: typeof next === "function" ? next(working.turns) : next };
+    });
   }, []);
-  const setConversationId = useCallback((id: string | null) => setState((s) => ({ ...s, touched: true, conversationId: id })), []);
+  const setConversationId = useCallback((id: string | null) => setState((s) => ({ ...adoptShownChat(s, aiChatsStore.getSnapshot()), conversationId: id })), []);
 
   useEffect(() => () => controllerRef.current?.abort(), []);
 
@@ -310,13 +362,12 @@ export function useAiChat({ lang, page, buildContext }: UseAiChatOptions) {
     [lang],
   );
 
-  /** Streams an answer to `base` (whose last turn is the question) and appends it. */
+  /** Streams an answer to `base` (whose last turn is the question) and appends it; the conversation is saved as `id`. */
   const run = useCallback(
-    async (base: ChatTurn[]) => {
+    async (base: ChatTurn[], id: string = conversationId ?? newConversationId()) => {
       const question = [...base].reverse().find((turn) => turn.role === "user");
       if (!question) return;
-      const id = conversationId ?? newConversationId();
-      if (!conversationId) setConversationId(id);
+      setConversationId(id);
       const answer: ChatTurn = { id: newMessageId(), role: "assistant", content: "", at: new Date().toISOString(), context: question.context, streaming: true };
       setTurns([...base, answer]);
       setBusy(true);
@@ -351,12 +402,13 @@ export function useAiChat({ lang, page, buildContext }: UseAiChatOptions) {
   );
 
   const send = useCallback(
-    (text: string, intent?: ChatIntentInput) => {
+    (text: string, intent?: ChatIntentInput, options: SendOptions = {}) => {
       const content = text.trim();
       if (!content || busy) return;
       const question: ChatTurn = { id: newMessageId(), role: "user", content: content.slice(0, 2_000), at: new Date().toISOString(), context: page };
       if (intent) question.intent = intent;
-      void run([...turns.filter((turn) => !turn.failure), question]);
+      if (options.seeded && isStaleConversation(turns)) void run([question], newConversationId());
+      else void run([...turns.filter((turn) => !turn.failure), question]);
     },
     [busy, page, run, turns],
   );
