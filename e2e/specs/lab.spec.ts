@@ -1,4 +1,4 @@
-import { COMMON_READING_DATE_SHARE, EPISODE_SHARE_LIMIT, isConcentrated, selectionTone } from "@/components/lab/evidence";
+import { EPISODE_SHARE_LIMIT, isConcentrated, selectionTone } from "@/components/lab/evidence";
 import { formatCorrelation, formatIc, formatP, formatT, pct, yearSpan } from "@/components/lab/stats-format";
 import factorResearchJson from "@/lib/factor-research.json";
 import { tpl } from "@/lib/format";
@@ -62,28 +62,34 @@ test.describe("factor lab", () => {
     await expect.poll(() => readCells(table), { message: "the factor test cells" }).toEqual(expected);
   });
 
-  test("the track record greys exactly the concentrated readings and colors a return only when the evidence allows", async ({ page, app }) => {
+  test("the track record inks each reading's row, name, return and range only as the evidence rules allow", async ({ page, app }, testInfo) => {
     await app.goto("/lab");
     const track = panel(page, L.track.title);
     const picker = track.getByRole("radiogroup", { name: L.track.horizonName });
     const colors = await tokenColors(track, ["--fg", "--fg-2", "--fg-3", "--up", "--down"] as const);
     expect(new Set(Object.values(colors)).size, "five distinct token colors").toBe(5);
+    let greyRows = 0;
 
     for (const horizon of EVALUATION.horizons) {
       await picker.getByRole("radio", { name: tpl(MESSAGES.en.signal.backtest.hold, { n: horizon.days }), exact: true }).click();
       const table = track.getByRole("table", { name: tpl(L.track.labelsCaption, { days: horizon.days }), exact: true });
       const totalDates = horizon.ic.dates;
-      // Each reading's row is grey when one market stretch holds too much of a rare reading (isConcentrated), and only
-      // then; its return against the same-day universe takes the up or down color only as selectionTone decides, and
-      // nothing else in the table takes a price color.
+      // A reading's row is grey, its name included, when one market stretch holds too much of a rare reading
+      // (isConcentrated), and only then; elsewhere the name stands out in --fg. Its return against the same-day universe
+      // takes the up or down color only as selectionTone decides, and nothing else in the table takes a price color. The
+      // dot of its range is accent only where the range excludes zero on a row that is not grey (components/ui/Whisker).
       const rows = horizon.labels.map((label) => {
         const grey = isConcentrated(label, totalDates);
+        if (grey) greyRows++;
         const tone = selectionTone(label, totalDates);
+        const range = label.ci.selection;
         return {
           reading: MESSAGES.en.signal.codes[label.code],
           color: grey ? colors["--fg-3"] : colors["--fg-2"],
+          readingColor: grey ? colors["--fg-3"] : colors["--fg"],
           value: pct(label.selection, 2, true),
           valueColor: tone === "up" ? colors["--up"] : tone === "down" ? colors["--down"] : grey ? colors["--fg-3"] : colors["--fg"],
+          dot: label.selection === null ? "" : grey ? "var(--fg-3)" : range !== null && (range[0] > 0 || range[1] < 0) ? "var(--accent)" : "var(--fg)",
         };
       });
       const priced = rows.filter((row) => row.valueColor === colors["--up"] || row.valueColor === colors["--down"]).length;
@@ -91,29 +97,46 @@ test.describe("factor lab", () => {
         .poll(
           () =>
             table.evaluate(
-              (element, priceColors) => {
+              (element, { heads, priceColors }) => {
                 const leaves = (scope: Element) => [...scope.querySelectorAll("*")].filter((node) => node.childElementCount === 0 && (node.textContent ?? "").trim() !== "");
+                // The columns by their heads, so a column added or moved cannot shift what is read.
+                const names = [...element.querySelectorAll("thead th")].map((head) => (head.textContent ?? "").trim());
+                const reading = names.indexOf(heads.reading);
+                const selection = names.indexOf(heads.selection);
+                if (reading < 0 || selection < 0) return { columns: names };
                 const rows = [...element.querySelectorAll("tbody tr")].map((row) => {
-                  const cells = [...row.children];
+                  const nameCell = row.children[reading];
+                  const selectionCell = row.children[selection];
                   // The return is the selection cell's figure ("+0.18%"); its interval ("[−0.22%, +0.57%]") is not.
-                  const value = leaves(cells[3] ?? row).find((node) => /^[+−]?\d+\.\d{2}%$/.test((node.textContent ?? "").trim()));
+                  const value = selectionCell ? leaves(selectionCell).find((node) => /^[+−]?\d+\.\d{2}%$/.test((node.textContent ?? "").trim())) : undefined;
+                  const name = nameCell ? leaves(nameCell)[0] : undefined;
                   return {
-                    reading: (cells[0]?.textContent ?? "").trim(),
+                    reading: (nameCell?.textContent ?? "").trim(),
                     color: getComputedStyle(row).color,
+                    readingColor: name ? getComputedStyle(name).color : "",
                     value: (value?.textContent ?? "").trim(),
                     valueColor: value ? getComputedStyle(value).color : "",
+                    dot: selectionCell?.querySelector("svg[role='img'] circle")?.getAttribute("fill") ?? "",
                   };
                 });
                 return { rows, priced: leaves(element).filter((node) => priceColors.includes(getComputedStyle(node).color)).length };
               },
-              [colors["--up"], colors["--down"]],
+              { heads: { reading: L.track.labelCols.reading, selection: L.track.labelCols.selection }, priceColors: [colors["--up"], colors["--down"]] },
             ),
           { message: `the readings at ${horizon.days} sessions` },
         )
         .toEqual({ rows, priced });
     }
-    // The legend states the rule with its two thresholds (its wording is being reworked, so only they are checked).
-    await expect(track.getByRole("paragraph").filter({ hasText: pct(EPISODE_SHARE_LIMIT, 0) }).filter({ hasText: pct(COMMON_READING_DATE_SHARE, 0) })).toBeVisible();
+    // With the committed file no reading is concentrated, so the grey half of the rule cannot show here; the lab's
+    // component test renders a concentrated reading.
+    if (greyRows === 0) {
+      testInfo.annotations.push({
+        type: "no-grey-row",
+        description: "No reading of lib/signal-evaluation.json is concentrated at any horizon: components/lab/ReadingTrackPanel.test.ts covers the grey rows.",
+      });
+    }
+    // The legend states the grey-row rule; its wording is being reworked, so only its episode limit is checked.
+    await expect(track.getByRole("paragraph").filter({ hasText: pct(EPISODE_SHARE_LIMIT, 0) }).first()).toBeVisible();
   });
 
   test("the risk calibration shows how often the forecast ranges held", async ({ page, app }) => {
