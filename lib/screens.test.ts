@@ -309,6 +309,16 @@ describe("sorting", () => {
       expect(symbols(sortScreenRows(named, { key: "name", direction: "desc" }, "zh"))).toEqual(["META", "KRMN", "NVDA", "MSFT", "AAPL", "XOM"]);
     });
 
+    it("collate in the app language, whatever the runtime's own locale", () => {
+      // Names that read the same in both languages (no Chinese names), so only the collation differs: English puts
+      // Latin before Han, Chinese puts Han first. A sort that left the collation to the runtime's locale (zh-CN on a
+      // Chinese system, en on most others) would order both languages alike and fail one of these lines on any machine.
+      const mixed = [row("ZETA", { name: "Zeta Corp" }), row("HANZ", { name: "汉字公司" }), row("ALFA", { name: "Alpha Corp" })];
+      for (const r of mixed) expect(screenSortValue("name", r, "zh")).toBe(screenSortValue("name", r, "en"));
+      expect(symbols(sortScreenRows(mixed, { key: "name", direction: "asc" }, "en"))).toEqual(["ALFA", "ZETA", "HANZ"]);
+      expect(symbols(sortScreenRows(mixed, { key: "name", direction: "asc" }, "zh"))).toEqual(["HANZ", "ALFA", "ZETA"]);
+    });
+
     it("are the values the table sorts by", () => {
       expect(screenSortValue("name", named[0], "zh")).toBe("苹果");
       expect(screenSortValue("name", named[0], "en")).toBe("Apple Inc.");

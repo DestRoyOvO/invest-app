@@ -68,7 +68,11 @@ function stock(index: number, symbol: string, name: string, overrides: Partial<S
   };
 }
 
-/** Names with and without a Chinese name, Latin names Chinese media use, a name that is the ticker in Chinese. */
+/**
+ * Names with and without a Chinese name, Latin names Chinese media use, a name that is the ticker in Chinese, and a
+ * name in Han characters without a Chinese-name entry: it reads the same in both languages, so only the collation
+ * places it (after the Latin names in English, among the Chinese names in Chinese), whatever the runtime's locale.
+ */
 const STOCKS: ScreenRow[] = [
   ["AAPL", "Apple Inc."],
   ["MSFT", "Microsoft Corporation"],
@@ -83,6 +87,7 @@ const STOCKS: ScreenRow[] = [
   ["BRK-B", "Berkshire Hathaway Inc."],
   ["ABBV", "AbbVie Inc."],
   ["PLD", "Prologis, Inc."],
+  ["HANZ", "汉字公司"],
 ].map(([symbol, name], index) => stock(index, symbol, name));
 
 const ETFS: ScreenRow[] = [
@@ -164,12 +169,13 @@ describe("the screener CSV", () => {
 
   it("names the rows in Chinese as the table does, and sorts them by those names", () => {
     const zh = exported("stocks", sortScreenRows(STOCKS, { key: "name", direction: "asc" }, "zh"), "zh");
-    // Pinyin order of the Chinese names, then the Latin ones; IBM keeps its English name, Karman has no Chinese one.
+    // Pinyin order of the Han names, then the Latin ones; IBM keeps its English name, Karman has no Chinese one.
     expect(zh.map((row) => row.name)).toEqual([
       "埃克森美孚",
       "艾伯维",
       "安博",
       "伯克希尔·哈撒韦",
+      "汉字公司",
       "摩根大通",
       "摩根士丹利",
       "苹果",
@@ -181,6 +187,7 @@ describe("the screener CSV", () => {
       "TJX 公司",
     ]);
     const en = exported("stocks", sortScreenRows(STOCKS, { key: "name", direction: "asc" }, "en"), "en");
-    expect(en.map((row) => row.symbol)).toEqual(["ABBV", "AAPL", "BRK-B", "XOM", "IBM", "JPM", "KRMN", "META", "MSFT", "MS", "NVDA", "PLD", "TJX"]);
+    // English collation puts the Latin names before the Han one.
+    expect(en.map((row) => row.symbol)).toEqual(["ABBV", "AAPL", "BRK-B", "XOM", "IBM", "JPM", "KRMN", "META", "MSFT", "MS", "NVDA", "PLD", "TJX", "HANZ"]);
   });
 });
