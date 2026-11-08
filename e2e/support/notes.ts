@@ -220,8 +220,10 @@ interface ToastProbe {
 
 /**
  * Records, from the next document on, every toast (`[data-toast]`, the attribute components/ui/Toast.tsx sets) that
- * enters the page and how: see ToastArrival. Read the record with `toastArrivals`. A toast moved to another place is
- * a new element there and is recorded again.
+ * enters the page and how: see ToastArrival. Read the record with `toastArrivals`. What one change of the page adds
+ * (one batch of mutations, such as a drawer opening with the toasts carried into it) counts as arriving together: each
+ * toast once, and a live region added in the same change is not one that was there before. A toast moved to another
+ * place is a new element there and is recorded again.
  */
 export async function watchToasts(page: Page): Promise<void> {
   await page.addInitScript(() => {
@@ -229,20 +231,20 @@ export async function watchToasts(page: Page): Promise<void> {
     (window as unknown as ToastProbe).__e2eToastArrivals = arrivals;
     const modal = '[role="dialog"][aria-modal="true"]';
     new MutationObserver((records) => {
-      for (const record of records) {
-        for (const node of record.addedNodes) {
-          // Skipped: what was inserted into a part of the page removed meanwhile, such as a closing dialog.
-          if (!(node instanceof Element) || !node.isConnected) continue;
-          const toasts = node.matches("[data-toast]") ? [node] : Array.from(node.querySelectorAll("[data-toast]"));
-          for (const toast of toasts) {
-            const region = toast.parentElement?.closest("[aria-live]") ?? null;
-            arrivals.push({
-              text: toast.textContent ?? "",
-              announced: region !== null && region.getAttribute("aria-live") === "polite" && !node.contains(region),
-              inDialog: toast.closest(modal) !== null,
-              modalOpen: document.querySelector(modal) !== null,
-            });
-          }
+      // Skipped: what was inserted into a part of the page removed meanwhile, such as a closing dialog.
+      const added = records.flatMap((record) => Array.from(record.addedNodes)).filter((node): node is Element => node instanceof Element && node.isConnected);
+      const seen = new Set<Element>();
+      for (const node of added) {
+        for (const toast of node.matches("[data-toast]") ? [node] : Array.from(node.querySelectorAll("[data-toast]"))) {
+          if (seen.has(toast)) continue;
+          seen.add(toast);
+          const region = toast.parentElement?.closest("[aria-live]") ?? null;
+          arrivals.push({
+            text: toast.textContent ?? "",
+            announced: region !== null && region.getAttribute("aria-live") === "polite" && !added.some((other) => other.contains(region)),
+            inDialog: toast.closest(modal) !== null,
+            modalOpen: document.querySelector(modal) !== null,
+          });
         }
       }
     }).observe(document, { childList: true, subtree: true });
