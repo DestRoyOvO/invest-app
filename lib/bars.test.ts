@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   foldTrailingSession,
+  gridPhase,
   latestSessions,
   localDay,
   normalizeBars,
@@ -169,6 +170,43 @@ describe("intraday sessions", () => {
       ["11-06T20:55", "regular"],
       ["11-07T00:59", "post"],
     ]);
+  });
+
+  it("folds the last-trade row into the bar it falls in when the interval is known", () => {
+    const FIVE_MINUTES = 300_000;
+    const chart = nyChart();
+    // Yahoo's NVDA 1D ended like this on 6 Nov 2026: 00:50 and 00:55 bars, then the last trade at 00:59:59.
+    chart.quotes = [
+      { date: new Date("2026-11-07T00:50:00Z"), open: 188.4007, high: 188.5515, low: 188.4, close: 188.55, volume: 0 },
+      { date: new Date("2026-11-07T00:55:00Z"), open: 188.55, high: 188.75, low: 188.55, close: 188.7001, volume: 120 },
+      { date: new Date("2026-11-07T00:59:59Z"), open: 188.71, high: 188.8, low: 188.5, close: 188.71, volume: 5 },
+    ];
+    const bars = normalizeIntradayBars(chart, FIVE_MINUTES);
+    expect(bars.map((b) => new Date(b.t).toISOString().slice(11, 19))).toEqual(["00:50:00", "00:55:00"]);
+    expect(bars[1]).toEqual({ t: utc("2026-11-07T00:55:00Z"), o: 188.55, h: 188.8, l: 188.5, c: 188.71, v: 125, session: "post" });
+
+    // Without a bar for its interval, the row becomes one at the grid time (nyChart's 00:59:43 row: the 00:55 bar).
+    const created = normalizeIntradayBars(nyChart(), FIVE_MINUTES);
+    expect(created).toHaveLength(8);
+    expect(created.at(-1)).toMatchObject({ t: utc("2026-11-07T00:55:00Z"), c: 104.4, session: "post" });
+    // Rows on the grid are unchanged, and a repeated grid time still keeps its latest row.
+    expect(created.slice(0, -1)).toEqual(normalizeIntradayBars(nyChart()).slice(0, -1));
+  });
+
+  it("finds the grid most bars sit on, for exchanges that open off the hour", () => {
+    const start = utc("2026-11-06T03:47:00Z"); // bars at :47, :52, :57 ... (2 minutes past the 5-minute grid)
+    const times = [0, 1, 2, 3].map((i) => start + i * 300_000);
+    expect(gridPhase([...times, start + 3 * 300_000 + 61_000], 300_000)).toBe(120_000);
+    expect(gridPhase([utc("2026-11-06T14:30:00Z"), utc("2026-11-06T14:31:12Z")], 300_000)).toBe(0);
+    expect(gridPhase([], 300_000)).toBe(0);
+
+    const chart: RawChart = {
+      meta: { gmtoffset: 19_800 },
+      quotes: [...times, start + 3 * 300_000 + 61_000].map((t, i) => ({ date: new Date(t), open: 10 + i, high: 11 + i, low: 9 + i, close: 10 + i, volume: 1 })),
+    };
+    const bars = normalizeIntradayBars(chart, 300_000);
+    expect(bars.map((b) => b.t)).toEqual(times);
+    expect(bars.at(-1)).toMatchObject({ o: 13, c: 14, h: 15, v: 2 });
   });
 
   it("falls back to the current session's hours for days without trading periods", () => {

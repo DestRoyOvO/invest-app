@@ -537,12 +537,11 @@ const RANGE_SPEC: Record<ChartRange, RangeSpec> = {
 
 export const CHART_RANGES = Object.keys(RANGE_SPEC) as ChartRange[];
 
-export function isChartRange(value: string | null): value is ChartRange {
-  return value !== null && Object.hasOwn(RANGE_SPEC, value);
-}
+/** Length of an intraday bar; Yahoo's trailing latest-trade row is folded into the bar on this grid. */
+const INTRADAY_MS: Partial<Record<ChartInterval, number>> = { "5m": 5 * MINUTE, "15m": 15 * MINUTE };
 
 function isIntraday(interval: ChartInterval): boolean {
-  return interval === "5m" || interval === "15m";
+  return INTRADAY_MS[interval] !== undefined;
 }
 
 function chartKey(symbol: string, range: ChartRange): string {
@@ -589,7 +588,7 @@ async function fetchChartData(symbol: string, range: ChartRange, now = Date.now(
   const continuous = tradesAroundTheClock(meta);
   if (intraday) {
     // Round-the-clock markets (crypto, futures, currencies) get rolling 24-hour windows instead of session dates.
-    const all = normalizeIntradayBars(raw);
+    const all = normalizeIntradayBars(raw, INTRADAY_MS[spec.interval]);
     const latest = continuous ? rollingWindow(all, spec.sessions ?? 1) : latestSessions(all, spec.sessions ?? 1, gmtOffset);
     bars = latest.bars;
     previousClose = latest.previousClose ?? num(meta?.previousClose);
@@ -618,11 +617,6 @@ async function fetchChartData(symbol: string, range: ChartRange, now = Date.now(
     dividends: normalizeDividends(raw, intraday).filter((d) => inRange(d.t)),
     splits: normalizeSplits(raw, intraday).filter((s) => inRange(s.t)),
   };
-}
-
-/** True when getChart(symbol, range) can be answered from the cache without calling Yahoo. */
-export function hasCachedChart(symbol: string, range: ChartRange): boolean {
-  return isFresh(chartKey(symbol, range));
 }
 
 /** Bars, dividends and splits for one range (see RANGE_SPEC), cached per symbol and range. */

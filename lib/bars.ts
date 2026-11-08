@@ -192,14 +192,36 @@ export function sessionClassifier(meta: Record<string, unknown> | undefined): (t
 }
 
 /**
- * Intraday rows to bars that keep their timestamps: rows with missing or non-positive prices are dropped, a repeated
- * timestamp keeps its latest row, and every bar gets its session. Yahoo's last row is often the latest trade, stamped
- * at its own time rather than on the interval grid; it is kept, since it carries the current price.
+ * Offset of the interval grid most timestamps sit on (ms past a multiple of `intervalMs`): 0 for exchanges whose
+ * sessions open on the hour or half hour. A tie goes to the offset seen first.
  */
-export function normalizeIntradayBars(chart: RawChart | null | undefined): IntradayBar[] {
+export function gridPhase(times: readonly number[], intervalMs: number): number {
+  const counts = new Map<number, number>();
+  let best = 0;
+  let bestCount = 0;
+  for (const t of times) {
+    const phase = ((t % intervalMs) + intervalMs) % intervalMs;
+    const count = (counts.get(phase) ?? 0) + 1;
+    counts.set(phase, count);
+    if (count > bestCount) {
+      best = phase;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/**
+ * Intraday rows to bars that keep their timestamps: rows with missing or non-positive prices are dropped, a repeated
+ * timestamp keeps its latest row, and every bar gets its session. Yahoo ends with an extra row for the latest trade,
+ * stamped at its own time (19:59:59) rather than on the interval grid. Given `intervalMs`, such a row is folded into
+ * the bar it falls in: the bar keeps its open, takes the wider high and low, the latest close and the added volume
+ * (a bar is created at the grid time if there is none), so the chart shows no extra sliver of a candle.
+ */
+export function normalizeIntradayBars(chart: RawChart | null | undefined, intervalMs?: number): IntradayBar[] {
   if (!chart?.quotes) return [];
   const classify = sessionClassifier(chart.meta);
-  const bars: IntradayBar[] = [];
+  const rows: Array<Omit<IntradayBar, "session">> = [];
   for (const q of chart.quotes) {
     const t = toMs(q.date);
     const o = finite(q.open);
@@ -207,12 +229,26 @@ export function normalizeIntradayBars(chart: RawChart | null | undefined): Intra
     const l = finite(q.low);
     const c = finite(q.close);
     if (t === null || o === null || h === null || l === null || c === null || c <= 0) continue;
-    const v = finite(q.volume);
-    if (bars.length > 0 && bars[bars.length - 1].t >= t) {
-      if (bars[bars.length - 1].t > t) continue; // out of order: keep the timeline monotonic
+    rows.push({ t, o, h, l, c, v: finite(q.volume) });
+  }
+  const step = intervalMs !== undefined && intervalMs > 0 ? intervalMs : null;
+  const phase = step ? gridPhase(rows.map((row) => row.t), step) : 0;
+  const bars: IntradayBar[] = [];
+  for (const row of rows) {
+    const start = step ? row.t - ((((row.t - phase) % step) + step) % step) : row.t;
+    const last = bars.at(-1);
+    if (last && last.t > start) continue; // out of order: keep the timeline monotonic
+    if (last && last.t === start) {
+      if (start !== row.t) {
+        last.h = Math.max(last.h, row.h);
+        last.l = Math.min(last.l, row.l);
+        last.c = row.c;
+        last.v = last.v === null && row.v === null ? null : (last.v ?? 0) + (row.v ?? 0);
+        continue;
+      }
       bars.pop();
     }
-    bars.push({ t, o, h, l, c, v, session: classify(t) });
+    bars.push({ ...row, t: start, session: classify(start) });
   }
   return bars;
 }
