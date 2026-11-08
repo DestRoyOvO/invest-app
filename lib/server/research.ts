@@ -17,8 +17,8 @@ import type {
 import type { Quote } from "@/types/api";
 import { normalizeDividends, toMs, type RawChart } from "@/lib/bars";
 
-import { cached, HOUR, isFresh } from "./cache";
-import { log } from "./log";
+import { cached, HOUR, isFresh, MINUTE } from "./cache";
+import { logThrottled } from "./log";
 import { callOptions, getQuote, getSummary, num, str, upstream, yf } from "./yahoo";
 
 // Research tabs of the quote page: financial statements (fundamentalsTimeSeries), dividend history (chart events plus
@@ -158,7 +158,8 @@ export async function getFinancials(symbol: string): Promise<FinancialStatements
     ]);
     const failures = settled.filter((s): s is PromiseRejectedResult => s.status === "rejected");
     if (failures.length === settled.length) throw failures[0].reason;
-    if (failures.length > 0) log("warn", "research.statements_partial", { symbol, failed: failures.length, error: failures[0].reason });
+    // Any client can ask for any symbol, so a Yahoo outage could repeat this for every one of them: at most once a minute.
+    if (failures.length > 0) logThrottled("research.statements_partial", MINUTE, "warn", "research.statements_partial", { symbol, failed: failures.length, error: failures[0].reason });
     const [annualIncome, annualCash, quarterlyIncome, quarterlyCash] = settled.map((s) => (s.status === "fulfilled" ? s.value : []));
 
     const annual = buildPeriods(annualIncome, annualCash, ANNUAL_PERIODS);
@@ -304,7 +305,7 @@ export async function getDividends(symbol: string): Promise<DividendHistory | nu
     const [chartResult, quoteResult] = await Promise.allSettled([loadDividendChart(symbol, now), getQuote(symbol)]);
     if (chartResult.status === "rejected") throw chartResult.reason;
     const quote = quoteResult.status === "fulfilled" ? quoteResult.value : null;
-    if (quoteResult.status === "rejected") log("warn", "research.dividend_quote_unavailable", { symbol, error: quoteResult.reason });
+    if (quoteResult.status === "rejected") logThrottled("research.dividend_quote_unavailable", MINUTE, "warn", "research.dividend_quote_unavailable", { symbol, error: quoteResult.reason });
     if (!chartResult.value && quote === null) return null;
     return buildDividendHistory(symbol, chartResult.value, quote, now);
   });
