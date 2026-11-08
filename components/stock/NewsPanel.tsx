@@ -13,9 +13,11 @@ import { tpl } from "@/lib/format";
 const COLLAPSED = 5;
 
 /**
- * Company news first, then industry and macro context; the top five with the rest a click away. With `ready` false
- * the request waits (the page passes the quote's arrival): the news route reuses the quote and profile the page has
- * just loaded instead of loading, and charging for, the same calls in parallel.
+ * The symbol's own news first, then industry and macro context; the top five with the rest a click away. The server
+ * tags the own headlines by the instrument (Company for stocks; Fund, Index, Currency, Futures or Crypto otherwise:
+ * ownNewsProvenance in lib/server/market.ts), and the reader drawer shows the same tag. With `ready` false the request
+ * waits (the page passes the quote's arrival): the news route reuses the quote and profile the page has just loaded
+ * instead of loading, and charging for, the same calls in parallel.
  */
 export function NewsPanel({ symbol, ready = true, className }: { symbol: string; ready?: boolean; className?: string }) {
   const { t } = usePrefs();

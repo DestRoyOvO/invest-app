@@ -9,6 +9,7 @@ import type {
   MarketBreadth,
   MarketOverview,
   NewsItem,
+  NewsProvenance,
   OverviewQuote,
   Quote,
   SectorSnapshot,
@@ -399,10 +400,28 @@ export async function getStockDetail(symbol: string): Promise<StockDetail | null
   return { asOf: new Date().toISOString(), quote, profile, stats: withApplicableMargins(stats), warnings };
 }
 
+const OWN_NEWS: Readonly<Record<string, NewsProvenance>> = {
+  ETF: "fund",
+  MUTUALFUND: "fund",
+  INDEX: "index",
+  CURRENCY: "currency",
+  FUTURE: "futures",
+  CRYPTOCURRENCY: "crypto",
+};
+
 /**
- * Company news with industry and macro context for the quote page. Null when Yahoo does not know the symbol; throws
- * when the quote cannot be loaded or every news search fails. The quote and the summary come from the same caches as
- * getStockDetail, so the page's two requests share those loads.
+ * The tag of a symbol's own headlines: "company" for stocks (and an unknown quote type), the instrument's kind for the
+ * rest, so the news on SPY's, ^GSPC's or EURUSD=X's page is not labelled company news.
+ */
+export function ownNewsProvenance(quoteType: string | null): NewsProvenance {
+  return (quoteType !== null ? OWN_NEWS[quoteType] : undefined) ?? "company";
+}
+
+/**
+ * Company news with industry and macro context for the quote page, the symbol's own headlines tagged by its kind
+ * (ownNewsProvenance). Null when Yahoo does not know the symbol; throws when the quote cannot be loaded or every news
+ * search fails. The quote and the summary come from the same caches as getStockDetail, so the page's two requests share
+ * those loads.
  */
 export async function getStockNews(symbol: string): Promise<NewsItem[] | null> {
   const [quoteResult, summaryResult] = await Promise.allSettled([getQuote(symbol), getSummary(symbol)]);
@@ -410,7 +429,9 @@ export async function getStockNews(symbol: string): Promise<NewsItem[] | null> {
   const quote = quoteResult.value;
   if (!quote) return null;
   const summary = summaryResult.status === "fulfilled" ? summaryResult.value : null;
-  return getCompanyNews(symbol, quote.name || summary?.profile.name || symbol, summary?.profile ?? null);
+  const news = await getCompanyNews(symbol, quote.name || summary?.profile.name || symbol, summary?.profile ?? null);
+  const own = ownNewsProvenance(quote.quoteType);
+  return own === "company" ? news : news.map((item) => (item.provenance === "company" ? { ...item, provenance: own } : item));
 }
 
 /**

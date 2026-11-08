@@ -153,6 +153,21 @@ describe("getChart: daily and longer", () => {
     expect(chart.previousClose).toBeNull();
   });
 
+  it("keeps a week's own range when the trailing session row copies a yield's placeholder zeros", async () => {
+    // ^TNX on 2026-11-07: the latest-session row has the quote's open, high and low of 0 and its 4.859 close.
+    spyChart({
+      meta: { gmtoffset: EST, exchangeTimezoneName: "America/Chicago" },
+      quotes: [
+        { date: new Date("2026-10-26T04:00:00Z"), open: 4.95, high: 5.01, low: 4.88, close: 4.9, volume: 0 },
+        { date: new Date("2026-11-02T05:00:00Z"), open: 4.904, high: 4.968, low: 4.814, close: 4.859, volume: 0 },
+        { date: new Date("2026-11-06T19:59:59Z"), open: 0, high: 0, low: 0, close: 4.859, volume: 0 },
+      ],
+    });
+    const chart = await getChart("^TNXW", "5y");
+    expect(chart.bars).toHaveLength(2);
+    expect(chart.bars[1]).toMatchObject({ o: 4.904, h: 4.968, l: 4.814, c: 4.859 });
+  });
+
   it("starts YTD on January 1 and drops anything Yahoo sends from before", async () => {
     const spy = spyChart({
       meta: { gmtoffset: EST },

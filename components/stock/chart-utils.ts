@@ -128,6 +128,23 @@ export function visibleBars(bars: readonly Bar[], extended: boolean): Bar[] {
   return extended ? [...bars] : bars.filter((bar) => (bar.session ?? "regular") === "regular");
 }
 
+/** Volume older than this before the latest bar says nothing about how the symbol trades now. */
+const VOLUME_RECENCY_MS = 365 * 86_400_000;
+
+/**
+ * True when the bars carry volume: some bar within a year of the latest one has a positive volume. Yahoo sends only
+ * nulls and zeros for instruments without exchange volume (yields such as ^TNX, other indices without volume, currency
+ * pairs such as EURUSD=X) in every range; ^TNX's MAX chart adds five months of volume from 2005, which tell nothing
+ * about it now. Crypto pairs report volume on some intraday bars only (BTC-USD: 80 of 288 five-minute bars on
+ * 2026-11-08), which counts.
+ */
+export function carriesVolume(bars: ReadonlyArray<Pick<Bar, "t" | "v">>): boolean {
+  const last = bars.at(-1);
+  if (!last) return false;
+  const from = last.t - VOLUME_RECENCY_MS;
+  return bars.some((bar) => bar.v !== null && bar.v > 0 && bar.t >= from);
+}
+
 // ---------------------------------------------------------------------------
 // Studies
 // ---------------------------------------------------------------------------

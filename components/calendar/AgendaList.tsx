@@ -234,17 +234,29 @@ export function PositionText({ item }: { item: AgendaItem }) {
   return null;
 }
 
-/** The implied move of a row, requested once the row scrolls near the viewport. */
+/**
+ * The implied move of a row, requested once the row scrolls near the viewport. Without one (no listed options, no
+ * usable quotes, a report Yahoo no longer lists as upcoming) the dash carries the reason.
+ */
 function MoveText({ symbol, enabled }: { symbol: string; enabled: boolean }) {
   const { t, lang } = usePrefs();
   const { data, error } = useImpliedMove(enabled ? symbol : null);
-  if (data) {
+  if (data?.available) {
     const pct = formatRatio(data.move, { digits: 1 });
     const label = tpl(t.calendar.moveLabel, { pct, date: shortDay(data.expiry, lang) });
     return (
       <span title={label} className="text-fg">
         <span className="sr-only">{label}</span>
         <span aria-hidden>{tpl(t.calendar.move, { pct })}</span>
+      </span>
+    );
+  }
+  if (data) {
+    const reason = t.calendar.noMove[data.reason];
+    return (
+      <span title={reason} className="text-fg-3">
+        <span className="sr-only">{reason}</span>
+        <span aria-hidden>—</span>
       </span>
     );
   }

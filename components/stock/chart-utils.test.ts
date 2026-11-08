@@ -5,6 +5,7 @@ import type { Bar } from "@/types/api";
 import {
   barIndexAt,
   bollingerSeries,
+  carriesVolume,
   chartTime,
   compareSlots,
   dataRange,
@@ -77,6 +78,20 @@ describe("ranges", () => {
     ];
     expect(visibleBars(bars, false).map((b) => b.t)).toEqual([2, 4]);
     expect(visibleBars(bars, true)).toHaveLength(4);
+  });
+
+  it("finds volume only where some bar of the latest year carries it", () => {
+    const bar = (v: number | null, t = 1): Bar => ({ t, o: 1, h: 1, l: 1, c: 1, v });
+    // ^TNX and EURUSD=X: zeros throughout; nulls where Yahoo leaves the field out.
+    expect(carriesVolume([bar(0), bar(0), bar(0)])).toBe(false);
+    expect(carriesVolume([bar(null), bar(0)])).toBe(false);
+    expect(carriesVolume([])).toBe(false);
+    // BTC-USD intraday: volume on some five-minute bars only.
+    expect(carriesVolume([bar(0), bar(0), bar(1_250_000), bar(0)])).toBe(true);
+    // ^TNX MAX: monthly bars with volume in 2005 and none since.
+    const month = (iso: string, v: number) => bar(v, Date.parse(`${iso}-01T00:00:00Z`));
+    expect(carriesVolume([month("2005-02", 2_959_200), month("2005-03", 2_007_800), month("2025-12", 0), month("2026-11", 0)])).toBe(false);
+    expect(carriesVolume([month("2005-02", 2_959_200), month("2026-01", 1_000), month("2026-11", 0)])).toBe(true);
   });
 });
 

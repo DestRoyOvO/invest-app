@@ -240,7 +240,12 @@ export interface SearchResponse {
 // News
 // ---------------------------------------------------------------------------
 
-export type NewsProvenance = "company" | "industry" | "macro" | "market" | "sector";
+/**
+ * Where a headline comes from. A quote page's own news is "company" for stocks and the instrument's kind otherwise
+ * ("fund", "index", "currency", "futures", "crypto"); "industry" and "macro" are its context; "market" and "sector"
+ * are the overview's and the sector pages' feeds.
+ */
+export type NewsProvenance = "company" | "fund" | "index" | "currency" | "futures" | "crypto" | "industry" | "macro" | "market" | "sector";
 
 export interface NewsItem {
   /** Yahoo news uuid; stable identifier used by POST /api/ai/analyze { kind: "news" }. */

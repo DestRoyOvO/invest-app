@@ -136,7 +136,7 @@ export function WorldTable({ entries, caption, compact = false, now, loading = f
           align: "right",
           width: "5.5rem",
           hideBelow: "md",
-          render: ({ row }) => (loading ? placeholder("w-10") : <Delta value={row?.change} kind="change" lang={lang} />),
+          render: ({ def, row }) => (loading ? placeholder("w-10") : <Delta value={row?.change} kind="change" digits={def.digits} lang={lang} />),
         },
     {
       key: "chgPct",

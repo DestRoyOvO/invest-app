@@ -3,17 +3,15 @@ import { describe, expect, it } from "vitest";
 import {
   daysUntil,
   earningsTiming,
-  formatQuotePrice,
   futureDate,
   instrumentKind,
   isUsListing,
   liveTitle,
   parseCompare,
   positionFigures,
-  priceDigits,
   quoteQuery,
-  reportedPrice,
-  reportedVolume,
+  quoteRanges,
+  rangesNeedBars,
   resolveTab,
   showsCoverage,
   tabsFor,
@@ -131,46 +129,57 @@ describe("liveTitle", () => {
   it("keeps a currency pair's decimals", () => {
     expect(liveTitle("EURUSD=X", 1.1143303, -0.6686)).toBe("EURUSD=X 1.1143 ▼0.67% · InvestSeek");
     expect(liveTitle("USDJPY=X", 158.425, 0.49)).toBe("USDJPY=X 158.425 ▲0.49% · InvestSeek");
+    expect(liveTitle("^TNX", 4.859, 0.45)).toBe("^TNX 4.859 ▲0.45% · InvestSeek");
   });
 });
 
-describe("price decimals", () => {
-  it("gives the world board's instruments its digits, other currency pairs four and the rest none", () => {
-    expect(priceDigits("EURUSD=X", "CURRENCY")).toBe(4);
-    expect(priceDigits("USDJPY=X", "CURRENCY")).toBe(3);
-    expect(priceDigits("HG=F", "FUTURE")).toBe(4);
-    expect(priceDigits("^GSPC", "INDEX")).toBe(2);
-    // A pair the world board does not list, by quote type or by Yahoo's "=X" before the quote arrives.
-    expect(priceDigits("AUDUSD=X", "CURRENCY")).toBe(4);
-    expect(priceDigits("AUDUSD=X", null)).toBe(4);
-    expect(priceDigits("AAPL", "EQUITY")).toBeNull();
-    expect(priceDigits("ES=F", "FUTURE")).toBeNull();
+describe("quoteRanges", () => {
+  const DAY = 86_400_000;
+  const LAST = Date.UTC(2026, 10, 6); // Friday, Nov 6
+  /** Two years of weekday bars ending on LAST: closes drift from 4.0 to about 4.9, each day's range 0.1 wide. */
+  const bars = Array.from({ length: 740 }, (_, i) => LAST - (739 - i) * DAY)
+    .filter((t) => new Date(t).getUTCDay() % 6 !== 0)
+    .map((t, i, all) => {
+      const c = 4 + (0.9 * i) / (all.length - 1);
+      return { t, o: c - 0.01, h: c + 0.05, l: c - 0.05, c, v: 0 };
+    });
+  const latest = bars[bars.length - 1];
+  // ^TNX as Yahoo quoted it on 2026-11-07: no open, day range or 52-week low.
+  const tnx = { quoteType: "INDEX", price: latest.c, open: null, dayLow: null, dayHigh: null, fiftyTwoWeekLow: null, fiftyTwoWeekHigh: 5.364, regularMarketTime: "2026-11-06T19:59:59.000Z" };
+
+  it("takes a yield's missing open, day range and 52-week low from the daily bars and keeps Yahoo's own figures", () => {
+    const ranges = quoteRanges(tnx, bars, "America/Chicago");
+    expect(ranges).toMatchObject({ open: latest.o, dayLow: latest.l, dayHigh: latest.h, high52: 5.364 });
+    // The lowest low of the 52 weeks after Friday, Nov 7, 2025.
+    const year = bars.filter((bar) => bar.t > LAST - 364 * DAY);
+    expect(new Date(year[0].t).toISOString().slice(0, 10)).toBe("2025-11-10");
+    expect(ranges.low52).toBeCloseTo(Math.min(...year.map((bar) => bar.l)), 10);
   });
 
-  it("formats with those decimals, or with formatPrice's rule", () => {
-    expect(formatQuotePrice(1.1143303, 4, "en")).toBe("1.1143");
-    expect(formatQuotePrice(158.425, 3, "en")).toBe("158.425");
-    expect(formatQuotePrice(1.1143303, null, "en")).toBe("1.11");
-    expect(formatQuotePrice(0.12345, null, "en")).toBe("0.1235");
-    expect(formatQuotePrice(null, 4, "en")).toBe("—");
-  });
-});
-
-describe("Yahoo placeholders", () => {
-  it("reads a zero open, day range or 52-week end as not reported", () => {
-    expect(reportedPrice(0)).toBeNull();
-    expect(reportedPrice(null)).toBeNull();
-    expect(reportedPrice(4.859)).toBe(4.859);
-    // A negative futures price is a price (WTI, April 2020).
-    expect(reportedPrice(-37.63)).toBe(-37.63);
+  it("stretches a derived range to the current price, which lies inside it by definition", () => {
+    const ranges = quoteRanges({ ...tnx, price: latest.h + 0.02 }, bars, "America/Chicago");
+    expect(ranges.dayHigh).toBeCloseTo(latest.h + 0.02, 10);
+    expect(ranges.dayLow).toBe(latest.l);
   });
 
-  it("drops a zero volume only where none is reported", () => {
-    expect(reportedVolume(0, "other")).toBeNull();
-    expect(reportedVolume(166_431, "other")).toBe(166_431);
-    // A stock before its first trade of the day has traded nothing yet.
-    expect(reportedVolume(0, "equity")).toBe(0);
-    expect(reportedVolume(null, "fund")).toBeNull();
+  it("derives the day figures only from the quote's own session and the 52-week range only from a full year", () => {
+    // The quote is from Monday while the bars end on Friday: Friday's range is not Monday's.
+    expect(quoteRanges({ ...tnx, regularMarketTime: "2026-11-09T19:59:59.000Z" }, bars, "America/Chicago")).toMatchObject({ open: null, dayLow: null, dayHigh: null });
+    // Half a year of bars cannot tell the 52-week low.
+    const short = bars.slice(-130);
+    expect(quoteRanges(tnx, short, "America/Chicago")).toMatchObject({ low52: null, dayLow: latest.l });
+    // A bar without a range (one price that day) is not a day range.
+    const flat = [...bars.slice(0, -1), { ...latest, o: latest.c, h: latest.c, l: latest.c }];
+    expect(quoteRanges(tnx, flat, "America/Chicago")).toMatchObject({ open: null, dayLow: null, dayHigh: null });
+  });
+
+  it("leaves complete quotes, mutual funds and missing bars alone", () => {
+    const full = { ...tnx, open: 4.874, dayLow: 4.814, dayHigh: 4.903, fiftyTwoWeekLow: 3.956 };
+    expect(rangesNeedBars(full)).toBe(false);
+    expect(quoteRanges(full, bars, "America/Chicago")).toEqual({ open: 4.874, dayLow: 4.814, dayHigh: 4.903, low52: 3.956, high52: 5.364 });
+    expect(rangesNeedBars({ ...tnx, quoteType: "MUTUALFUND" })).toBe(false);
+    expect(rangesNeedBars(tnx)).toBe(true);
+    expect(quoteRanges(tnx, null, null)).toMatchObject({ open: null, dayLow: null, low52: null, high52: 5.364 });
   });
 });
 

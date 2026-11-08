@@ -11,8 +11,9 @@ import { earningsBadge, formatCompactFixed } from "@/components/watchlist/format
 import { useNow } from "@/hooks/usePortfolio";
 import { stockPath } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { formatPrice, formatShortDate, tpl } from "@/lib/format";
+import { formatShortDate, tpl } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/messages";
+import { formatQuotePrice, priceDigits } from "@/lib/quote-figures";
 import type { Lang, Quote } from "@/types/api";
 
 export type QuoteColumn = "name" | "last" | "change" | "changePct" | "volume" | "dollarVolume" | "marketCap" | "pe" | "trend";
@@ -56,7 +57,7 @@ function ExtendedPrice({ quote, t, lang }: { quote: Quote | undefined; t: Messag
       <abbr title={pre ? t.watchlist.preLong : t.watchlist.postLong} className="no-underline">
         {pre ? t.watchlist.pre : t.watchlist.post}
       </abbr>{" "}
-      <span className="num text-fg-2">{formatPrice(quote.extendedPrice, lang)}</span>
+      <span className="num text-fg-2">{formatQuotePrice(quote.extendedPrice, digitsOf(quote), lang)}</span>
     </span>
   );
 }
@@ -64,6 +65,11 @@ function ExtendedPrice({ quote, t, lang }: { quote: Quote | undefined; t: Messag
 function ExtendedChange({ quote }: { quote: Quote | undefined }) {
   if (!quote?.extendedSession || quote.extendedChangePercent === null) return <span aria-hidden className="block text-micro leading-4">&nbsp;</span>;
   return <Delta value={quote.extendedChangePercent} className="block text-micro leading-4" />;
+}
+
+/** The decimals of a row's price and change: a currency pair keeps its pips (EURUSD=X 1.1143, USDJPY=X +0.770). */
+function digitsOf(quote: Quote | undefined): number | null {
+  return quote ? priceDigits(quote.symbol, quote.quoteType) : null;
 }
 
 /** "ER 3d" within 14 days (warn color within 7), with the date and whether it is estimated for screen readers. */
@@ -137,7 +143,7 @@ export function quoteColumns<Row>(columns: readonly QuoteColumn[], quoteOf: (row
             return (
               <>
                 <TickNumber value={q?.price} className="block leading-5 text-fg">
-                  {formatPrice(q?.price, lang)}
+                  {formatQuotePrice(q?.price, digitsOf(q), lang)}
                 </TickNumber>
                 {extendedHours ? <ExtendedPrice quote={q} t={t} lang={lang} /> : null}
               </>
@@ -145,7 +151,16 @@ export function quoteColumns<Row>(columns: readonly QuoteColumn[], quoteOf: (row
           },
         };
       case "change":
-        return { ...base, header: t.columns.change, align: "right", sortValue: sort((q) => q.change), render: (row) => <Delta value={quoteOf(row)?.change} kind="change" lang={lang} /> };
+        return {
+          ...base,
+          header: t.columns.change,
+          align: "right",
+          sortValue: sort((q) => q.change),
+          render: (row) => {
+            const q = quoteOf(row);
+            return <Delta value={q?.change} kind="change" digits={digitsOf(q) ?? undefined} lang={lang} />;
+          },
+        };
       case "changePct":
         return {
           ...base,

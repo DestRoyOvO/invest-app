@@ -1,5 +1,5 @@
 import { cn } from "@/lib/cn";
-import { formatChange, formatPercent, formatRatio, signOf } from "@/lib/format";
+import { formatChange, formatNumber, formatPercent, formatRatio, signOf } from "@/lib/format";
 import type { Lang } from "@/types/api";
 
 import { withTrueMinus } from "./delta-utils";
@@ -10,10 +10,21 @@ interface DeltaProps {
   value: number | null | undefined;
   /** percent: value in percent units; ratio: decimal; change: absolute price change. */
   kind?: "percent" | "ratio" | "change";
+  /**
+   * Decimals. A change takes the decimals of the price beside it (a currency pair's pips, see priceDigits in
+   * lib/quote-figures.ts); without them it follows formatChange (2, or 4 for sub-cent moves).
+   */
   digits?: number;
   arrow?: boolean;
   lang?: Lang;
   className?: string;
+}
+
+/** A signed price change with fixed decimals (USD/JPY +0.770), or formatChange's rule without them. */
+function changeText(value: number | null | undefined, lang: Lang, digits: number | undefined): string {
+  if (digits === undefined || typeof value !== "number" || !Number.isFinite(value)) return formatChange(value, lang);
+  const text = formatNumber(Math.abs(value), digits, lang);
+  return value > 0 ? `+${text}` : value < 0 ? `-${text}` : text;
 }
 
 /**
@@ -28,7 +39,7 @@ export function Delta({ value, kind = "percent", digits, arrow = false, lang = "
       ? formatPercent(value, { digits })
       : kind === "ratio"
         ? formatRatio(value, { digits: digits ?? 2, sign: true })
-        : formatChange(value, lang);
+        : changeText(value, lang, digits);
   return (
     <span className={cn("num whitespace-nowrap", color, className)}>
       {arrow && sign !== 0 ? (

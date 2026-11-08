@@ -67,6 +67,7 @@ import {
   getMarketOverview,
   getStockDetail,
   getStockNews,
+  ownNewsProvenance,
   selectMovers,
   summaryFromQuote,
   weightedChangePercent,
@@ -439,6 +440,32 @@ describe("getStockNews", () => {
     yahoo.getSummary.mockRejectedValue(new Error("quoteSummary failed"));
     await getStockNews("AAPL");
     expect(news.getCompanyNews).toHaveBeenLastCalledWith("AAPL", "Apple Inc.", null);
+  });
+
+  it("tags a fund's, an index's or a currency pair's own headlines by its kind and keeps a stock's as company news", async () => {
+    const own = { ...newsItem, id: "own", provenance: "company" as const };
+    const macro = { ...newsItem, id: "ctx", provenance: "macro" as const };
+    yahoo.getSummary.mockResolvedValue(null);
+    news.getCompanyNews.mockResolvedValue([own, macro]);
+    const tags = async (symbol: string, quoteType: string | null) => {
+      yahoo.getQuote.mockResolvedValue(quote(symbol, { quoteType }));
+      return (await getStockNews(symbol))?.map((item) => item.provenance);
+    };
+    expect(await tags("AAPL", "EQUITY")).toEqual(["company", "macro"]);
+    expect(await tags("SPY", "ETF")).toEqual(["fund", "macro"]);
+    expect(await tags("VFIAX", "MUTUALFUND")).toEqual(["fund", "macro"]);
+    expect(await tags("^GSPC", "INDEX")).toEqual(["index", "macro"]);
+    expect(await tags("EURUSD=X", "CURRENCY")).toEqual(["currency", "macro"]);
+    expect(await tags("CL=F", "FUTURE")).toEqual(["futures", "macro"]);
+    expect(await tags("BTC-USD", "CRYPTOCURRENCY")).toEqual(["crypto", "macro"]);
+    expect(await tags("XYZ", null)).toEqual(["company", "macro"]);
+  });
+
+  it("names the tag of a symbol's own news after its quote type", () => {
+    expect(ownNewsProvenance("EQUITY")).toBe("company");
+    expect(ownNewsProvenance("ETF")).toBe("fund");
+    expect(ownNewsProvenance("OPTION")).toBe("company");
+    expect(ownNewsProvenance(null)).toBe("company");
   });
 
   it("throws when the quote or every search fails", async () => {

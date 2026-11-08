@@ -34,6 +34,7 @@ import { isIntradayRange, useChartSeries } from "@/hooks/useQuoteApi";
 import { cn } from "@/lib/cn";
 import { formatCompact, formatDate, formatPrice, formatShortDate, formatTime, tpl } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/messages";
+import { formatQuotePrice, priceDigits } from "@/lib/quote-figures";
 import { wilderRsiSeries } from "@/lib/signal";
 import type { Bar, ChartRange, Lang, Quote } from "@/types/api";
 
@@ -41,6 +42,7 @@ import { chartSettingsStore, updateChartSettings } from "./chart-settings";
 import {
   barIndexAt,
   bollingerSeries,
+  carriesVolume,
   chartTime,
   compareSlots,
   dataRange,
@@ -59,7 +61,6 @@ import {
 } from "./chart-utils";
 import { RangePicker, StudiesMenu } from "./ChartToolbar";
 import { CompareBar, SeriesKey } from "./CompareBar";
-import { formatQuotePrice, priceDigits } from "./quote-utils";
 import { useGSequenceGuard } from "./use-g-guard";
 
 type Lwc = typeof import("lightweight-charts");
@@ -371,10 +372,19 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
   const digits = priceDigits(symbol, quote?.quoteType);
   const precision = digits ?? ((lastBar?.c ?? quote?.price ?? 2) < 1 ? 4 : 2);
 
+  // Volume only where the loaded bars carry it: yields such as ^TNX and currency pairs have none, so no pane is drawn and
+  // the studies menu says why. While a range loads, the symbol's last answer stands, so the chart is not rebuilt for a
+  // pane that is not coming.
+  const measuredVolume = data && data.bars.length > 0 ? carriesVolume(data.bars) : null;
+  const [volumeSeen, setVolumeSeen] = useState<{ symbol: string; available: boolean } | null>(null);
+  if (measuredVolume !== null && (volumeSeen?.symbol !== symbol || volumeSeen.available !== measuredVolume)) setVolumeSeen({ symbol, available: measuredVolume });
+  const volumeAvailable = measuredVolume ?? (volumeSeen?.symbol === symbol ? volumeSeen.available : true);
+  const unavailableStudies = volumeAvailable ? undefined : { volume: tpl(t.chart.volumeUnavailable, { symbol }) };
+
   // --- Chart instance ---------------------------------------------------------------------------------------------
   const containerRef = useRef<HTMLDivElement>(null);
   const [handles, setHandles] = useState<Handles | null>(null);
-  const structure = compareMode ? "compare" : `price:${settings.volume ? 1 : 0}:${settings.rsi ? 1 : 0}`;
+  const structure = compareMode ? "compare" : `price:${settings.volume && volumeAvailable ? 1 : 0}:${settings.rsi ? 1 : 0}`;
 
   useEffect(() => {
     let disposed = false;
@@ -721,7 +731,7 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
       title={t.stock.chart}
       code="GP"
       className={cn("scroll-mt-2", className)}
-      actions={<StudiesMenu settings={settings} onChange={updateChartSettings} disabled={compareMode} />}
+      actions={<StudiesMenu settings={settings} onChange={updateChartSettings} disabled={compareMode} unavailable={unavailableStudies} />}
       footer={
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line px-3 py-1.5 text-micro text-fg-3">
           <a href="https://www.tradingview.com/" target="_blank" rel="noopener noreferrer" className="hover:text-fg-2 hover:underline max-sm:inline-flex max-sm:min-h-10 max-sm:items-center">
@@ -795,7 +805,7 @@ export function PriceChart({ symbol, quote, sectorEtf, compare, onCompareChange,
               </span>
             </span>
             <Delta value={shownChange} />
-            {shown.v ? (
+            {volumeAvailable && shown.v ? (
               <span className="mono hidden sm:inline">
                 {ohlc.volume} <span className="num text-fg-2">{formatCompact(shown.v, lang)}</span>
               </span>

@@ -1,13 +1,12 @@
 // Pure helpers behind the quote page (StockView, QuoteHeader), kept free of React so they can be tested: which tabs
-// apply, the compare list from the URL, event chips, price decimals and Yahoo's placeholder figures, the live tab
-// title and the position line.
+// apply, the compare list from the URL, event chips, the header's ranges, the live tab title and the position line.
+// Price decimals and Yahoo's placeholder figures are shared with the other views (lib/quote-figures.ts).
 
 import { isNonEquity, knownNonEquity } from "@/components/calendar/earnings-model";
 import { isDateOnly } from "@/lib/events";
-import { formatNumber, formatPrice } from "@/lib/format";
+import { priceDigits } from "@/lib/quote-figures";
 import { normalizeSymbol } from "@/lib/symbols";
-import { getWorldSymbol } from "@/lib/universe";
-import type { Lang } from "@/types/api";
+import type { Bar, Quote } from "@/types/api";
 
 import { MAX_COMPARE } from "./chart-utils";
 
@@ -40,33 +39,76 @@ export function tabsFor(quoteType: string | null | undefined): QuoteTab[] {
   return kind === "fund" ? ["overview", "dividends"] : ["overview"];
 }
 
+const DAY_MS = 86_400_000;
+/** 52 weeks: the 52-week range covers the sessions after the same weekday a year before the quote's session. */
+const YEAR_MS = 364 * DAY_MS;
+/** The bars must reach back to within a week of that start (weekends and holidays) to give a 52-week range. */
+const YEAR_SLACK_MS = 7 * DAY_MS;
+
+/** The open, day range and 52-week range of the quote header. */
+export interface QuoteRanges {
+  open: number | null;
+  dayLow: number | null;
+  dayHigh: number | null;
+  low52: number | null;
+  high52: number | null;
+}
+
+type RangeQuote = Pick<Quote, "quoteType" | "price" | "open" | "dayLow" | "dayHigh" | "fiftyTwoWeekLow" | "fiftyTwoWeekHigh" | "regularMarketTime">;
+
 /**
- * Decimals for an instrument's prices, or null for formatPrice's own rule (2, or 4 below 1). The world board's
- * instruments keep its digits (EUR/USD 4, USD/JPY 3, copper 4), so a pair reads the same on its quote page as on
- * /markets; other currency pairs (quote type CURRENCY, or Yahoo's "=X" symbols before the quote arrives) get 4.
+ * True when the quote lacks a figure of its ranges that daily bars could give. Mutual funds have no intraday trading
+ * (their bars are one NAV a day), so their missing open and day range stay missing.
  */
-export function priceDigits(symbol: string, quoteType: string | null | undefined): number | null {
-  const listed = getWorldSymbol(symbol);
-  if (listed) return listed.digits;
-  return quoteType === "CURRENCY" || symbol.endsWith("=X") ? 4 : null;
+export function rangesNeedBars(quote: RangeQuote): boolean {
+  if (quote.quoteType === "MUTUALFUND" || quote.price === null) return false;
+  return [quote.open, quote.dayLow, quote.dayHigh, quote.fiftyTwoWeekLow, quote.fiftyTwoWeekHigh].some((value) => value === null);
 }
 
-/** A price with the instrument's decimals (see priceDigits), or formatPrice's rule without them. */
-export function formatQuotePrice(value: number | null | undefined, digits: number | null, lang: Lang): string {
-  return digits === null ? formatPrice(value, lang) : formatNumber(value, digits, lang);
+/** UTC midnight of the date of `iso` on the exchange's clock: the `t` of that session's daily bar. */
+function sessionDay(iso: string | null, timeZone: string | null): number | null {
+  const ms = iso ? Date.parse(iso) : Number.NaN;
+  if (!Number.isFinite(ms)) return null;
+  try {
+    const key = new Intl.DateTimeFormat("en-CA", { timeZone: timeZone ?? "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(ms);
+    return Date.parse(`${key}T00:00:00Z`);
+  } catch {
+    return null; // a time zone this browser does not know
+  }
 }
 
 /**
- * A price of the session or the year (open, day low and high, 52-week low and high), or null for Yahoo's placeholder
- * zero: yields such as ^TNX and ^IRX come with an open, a day range and a 52-week low of 0.
+ * The quote header's open, day range and 52-week range. Yahoo leaves some out for yields (^TNX quotes no open, day
+ * range or 52-week low) while its daily bars (`bars`, `timeZone`: the 2Y chart the page loads) carry them, so a missing
+ * figure is taken from the bars where they hold that very figure: the open and the day range from the latest bar when
+ * it is the quote's own session and traded a range, the 52-week low and high from the bars of the 52 weeks up to that
+ * session when the bars reach that far back. Yahoo's own 52-week figures are the extremes of the same daily bars
+ * (^GSPC, EURUSD=X, BTC-USD and ^TNX's high match exactly on 2026-11-07), and the current price lies inside both ranges
+ * by definition, so the derived ends include it. Figures the quote has always win.
  */
-export function reportedPrice(value: number | null): number | null {
-  return value === 0 ? null : value;
-}
+export function quoteRanges(quote: RangeQuote, bars: readonly Bar[] | null, timeZone: string | null): QuoteRanges {
+  const ranges: QuoteRanges = { open: quote.open, dayLow: quote.dayLow, dayHigh: quote.dayHigh, low52: quote.fiftyTwoWeekLow, high52: quote.fiftyTwoWeekHigh };
+  const day = rangesNeedBars(quote) && bars && bars.length > 0 ? sessionDay(quote.regularMarketTime, timeZone) : null;
+  if (day === null || !bars) return ranges;
+  const price = quote.price !== null && quote.price > 0 ? quote.price : null;
+  const low = (value: number) => (price === null ? value : Math.min(value, price));
+  const high = (value: number) => (price === null ? value : Math.max(value, price));
 
-/** The session's volume, or null where Yahoo's 0 means none is reported: indices and currencies (^VIX, EURUSD=X). */
-export function reportedVolume(volume: number | null, kind: InstrumentKind): number | null {
-  return kind === "other" && volume !== null && volume <= 0 ? null : volume;
+  const latest = bars[bars.length - 1];
+  if (latest.t === day && latest.h > latest.l) {
+    ranges.open ??= latest.o;
+    ranges.dayLow ??= low(latest.l);
+    ranges.dayHigh ??= high(latest.h);
+  }
+  const from = day - YEAR_MS;
+  if (bars[0].t <= from + YEAR_SLACK_MS) {
+    const year = bars.filter((bar) => bar.t > from && bar.t <= day);
+    if (year.length > 0) {
+      ranges.low52 ??= low(Math.min(...year.map((bar) => bar.l)));
+      ranges.high52 ??= high(Math.max(...year.map((bar) => bar.h)));
+    }
+  }
+  return ranges;
 }
 
 /**

@@ -305,7 +305,7 @@ export const en = {
       sell: "Sell",
       none: "No rating",
     },
-    provenance: { company: "Company", industry: "Industry", macro: "Macro", market: "Market", sector: "Sector" },
+    provenance: { company: "Company", fund: "Fund", index: "Index", currency: "Currency", futures: "Futures", crypto: "Crypto", industry: "Industry", macro: "Macro", market: "Market", sector: "Sector" },
   },
   signal: {
     title: "Technical reading",
@@ -998,7 +998,7 @@ export const zh: Messages = {
       sell: "卖出",
       none: "暂无评级",
     },
-    provenance: { company: "公司", industry: "行业", macro: "宏观", market: "市场", sector: "板块" },
+    provenance: { company: "公司", fund: "基金", index: "指数", currency: "外汇", futures: "期货", crypto: "加密货币", industry: "行业", macro: "宏观", market: "市场", sector: "板块" },
   },
   signal: {
     title: "技术读数",
