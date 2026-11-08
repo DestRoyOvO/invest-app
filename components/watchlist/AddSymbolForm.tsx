@@ -6,19 +6,19 @@ import { useRef, useState, type FormEvent } from "react";
 import { SymbolCombobox } from "@/components/portfolio/SymbolCombobox";
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Button } from "@/components/ui/Button";
-import { watchlistActions, type AddResult, type TypedAddResult } from "@/hooks/useWatchlist";
+import type { AddResult, TypedAddResult } from "@/hooks/useWatchlist";
 import { tpl } from "@/lib/format";
 import { normalizeSymbol } from "@/lib/symbols";
 import { MAX_WATCHLIST } from "@/lib/universe";
 
 interface AddSymbolFormProps {
-  /** A suggestion was picked: a search result, added as it is. */
+  /** A suggestion was picked: a search result, added as it is (useWatchlist().add). */
   onAdd: (symbol: string) => AddResult;
   /**
-   * Text was submitted: added once the data source knows it (watchlistActions.addTyped), with the result at once when
-   * the text settles it and as a promise while the data source is asked.
+   * Text was submitted: added once the data source knows it (useWatchlist().addTyped), with the result at once when the
+   * text settles it and as a promise while the data source is asked.
    */
-  onAddTyped?: (input: string) => AddResult | Promise<TypedAddResult>;
+  onAddTyped: (input: string) => AddResult | Promise<TypedAddResult>;
   inputId?: string;
 }
 
@@ -27,7 +27,7 @@ interface AddSymbolFormProps {
  * added at once; typed text is looked up first, with the button showing the check, and a symbol the data source does
  * not know is refused under the field.
  */
-export function AddSymbolForm({ onAdd, onAddTyped = watchlistActions.addTyped, inputId = "watchlist-add" }: AddSymbolFormProps) {
+export function AddSymbolForm({ onAdd, onAddTyped, inputId = "watchlist-add" }: AddSymbolFormProps) {
   const { t } = usePrefs();
   const [value, setValue] = useState("");
   const [message, setMessage] = useState<string | null>(null);

@@ -70,7 +70,7 @@ export function WatchlistView() {
   const { t, lang } = usePrefs();
   const toast = useToast();
   const { watchlist, holdings, quotes, portfolio, hydrated, loading, error, stale, staleSince, missing, refresh } = usePortfolio();
-  const { add, remove, insertAt, moveTo } = useWatchlist();
+  const { add, addTyped, remove, insertAt, moveTo } = useWatchlist();
   const view = useLocalStore(watchlistViewStore);
   const { data: sparks } = useSparklines(watchlist);
 
@@ -167,7 +167,7 @@ export function WatchlistView() {
             </>
           }
         >
-          <AddSymbolForm onAdd={add} inputId={ADD_INPUT_ID} />
+          <AddSymbolForm onAdd={add} onAddTyped={addTyped} inputId={ADD_INPUT_ID} />
           <StaleBanner show={stale} since={staleSince} />
           {missingHere.length > 0 ? (
             <div role="status" className="flex flex-wrap items-center gap-2 border-t border-line bg-panel-2 px-3 py-1.5 text-xs text-warn">
