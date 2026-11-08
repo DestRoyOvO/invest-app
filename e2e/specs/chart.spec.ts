@@ -1,7 +1,6 @@
 import type { APIRequestContext } from "@playwright/test";
 
-import { LEVEL_REACH } from "@/components/stock/chart-utils";
-import type { ChartData, ChartRange, HistoryResponse } from "@/types/api";
+import type { Bar, ChartData, ChartRange, HistoryResponse } from "@/types/api";
 import type { EarningsDetail } from "@/types/earnings";
 
 import { AT_DEFAULT_NOW } from "../support/env";
@@ -12,6 +11,7 @@ import {
   chartSeries,
   chartSummary,
   chartSummaryText,
+  escapeRegExp,
   inOrder,
   known,
   percent,
@@ -40,6 +40,28 @@ async function aaplSeries(request: APIRequestContext): Promise<Record<ChartRange
 
 function rangeButton(chart: Locator, range: ChartRange): Locator {
   return chart.getByRole("radiogroup", { name: "Chart range" }).getByRole("radio", { name: RANGE_LABELS[range], exact: true });
+}
+
+/**
+ * How far the price scale stretches to show an investor's level (average cost, target, stop): to a level within a
+ * quarter of the span of the prices in view. The rule is written down here rather than imported from the chart's
+ * code, so a change to the chart's reach fails the levels test instead of moving its expectations along.
+ */
+const LEVEL_REACH = 0.25;
+
+/** SAMPLE_DATA's levels for AAPL (its position's average cost, its note's target and stop), as the legend labels them. */
+const AAPL_LEVELS: ReadonlyArray<{ label: string; price: number }> = [
+  { label: "Avg cost", price: SAMPLE_DATA.holdings.AAPL.cost },
+  { label: "Target", price: SAMPLE_DATA.notes.AAPL.target },
+  { label: "Stop", price: SAMPLE_DATA.notes.AAPL.stop },
+];
+
+/** Where a level lies against the bars in view: off the chart below or above them (beyond the reach), or null (drawn). */
+function levelSide(level: number, bars: readonly Bar[]): "below" | "above" | null {
+  const low = Math.min(...bars.map((bar) => bar.l));
+  const high = Math.max(...bars.map((bar) => bar.h));
+  const reach = (high - low) * LEVEL_REACH;
+  return level < low - reach ? "below" : level > high + reach ? "above" : null;
 }
 
 test.describe("chart ranges", () => {
@@ -276,41 +298,40 @@ test.describe("markers and levels", () => {
   test("names the investor's cost, target and stop when they lie beyond the prices in view", async ({ page, app, request }) => {
     test.skip(app.isPhone, "The legend is the same on phones.");
     await app.seedStorage(SAMPLE_DATA);
-    const note = SAMPLE_DATA.notes.AAPL;
-    const levels = [
-      { label: "Avg cost", price: SAMPLE_DATA.holdings.AAPL.cost },
-      { label: "Target", price: note.target },
-      { label: "Stop", price: note.stop },
-    ];
     const [year, day] = await Promise.all([chartSeries(request, "AAPL", "2y"), chartSeries(request, "AAPL", "1d")]);
     await app.goto("/stock/AAPL");
     const chart = chartPanel(page);
-    // The price scale stretches to a level within a quarter of the visible span (LEVEL_REACH); one further out stays
-    // off the chart and the legend names it with its side.
+    // The price scale stretches to a level within reach of the prices in view; one further out stays off the chart and
+    // the legend names it with its side.
+    const places = new Set<string>();
     for (const [range, series] of [["1y", year], ["1d", day]] as const) {
       await rangeButton(chart, range).click();
       await expect(chartSummaryText(page, "AAPL")).toHaveText(chartSummary(range, series));
       const bars = shownBars(range, series);
-      const low = Math.min(...bars.map((bar) => bar.l));
-      const high = Math.max(...bars.map((bar) => bar.h));
-      const reach = (high - low) * LEVEL_REACH;
-      for (const level of levels) {
-        const side = level.price < low - reach ? "below" : level.price > high + reach ? "above" : null;
+      for (const level of AAPL_LEVELS) {
+        const side = levelSide(level.price, bars);
+        places.add(side ?? "within");
         const named = chart.getByText(new RegExp(`^${level.label} [\\d,.]+, (?:below|above) the chart$`));
         if (side) await expect(named).toHaveText(`${level.label} ${price(level.price)}, ${side} the chart`);
         else await expect(named).toHaveCount(0);
       }
     }
+    // The pinned data puts levels in every place: within reach on 1Y (the target and the stop), below and above on 1D.
+    if (AT_DEFAULT_NOW) expect([...places].sort()).toEqual(["above", "below", "within"]);
   });
 
-  test("tells assistive technology where the cost, target and stop lines drawn on the chart are", async ({ page, app }) => {
+  test("tells assistive technology where the cost, target and stop lines drawn on the chart are", async ({ page, app, request }) => {
     test.skip(app.isPhone, "The legend is the same on phones.");
     test.fixme(true, "Lines within the visible prices are drawn on the canvas only (aria-hidden); PriceChart names only off-chart levels.");
     await app.seedStorage(SAMPLE_DATA);
+    const year = await chartSeries(request, "AAPL", "2y");
     await app.goto("/stock/AAPL");
-    // On 1Y the target (340) and the stop (260) lie within the visible prices of the pinned data, so they are drawn.
     const chart = chartPanel(page);
-    await expect(chart).toContainText(/Target\D{0,20}340\.00/);
-    await expect(chart).toContainText(/Stop\D{0,20}260\.00/);
+    await expect(chartSummaryText(page, "AAPL")).toHaveText(chartSummary("1y", year));
+    // The levels within reach of the 1Y prices are drawn (the target and the stop in the pinned data): each should be
+    // named, with its price, where assistive technology reads it.
+    const drawn = AAPL_LEVELS.filter((level) => levelSide(level.price, shownBars("1y", year)) === null);
+    if (AT_DEFAULT_NOW) expect(drawn.length, "levels drawn within the 1Y prices").toBeGreaterThan(0);
+    for (const level of drawn) await expect(chart).toContainText(new RegExp(`${escapeRegExp(level.label)}\\D{0,20}${escapeRegExp(price(level.price))}`));
   });
 });
