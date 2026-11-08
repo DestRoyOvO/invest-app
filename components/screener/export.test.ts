@@ -6,6 +6,7 @@ import { DataTable } from "@/components/ui/DataTable";
 import { parseCsv } from "@/lib/csv";
 import { MESSAGES } from "@/lib/i18n/messages";
 import { appliesTo, COLUMN_SET_KEYS, columnsFor, METRIC_KEYS, sortScreenRows, toCsv, type ColumnSetKey, type SortState } from "@/lib/screens";
+import { getSector } from "@/lib/universe";
 import type { Lang, ScreenerUniverse } from "@/types/api";
 import type { ScreenRow } from "@/types/screener";
 
@@ -103,7 +104,7 @@ const ETFS: ScreenRow[] = [
 const ENTITIES: Record<string, string> = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#x27;": "'" };
 const unescape = (html: string) => html.replace(/&(?:amp|lt|gt|quot|#x27);/g, (entity) => ENTITIES[entity]);
 
-/** The symbols and names of the table's body rows, top to bottom, as rendered. */
+/** The symbols, names and sector labels of the table's body rows, top to bottom, as rendered. */
 function renderedTable(universe: ScreenerUniverse, set: ColumnSetKey, rows: ScreenRow[], sort: SortState | null, lang: Lang) {
   prefs.lang = lang;
   const t = MESSAGES[lang];
@@ -129,11 +130,12 @@ function renderedTable(universe: ScreenerUniverse, set: ColumnSetKey, rows: Scre
   return body
     .split("<tr")
     .slice(1)
-    .map((row) => ({
-      symbol: unescape(/<a [^>]*data-row-link[^>]*>([^<]*)<\/a>/.exec(row)?.[1] ?? ""),
-      // The name cell is the first text-fg-2 span with the English name as its title (the sector cell comes after it).
-      name: unescape(/<span class="text-fg-2" title="[^"]*">([^<]*)<\/span>/.exec(row)?.[1] ?? ""),
-    }));
+    .map((row) => {
+      // The name cell is the first text-fg-2 span with the English name as its title; the sector cell, where the set
+      // has one, is the second, titled with the sector's full label.
+      const labelled = [...row.matchAll(/<span class="text-fg-2" title="[^"]*">([^<]*)<\/span>/g)].map((match) => unescape(match[1]));
+      return { symbol: unescape(/<a [^>]*data-row-link[^>]*>([^<]*)<\/a>/.exec(row)?.[1] ?? ""), name: labelled[0] ?? "", sector: labelled[1] };
+    });
 }
 
 /** The symbols and names of the CSV's rows, top to bottom. */
@@ -159,7 +161,8 @@ describe("the screener CSV", () => {
           for (const sort of sorts) {
             const matches = sortScreenRows(rows, sort, lang);
             const context = `${set} ${sort ? `${sort.key}.${sort.direction}` : "unsorted"}`;
-            expect(exported(universe, matches, lang), context).toEqual(renderedTable(universe, set, matches, sort, lang));
+            const table = renderedTable(universe, set, matches, sort, lang).map(({ symbol, name }) => ({ symbol, name }));
+            expect(exported(universe, matches, lang), context).toEqual(table);
             compared++;
           }
         }
@@ -190,5 +193,28 @@ describe("the screener CSV", () => {
     const en = exported("stocks", sortScreenRows(STOCKS, { key: "name", direction: "asc" }, "en"), "en");
     // English collation puts the Latin names before the Han one.
     expect(en.map((row) => row.symbol)).toEqual(["ABBV", "AAPL", "BRK-B", "XOM", "IBM", "JPM", "KRMN", "META", "MSFT", "MS", "NVDA", "PLD", "TJX", "HANZ"]);
+  });
+
+  it("sorts the rows by the sector label the table shows in each language, and lists them in that order", () => {
+    // Five sectors whose short labels sort differently in each language and differently from their keys: Comm, Fin, RE,
+    // Staples, Tech in English; 必需消费, 地产, 金融, 科技, 通信 (bi, di, jin, ke, tong) in Chinese.
+    const rows = (["technology", "consumer-staples", "real-estate", "communication", "financials"] as const).map((sector, index) =>
+      stock(index, `S${index}`, `Sector ${index} Inc.`, { sector }),
+    );
+    const sort: SortState = { key: "sector", direction: "asc" };
+    const expected: Record<Lang, { labels: string[]; csv: string[] }> = {
+      en: { labels: ["Comm", "Fin", "RE", "Staples", "Tech"], csv: ["Communication Services", "Financials", "Real Estate", "Consumer Staples", "Information Technology"] },
+      zh: { labels: ["必需消费", "地产", "金融", "科技", "通信"], csv: ["Consumer Staples", "Real Estate", "Financials", "Information Technology", "Communication Services"] },
+    };
+    for (const lang of ["en", "zh"] as const) {
+      const matches = sortScreenRows(rows, sort, lang);
+      const table = renderedTable("stocks", "overview", matches, sort, lang);
+      expect(table.map((row) => row.sector), lang).toEqual(expected[lang].labels);
+      // The file names the sectors in English in both languages (as ScreenerTab passes them), in the table's order.
+      const [header, ...records] = parseCsv(toCsv(matches, "stocks", { lang, sectorLabel: (key) => getSector(key)?.label.en ?? key }), ",").rows;
+      const sector = header.indexOf("Sector");
+      expect(records.map((fields) => fields[0]), lang).toEqual(table.map((row) => row.symbol));
+      expect(records.map((fields) => fields[sector]), lang).toEqual(expected[lang].csv);
+    }
   });
 });

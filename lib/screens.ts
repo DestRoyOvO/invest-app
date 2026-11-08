@@ -16,7 +16,7 @@ import type { ScreenRow } from "@/types/screener";
 import { createLocalStore } from "./local-store";
 import { displayName } from "./names-zh";
 import { htmlLang } from "./prefs";
-import { BROAD_ETFS, SECTOR_KEYS, SECTORS, UNIVERSE_STOCKS } from "./universe";
+import { BROAD_ETFS, getSector, SECTOR_KEYS, SECTORS, UNIVERSE_STOCKS } from "./universe";
 
 export type { SortDirection, SortState } from "@/components/ui/table-sort";
 
@@ -450,18 +450,21 @@ export function sectorCounts(rows: readonly ScreenRow[]): Partial<Record<SectorK
 // ---------------------------------------------------------------------------
 
 /**
- * What a column sorts by, on screen and in the export: the name as the table shows it (the Chinese name in Chinese,
- * lib/names-zh.ts), every other column by its raw value.
+ * What a column sorts by, on screen and in the export: the name and the sector as the table shows them (the Chinese
+ * name, lib/names-zh.ts, and the sector's short Chinese label in Chinese; a sector the universe does not list shows a
+ * dash, so it sorts as missing), every other column by its raw value.
  */
 export function screenSortValue(key: MetricKey, row: ScreenRow, lang: Lang): number | string | null {
-  return key === "name" ? displayName(row.symbol, row.name, lang) : metricValue(key, row);
+  if (key === "name") return displayName(row.symbol, row.name, lang);
+  if (key === "sector") return row.sector ? (getSector(row.sector)?.short[lang] ?? null) : null;
+  return metricValue(key, row);
 }
 
 /**
  * Rows in the screen's order with DataTable's rules (components/ui/table-sort.ts): missing values last in both
- * directions, ties in snapshot order, text collated in the app language (pinyin order for Chinese names). The table
- * re-sorts by the same values (screenSortValue) in the same collation (DataTable passes htmlLang), so the rows on
- * screen and in the export come in one order.
+ * directions, ties in snapshot order, text collated in the app language (pinyin order for Chinese names and sector
+ * labels). The table re-sorts by the same values (screenSortValue) in the same collation (DataTable passes htmlLang),
+ * so the rows on screen and in the export come in one order.
  */
 export function sortScreenRows(rows: readonly ScreenRow[], sort: SortState | null, lang: Lang): ScreenRow[] {
   if (!sort || !isMetricKey(sort.key)) return [...rows];
