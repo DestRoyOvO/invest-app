@@ -43,6 +43,7 @@ async function colorScheme(page: Page): Promise<string> {
 
 test.describe("theme", () => {
   test("dark, light and system are rendered by the server and kept in the cookie; system follows the browser", async ({ page, app }) => {
+    test.skip(app.isPhone, "The menu, the cookie and the server's rendering are the same on phones.");
     const first = await app.goto("/watchlist");
     // A first visit follows the operating system.
     expect((await serverHtml(first))["data-theme"]).toBe("system");
