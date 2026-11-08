@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0 · Function codes, portfolio analytics and honest research (2026-11-07)
+## 0.3.0 · Function codes, portfolio analytics and honest research (2026-11)
 
 Every screen gets a function code, your positions move to the center (home page, calendar, alerts and the AI), and the quant layer now forecasts risk and publishes the tests its return signals failed. Built in three waves from an eight-lens audit ([roadmap](docs/roadmap-v0.3.md)).
 
@@ -21,17 +21,15 @@ Every screen gets a function code, your positions move to the center (home page,
 
 ### Changed
 - **The technical score is described, not sold.** It is shown in neutral ink as short-term relative strength, and its track record comes from a pinned, reproducible evaluation: a fixed 2016–2026 window, the all-dates rank IC with a Newey-West t, timing and selection split apart, block-bootstrap intervals, a 2014–2024 holdout and the hindsight gap. None of it shows a reliable edge, and the app says so.
-- **Model v4** takes the volatility regime out of the score (it measures risk, not direction) and rescales the other hand-set weights in proportion.
+- **Model v4** takes the volatility regime out of the score (it measures risk, not direction) and rescales the other hand-set weights in proportion. The change was made after seeing the 2014–2024 holdout, so for v4 that holdout is no longer an independent test.
 - **New design system.** Semantic tokens for dark, light and system themes, IBM Plex Sans tabular figures, red and green for prices and P&L only, column-flow layouts, shared primitives (DataTable, panel codes, whiskers, ticking numbers, toasts, drawers) and WCAG AA contrast checked in both themes and all three price conventions. A prompt-candle brand mark replaces the starter icons.
 - **Lighter requests.** A small board endpoint feeds the ticker strip and status bar, the watchlist and holdings share one batched quote request, the overview carries only the fields it shows, and the backup validator loads only when a file is checked.
 - **yahoo-finance2 4**, which needs Node.js 22.
 
 ### Fixed
-- **Honest data states.** Stale quotes always show as stale, with their age, on the overview, world markets, notes, alerts and the research tabs; Treasury's empty file early in a new year counts as no data yet, not as a failed download.
-- **Dates, times and currencies.** Exact report times only where Yahoo gives them, events grouped by New York day, EPS and revenue currencies named apart for ADRs, totals and dividend cash per currency, and charts that stay correct across daylight-saving changes and Yahoo's trailing intraday rows.
+- **Honest data states.** Stale quotes show as stale, with their age, instead of passing for live prices.
 - **Layout and touch.** Tables fit their panels from 375 to 1440 px in both languages without sideways scrolling, and controls are at least 40 px tall on phones.
-- **Keyboard and screen readers.** Focus stays in place in the command bar, the compare bar, the screener and dialogs; scrollable regions are focusable; accessible names start with the visible text.
-- **Alerts.** Missed levels are replayed after a later gap, a level touched in a new session before the first check counts, logged triggers carry their dates, and no system notification appears while another InvestSeek tab is in front.
+- **Keyboard and screen readers.** Focus stays in place in the command bar and dialogs; scrollable regions are focusable; accessible names start with the visible text.
 - **AI.** Missing data is no longer turned into claims, and a key DeepSeek rejects is told apart from AI being switched off.
 
 ### Security
