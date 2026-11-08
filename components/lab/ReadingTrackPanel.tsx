@@ -94,8 +94,10 @@ export function ReadingTrackPanel() {
       render: (row) => {
         const tone = selectionTone(row, totalDates);
         const interval = row.ci.selection;
-        // A concentrated row is grey throughout: its value inherits the row's --fg-3 like every other cell.
-        const ink = tone === "up" ? "text-up" : tone === "down" ? "text-down" : isConcentrated(row, totalDates) ? undefined : "text-fg";
+        const concentrated = isConcentrated(row, totalDates);
+        // A concentrated row is grey throughout: its value inherits the row's --fg-3 like every other cell, and its
+        // whisker is grey too (no accent dot even when the interval excludes zero).
+        const ink = tone === "up" ? "text-up" : tone === "down" ? "text-down" : concentrated ? undefined : "text-fg";
         return (
           <div className="py-1">
             <div className="flex items-center justify-end gap-2">
@@ -107,6 +109,7 @@ export function ReadingTrackPanel() {
                 base={0}
                 min={domain[0]}
                 max={domain[1]}
+                neutral={concentrated}
                 label={tpl(t.signal.track.whisker, {
                   reading: t.signal.codes[row.code],
                   value: pct(row.selection, 2, true),
