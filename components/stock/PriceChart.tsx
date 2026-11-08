@@ -34,6 +34,7 @@ import { isIntradayRange, useChartSeries } from "@/hooks/useQuoteApi";
 import { cn } from "@/lib/cn";
 import { formatCompact, formatDate, formatPrice, formatShortDate, formatTime, tpl } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/messages";
+import { formatQuotePrice, priceDigits } from "@/lib/quote-figures";
 import { wilderRsiSeries } from "@/lib/signal";
 import type { Bar, ChartRange, Lang, Quote } from "@/types/api";
 
@@ -59,7 +60,6 @@ import {
 } from "./chart-utils";
 import { RangePicker, StudiesMenu } from "./ChartToolbar";
 import { CompareBar, SeriesKey } from "./CompareBar";
-import { formatQuotePrice, priceDigits } from "./quote-utils";
 import { useGSequenceGuard } from "./use-g-guard";
 
 type Lwc = typeof import("lightweight-charts");

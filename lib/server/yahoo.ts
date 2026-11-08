@@ -28,6 +28,7 @@ import {
   type RawChart,
 } from "@/lib/bars";
 import { hasCjk } from "@/lib/names-zh";
+import { reportedPrice, reportedVolume } from "@/lib/quote-figures";
 
 import { cached, HOUR, isFresh, MINUTE, peek } from "./cache";
 import { log } from "./log";
@@ -243,8 +244,14 @@ export function displayName(shortName: unknown, longName: unknown): string | nul
   return short;
 }
 
+/**
+ * A Yahoo quote in the app's units. Figures Yahoo fills with a placeholder 0 become null (lib/quote-figures.ts): the
+ * open, day range, 52-week range and previous close of yields such as ^TNX, and the volume of indices, currencies and
+ * other types without exchange volume (a stock's or an ETF's 0 volume is real and stays).
+ */
 export function mapQuote(q: RawQuote): Quote {
   const symbol = String(q.symbol);
+  const quoteType = str(q.quoteType);
   const state = marketState(q.marketState);
   const regularTime = toIso(q.regularMarketTime);
 
@@ -280,22 +287,22 @@ export function mapQuote(q: RawQuote): Quote {
   return {
     symbol,
     name: displayName(q.shortName, q.longName) ?? str(q.displayName) ?? symbol,
-    quoteType: str(q.quoteType),
+    quoteType,
     currency: str(q.currency),
     exchange: str(q.fullExchangeName) ?? str(q.exchange),
     marketState: state,
     price: num(q.regularMarketPrice),
     change: num(q.regularMarketChange),
     changePercent: num(q.regularMarketChangePercent),
-    previousClose: num(q.regularMarketPreviousClose),
-    open: num(q.regularMarketOpen),
-    dayHigh: num(q.regularMarketDayHigh),
-    dayLow: num(q.regularMarketDayLow),
-    volume: num(q.regularMarketVolume),
-    avgVolume: num(q.averageDailyVolume3Month),
+    previousClose: reportedPrice(num(q.regularMarketPreviousClose)),
+    open: reportedPrice(num(q.regularMarketOpen)),
+    dayHigh: reportedPrice(num(q.regularMarketDayHigh)),
+    dayLow: reportedPrice(num(q.regularMarketDayLow)),
+    volume: reportedVolume(num(q.regularMarketVolume), quoteType),
+    avgVolume: reportedVolume(num(q.averageDailyVolume3Month), quoteType),
     marketCap: num(q.marketCap),
-    fiftyTwoWeekHigh: num(q.fiftyTwoWeekHigh),
-    fiftyTwoWeekLow: num(q.fiftyTwoWeekLow),
+    fiftyTwoWeekHigh: reportedPrice(num(q.fiftyTwoWeekHigh)),
+    fiftyTwoWeekLow: reportedPrice(num(q.fiftyTwoWeekLow)),
     trailingPE: num(q.trailingPE),
     forwardPE: num(q.forwardPE),
     epsTrailingTwelveMonths: num(q.epsTrailingTwelveMonths),
@@ -500,11 +507,23 @@ export function peekQuote(symbol: string): Quote | null | undefined {
 
 export type { DailyBar } from "@/lib/bars";
 
+/**
+ * A bar without Yahoo's placeholder zeros. Weekly and monthly charts end with a row for the latest session that copies
+ * the quote, zeros included (^TNX has no open or day range): an open, high or low of 0 is unknown there, so the row
+ * falls back to its close, and the period it is folded into keeps its own range instead of a wick down to zero.
+ */
+export function withoutPlaceholderPrices<T extends { o: number; h: number; l: number; c: number }>(bar: T): T {
+  const o = reportedPrice(bar.o) ?? bar.c;
+  const h = reportedPrice(bar.h) ?? Math.max(o, bar.c);
+  const l = reportedPrice(bar.l) ?? Math.min(o, bar.c);
+  return o === bar.o && h === bar.h && l === bar.l ? bar : { ...bar, o, h, l };
+}
+
 async function fetchChart(symbol: string, days: number, interval: "1d" | "1wk"): Promise<DailyBar[]> {
   const period1 = new Date(Date.now() - days * 24 * HOUR);
   try {
     const chart = (await upstream(() => yf.chart(symbol, { period1, interval }, callOptions()))) as unknown as RawChart;
-    return normalizeBars(chart);
+    return normalizeBars(chart).map(withoutPlaceholderPrices);
   } catch (error) {
     // Unknown or delisted symbols: an empty (cacheable) result instead of an error, so repeated requests for
     // them do not keep hitting Yahoo. Network and server errors still throw.
@@ -615,7 +634,7 @@ async function fetchChartData(symbol: string, range: ChartRange, now = Date.now(
     bars = latest.bars;
     previousClose = latest.previousClose ?? num(meta?.previousClose);
   } else {
-    let daily = normalizeBars(raw);
+    let daily = normalizeBars(raw).map(withoutPlaceholderPrices);
     if (spec.interval === "1wk" || spec.interval === "1mo") daily = foldTrailingSession(daily, spec.interval);
     if (spec.from === "ytd") {
       const yearStart = Date.UTC(new Date(now).getUTCFullYear(), 0, 1);
@@ -683,6 +702,8 @@ export function mapSummary(symbol: string, s: RawSummary): { profile: StockProfi
   const fin = s.financialData ?? {};
   const asset = s.assetProfile ?? {};
   const debtToEquityPercent = num(fin.debtToEquity);
+  // The summary repeats the quote's placeholder zeros (^TNX's 52-week low, an index's average volume): null, as there.
+  const quoteType = str(price.quoteType);
 
   const profile: StockProfile = {
     symbol,
@@ -708,9 +729,9 @@ export function mapSummary(symbol: string, s: RawSummary): { profile: StockProfi
     forwardEps: num(keyStats.forwardEps),
     dividendYield: num(detail.dividendYield) ?? num(detail.trailingAnnualDividendYield),
     beta: num(detail.beta) ?? num(keyStats.beta),
-    fiftyTwoWeekHigh: num(detail.fiftyTwoWeekHigh),
-    fiftyTwoWeekLow: num(detail.fiftyTwoWeekLow),
-    avgVolume: num(detail.averageVolume),
+    fiftyTwoWeekHigh: reportedPrice(num(detail.fiftyTwoWeekHigh)),
+    fiftyTwoWeekLow: reportedPrice(num(detail.fiftyTwoWeekLow)),
+    avgVolume: reportedVolume(num(detail.averageVolume), quoteType),
     sharesOutstanding: num(keyStats.sharesOutstanding),
     roe: num(fin.returnOnEquity),
     profitMargin: num(fin.profitMargins),

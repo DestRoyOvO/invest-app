@@ -7,9 +7,10 @@ import { Badge } from "@/components/ui/Badge";
 import { Delta } from "@/components/ui/Delta";
 import { Panel } from "@/components/ui/Panel";
 import { formatCompact, formatDate, formatMultiple, formatNumber, formatPercent, formatPrice, formatRatio, tpl } from "@/lib/format";
+import { formatQuotePrice, priceDigits } from "@/lib/quote-figures";
 import type { KeyStats as KeyStatsData, Quote } from "@/types/api";
 
-import { formatQuotePrice, instrumentKind, priceDigits } from "./quote-utils";
+import { instrumentKind } from "./quote-utils";
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (

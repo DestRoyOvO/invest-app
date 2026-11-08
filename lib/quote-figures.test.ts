@@ -1,0 +1,62 @@
+import { describe, expect, it } from "vitest";
+
+import { formatQuotePrice, priceDigits, reportedPrice, reportedVolume } from "./quote-figures";
+
+describe("Yahoo placeholder prices", () => {
+  it("reads a zero open, day range, 52-week end, previous close, bid or ask as not reported", () => {
+    expect(reportedPrice(0)).toBeNull();
+    expect(reportedPrice(null)).toBeNull();
+    expect(reportedPrice(4.859)).toBe(4.859);
+    // A negative futures price is a price (WTI, April 2020).
+    expect(reportedPrice(-37.63)).toBe(-37.63);
+  });
+});
+
+describe("Yahoo placeholder volumes", () => {
+  it("keeps a zero volume for stocks and ETFs, where it can be real", () => {
+    // A stock before its first trade of the day, or a halted one, has traded nothing.
+    expect(reportedVolume(0, "EQUITY")).toBe(0);
+    expect(reportedVolume(0, "ETF")).toBe(0);
+    expect(reportedVolume(43_750_861, "EQUITY")).toBe(43_750_861);
+  });
+
+  it("drops a zero volume for the quote types that report none (2026-11-07 quotes)", () => {
+    expect(reportedVolume(0, "INDEX")).toBeNull(); // ^TNX, ^VIX, ^N225
+    expect(reportedVolume(0, "CURRENCY")).toBeNull(); // EURUSD=X
+    expect(reportedVolume(0, "MUTUALFUND")).toBeNull(); // VFIAX's average volume
+    expect(reportedVolume(0, "FUTURE")).toBeNull();
+    expect(reportedVolume(0, "CRYPTOCURRENCY")).toBeNull();
+  });
+
+  it("keeps real volumes of every type, missing ones and zeros of an unknown type", () => {
+    expect(reportedVolume(3_410_452_000, "INDEX")).toBe(3_410_452_000); // ^GSPC
+    expect(reportedVolume(166_431, "FUTURE")).toBe(166_431); // GC=F
+    expect(reportedVolume(null, "ETF")).toBeNull();
+    expect(reportedVolume(0, null)).toBe(0);
+  });
+});
+
+describe("price decimals", () => {
+  it("gives the world board's instruments its digits, the board's yields three, other pairs four and the rest none", () => {
+    expect(priceDigits("EURUSD=X", "CURRENCY")).toBe(4);
+    expect(priceDigits("USDJPY=X", "CURRENCY")).toBe(3);
+    expect(priceDigits("HG=F", "FUTURE")).toBe(4);
+    expect(priceDigits("^GSPC", "INDEX")).toBe(2);
+    expect(priceDigits("^TNX", "INDEX")).toBe(3);
+    // A pair the world board does not list, by quote type or by Yahoo's "=X" before the quote arrives.
+    expect(priceDigits("AUDUSD=X", "CURRENCY")).toBe(4);
+    expect(priceDigits("AUDUSD=X", null)).toBe(4);
+    expect(priceDigits("AAPL", "EQUITY")).toBeNull();
+    expect(priceDigits("ES=F", "FUTURE")).toBeNull();
+    expect(priceDigits("^VIX", "INDEX")).toBeNull();
+  });
+
+  it("formats with those decimals, or with formatPrice's rule", () => {
+    expect(formatQuotePrice(1.1143303, 4, "en")).toBe("1.1143");
+    expect(formatQuotePrice(158.425, 3, "en")).toBe("158.425");
+    expect(formatQuotePrice(4.859, 3, "zh")).toBe("4.859");
+    expect(formatQuotePrice(1.1143303, null, "en")).toBe("1.11");
+    expect(formatQuotePrice(0.12345, null, "en")).toBe("0.1235");
+    expect(formatQuotePrice(null, 4, "en")).toBe("—");
+  });
+});

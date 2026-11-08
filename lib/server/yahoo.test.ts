@@ -25,6 +25,7 @@ import {
   searchSymbols,
   upstream,
   UpstreamBusyError,
+  withoutPlaceholderPrices,
   yf,
 } from "./yahoo";
 
@@ -176,6 +177,33 @@ describe("mapQuote", () => {
     expect(quote.expenseRatio).toBeCloseTo(0.000945);
   });
 
+  it("maps Yahoo's placeholder zeros to null: a yield's open, day range and 52-week low, volume where none is reported", () => {
+    // ^TNX, ^VIX, EURUSD=X, GC=F, AAPL and SPY as Yahoo quoted them on 2026-11-07.
+    const tnx = mapQuote({
+      symbol: "^TNX",
+      quoteType: "INDEX",
+      regularMarketPrice: 4.859,
+      regularMarketPreviousClose: 4.837,
+      regularMarketOpen: 0,
+      regularMarketDayLow: 0,
+      regularMarketDayHigh: 0,
+      fiftyTwoWeekLow: 0,
+      fiftyTwoWeekHigh: 5.364,
+      regularMarketVolume: 0,
+      averageDailyVolume3Month: 0,
+    });
+    expect(tnx).toMatchObject({ price: 4.859, previousClose: 4.837, open: null, dayLow: null, dayHigh: null, fiftyTwoWeekLow: null, fiftyTwoWeekHigh: 5.364, volume: null, avgVolume: null });
+    expect(mapQuote({ symbol: "^VIX", quoteType: "INDEX", regularMarketOpen: 27.68, regularMarketVolume: 0, averageDailyVolume3Month: 0 })).toMatchObject({ open: 27.68, volume: null, avgVolume: null });
+    expect(mapQuote({ symbol: "^GSPC", quoteType: "INDEX", regularMarketVolume: 3_410_452_000 }).volume).toBe(3_410_452_000);
+    expect(mapQuote({ symbol: "EURUSD=X", quoteType: "CURRENCY", regularMarketVolume: 0, averageDailyVolume3Month: 0 })).toMatchObject({ volume: null, avgVolume: null });
+    expect(mapQuote({ symbol: "GC=F", quoteType: "FUTURE", regularMarketVolume: 166_431 }).volume).toBe(166_431);
+    // A stock or an ETF can trade nothing (before the open, halted): its zero is a volume.
+    expect(mapQuote({ symbol: "AAPL", quoteType: "EQUITY", regularMarketVolume: 0, regularMarketOpen: 338.73 })).toMatchObject({ volume: 0, open: 338.73 });
+    expect(mapQuote({ symbol: "SPY", quoteType: "ETF", regularMarketVolume: 0 }).volume).toBe(0);
+    // Negative prices are real (WTI, April 2020).
+    expect(mapQuote({ symbol: "CL=F", quoteType: "FUTURE", regularMarketDayLow: -40.32, regularMarketPreviousClose: 18.27 })).toMatchObject({ dayLow: -40.32, previousClose: 18.27 });
+  });
+
   it("leaves the new fields null when Yahoo omits them", () => {
     const quote = mapQuote({ symbol: "^GSPC", regularMarketPrice: 7000 });
     expect(quote).toMatchObject({
@@ -199,6 +227,22 @@ describe("mapSummary", () => {
       "State Street SPDR S&P 500 ETF Trust",
     );
     expect(mapSummary("ZZZ", {}).profile.name).toBe("ZZZ");
+  });
+
+  it("drops the placeholder zeros the summary repeats from the quote", () => {
+    const tnx = mapSummary("^TNX", { price: { quoteType: "INDEX" }, summaryDetail: { fiftyTwoWeekLow: 0, fiftyTwoWeekHigh: 5.364, averageVolume: 0 } });
+    expect(tnx.stats).toMatchObject({ fiftyTwoWeekLow: null, fiftyTwoWeekHigh: 5.364, avgVolume: null });
+    const aapl = mapSummary("AAPL", { price: { quoteType: "EQUITY" }, summaryDetail: { fiftyTwoWeekLow: 243.42, averageVolume: 42_880_493 } });
+    expect(aapl.stats).toMatchObject({ fiftyTwoWeekLow: 243.42, avgVolume: 42_880_493 });
+  });
+});
+
+describe("withoutPlaceholderPrices", () => {
+  it("falls back to the close for an open, high or low of 0 and leaves real bars alone", () => {
+    const real = { t: 1, o: 4.874, h: 4.903, l: 4.814, c: 4.859, v: 0 };
+    expect(withoutPlaceholderPrices(real)).toBe(real);
+    expect(withoutPlaceholderPrices({ t: 2, o: 0, h: 0, l: 0, c: 4.859, v: 0 })).toEqual({ t: 2, o: 4.859, h: 4.859, l: 4.859, c: 4.859, v: 0 });
+    expect(withoutPlaceholderPrices({ t: 3, o: 4.9, h: 0, l: 0, c: 4.859, v: null })).toEqual({ t: 3, o: 4.9, h: 4.9, l: 4.859, c: 4.859, v: null });
   });
 });
 

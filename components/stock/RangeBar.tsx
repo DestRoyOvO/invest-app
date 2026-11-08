@@ -1,6 +1,5 @@
+import { formatQuotePrice } from "@/lib/quote-figures";
 import type { Lang } from "@/types/api";
-
-import { formatQuotePrice } from "./quote-utils";
 
 /**
  * Low–high range with a marker at the current value (e.g. day range, 52-week range), its ends with the instrument's
