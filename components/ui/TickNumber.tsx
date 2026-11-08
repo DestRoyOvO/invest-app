@@ -4,11 +4,12 @@ import type { ReactNode } from "react";
 
 import { useTickFlash } from "@/hooks/useTickFlash";
 import { cn } from "@/lib/cn";
+import { DASH } from "@/lib/format";
 
 interface TickNumberProps {
   /** The raw value: a change between refreshes flashes this element only. */
   value: number | null | undefined;
-  /** The formatted text; defaults to the raw value. */
+  /** The formatted text; defaults to the raw value, or DASH when it is missing. */
   children?: ReactNode;
   className?: string;
 }
@@ -21,7 +22,7 @@ export function TickNumber({ value, children, className }: TickNumberProps) {
   const ref = useTickFlash<HTMLSpanElement>(value);
   return (
     <span ref={ref} className={cn("num -mx-0.5 rounded-xs px-0.5", className)}>
-      {children ?? value ?? "—"}
+      {children ?? (typeof value === "number" && Number.isFinite(value) ? value : DASH)}
     </span>
   );
 }
