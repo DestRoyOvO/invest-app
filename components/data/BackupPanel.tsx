@@ -15,6 +15,7 @@ import {
   applyBackup,
   backupAgeDays,
   backupMetaStore,
+  backupReminder,
   defaultRestoreMode,
   diffRestore,
   formatBytes,
@@ -64,6 +65,8 @@ export function BackupPanel() {
   // Reading and checking a file is asynchronous; only the latest pick may update the panel.
   const pickCount = useRef(0);
   const lastBackup = lastBackupLabel(t, backupAgeDays(meta.lastBackupAt));
+  // In the caveat color while a backup is due, as the status bar and the menus show it.
+  const due = snapshot !== null && backupReminder(snapshot, meta.lastBackupAt) !== null;
 
   const onExport = () => {
     const file = exportBackupNow();
@@ -186,7 +189,7 @@ export function BackupPanel() {
       : [];
 
   return (
-    <Panel id="restore" code="DATA" title={t.data.backup.title} className="scroll-mt-2" actions={<PanelMeta>{lastBackup}</PanelMeta>}>
+    <Panel id="restore" code="DATA" title={t.data.backup.title} className="scroll-mt-2" actions={<PanelMeta>{due ? <span className="text-warn">{lastBackup}</span> : lastBackup}</PanelMeta>}>
       <div className="space-y-3 px-3 py-3">
         <p className="text-sm text-fg-2">{t.data.privacy}</p>
         <div className="flex flex-wrap items-center gap-2">
