@@ -71,15 +71,17 @@ export function hasMalformedEscape(pathname: string): boolean {
 }
 
 /**
- * The same characters as a well-formed path: each segment with a malformed escape gets its "%" escaped as "%25", so
- * "/stock/%E0%A4%A" becomes "/stock/%25E0%25A4%25A", a symbol that cannot exist, which the quote page answers with the
- * not-found page and 404. Well-formed segments stay as they are.
+ * The same characters as a well-formed path on this site: each segment with a malformed escape gets its "%" escaped as
+ * "%25", so "/stock/%E0%A4%A" becomes "/stock/%25E0%25A4%25A", a symbol that cannot exist, which the quote page answers
+ * with the not-found page and 404. Well-formed segments stay as they are. Leading slashes collapse into one, so the
+ * result never reads as a protocol-relative URL ("//evil.example/%ZZ" stays on this site as "/evil.example/%25ZZ").
  */
 export function escapeMalformedSegments(pathname: string): string {
-  return pathname
+  const escaped = pathname
     .split("/")
     .map((segment) => (hasMalformedEscape(segment) ? segment.replaceAll("%", "%25") : segment))
     .join("/");
+  return `/${escaped.replace(/^[/\\]+/, "")}`;
 }
 
 /**

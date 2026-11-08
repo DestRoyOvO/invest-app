@@ -174,6 +174,13 @@ describe("proxy on a path with a malformed percent-escape", () => {
     expect(call("/stock/%24%24%24").headers.get("x-middleware-next")).toBe("1");
   });
 
+  it("keeps the redirect on this site when the path starts with two slashes", () => {
+    // As a Location, "//evil.example/%25ZZ" would send the browser to evil.example.
+    const response = proxy(new NextRequest(new URL("http://localhost:3000//evil.example/%ZZ")));
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe("http://localhost:3000/evil.example/%25ZZ");
+  });
+
   it("gives the page it sends the visitor to its own nonce CSP in production", () => {
     vi.stubEnv("NODE_ENV", "production");
     expect(call("/stock/%E0%A4%A").status).toBe(307);

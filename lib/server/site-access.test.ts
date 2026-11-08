@@ -135,6 +135,14 @@ describe("paths with a malformed percent-escape", () => {
     }
   });
 
+  it("are never sent to another site: leading slashes collapse into one", () => {
+    // "//evil.example/..." as a redirect target would be a protocol-relative URL, an open redirect.
+    expect(escapeMalformedSegments("//evil.example/%ZZ")).toBe("/evil.example/%25ZZ");
+    expect(escapeMalformedSegments("/\\evil.example/%ZZ")).toBe("/evil.example/%25ZZ");
+    expect(escapeMalformedSegments("///%ZZ")).toBe("/%25ZZ");
+    expect(decideSiteAccess(request({ isPrivate: false, pathname: "//evil.example/%ZZ" }))).toEqual({ action: "redirect", location: "/evil.example/%25ZZ" });
+  });
+
   it("answer 400 on API paths and send pages to the escaped path, which answers with the not-found page", () => {
     for (const isPrivate of [false, true]) {
       const authenticated = isPrivate;
