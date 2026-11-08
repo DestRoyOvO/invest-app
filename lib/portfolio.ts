@@ -114,3 +114,166 @@ export function valuePortfolio(positions: readonly PositionLike[], quoteOf: (sym
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// Day summary: the figures the watchlist summary, My day and the portfolio page share
+// ---------------------------------------------------------------------------
+
+/**
+ * Today's change of the base-currency positions as a decimal of their value at the previous close:
+ * dayPnl / (value - dayPnl), over the positions whose change is known. Value-weighted, unlike an average of changes.
+ */
+export function dayChangeRatio(rows: readonly ValuedPosition[]): number | null {
+  let pnl = 0;
+  let previous = 0;
+  for (const row of rows) {
+    if (row.dayPnl === null) continue;
+    pnl += row.dayPnl;
+    previous += row.value - row.dayPnl;
+  }
+  return previous > 0 ? pnl / previous : null;
+}
+
+export interface ExtendedQuoteLike {
+  extendedSession: "PRE" | "POST" | null;
+  /** Change of the extended-hours price from the regular close it follows. */
+  extendedChange: number | null;
+}
+
+export interface ExtendedHoursPnl {
+  /** PRE or POST when every quoted position is in the same session; MIXED otherwise. */
+  session: "PRE" | "POST" | "MIXED";
+  /** Sum of shares x extended change. Never part of the day P&L. */
+  pnl: number;
+  /** pnl over the value of the positions it covers, at the regular price. */
+  ratio: number | null;
+  /** Positions with an extended-hours quote. */
+  positions: number;
+}
+
+/**
+ * Pre-market or after-hours P&L of the base-currency positions: shares x the change since the regular close, for the
+ * positions that have an extended-hours quote. Null when none has one. Kept apart from the day P&L on purpose.
+ */
+export function extendedHoursPnl(rows: readonly ValuedPosition[], quoteOf: (symbol: string) => ExtendedQuoteLike | undefined): ExtendedHoursPnl | null {
+  let pnl = 0;
+  let value = 0;
+  let positions = 0;
+  const sessions = new Set<"PRE" | "POST">();
+  for (const row of rows) {
+    const quote = quoteOf(row.symbol);
+    if (!quote?.extendedSession || !isFiniteNumber(quote.extendedChange)) continue;
+    sessions.add(quote.extendedSession);
+    pnl += row.shares * quote.extendedChange;
+    value += row.value;
+    positions++;
+  }
+  if (positions === 0) return null;
+  const session = sessions.size === 1 ? [...sessions][0] : "MIXED";
+  return { session, pnl, ratio: value > 0 ? pnl / value : null, positions };
+}
+
+/** The largest gains and losses of the day in money: contributors (largest gain first) and detractors (largest loss first). */
+export function dayMovers(rows: readonly ValuedPosition[], count = 3): { contributors: ValuedPosition[]; detractors: ValuedPosition[] } {
+  const known = rows.filter((row) => row.dayPnl !== null && row.dayPnl !== 0);
+  return {
+    contributors: known
+      .filter((row) => (row.dayPnl as number) > 0)
+      .sort((a, b) => (b.dayPnl as number) - (a.dayPnl as number))
+      .slice(0, count),
+    detractors: known
+      .filter((row) => (row.dayPnl as number) < 0)
+      .sort((a, b) => (a.dayPnl as number) - (b.dayPnl as number))
+      .slice(0, count),
+  };
+}
+
+/** Share of the base-currency value held in the `count` largest positions; null without priced positions. */
+export function topWeight(rows: readonly ValuedPosition[], count = 3): number | null {
+  const total = rows.reduce((sum, row) => sum + row.value, 0);
+  if (!(total > 0)) return null;
+  const top = [...rows].sort((a, b) => b.value - a.value).slice(0, count);
+  return top.reduce((sum, row) => sum + row.value, 0) / total;
+}
+
+// ---------------------------------------------------------------------------
+// Scheduled events
+// ---------------------------------------------------------------------------
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const dateKeyFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/** UTC-midnight timestamp of the calendar date of `ms` in a time zone (New York by default). */
+export function calendarDate(ms: number, timeZone = "America/New_York"): number {
+  let formatter = dateKeyFormatters.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" });
+    dateKeyFormatters.set(timeZone, formatter);
+  }
+  const [y, m, d] = formatter.format(new Date(ms)).split("-").map(Number);
+  return Date.UTC(y, m - 1, d);
+}
+
+/**
+ * Calendar days from `now` until the ISO time, counted on New York dates (0 = today, 1 = tomorrow, negative = past).
+ * Null for a missing or unparseable date.
+ */
+export function calendarDaysUntil(iso: string | null | undefined, now: number, timeZone = "America/New_York"): number | null {
+  if (!iso) return null;
+  const at = Date.parse(iso);
+  if (Number.isNaN(at)) return null;
+  return Math.round((calendarDate(at, timeZone) - calendarDate(now, timeZone)) / DAY_MS);
+}
+
+export interface SessionQuoteLike {
+  /** Time of the last regular-session trade (ISO). */
+  regularMarketTime: string | null;
+}
+
+/**
+ * The New York date (UTC midnight) of the latest regular session among the positions' quotes when that session was
+ * before today, so a day figure shown while the market is closed (a weekend, or before the open) can say it covers the
+ * last session rather than today. Null when a quote traded today, when no time is known, or without a clock (now <= 0).
+ */
+export function lastSessionDate(rows: ReadonlyArray<{ symbol: string }>, quoteOf: (symbol: string) => SessionQuoteLike | undefined, now: number): number | null {
+  if (now <= 0) return null;
+  let latest: number | null = null;
+  for (const row of rows) {
+    const at = Date.parse(quoteOf(row.symbol)?.regularMarketTime ?? "");
+    if (!Number.isNaN(at) && (latest === null || at > latest)) latest = at;
+  }
+  if (latest === null) return null;
+  const session = calendarDate(latest);
+  return session < calendarDate(now) ? session : null;
+}
+
+export interface EarningsQuoteLike {
+  nextEarningsDate: string | null;
+  earningsDateEstimated: boolean | null;
+}
+
+export interface UpcomingEarnings {
+  symbol: string;
+  date: string;
+  estimated: boolean;
+  days: number;
+}
+
+/** The earliest report from today on among the symbols, within `maxDays` (default: any); ties keep input order. */
+export function nextEarnings(
+  symbols: readonly string[],
+  quoteOf: (symbol: string) => EarningsQuoteLike | undefined,
+  now: number,
+  maxDays = Number.POSITIVE_INFINITY,
+): UpcomingEarnings | null {
+  let best: UpcomingEarnings | null = null;
+  for (const symbol of symbols) {
+    const quote = quoteOf(symbol);
+    const days = calendarDaysUntil(quote?.nextEarningsDate, now);
+    if (!quote?.nextEarningsDate || days === null || days < 0 || days > maxDays) continue;
+    if (!best || Date.parse(quote.nextEarningsDate) < Date.parse(best.date)) {
+      best = { symbol, date: quote.nextEarningsDate, estimated: quote.earningsDateEstimated === true, days };
+    }
+  }
+  return best;
+}

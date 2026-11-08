@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useSyncExternalStore } from "react";
-
+import { createLocalStore } from "@/lib/local-store";
 import { valuePortfolio, type Portfolio, type QuoteLike } from "@/lib/portfolio";
 import { normalizeSymbol } from "@/lib/symbols";
 
-// Positions (shares and average cost per symbol), stored only in this browser.
+import { useLocalStore } from "./useLocalStore";
+
+// Positions (shares and average cost per symbol), stored only in this browser through a local store
+// (lib/local-store.ts), so every component and every open tab stays in sync.
 
 export interface Position {
   shares: number;
@@ -16,10 +18,7 @@ export interface Position {
 export type Holdings = Record<string, Position>;
 
 export const HOLDINGS_STORAGE_KEY = "investseek:holdings:v1";
-const STORAGE_KEY = HOLDINGS_STORAGE_KEY;
 const EMPTY: Holdings = {};
-const listeners = new Set<() => void>();
-let snapshot: Holdings | null = null;
 
 function isPositive(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
@@ -37,72 +36,29 @@ export function sanitizeHoldings(value: unknown): Holdings {
   return out;
 }
 
-function read(): Holdings {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? sanitizeHoldings(JSON.parse(raw)) : {};
-  } catch {
-    return {};
-  }
+/** The store behind useHoldings; registered for backup and restore. */
+export const holdingsStore = createLocalStore<Holdings>({ key: HOLDINGS_STORAGE_KEY, sanitize: sanitizeHoldings, empty: EMPTY });
+
+/** Saves a position; false (and nothing saved) for an invalid symbol or a non-positive share count or cost. */
+export function setPosition(symbol: string, position: Position): boolean {
+  const key = normalizeSymbol(symbol);
+  if (!key || !isPositive(position.shares) || !isPositive(position.cost)) return false;
+  holdingsStore.update((current) => ({ ...current, [key]: { shares: position.shares, cost: position.cost } }));
+  return true;
 }
 
-function emit() {
-  for (const listener of listeners) listener();
-}
-
-function subscribe(listener: () => void) {
-  // While nothing was subscribed, another tab may have changed storage without this tab hearing the event.
-  if (listeners.size === 0) snapshot = null;
-  listeners.add(listener);
-  const onStorage = (event: StorageEvent) => {
-    if (event.key === STORAGE_KEY) {
-      snapshot = null;
-      emit();
-    }
-  };
-  window.addEventListener("storage", onStorage);
-  return () => {
-    listeners.delete(listener);
-    window.removeEventListener("storage", onStorage);
-  };
-}
-
-function getSnapshot(): Holdings {
-  if (snapshot === null) snapshot = read();
-  return snapshot;
-}
-
-/** Re-reads storage before a change, so an edit never overwrites positions saved in another tab. */
-function latest(): Holdings {
-  snapshot = read();
-  return snapshot;
-}
-
-function write(next: Holdings) {
-  snapshot = next;
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  } catch {
-    // ignore storage errors
-  }
-  emit();
+/** Removes the position for the symbol, if any. */
+export function clearPosition(symbol: string) {
+  holdingsStore.update((current) => {
+    if (!(symbol in current)) return current;
+    const next = { ...current };
+    delete next[symbol];
+    return next;
+  });
 }
 
 export function useHoldings() {
-  const holdings = useSyncExternalStore(subscribe, getSnapshot, () => EMPTY);
-
-  const setPosition = useCallback((symbol: string, position: Position): boolean => {
-    if (!isPositive(position.shares) || !isPositive(position.cost)) return false;
-    write({ ...latest(), [symbol]: position });
-    return true;
-  }, []);
-
-  const clearPosition = useCallback((symbol: string) => {
-    const next = { ...latest() };
-    delete next[symbol];
-    write(next);
-  }, []);
-
+  const holdings = useLocalStore(holdingsStore);
   return { holdings, setPosition, clearPosition };
 }
 

@@ -229,7 +229,7 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   text("info", "panel", "Links, info badges"),
   text("warn", "panel", "Warnings"),
   text("warn", "panel-2", "Stale data banner"),
-  text("warn", "hover", "Caveats on a hovered row: overdue reviews, alerts that cannot be checked"),
+  text("warn", "hover", "Caveats and near dates on a hovered row: overdue reviews, alerts that cannot be checked, earnings within 7 days"),
   text("danger", "panel", "Errors"),
   text("heat-fg", "heat-flat", "Heatmap tile, flat"),
   ...[1, 2, 3].flatMap((step) => [text("heat-fg", `heat-up-${step}`, `Heatmap tile, up step ${step}`), text("heat-fg", `heat-down-${step}`, `Heatmap tile, down step ${step}`)]),
@@ -240,6 +240,7 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   mark("accent", "canvas", "Focus ring on the canvas"),
   mark("spark", "panel", "Sparkline stroke"),
   mark("fg-3", "line-2", "Meter fill on its track"),
+  mark("info", "line-2", "Share-of-risk bar on its track"),
   ...[1, 2, 3, 4, 5, 6].map((n) => mark(`series-${n}`, "panel", `Chart series ${n}`)),
 ];
 
