@@ -3,7 +3,7 @@ import "server-only";
 import type { SectorKey } from "@/types/api";
 
 import { between, pick } from "./random";
-import { PROFILES, type MarketProfile, type ProfileKey } from "./sessions";
+import { parseDayKey, PROFILES, type MarketProfile, type ProfileKey } from "./sessions";
 
 // The securities the fixture data knows. Tickers, names, sectors and rough sizes are facts, so a table covers the
 // app's universe (lib/universe.ts, lib/names-zh.ts, the sector and broad ETFs and the world board); everything else is
@@ -418,6 +418,89 @@ const MARKETS: readonly MarketRow[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// First trading days
+// ---------------------------------------------------------------------------
+
+/**
+ * First trading day of the listings that started after their calendar's first day (2000 for US stocks and funds):
+ * no bars, dividends or charts before it, and the quote's firstTradeDate. Approximate days, as Yahoo lists them.
+ */
+const LISTED: Readonly<Record<string, string>> = {
+  META: "2012-05-18",
+  TSLA: "2010-06-29",
+  GOOGL: "2004-08-19",
+  V: "2008-03-19",
+  MA: "2006-05-25",
+  PYPL: "2015-07-20",
+  ABBV: "2013-01-02",
+  PM: "2008-03-17",
+  TMUS: "2007-04-19",
+  CRM: "2004-06-23",
+  AVGO: "2009-08-06",
+  NFLX: "2002-05-23",
+  MDLZ: "2001-06-13",
+  CEG: "2022-02-02",
+  MRVL: "2000-06-27",
+  SMCI: "2007-03-29",
+  UBER: "2019-05-10",
+  ABNB: "2020-12-10",
+  PLTR: "2020-09-30",
+  ARM: "2023-09-14",
+  COIN: "2021-04-14",
+  HOOD: "2021-07-29",
+  SHOP: "2015-05-21",
+  BABA: "2014-09-19",
+  PDD: "2018-07-26",
+  JD: "2014-05-22",
+  BIDU: "2005-08-05",
+  NTES: "2000-06-30",
+  TCOM: "2003-12-09",
+  BILI: "2018-03-28",
+  NIO: "2018-09-12",
+  XPEV: "2020-08-27",
+  LI: "2020-07-30",
+  BEKE: "2020-08-13",
+  TME: "2018-12-12",
+  FUTU: "2019-03-08",
+  TAL: "2010-10-20",
+  EDU: "2006-09-07",
+  VIPS: "2012-03-23",
+  "0700.HK": "2004-06-16",
+  "9988.HK": "2019-11-26",
+  "3690.HK": "2018-09-20",
+  "1810.HK": "2018-07-09",
+  "1211.HK": "2002-07-31",
+  "9618.HK": "2020-06-18",
+  "2318.HK": "2004-06-24",
+  XLC: "2018-06-19",
+  XLRE: "2015-10-08",
+  IGV: "2001-07-13",
+  VOX: "2004-09-29",
+  VCR: "2004-01-30",
+  VDC: "2004-01-30",
+  KBE: "2005-11-15",
+  ITA: "2006-05-05",
+  XOP: "2006-06-22",
+  GDX: "2006-05-22",
+  VNQ: "2004-09-29",
+  KWEB: "2013-08-01",
+  FXI: "2004-10-08",
+  GLD: "2004-11-18",
+  TLT: "2002-07-30",
+  RSP: "2003-05-01",
+  IWM: "2000-05-26",
+  IBB: "2001-02-09",
+  "ETH-USD": "2017-11-09",
+};
+
+/** The market profile of a listing: its calendar, starting on its first trading day when it listed later. */
+function listedProfile(symbol: string, key: ProfileKey): MarketProfile {
+  const profile: MarketProfile = PROFILES[key];
+  const listed = LISTED[symbol];
+  return listed ? { ...profile, epoch: Math.max(profile.epoch, parseDayKey(listed)) } : profile;
+}
+
+// ---------------------------------------------------------------------------
 // Building the records
 // ---------------------------------------------------------------------------
 
@@ -434,7 +517,7 @@ function stockRecord(row: StockRow): Security {
     name,
     shortName: shortNameOf(name),
     type: "EQUITY",
-    profile: PROFILES[venue.profile],
+    profile: listedProfile(symbol, venue.profile),
     exchange: venue.exchange,
     fullExchangeName: venue.fullExchangeName,
     market: venue.market,
@@ -473,7 +556,7 @@ function fundRecord(row: FundRow): Security {
     name,
     shortName: shortNameOf(name),
     type: "ETF",
-    profile: PROFILES.us,
+    profile: listedProfile(symbol, "us"),
     exchange: venue.exchange,
     fullExchangeName: venue.fullExchangeName,
     market: venue.market,
@@ -506,7 +589,7 @@ function marketRecord(row: MarketRow): Security {
     name: row.name,
     shortName: row.shortName ?? shortNameOf(row.name),
     type: row.type,
-    profile: PROFILES[row.profile],
+    profile: listedProfile(row.symbol, row.profile),
     exchange: row.exchange,
     fullExchangeName: row.fullExchangeName,
     market: row.market,

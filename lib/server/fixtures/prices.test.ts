@@ -76,6 +76,23 @@ describe("daily bars", () => {
     }
   });
 
+  it("keep long histories of volatile securities within 20 times their anchor price", () => {
+    for (const symbol of ["MSTR", "SMCI", "PLTR", "NG=F", "CL=F", "BTC-USD", "AAPL", "^GSPC"]) {
+      const s = security(symbol);
+      const closes = dailyRows(s, parseDayKey("2000-01-01"), parseDayKey("2026-11-06")).map((row) => row.c);
+      expect(Math.max(...closes) / s.anchorPrice, symbol).toBeLessThan(20);
+      expect(Math.min(...closes) / s.anchorPrice, symbol).toBeGreaterThan(1 / 20);
+    }
+  });
+
+  it("start a later listing on its first trading day", () => {
+    const pltr = security("PLTR");
+    const [first] = dailyRows(pltr, parseDayKey("2000-01-01"), parseDayKey("2021-01-01"));
+    expect(new Date(first.day * DAY).toISOString().slice(0, 10)).toBe("2020-09-30");
+    expect((buildQuote(pltr, SATURDAY)?.firstTradeDateMilliseconds as Date).toISOString()).toBe("2020-09-30T13:30:00.000Z");
+    expect(dailyRows(security("AAPL"), parseDayKey("2000-01-01"), parseDayKey("2000-01-10"))[0].day).toBe(parseDayKey("2000-01-03"));
+  });
+
   it("move a fund exactly like the index it tracks", () => {
     const from = parseDayKey("2026-09-01");
     const to = parseDayKey("2026-11-06");

@@ -18,12 +18,13 @@ import {
 } from "./sessions";
 
 // Price series of the fixture data. A walk's close on a day is its anchor price (the level on 2026-01-02) times the
-// compounded daily returns between the anchor and that day; each return mixes a market factor (seeded by the date), a
-// sector factor (seeded by sector and date) and the security's own noise (seeded by symbol and date). So a bar for a
-// given session is the same on every run and every day, stocks move together with their sector and the index, and a
-// fund that tracks an index moves exactly like it. ^VIX mean-reverts around its level, Treasury yields come from the
-// curve model (curve.ts). Intraday bars are drawn inside their daily bar: they open at its open, close at its close and
-// touch its high and low.
+// compounded daily returns between the anchor and that day (before the anchor, without the volatility drag and kept
+// within 20 times the anchor price either way, so volatile histories stay plausible); each return mixes a market
+// factor (seeded by the date), a sector factor (seeded by sector and date) and the security's own noise (seeded by
+// symbol and date). So a bar for a given session is the same on every run and every day, stocks move together with
+// their sector and the index, and a fund that tracks an index moves exactly like it. ^VIX mean-reverts around its
+// level, Treasury yields come from the curve model (curve.ts). Intraday bars are drawn inside their daily bar: they
+// open at its open, close at its close and touch its high and low.
 
 /** The day whose close equals each security's anchor price. A trading day on every calendar. */
 export const ANCHOR_DAY = parseDayKey("2026-01-02");
@@ -89,21 +90,42 @@ function dailyShock(security: Security, day: number): number {
   return market * marketZ(day) + (sector && security.sectorKey ? sector * sectorZ(security.sectorKey, day) : 0) + own * gaussian(security.seedKey, day);
 }
 
+/** A day's log return after the anchor: drift, the volatility drag of a geometric walk and the day's shock. */
 function walkReturn(security: Security, day: number): number {
   const sd = dailyVol(security);
   return security.drift / security.profile.periodsPerYear - 0.5 * sd * sd + sd * dailyShock(security, day);
 }
 
+/**
+ * A day's log return up to the anchor, which the walk takes back in time. Without the volatility drag: subtracting
+ * it on the way back would make a volatile stock's history grow exponentially (a 0.8 volatility adds 32% a year).
+ */
+function backwardReturn(security: Security, day: number): number {
+  return security.drift / security.profile.periodsPerYear + dailyVol(security) * dailyShock(security, day);
+}
+
+/** How far before the anchor a walk may stray from its anchor price: 20 times up or down, approached smoothly. */
+const MAX_LOG_DEVIATION = Math.log(20);
+
+/** Maps a log deviation from the anchor into ±MAX_LOG_DEVIATION, unchanged near zero (tanh). */
+function squash(deviation: number): number {
+  return MAX_LOG_DEVIATION * Math.tanh(deviation / MAX_LOG_DEVIATION);
+}
+
+/** Unbounded log deviation from the anchor at the end of a day before it: minus the returns after it, up to the anchor. */
+function backwardDeviation(security: Security, day: number): number {
+  let sum = 0;
+  for (let d = day + 1; d <= ANCHOR_DAY; d++) if (isTradingDay(security.profile, d)) sum -= backwardReturn(security, d);
+  return sum;
+}
+
 /** Log close of a walk at the end of `day` (any day: before the first bar it is the level the first bar starts from). */
 function walkLogClose(security: Security, day: number): number {
-  const profile = security.profile;
+  const anchor = Math.log(security.anchorPrice);
+  if (day < ANCHOR_DAY) return anchor + squash(backwardDeviation(security, day));
   let sum = 0;
-  if (day >= ANCHOR_DAY) {
-    for (let d = ANCHOR_DAY + 1; d <= day; d++) if (isTradingDay(profile, d)) sum += walkReturn(security, d);
-  } else {
-    for (let d = day + 1; d <= ANCHOR_DAY; d++) if (isTradingDay(profile, d)) sum -= walkReturn(security, d);
-  }
-  return Math.log(security.anchorPrice) + sum;
+  for (let d = ANCHOR_DAY + 1; d <= day; d++) if (isTradingDay(security.profile, d)) sum += walkReturn(security, d);
+  return anchor + sum;
 }
 
 /** Per-session pull of ^VIX towards its level. */
@@ -152,9 +174,16 @@ function rawCloses(security: Security, days: readonly number[]): { previous: num
   if (security.model === "vix") {
     return { previous: Math.exp(vixLog(security, before)), closes: days.map((day) => Math.exp(vixLog(security, day))) };
   }
-  let log = walkLogClose(security, before);
-  const previous = Math.exp(log);
+  // Up to the anchor the walk runs on its (squashed) deviation from the anchor price, after it on compounded returns.
+  const anchor = Math.log(security.anchorPrice);
+  let deviation = before < ANCHOR_DAY ? backwardDeviation(security, before) : 0;
+  let log = before < ANCHOR_DAY ? anchor : walkLogClose(security, before);
+  const previous = Math.exp(before < ANCHOR_DAY ? anchor + squash(deviation) : log);
   const closes = days.map((day) => {
+    if (day <= ANCHOR_DAY) {
+      deviation += backwardReturn(security, day);
+      return Math.exp(anchor + squash(deviation));
+    }
     log += walkReturn(security, day);
     return Math.exp(log);
   });
