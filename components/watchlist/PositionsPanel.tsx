@@ -106,7 +106,7 @@ export function PositionsPanel({ portfolio, quotes, loading, className }: Positi
         const currency = r.kind === "foreign" ? r.valued?.currency : undefined;
         return (
           <span className="block min-w-0 py-1">
-            <span className="flex min-w-0 items-center gap-1.5">
+            <span className="flex min-w-0 items-center gap-1">
               <span className="mono min-w-0 truncate font-medium text-fg">{r.symbol}</span>
               {currency ? <span className="mono shrink-0 text-xs text-fg-3 max-sm:hidden">{currency}</span> : null}
             </span>
