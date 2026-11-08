@@ -8,6 +8,8 @@ import {
   consumeDailyBudget,
   consumeRateLimit,
   DEFAULT_AI_DAILY_LIMIT,
+  FIXTURE_MARKET_LIMIT,
+  marketRateLimit,
   RATE_LIMITS,
   readDailyLimit,
   refundDailyBudget,
@@ -26,6 +28,15 @@ describe("consumeRateLimit", () => {
     expect(RATE_LIMITS.chat).toMatchObject({ limit: 40, windowMs: 10 * MINUTE });
     expect(RATE_LIMITS.login).toMatchObject({ limit: 5, windowMs: 15 * MINUTE });
     expect(RATE_LIMITS.loginGlobal).toMatchObject({ limit: 30, windowMs: 15 * MINUTE });
+  });
+
+  it("raises only the market-data limit while serving fixture data", () => {
+    expect(marketRateLimit({})).toBe(RATE_LIMITS.market);
+    expect(marketRateLimit({ MARKET_DATA_SOURCE: "yahoo" })).toBe(RATE_LIMITS.market);
+    const fixtures = marketRateLimit({ MARKET_DATA_SOURCE: "fixtures" });
+    expect(fixtures).toBe(FIXTURE_MARKET_LIMIT);
+    expect(fixtures.limit).toBeGreaterThan(100 * RATE_LIMITS.market.limit);
+    expect(fixtures.name).toBe(RATE_LIMITS.market.name);
   });
 
   it("allows up to the limit inside the window, then reports when a slot frees up", () => {

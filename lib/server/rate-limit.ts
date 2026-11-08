@@ -29,6 +29,18 @@ export const RATE_LIMITS = {
   market: { name: "market", limit: 600, windowMs: 5 * MINUTE },
 } as const satisfies Record<string, RateLimitRule>;
 
+/**
+ * The market-data limit with MARKET_DATA_SOURCE=fixtures: synthetic data costs no upstream quota, so the end-to-end
+ * suite (several browsers polling one server, all sharing one client key) cannot trip it. The AI and sign-in limits
+ * stay the same in every mode.
+ */
+export const FIXTURE_MARKET_LIMIT = { name: "market", limit: 1_000_000, windowMs: 5 * MINUTE } as const satisfies RateLimitRule;
+
+/** The rule for the public market-data routes in the current data mode. */
+export function marketRateLimit(source?: RawEnv): RateLimitRule {
+  return readEnv(source).marketDataSource === "fixtures" ? FIXTURE_MARKET_LIMIT : RATE_LIMITS.market;
+}
+
 /** Key for limits shared by every client. */
 export const GLOBAL_KEY = "*";
 
