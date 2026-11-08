@@ -190,11 +190,11 @@ export function OwnershipTab({ symbol }: { symbol: string }) {
           ) : null
         }
       >
-        <DataTable rows={shownTrades} columns={tradeColumns} rowKey={(trade) => String(trade.index)} caption={o.trades} empty={o.noTrades} />
+        <DataTable rows={shownTrades} columns={tradeColumns} rowKey={(trade) => String(trade.index)} caption={o.tradesCaption} empty={o.noTrades} />
       </Panel>
 
       <Panel title={o.topInstitutions} footer={<p className="border-t border-line px-3 py-1.5 text-micro text-fg-3">{o.lag}</p>}>
-        <DataTable rows={institutions} columns={institutionColumns} rowKey={(row) => row.name} caption={o.topInstitutions} empty={o.noInstitutions} />
+        <DataTable rows={institutions} columns={institutionColumns} rowKey={(row) => row.name} caption={o.institutionsCaption} empty={o.noInstitutions} />
       </Panel>
     </div>
   );

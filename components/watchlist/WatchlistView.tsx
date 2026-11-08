@@ -205,7 +205,7 @@ export function WatchlistView() {
                 onRemove={onRemove}
                 emptyFocusId={ADD_INPUT_ID}
                 loading={!hydrated || (loading && watchlist.length > 0)}
-                caption={t.watchlist.title}
+                caption={t.watchlist.quotesCaption}
                 empty={
                   <EmptyState
                     chips={STARTERS.map((s) => ({ label: s, onSelect: () => add(s) }))}

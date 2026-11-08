@@ -43,6 +43,8 @@ export function MoversPanel({ movers, loading, className }: { movers: MarketOver
   const isLoading = scope === "us" ? !usData && !discover.error : loading;
   const failed = scope === "us" && discover.error && !usData;
   const title = scope === "us" ? t.markets.movers.titleUs : tpl(t.markets.movers.titleUniverse, { n: universeCount });
+  const listLabel = list === "gainers" ? t.market.gainers : list === "losers" ? t.market.losers : t.market.mostActive;
+  const caption = tpl(scope === "us" ? t.markets.movers.captionUs : t.markets.movers.captionUniverse, { list: listLabel, n: universeCount });
 
   const columns: DataTableColumn<OverviewQuote>[] = [
     { key: "symbol", header: t.columns.symbol, width: "4.75rem", render: (q) => <span className="mono font-medium text-fg">{q.symbol}</span> },
@@ -107,7 +109,7 @@ export function MoversPanel({ movers, loading, className }: { movers: MarketOver
           rows={rows}
           columns={columns}
           rowKey={(q) => q.symbol}
-          caption={title}
+          caption={caption}
           rowHref={(q) => stockPath(q.symbol)}
           loading={isLoading}
           loadingRows={ROWS}

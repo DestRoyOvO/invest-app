@@ -100,7 +100,7 @@ export function WorldPanel({ className }: { className?: string }) {
               <h3 id={`${headingId}-${group.region}`} className="col-head bg-panel-2 px-3 py-1.5">
                 {t.markets.regions[group.region]}
               </h3>
-              <WorldTable entries={group.entries} caption={t.markets.regions[group.region]} now={now} loading={!data} />
+              <WorldTable entries={group.entries} caption={t.markets.regionCaptions[group.region]} now={now} loading={!data} />
             </section>
           ))}
           {data ? <MissingNote data={data} regions={EQUITY_REGIONS} /> : null}
@@ -122,7 +122,7 @@ export function RegionPanel({ region, code, className }: { region: "fx" | "commo
         <ErrorState error={error} onRetry={() => mutate()} compact />
       ) : group ? (
         <div aria-busy={!data}>
-          <WorldTable entries={group.entries} caption={t.markets.regions[region]} compact now={data ? Date.parse(data.asOf) : 0} loading={!data} />
+          <WorldTable entries={group.entries} caption={t.markets.regionCaptions[region]} compact now={data ? Date.parse(data.asOf) : 0} loading={!data} />
           {data ? <MissingNote data={data} regions={[region]} /> : null}
         </div>
       ) : null}

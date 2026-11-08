@@ -17,7 +17,7 @@ import { TickNumber } from "@/components/ui/TickNumber";
 import { useHistory, useOverview, useQuotes, useSectorNews, useSparklines } from "@/hooks/useApi";
 import { stockPath } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { formatCompact, formatPrice } from "@/lib/format";
+import { formatCompact, formatPrice, tpl } from "@/lib/format";
 import { SECTORS, type SectorDef } from "@/lib/universe";
 import type { AnalyzeRequest, OverviewQuote } from "@/types/api";
 
@@ -150,7 +150,7 @@ export function SectorView({ sector }: { sector: SectorDef }) {
             rows={snapshot?.stocks ?? []}
             columns={columns}
             rowKey={(q) => q.symbol}
-            caption={t.sector.constituents}
+            caption={tpl(t.sector.constituentsCaption, { sector: sector.label[lang] })}
             rowHref={(q) => stockPath(q.symbol)}
             loading={!snapshot && !error}
             loadingRows={8}

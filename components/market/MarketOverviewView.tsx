@@ -63,7 +63,7 @@ function WatchlistPanel() {
       ) : (
         <>
           <StaleBanner show={freshness.stale} since={freshness.since} />
-          <QuoteTable quotes={quotes} columns={["last", "changePct", "trend"]} sparklines={sparks} caption={t.market.watchlist} />
+          <QuoteTable quotes={quotes} columns={["last", "changePct", "trend"]} sparklines={sparks} caption={t.watchlist.quotesCaption} />
         </>
       )}
     </Panel>

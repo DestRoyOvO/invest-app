@@ -146,7 +146,7 @@ function SectorTable({ breadth }: { breadth: MarketBreadth }) {
       <h3 className="col-head px-3 pt-2.5 pb-1">{t.markets.breadth.bySector}</h3>
       {/* Column widths step up from sm, where the meters appear; phones keep room for the sector names. */}
       <div className="[--breadth-pct:5.25rem] [--breadth-ud:5.5rem] sm:[--breadth-pct:7.25rem] sm:[--breadth-ud:6.25rem]">
-        <DataTable rows={breadth.sectors} columns={columns} rowKey={(row) => row.key} caption={t.markets.breadth.bySector} rowHref={(row) => `/sector/${row.key}`} />
+        <DataTable rows={breadth.sectors} columns={columns} rowKey={(row) => row.key} caption={t.markets.breadth.bySectorCaption} rowHref={(row) => `/sector/${row.key}`} />
       </div>
     </section>
   );

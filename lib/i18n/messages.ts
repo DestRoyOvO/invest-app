@@ -397,6 +397,8 @@ export const en = {
   },
   watchlist: {
     title: "Watchlist",
+    // A table caption also names the table's scroll region, so it differs from the panel title (docs/design-system.md).
+    quotesCaption: "Watchlist quotes",
     addPlaceholder: "Add ticker or company…",
     remove: "Remove {symbol}",
     count: "{n} symbols",
@@ -454,6 +456,7 @@ export const en = {
     byCount: "By number of symbols, no positions yet",
     concentration: "Top {n} positions: {pct} of value",
     upcoming: "Upcoming",
+    upcomingCaption: "Upcoming earnings and ex-dividend dates",
     upcomingMeta: "Earnings and ex-dividend dates for your holdings and watchlist, next 14 days.",
     upcomingEmpty: "No earnings or ex-dividend dates for your symbols in the next 14 days.",
     event: "Event",
@@ -475,6 +478,8 @@ export const en = {
   },
   portfolio: {
     title: "Positions",
+    // A table caption also names the table's scroll region, so it differs from the panel title (docs/design-system.md).
+    caption: "Positions with value and P&L",
     shares: "Shares",
     avgCost: "Avg cost",
     value: "Value",
@@ -537,6 +542,7 @@ export const en = {
   sector: {
     title: "Sectors",
     constituents: "Constituents",
+    constituentsCaption: "{sector} constituents",
     etfs: "ETFs",
     news: "Sector news",
     aiScan: "AI sector scan",
@@ -1086,6 +1092,7 @@ export const zh: Messages = {
   },
   watchlist: {
     title: "自选",
+    quotesCaption: "自选行情",
     addPlaceholder: "添加代码或公司名…",
     remove: "移除 {symbol}",
     count: "{n} 只",
@@ -1143,6 +1150,7 @@ export const zh: Messages = {
     byCount: "按代码数量（尚无持仓）",
     concentration: "前 {n} 大持仓占市值 {pct}",
     upcoming: "近期事件",
+    upcomingCaption: "近期财报与除息日",
     upcomingMeta: "你的持仓和自选未来 14 天的财报和除息日。",
     upcomingEmpty: "未来 14 天内，你的持仓和自选没有财报或除息日。",
     event: "事件",
@@ -1164,6 +1172,7 @@ export const zh: Messages = {
   },
   portfolio: {
     title: "持仓",
+    caption: "持仓的市值与盈亏",
     shares: "股数",
     avgCost: "成本价",
     value: "市值",
@@ -1226,6 +1235,7 @@ export const zh: Messages = {
   sector: {
     title: "板块",
     constituents: "成分股",
+    constituentsCaption: "{sector}成分股",
     etfs: "相关 ETF",
     news: "板块新闻",
     aiScan: "AI 板块扫描",

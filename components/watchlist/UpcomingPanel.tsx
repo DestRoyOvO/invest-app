@@ -122,7 +122,7 @@ export function UpcomingPanel({ symbols, weights, className }: { symbols: readon
           rows={rows}
           columns={columns}
           rowKey={(r) => r.event.id}
-          caption={t.watchlist.upcoming}
+          caption={t.watchlist.upcomingCaption}
           rowHref={(r) => stockPath(r.event.symbol ?? "")}
           loading={!data}
           loadingRows={3}

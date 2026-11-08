@@ -97,7 +97,7 @@ export function EtfReturnsTable({ quotes, history, historyError, onRetryHistory 
 
   return (
     <>
-      <DataTable rows={rows} columns={columns} rowKey={(row) => row.quote.symbol} caption={t.markets.sector.etfReturns} rowHref={(row) => stockPath(row.quote.symbol)} />
+      <DataTable rows={rows} columns={columns} rowKey={(row) => row.quote.symbol} caption={t.markets.sector.etfCaption} rowHref={(row) => stockPath(row.quote.symbol)} />
       {historyError && !history ? (
         <ErrorState error={historyError} title={t.markets.sector.returnsUnavailable} onRetry={onRetryHistory} compact className="border-t border-line" />
       ) : (

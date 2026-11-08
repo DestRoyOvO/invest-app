@@ -125,7 +125,7 @@ export function DividendsTab({ symbol, position }: { symbol: string; position?: 
           {years.at(-1)?.partial ? <p className="px-3 pb-2 text-micro text-fg-3">* {tpl(d.yearToDate, { year: years.at(-1)?.year ?? "" })}</p> : null}
         </Panel>
         <Panel title={d.recent}>
-          <DataTable rows={recent} columns={columns} rowKey={(p) => p.exDate} caption={d.recent} />
+          <DataTable rows={recent} columns={columns} rowKey={(p) => p.exDate} caption={d.recentCaption} />
         </Panel>
       </div>
     </div>

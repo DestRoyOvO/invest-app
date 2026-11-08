@@ -279,7 +279,7 @@ export function PositionsPanel({ portfolio, quotes, loading, className }: Positi
             rows={loading ? [] : rows}
             columns={columns}
             rowKey={(r) => r.symbol}
-            caption={p.title}
+            caption={p.caption}
             rowHref={(r) => stockPath(r.symbol)}
             rowActions={(r) => <IconButton size="sm" label={tpl(p.editShort, { symbol: r.symbol })} icon={<Pencil className="size-3.5" strokeWidth={1.75} />} onClick={() => openPositionEditor(r.symbol)} />}
             actionsWidth="2.5rem"
