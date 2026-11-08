@@ -1,17 +1,17 @@
 import { PORT_VIEW_KEY } from "@/components/portfolio/port-view";
 import { HOLDINGS_STORAGE_KEY } from "@/hooks/useHoldings";
-import { yahooSectorKey } from "@/lib/sectors";
-import { getSector, sectorOfSymbol } from "@/lib/universe";
 import type { Quote } from "@/types/api";
 
 import {
   amount,
-  cellOf,
   dataRows,
+  expectCells,
   expectFigure,
+  expectSumOf100,
   fetchHistory,
   fetchProfiles,
   fetchQuotes,
+  figure,
   FIGURE,
   parseFigure,
   percent,
@@ -24,7 +24,9 @@ import {
   signedAmount,
   tileLines,
   toast,
+  trailingPercent,
   valueHoldings,
+  type CellExpectation,
   type Holdings,
   type ValuedHoldings,
 } from "../support/personal";
@@ -39,6 +41,13 @@ import { expect, test, type Page } from "../support/test";
 
 const HOLDINGS: Holdings = SAMPLE_DATA.holdings;
 const SYMBOLS = Object.keys(HOLDINGS);
+
+/**
+ * The sector bucket of each seeded position, as facts of the fixture data rather than through the app's own mapping
+ * table: AAPL and MSFT are technology stocks of the universe, PLTR is outside it and grouped by its profile's sector
+ * (Technology, which each test that relies on it checks), and SPY is a fund.
+ */
+const SECTOR_OF: Readonly<Record<string, string>> = { AAPL: "Information Technology", MSFT: "Information Technology", PLTR: "Information Technology", SPY: "ETFs and funds" };
 
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -65,12 +74,6 @@ function extendedLabels(quotes: ReadonlyMap<string, Quote>, symbols: readonly st
   return sessions.has("PRE") ? { column: "Pre P&L", tile: "Pre-market P&L" } : { column: "AH P&L", tile: "After-hours P&L" };
 }
 
-/** The summed weights as shown (one decimal each) come to 100% up to their rounding. */
-function expectWeightsAddUp(shown: readonly string[]): void {
-  const sum = shown.reduce((total, text) => total + parseFigure(text), 0);
-  expect(Math.abs(sum - 100), `weights ${shown.join(" + ")}`).toBeLessThanOrEqual(0.05 * shown.length + 1e-9);
-}
-
 test.describe("positions", () => {
   test("the positions panel values each holding at its quote, with totals and weights that add up", async ({ page, app, request }) => {
     await app.seedStorage({ watchlist: ["NVDA"], holdings: HOLDINGS });
@@ -84,36 +87,41 @@ test.describe("positions", () => {
 
     // Largest value first, then the totals row. Phones show values in whole units and P&L % under the P&L.
     await expect(dataRows(table)).toHaveText([...valued.rows.map((row) => new RegExp(`^${escapeRegExp(row.symbol)}`)), /^Total/]);
+    const money = (value: number, pnl: number, pnlRatio: number, dayPnl: number): Record<string, CellExpectation> => ({
+      Value: amount(value, phone ? 0 : 2),
+      "Day P&L": signedAmount(dayPnl),
+      "P&L": phone ? `${signedAmount(pnl)} ${percent(pnlRatio, 1, true)}` : signedAmount(pnl),
+    });
+    const shownWeights: string[] = [];
     for (const row of valued.rows) {
-      const line = rowOf(table, row.symbol);
-      const cell = (column: string) => cellOf(table, line, column);
-      await expect(await cell("Value")).toHaveText(amount(row.value, phone ? 0 : 2), { useInnerText: true });
-      await expect(await cell("Day P&L")).toHaveText(signedAmount(row.dayPnl), { useInnerText: true });
-      await expect(await cell("P&L")).toHaveText(phone ? `${signedAmount(row.pnl)} ${percent(row.pnlRatio, 1, true)}` : signedAmount(row.pnl), { useInnerText: true });
+      const figures = money(row.value, row.pnl, row.pnlRatio, row.dayPnl);
       if (phone) {
-        await expect(await cell("Symbol")).toHaveText(`${row.symbol} ${row.shares} sh`, { useInnerText: true });
+        await expectCells(table, rowOf(table, row.symbol), { ...figures, Symbol: `${row.symbol} ${row.shares} sh` });
         continue;
       }
-      await expect(await cell("Shares")).toHaveText(String(row.shares));
-      await expect(await cell("Weight")).toHaveText(percent(row.weight as number));
-      await expect(await cell("P&L %")).toHaveText(percent(row.pnlRatio, 1, true));
-      if (extended) await expect(await cell(extended.column)).toHaveText(row.extendedPnl === null ? "—" : signedAmount(row.extendedPnl));
       const next = quotes.get(row.symbol)?.nextEarningsDate;
-      await expect(await cell("Next ER")).toHaveText(next ? shortDate(next) : "—");
+      const cells = await expectCells(table, rowOf(table, row.symbol), {
+        ...figures,
+        Shares: String(row.shares),
+        Weight: percent(row.weight as number),
+        "P&L %": percent(row.pnlRatio, 1, true),
+        ...(extended ? { [extended.column]: row.extendedPnl === null ? "—" : signedAmount(row.extendedPnl) } : {}),
+        "Next ER": next ? shortDate(next) : "—",
+      });
+      shownWeights.push(cells.Weight);
     }
 
-    const totals = rowOf(table, "Total");
-    const total = (column: string) => cellOf(table, totals, column);
-    await expect(await total("Value")).toHaveText(amount(valued.totals.value, phone ? 0 : 2), { useInnerText: true });
-    await expect(await total("Day P&L")).toHaveText(signedAmount(valued.totals.dayPnl), { useInnerText: true });
-    await expect(await total("P&L")).toHaveText(phone ? `${signedAmount(valued.totals.pnl)} ${percent(valued.totals.pnlRatio, 1, true)}` : signedAmount(valued.totals.pnl), {
-      useInnerText: true,
-    });
-    if (!phone) {
-      await expect(await total("Weight")).toHaveText("100.0%");
-      await expect(await total("P&L %")).toHaveText(percent(valued.totals.pnlRatio, 1, true));
-      if (extended) await expect(await total(extended.column)).toHaveText(signedAmount(valued.totals.extendedPnl));
-      expectWeightsAddUp(valued.rows.map((row) => percent(row.weight as number)));
+    const totals = money(valued.totals.value, valued.totals.pnl, valued.totals.pnlRatio, valued.totals.dayPnl);
+    if (phone) await expectCells(table, rowOf(table, "Total"), totals);
+    else {
+      await expectCells(table, rowOf(table, "Total"), {
+        ...totals,
+        Weight: "100.0%",
+        "P&L %": percent(valued.totals.pnlRatio, 1, true),
+        ...(extended ? { [extended.column]: signedAmount(valued.totals.extendedPnl) } : {}),
+      });
+      // The weights the rows show come to 100% within their rounding.
+      expectSumOf100(shownWeights);
     }
 
     // The summary band above the list shows the same totals.
@@ -169,14 +177,15 @@ test.describe("portfolio page", () => {
     const effective = 1 / valued.rows.reduce((sum, row) => sum + (row.weight as number) ** 2, 0);
     await expect.poll(() => tileLines(page, "Effective positions")).toEqual([effective.toFixed(1), `of ${n} positions`]);
 
-    // Every position is analyzed, at its weight; the weights add up to 100%.
+    // Every position is analyzed, at its weight; the weights shown add up to 100%.
     const coverage = page.getByRole("region", { name: "Holdings analyzed", exact: true }).first();
     await expect(coverage).toContainText(`${n} of ${n} positions`);
-    await expect(coverage.getByRole("listitem")).toHaveText(
+    const analyzed = coverage.getByRole("listitem");
+    await expect(analyzed).toHaveText(
       valued.rows.map((row) => new RegExp(`^${escapeRegExp(row.symbol)}\\s*${escapeRegExp(percent(row.weight as number))}$`)),
       { useInnerText: true },
     );
-    expectWeightsAddUp(valued.rows.map((row) => percent(row.weight as number)));
+    expectSumOf100((await analyzed.allInnerTexts()).map(trailingPercent));
   });
 
   test("the benchmark switch compares today's holdings with SPY or QQQ over the chosen range", async ({ page, app, request }) => {
@@ -191,14 +200,20 @@ test.describe("portfolio page", () => {
     const range = analytics.getByRole("radiogroup", { name: "Range" });
     const chart = analytics.getByRole("img", { name: /^Today's holdings / });
 
-    /** The chart's label names the benchmark and both returns over the range. */
+    /** The chart's label and its legend name the benchmark and give both returns over the range. */
     const expectComparison = async (name: "SPY" | "QQQ", returns: { holdings: number; benchmark: number }) => {
       const label = async () => (await chart.getAttribute("aria-label")) ?? "";
       const part = (index: 1 | 3) => async () => /^Today's holdings (\S+), (\S+) (\S+) over the range$/.exec(await label())?.[index] ?? "";
       await expect.poll(async () => /^Today's holdings \S+, (\S+) /.exec(await label())?.[1]).toBe(name);
       await expectFigure(part(1), returns.holdings * 100, 1);
       await expectFigure(part(3), returns.benchmark * 100, 1);
-      await expect(analytics.getByRole("listitem").filter({ hasText: name })).toHaveText(new RegExp(`^${name}\\s*[+\\u2212]?\\d+\\.\\d%$`), { useInnerText: true });
+      // The legend: "Today's holdings +x.x%" and "<benchmark> +y.y%".
+      const legend = (itemLabel: string) => async () => {
+        const text = (await analytics.getByRole("listitem").filter({ hasText: new RegExp(`^${escapeRegExp(itemLabel)}\\s*[+−]?\\d`) }).innerText()).replace(/\s+/g, " ").trim();
+        return text.startsWith(itemLabel) ? trailingPercent(text) : `(the legend item reads "${text}")`;
+      };
+      await expectFigure(legend("Today's holdings"), returns.holdings * 100, 1);
+      await expectFigure(legend(name), returns.benchmark * 100, 1);
     };
 
     await expect(benchmark.getByRole("radio", { name: "SPY" })).toBeChecked();
@@ -258,16 +273,14 @@ test.describe("portfolio page", () => {
       );
       // Each bar names its members (its tooltip), so every holding is in exactly one bucket.
       for (const slice of expected) await expect(list.getByRole("listitem", { name: slice.symbols.join(", "), exact: true })).toHaveCount(1);
-      expectWeightsAddUp(expected.map((slice) => percent(slice.weight)));
+      // The weights the bars show come to 100% within their rounding.
+      expectSumOf100((await list.getByRole("listitem").allInnerTexts()).map(trailingPercent));
     };
 
-    // Sector: the universe's sector for AAPL and MSFT, Yahoo's sector (from the profile) for PLTR, funds by kind. The
-    // position in HKD is left out of the sector and asset-class bars, which are by value in USD.
-    const sectorOf = (symbol: string) => {
-      if (quotes.get(symbol)?.quoteType === "ETF") return "ETFs and funds";
-      const key = sectorOfSymbol(symbol)?.key ?? yahooSectorKey(profiles.profiles[symbol]?.sector);
-      return (key && getSector(key)?.label.en) ?? "Unclassified";
-    };
+    // Sector: the bucket of each holding is a fact of the fixture data (SECTOR_OF), PLTR's by its profile. The position
+    // in HKD is left out of the sector and asset-class bars, which are by value in USD.
+    expect(profiles.profiles.PLTR?.sector).toBe("Technology");
+    const sectorOf = (symbol: string) => SECTOR_OF[symbol] ?? `(no sector for ${symbol})`;
     const total = valued.totals.value;
     await bars("Sector", slices(sectorOf).map((slice) => ({ ...slice, weight: slice.value / total })));
     const classOf = (symbol: string) => ({ EQUITY: "Stocks", ETF: "ETFs" })[quotes.get(symbol)?.quoteType as "EQUITY" | "ETF"] ?? "Other";
@@ -307,18 +320,19 @@ test.describe("portfolio page", () => {
     const shownShares: string[] = [];
     for (const row of order) {
       const figures = risk.positions[row.symbol];
-      const line = rowOf(table, row.symbol);
-      const cell = (column: string) => cellOf(table, line, column);
-      await expect(await cell("Weight")).toHaveText(percent(figures.weight));
-      await expectFigure(await cell("Share of risk"), figures.riskShare * 100, 1);
-      await expectFigure(await cell("Risk − weight"), (figures.riskShare - figures.weight) * 100, 1);
-      await expectFigure(await cell("Beta"), figures.beta, 2);
-      await expectFigure(await cell("Volatility"), figures.volatility * 100, 1);
-      shownWeights.push(await (await cell("Weight")).innerText());
-      shownShares.push(await (await cell("Share of risk")).innerText());
+      const cells = await expectCells(table, rowOf(table, row.symbol), {
+        Weight: percent(figures.weight),
+        "Share of risk": figure(figures.riskShare * 100, 1),
+        "Risk − weight": figure((figures.riskShare - figures.weight) * 100, 1),
+        Beta: figure(figures.beta, 2),
+        Volatility: figure(figures.volatility * 100, 1),
+      });
+      shownWeights.push(cells.Weight);
+      shownShares.push(cells["Share of risk"]);
     }
-    expectWeightsAddUp(shownWeights);
-    expectWeightsAddUp(shownShares);
+    // The weights and the shares of risk the rows show each come to 100% within their rounding.
+    expectSumOf100(shownWeights);
+    expectSumOf100(shownShares);
 
     // The sentence names the position whose share of risk exceeds its weight the most.
     const excess = (symbol: string) => risk.positions[symbol].riskShare - risk.positions[symbol].weight;
