@@ -71,8 +71,12 @@ function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+/**
+ * A panel by its title. The first match: a table inside a panel can become a labelled scroll region of its own when it
+ * overflows (pending in int/ui's DataTable), and the panel comes before it in document order.
+ */
 function region(page: Page, name: string) {
-  return page.getByRole("region", { name, exact: true });
+  return page.getByRole("region", { name, exact: true }).first();
 }
 
 /** The quote header (a region named by the symbol, once the quote is in) and the chart's text summary of its bars. */
