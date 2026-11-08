@@ -10,26 +10,13 @@ import { cn } from "@/lib/cn";
 
 import { useScrollRegion } from "./scroll-region";
 import { EmptyState, SkeletonRows } from "./States";
+import { hideClass, queriesContainer, type Breakpoint, type ContainerBreakpoint } from "./table-hide";
 import { ariaSort, nextSort, sortRows, type SortDirection, type SortState, type SortValue } from "./table-sort";
 
 export type { SortDirection, SortState, SortValue } from "./table-sort";
+export type { Breakpoint, ContainerBreakpoint } from "./table-hide";
+export { hideClass } from "./table-hide";
 
-export type Breakpoint = "sm" | "md" | "lg" | "xl";
-
-// Static class names so Tailwind sees them. A hidden <col> must disappear together with its cells, or the remaining
-// widths shift onto the wrong columns.
-const HIDE_CELL: Record<Breakpoint, string> = {
-  sm: "hidden sm:table-cell",
-  md: "hidden md:table-cell",
-  lg: "hidden lg:table-cell",
-  xl: "hidden xl:table-cell",
-};
-const HIDE_COL: Record<Breakpoint, string> = {
-  sm: "hidden sm:table-column",
-  md: "hidden md:table-column",
-  lg: "hidden lg:table-column",
-  xl: "hidden xl:table-column",
-};
 const ALIGN = { left: "text-left", right: "text-right", center: "text-center" } as const;
 
 export interface DataTableColumn<Row> {
@@ -44,8 +31,14 @@ export interface DataTableColumn<Row> {
   sortValue?: (row: Row) => SortValue;
   /** First direction on click; defaults to descending for right-aligned columns and ascending otherwise. */
   firstSort?: SortDirection;
-  /** Hides the column (header, cells and width) below this breakpoint. */
+  /** Hides the column (header, cells and width) below this viewport breakpoint. */
   hideBelow?: Breakpoint;
+  /**
+   * Hides the column while the table's own box is narrower than this container size (sm 24rem, md 28rem; see
+   * ContainerBreakpoint), whatever the viewport: a table in the 22rem right-hand column at xl drops it there and keeps
+   * it where it is wide. Takes the place of hideBelow. The scroll box becomes the query container (@container).
+   */
+  hideBelowContainer?: ContainerBreakpoint;
   /** Extra classes for this column's body cells. */
   className?: string;
   /** Header tooltip, e.g. the full name of an abbreviation. */
@@ -190,7 +183,7 @@ export function DataTable<Row>({
             return (
               <td
                 key={column.key}
-                className={cn("truncate px-3", ALIGN[column.align ?? "left"], column.hideBelow && HIDE_CELL[column.hideBelow], column.className)}
+                className={cn("truncate px-3", ALIGN[column.align ?? "left"], hideClass(column), column.className)}
               >
                 {columnIndex === 0 && href ? (
                   <Link href={href} className="hover:text-accent focus-visible:outline-offset-[-2px]">
@@ -223,6 +216,7 @@ export function DataTable<Row>({
       {...region}
       className={cn(
         "relative",
+        queriesContainer(columns) && "@container",
         stickyHeader ? "focus-visible:outline-offset-0" : "focus-visible:outline-offset-[-2px]",
         maxHeight ? "overflow-auto" : "overflow-x-auto",
         className,
@@ -233,7 +227,7 @@ export function DataTable<Row>({
         <caption className="sr-only">{caption}</caption>
         <colgroup>
           {columns.map((column) => (
-            <col key={column.key} className={column.hideBelow ? HIDE_COL[column.hideBelow] : undefined} style={column.width ? { width: column.width } : undefined} />
+            <col key={column.key} className={hideClass(column, "col")} style={column.width ? { width: column.width } : undefined} />
           ))}
           {rowActions ? (
             <col className="w-(--dt-actions) max-sm:w-(--dt-actions-touch)" style={{ "--dt-actions": actionsWidth, "--dt-actions-touch": actionsTouchWidth } as CSSProperties} />
@@ -256,7 +250,7 @@ export function DataTable<Row>({
                     // A sort button fills its cell, so the whole head is the target (40px tall on phones).
                     !column.sortValue && "px-3",
                     ALIGN[align],
-                    column.hideBelow && HIDE_CELL[column.hideBelow],
+                    hideClass(column),
                   )}
                 >
                   {column.sortValue ? (

@@ -158,4 +158,34 @@ describe("DataTable", () => {
     expect(markup).toContain('<caption class="sr-only">Quotes</caption>');
     expect(markup).toMatch(/<th scope="col"[^>]*><button type="button"/);
   });
+
+  it("hides a column by the viewport, or by its own width as a query container", () => {
+    const render = (hiding: Pick<DataTableColumn<Row>, "hideBelow" | "hideBelowContainer">) =>
+      html(createElement(DataTable<Row>, { rows, columns: [columns[0], { ...columns[1], ...hiding }], rowKey: (row) => row.symbol, caption: "Quotes" }));
+    const parts = (markup: string) => ({
+      box: classTokens(markup, "div")[0],
+      col: classTokens(markup, "col")[0],
+      head: classTokens(markup, "th")[1],
+      cells: classTokens(markup, "td").filter((_, i) => i % 2 === 1),
+    });
+
+    const viewport = parts(render({ hideBelow: "sm" }));
+    expect(viewport.box).not.toContain("@container");
+    for (const tokens of [viewport.head, ...viewport.cells]) expect(tokens).toEqual(expect.arrayContaining(["hidden", "sm:table-cell"]));
+    expect(viewport.col).toEqual(["hidden", "sm:table-column"]);
+
+    const container = parts(render({ hideBelowContainer: "md" }));
+    expect(container.box).toContain("@container");
+    expect(container.cells).toHaveLength(2);
+    for (const tokens of [container.head, ...container.cells]) {
+      expect(tokens).toEqual(expect.arrayContaining(["hidden", "@md:table-cell"]));
+      expect(tokens).not.toContain("sm:table-cell");
+    }
+    expect(container.col).toEqual(["hidden", "@md:table-column"]);
+
+    // The container size takes the place of the viewport breakpoint.
+    const both = parts(render({ hideBelow: "sm", hideBelowContainer: "sm" }));
+    expect(both.col).toEqual(["hidden", "@sm:table-column"]);
+    expect(both.head).not.toContain("sm:table-cell");
+  });
 });
