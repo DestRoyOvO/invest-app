@@ -12,6 +12,8 @@ import { LineChart } from "./LineChart";
 import { PORT_BENCHMARKS, type PortBenchmark } from "./port-view";
 
 const RANGES: readonly PerformanceRange[] = ["3m", "6m", "1y"];
+/** Segmented options are 28px; phones get 40px touch targets. */
+const PHONE_TARGETS = "[&_[role=radio]]:max-sm:h-10";
 const HOLDINGS_COLOR = "var(--series-1)";
 const BENCHMARK_COLOR = "var(--series-6)";
 
@@ -37,14 +39,21 @@ export function PerformanceTab({ report, benchmark, range, onBenchmarkChange, on
 
   const controls = (
     <div className="flex flex-wrap items-end gap-3 px-3 pt-3">
-      <Segmented label={o.benchmark} value={benchmark} onChange={onBenchmarkChange} options={PORT_BENCHMARKS.map((b) => ({ value: b, label: b }))} size="sm" className="w-36" />
+      <Segmented
+        label={o.benchmark}
+        value={benchmark}
+        onChange={onBenchmarkChange}
+        options={PORT_BENCHMARKS.map((b) => ({ value: b, label: b }))}
+        size="sm"
+        className={`w-36 ${PHONE_TARGETS}`}
+      />
       <Segmented
         label={o.range}
         value={range}
         onChange={onRangeChange}
         options={RANGES.map((r) => ({ value: r, label: o.ranges[r] }))}
         size="sm"
-        className="w-48"
+        className={`w-48 ${PHONE_TARGETS}`}
       />
     </div>
   );

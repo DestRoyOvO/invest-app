@@ -174,6 +174,8 @@ function EditorDrawer({ initial, onClose }: { initial: string; onClose: () => vo
                     { value: "add", label: t.portfolio.modeAdd },
                     { value: "reduce", label: t.portfolio.modeReduce },
                   ]}
+                  // 32px options on desktop, 40px touch targets on phones.
+                  className="[&_[role=radio]]:max-sm:h-10"
                 />
               </div>
             ) : null}

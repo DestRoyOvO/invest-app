@@ -11,12 +11,14 @@ import { Panel } from "@/components/ui/Panel";
 import { EmptyState, ErrorState, SkeletonRows, StaleBanner } from "@/components/ui/States";
 import { usePortfolio, useNow } from "@/hooks/usePortfolio";
 import { stockPath } from "@/lib/api-client";
+import { cn } from "@/lib/cn";
 import { formatShortDate, tpl } from "@/lib/format";
 import type { Messages } from "@/lib/i18n/messages";
 import { dayMovers, nextEarnings, type ValuedPosition } from "@/lib/portfolio";
 import type { Lang, Quote } from "@/types/api";
 
-import { dayFigures, DayTiles, dayTileCount } from "./DayTiles";
+import { dayFigures, dayTileCount } from "./day-figures";
+import { DayTiles } from "./DayTiles";
 import { SignedMoney } from "./money";
 
 /** Secondary button look for a link (the design system's Button renders a <button>). */
@@ -61,7 +63,7 @@ export function MyDayPanel({ className }: { className?: string }) {
   const { holdings, portfolio, quotes, hydrated, loading, error, stale, staleSince, refresh } = usePortfolio();
   const now = useNow();
   const held = Object.keys(holdings);
-  const figures = dayFigures(portfolio, quotes);
+  const figures = dayFigures(portfolio, quotes, now);
   const tiles = dayTileCount(figures, false);
   const { contributors, detractors } = dayMovers(portfolio.rows);
   const upcoming = now > 0 ? nextEarnings(held, (s) => quotes.get(s), now) : null;
@@ -95,7 +97,13 @@ export function MyDayPanel({ className }: { className?: string }) {
     body = (
       <>
         <StaleBanner show={stale} since={staleSince} />
-        <div className={tiles >= 4 ? "grid grid-cols-2 gap-px bg-line sm:grid-cols-4" : "grid grid-cols-2 gap-px bg-line sm:grid-cols-3"}>
+        {/* Two columns on phones: an odd last tile spans both, so no empty cell is left. */}
+        <div
+          className={cn(
+            "grid grid-cols-2 gap-px bg-line [&>*:last-child:nth-child(odd)]:max-sm:col-span-2",
+            tiles >= 4 ? "sm:grid-cols-4" : "sm:grid-cols-3",
+          )}
+        >
           <DayTiles figures={figures} />
         </div>
         <div className="grid gap-px border-t border-line bg-line sm:grid-cols-2">

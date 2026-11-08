@@ -4,10 +4,11 @@ import { X } from "lucide-react";
 import { useMemo } from "react";
 
 import { ResearchNote } from "@/components/ai/ResearchNote";
-import { dayFigures, DayTiles, dayTileCount } from "@/components/portfolio/DayTiles";
+import { dayFigures, dayTileCount } from "@/components/portfolio/day-figures";
+import { DayTiles } from "@/components/portfolio/DayTiles";
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { Kbd } from "@/components/ui/Badge";
-import { IconButton } from "@/components/ui/Button";
+import { Button, IconButton } from "@/components/ui/Button";
 import { Delta } from "@/components/ui/Delta";
 import { Panel, PanelMeta } from "@/components/ui/Panel";
 import { EmptyState, ErrorState, StaleBanner } from "@/components/ui/States";
@@ -15,7 +16,7 @@ import { StatTile } from "@/components/ui/StatTile";
 import { useToast } from "@/components/ui/Toast";
 import { useSparklines } from "@/hooks/useApi";
 import { useLocalStore } from "@/hooks/useLocalStore";
-import { usePortfolio } from "@/hooks/usePortfolio";
+import { useNow, usePortfolio } from "@/hooks/usePortfolio";
 import { useProfiles } from "@/hooks/usePortfolioApi";
 import { useWatchlist } from "@/hooks/useWatchlist";
 import { cn } from "@/lib/cn";
@@ -93,7 +94,8 @@ export function WatchlistView() {
 
   const watchQuotes = useMemo(() => watchlist.map((s) => quotes.get(s)).filter((q): q is Quote => q !== undefined), [watchlist, quotes]);
   const breadth = watchlistBreadth(watchQuotes);
-  const figures = dayFigures(portfolio, quotes);
+  const now = useNow();
+  const figures = dayFigures(portfolio, quotes, now);
   const tileCount = valued ? dayTileCount(figures, true) + 1 : 3;
   const upcomingSymbols = useMemo(() => [...new Set([...Object.keys(holdings), ...watchlist])], [holdings, watchlist]);
   const weights = useMemo(() => new Map(portfolio.rows.map((r) => [r.symbol, r.weight])), [portfolio.rows]);
@@ -152,12 +154,13 @@ export function WatchlistView() {
               <span className="hidden sm:inline">
                 <PanelMeta>{view.sort ? tpl(t.watchlist.sortedBy, { column: columnLabel(view.sort.key, t) }) : tpl(t.watchlist.count, { n: watchlist.length })}</PanelMeta>
               </span>
+              {/* On phones the 36px header has no room for a 40px target: a strip under the form offers it while sorted. */}
               <button
                 type="button"
                 aria-pressed={view.sort === null}
                 onClick={() => watchlistViewStore.write({ sort: null })}
                 className={cn(
-                  "-mb-px h-9 border-b-2 px-2 text-xs font-medium tracking-[0.04em] whitespace-nowrap uppercase transition-colors",
+                  "-mb-px h-9 border-b-2 px-2 text-xs font-medium tracking-[0.04em] whitespace-nowrap uppercase transition-colors max-sm:hidden",
                   view.sort === null ? "border-accent text-fg" : "border-transparent text-fg-3 hover:text-fg-2",
                 )}
               >
@@ -167,6 +170,14 @@ export function WatchlistView() {
           }
         >
           <AddSymbolForm onAdd={add} inputId={ADD_INPUT_ID} />
+          {view.sort ? (
+            <div className="flex items-center justify-between gap-3 border-t border-line px-3 py-1 sm:hidden">
+              <span className="min-w-0 truncate text-xs text-fg-2">{tpl(t.watchlist.sortedBy, { column: columnLabel(view.sort.key, t) })}</span>
+              <Button onClick={() => watchlistViewStore.write({ sort: null })} className="h-10">
+                {t.watchlist.sortCustom}
+              </Button>
+            </div>
+          ) : null}
           <StaleBanner show={stale} since={staleSince} />
           {missingHere.length > 0 ? (
             <div role="status" className="flex flex-wrap items-center gap-2 border-t border-line bg-panel-2 px-3 py-1.5 text-xs text-warn">

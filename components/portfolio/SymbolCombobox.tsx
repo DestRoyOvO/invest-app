@@ -28,8 +28,10 @@ interface SymbolComboboxProps extends Omit<InputHTMLAttributes<HTMLInputElement>
 
 /**
  * Ticker input with suggestions: Yahoo search for Latin text, and the local Chinese name table for Chinese input (Yahoo
- * cannot search Chinese). A combobox with a listbox: arrows move, Enter picks the highlighted option (otherwise the
- * surrounding form submits the typed text), Escape closes the list. Inside a Field it is labelled automatically.
+ * cannot search Chinese). A combobox with a listbox: arrows move, Enter picks the highlighted option, Escape closes the
+ * list. Enter with nothing highlighted picks the first match for Chinese text (a company name is never a ticker) and
+ * otherwise lets the surrounding form submit the typed text, closing the list so it cannot cover an error below.
+ * Inside a Field it is labelled automatically.
  */
 export const SymbolCombobox = forwardRef<HTMLInputElement, SymbolComboboxProps>(function SymbolCombobox(
   { value, onValueChange, onPick, className, inputClassName, inline = false, onKeyDown, onFocus, onBlur, ...props },
@@ -76,6 +78,11 @@ export const SymbolCombobox = forwardRef<HTMLInputElement, SymbolComboboxProps>(
     } else if (event.key === "Enter" && activeIndex >= 0) {
       event.preventDefault();
       pick(suggestions[activeIndex].symbol);
+    } else if (event.key === "Enter" && hasCjk(typed)) {
+      event.preventDefault();
+      pick(suggestions[0].symbol);
+    } else if (event.key === "Enter") {
+      setFocused(false);
     } else if (event.key === "Escape") {
       // Close the list only; a surrounding drawer closes on the next Escape.
       event.preventDefault();
