@@ -90,10 +90,10 @@ All colors are CSS variables with a Tailwind utility of the same name (`bg-panel
 The light `--fg-3` is `#646d7b` rather than the audit's `#687180`: the latter measured 4.35:1 on the hover row. It is
 4.6:1 on `--hover`, 4.9:1 on `--panel-2` and still 1.95:1 apart from `--fg-2`, so the two stay distinct.
 
-### Accent and status
-
 `--fg-3` is for text on panels. It is only 4.25:1 on the light `--canvas`, so text placed straight on the canvas (the
 404 page, anything outside a panel) uses `--fg-2` (8.3:1) or `--fg`.
+
+### Accent and status
 
 | Token | Dark | Light | Role |
 | --- | --- | --- | --- |
@@ -104,10 +104,10 @@ The light `--fg-3` is `#646d7b` rather than the audit's `#687180`: the latter me
 | `--warn` | `#e3b341` | `#8a5f00` | Stale data, caveats such as "No reliable edge" |
 | `--danger` | red | red | Errors. Stays red in every price convention |
 
-### Price direction
-
 The light accent is dark enough for accent text on every surface it meets: 5.0:1 on a hovered row (ticker links turn
 accent there), 4.8:1 for an accent badge in a panel header and 4.6:1 for one on a hovered row.
+
+### Price direction
 
 | Token | intl | cn | cb dark / light |
 | --- | --- | --- | --- |
