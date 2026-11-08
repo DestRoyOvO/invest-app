@@ -374,6 +374,25 @@ describe("quote page research", () => {
     }
   });
 
+  it("pay out the dividend history in the cash flow statements", { timeout: 30_000 }, async () => {
+    const quotes = await getQuotes([...UNIVERSE_STOCKS]);
+    let payers = 0;
+    for (const symbol of UNIVERSE_STOCKS) {
+      const [financials, dividends] = await Promise.all([getFinancials(symbol), getDividends(symbol)]);
+      const year = financials!.annual.at(-1)!;
+      const paid = dividends?.years.find((entry) => String(entry.year) === year.end.slice(0, 4));
+      if (!paid) {
+        expect(year.dividendsPaid, symbol).toBeNull();
+        continue;
+      }
+      payers++;
+      // The latest fiscal year paid the dividends that went ex in it, on every share.
+      const perShare = -year.dividendsPaid! / quotes.get(symbol)!.sharesOutstanding!;
+      expect(Math.abs(perShare / paid.total - 1), `${symbol} ${year.end}: ${perShare} a share against ${paid.total}`).toBeLessThan(0.02);
+    }
+    expect(payers).toBeGreaterThan(60);
+  });
+
   it("sum ten years of dividends and announce the next payment", async () => {
     const [history, quote] = await Promise.all([getDividends("AAPL"), quoteOf("AAPL")]);
     expect(history).not.toBeNull();

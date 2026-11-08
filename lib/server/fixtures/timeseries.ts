@@ -1,6 +1,6 @@
 import "server-only";
 
-import { companyFigures, earningsSchedule, lastReportedYear, quarterEndsOf, quarterResult } from "./company";
+import { companyFigures, dividendSchedule, earningsSchedule, lastReportedYear, quarterEndsOf, quarterResult, shiftQuarterEnd, type DividendSchedule } from "./company";
 import { between, round } from "./random";
 import { securityOf, type Security } from "./securities";
 import { DAY_MS, dayNumber, latestCompletedSession } from "./sessions";
@@ -9,7 +9,8 @@ import { DAY_MS, dayNumber, latestCompletedSession } from "./sessions";
 // (calendar years) or quarter, consistent with the earnings modules (the same quarterly revenue and EPS). A year, and
 // the trailing twelve months, is the sum of its quarters line by line. Each quarter's margins move a little around the
 // company's figures (seeded by the quarter, so a reported quarter never changes), and operating income stays between
-// pretax income and gross profit. Like Yahoo, the oldest period of a request is a thin "stub" row with only a few fields. Funds, indices and unknown
+// pretax income and gross profit. Dividends paid are the payments of the dividend history that went ex in the period.
+// Like Yahoo, the oldest period of a request is a thin "stub" row with only a few fields. Funds, indices and unknown
 // symbols get an empty list, which is what the library returns for them.
 
 export interface FixtureFundamentalsOptions {
@@ -85,18 +86,20 @@ function quarterIncome(security: Security, quarter: Quarter): Record<string, num
   };
 }
 
-/** The cash flow statement of one quarter (its income statement given). */
-function quarterCashFlow(security: Security, quarter: Quarter, income: Record<string, number>): Record<string, number> {
+/** The cash flow statement of one quarter (its income statement given), with the dividends that went ex in it. */
+function quarterCashFlow(security: Security, quarter: Quarter, income: Record<string, number>, dividends: DividendSchedule | null): Record<string, number> {
   const revenue = quarter.revenue;
   const operatingCashFlow = Math.round(income.operatingIncome + revenue * 0.06 * (1 + 0.15 * wiggle(security, "cash", quarter)));
   const capitalExpenditure = -Math.round(revenue * between(0.03, 0.12, security.symbol, "capex") * (1 + 0.08 * wiggle(security, "capex", quarter)));
   const buybacks = -Math.round(revenue * between(0, 0.15, security.symbol, "buyback") * (1 + 0.15 * wiggle(security, "buyback", quarter)));
+  const quarterStart = shiftQuarterEnd(quarter.end, -3);
+  const perShare = (dividends?.history ?? []).filter((payment) => payment.exDay > quarterStart && payment.exDay <= quarter.end).reduce((sum, payment) => sum + payment.amount, 0);
   return {
     operatingCashFlow,
     capitalExpenditure,
     freeCashFlow: operatingCashFlow + capitalExpenditure,
     repurchaseOfCapitalStock: buybacks,
-    dividends: -Math.round(quarter.eps * companyFigures(security).sharesOutstanding * (security.dividendYield > 0 ? 0.3 : 0)),
+    dividends: -Math.round(perShare * companyFigures(security).sharesOutstanding),
     investingCashFlow: Math.round(capitalExpenditure * 1.4),
     stockBasedCompensation: Math.round(revenue * 0.02 * (1 + 0.05 * wiggle(security, "compensation", quarter))),
     depreciationAndAmortization: income.depreciationAndAmortization,
@@ -138,8 +141,8 @@ function financialRow(security: Security, period: Period): Record<string, number
   };
 }
 
-function cashFlowRow(security: Security, period: Period): Record<string, number> {
-  const sum = sumOf(period.quarters.map((quarter) => quarterCashFlow(security, quarter, quarterIncome(security, quarter))));
+function cashFlowRow(security: Security, period: Period, dividends: DividendSchedule | null): Record<string, number> {
+  const sum = sumOf(period.quarters.map((quarter) => quarterCashFlow(security, quarter, quarterIncome(security, quarter), dividends)));
   const row: Record<string, number> = {
     operatingCashFlow: sum.operatingCashFlow,
     capitalExpenditure: sum.capitalExpenditure,
@@ -201,6 +204,7 @@ export function buildFundamentals(symbol: string, options: FixtureFundamentalsOp
   const security = securityOf(symbol);
   if (!security || security.type !== "EQUITY") return [];
   const latest = latestCompletedSession(security.profile, now);
+  const dividends = dividendSchedule(security, latest);
   const from = toMs(options.period1, 0);
   const to = toMs(options.period2, now);
   const periods = periodsOf(security, latest, options.type).filter((period) => period.end * DAY_MS >= from && period.end * DAY_MS <= to);
@@ -208,7 +212,7 @@ export function buildFundamentals(symbol: string, options: FixtureFundamentalsOp
   return periods.map((period, index) => {
     let fields: Record<string, number> = {};
     if (options.module === "financials" || options.module === "all") fields = { ...fields, ...financialRow(security, period) };
-    if (options.module === "cash-flow" || options.module === "all") fields = { ...fields, ...cashFlowRow(security, period) };
+    if (options.module === "cash-flow" || options.module === "all") fields = { ...fields, ...cashFlowRow(security, period, dividends) };
     if (options.module === "balance-sheet" || options.module === "all") fields = { ...fields, ...balanceSheetRow(security, period) };
     // Yahoo's oldest period carries only a handful of values.
     if (index === 0 && periods.length > 2) fields = Object.fromEntries(Object.entries(fields).slice(0, 3));
