@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, useId, useMemo, useState, type InputHTMLAttributes, type KeyboardEvent } from "react";
+import { forwardRef, useEffect, useId, useMemo, useRef, useState, type InputHTMLAttributes, type KeyboardEvent } from "react";
 
 import { Input } from "@/components/ui/Field";
 import { useSymbolSearch } from "@/hooks/useApi";
@@ -37,6 +37,13 @@ export const SymbolCombobox = forwardRef<HTMLInputElement, SymbolComboboxProps>(
 ) {
   const listId = useId();
   const [focused, setFocused] = useState(false);
+  // Closing on blur waits a moment (so a click on an option lands); focus coming back cancels it.
+  const blurTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(blurTimer.current), []);
+  const keepOpen = () => {
+    window.clearTimeout(blurTimer.current);
+    setFocused(true);
+  };
   const [active, setActive] = useState(-1);
   const typed = value.trim();
   const query = useDebounced(typed, 200);
@@ -87,15 +94,16 @@ export const SymbolCombobox = forwardRef<HTMLInputElement, SymbolComboboxProps>(
         onChange={(event) => {
           onValueChange(event.target.value);
           setActive(-1);
-          setFocused(true);
+          keepOpen();
         }}
         onKeyDown={handleKeyDown}
         onFocus={(event) => {
-          setFocused(true);
+          keepOpen();
           onFocus?.(event);
         }}
         onBlur={(event) => {
-          window.setTimeout(() => setFocused(false), 120);
+          window.clearTimeout(blurTimer.current);
+          blurTimer.current = window.setTimeout(() => setFocused(false), 120);
           onBlur?.(event);
         }}
         autoComplete="off"
