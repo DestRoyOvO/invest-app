@@ -48,8 +48,9 @@ export function countdownText(t: Messages, state: MarketState | null | undefined
 
 /**
  * Market state, an approximate countdown to the next open or close, and the New York time (ET), ticking every second.
- * The compact variant (phones and tablets) shows the dot and the short countdown. Time-dependent text renders only
- * after hydration.
+ * The compact variant (phones and tablets) shows the dot and the short countdown; below 390px only the dot, so the
+ * phone command field keeps room for its word even with the widest countdown ("距开盘 23小时59分"). Screen readers get
+ * the state and the countdown either way. Time-dependent text renders only after hydration.
  */
 export function MarketClock({ state, compact = false }: { state: MarketState | null | undefined; compact?: boolean }) {
   const { t } = usePrefs();
@@ -63,7 +64,7 @@ export function MarketClock({ state, compact = false }: { state: MarketState | n
       <div className="flex items-center gap-1.5 text-xs" title={note}>
         <StateDot state={state} />
         <span className="sr-only">{countdown ? `${label}. ${countdown}` : label}</span>
-        <span aria-hidden className="num whitespace-nowrap text-fg-2 max-[359px]:hidden">
+        <span aria-hidden className="num whitespace-nowrap text-fg-2 max-[390px]:hidden">
           {countdownText(t, state, now, true) ?? label}
         </span>
       </div>
