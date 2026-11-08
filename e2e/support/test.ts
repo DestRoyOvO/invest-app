@@ -67,14 +67,6 @@ export interface App {
  */
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22a", "wcag22aa"];
 
-/**
- * Pages the navigation already links to that arrive with feature branches not merged yet: /markets (wave2/overview),
- * /screener (wave2/screener), /portfolio (wave2/portfolio) and /calendar (wave2/calendar). Next prefetches every
- * visible link, and those prefetches answer 404 until the pages exist. Remove each entry when its branch is merged.
- */
-const PENDING_PAGES = ["markets", "screener", "portfolio", "calendar"];
-const PENDING_PAGE_PREFETCH = new RegExp(`status of 404 \\(Not Found\\) \\(https?://[^/]+/(${PENDING_PAGES.join("|")})\\?_rsc=`);
-
 const QUIET_MS = 500;
 const SETTLE_TIMEOUT_MS = 10_000;
 
@@ -159,9 +151,7 @@ export const test = base.extend<{ consoleErrors: ConsoleErrors; axe: Axe; app: A
   consoleErrors: [
     async ({ page }, provide, testInfo) => {
       const seen: string[] = [];
-      const allowances: Array<{ pattern: RegExp | string; reason: string }> = [
-        { pattern: PENDING_PAGE_PREFETCH, reason: "Navigation prefetches of pages that are not merged yet." },
-      ];
+      const allowances: Array<{ pattern: RegExp | string; reason: string }> = [];
       page.on("console", (message) => {
         if (message.type() !== "error") return;
         const url = message.location().url;
