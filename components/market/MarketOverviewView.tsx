@@ -19,6 +19,7 @@ import type { AnalyzeRequest, Quote } from "@/types/api";
 
 import { BreadthStrip } from "./BreadthStrip";
 import { MarketBoard } from "./MarketBoard";
+import { staleSinceOf } from "./metrics";
 import { MoversPanel } from "./MoversPanel";
 import { QuoteTable } from "./QuoteTable";
 import { SectorBars } from "./SectorBars";
@@ -66,10 +67,11 @@ function WatchlistPanel() {
 }
 
 /**
- * The home page, personal first: my day and the week ahead, then the markets board, breadth and the heatmap on the
- * left; the watchlist, sectors, movers, headlines and the AI brief on the right. Two independent column stacks
- * (docs/design-system.md, column flow), so no panel stretches to its neighbour; the heatmap grows to fill whatever
- * height the left column has to spare. DOM order is the phone order.
+ * The home page, personal first: my day and the week ahead, then the markets board, breadth, the heatmap and the movers
+ * on the left; the watchlist, sectors, headlines and the AI brief on the right. Two independent column stacks
+ * (docs/design-system.md, column flow), so no panel stretches to its neighbour; the heatmap grows into whatever height
+ * the left column has to spare, up to a size that still reads at a glance. The movers table sits in the wide column,
+ * where its names have room. DOM order is the phone order.
  */
 export function MarketOverviewView() {
   const { t, lang } = usePrefs();
@@ -103,13 +105,14 @@ export function MarketOverviewView() {
             </>
           }
         >
-          <StaleBanner show={stale} since={data?.asOf} />
+          <StaleBanner show={stale} since={staleSinceOf(data)} />
           {failed ? <ErrorState error={error} onRetry={() => mutate()} compact /> : <MarketBoard board={data?.board} />}
         </Panel>
 
         <BreadthStrip breadth={data?.breadth} loading={!data && !error} />
 
-        <Panel title={t.market.heatmap} code="HMAP" actions={<HeatLegend />} className="flex-1" bodyClassName="flex flex-col">
+        {/* Fills the spare height of the column, capped at about one screen so the whole map stays in view. */}
+        <Panel title={t.market.heatmap} code="HMAP" actions={<HeatLegend />} className="flex-1 xl:max-h-[min(54rem,calc(100dvh_-_5rem))]" bodyClassName="flex flex-col">
           {data ? (
             <SectorHeatmap sectors={data.sectors} phoneList />
           ) : failed ? (
@@ -119,6 +122,7 @@ export function MarketOverviewView() {
           )}
         </Panel>
 
+        <MoversPanel movers={data?.movers} loading={!data && !error} />
       </div>
 
       <div className="flex min-w-0 flex-col gap-px">
@@ -127,7 +131,6 @@ export function MarketOverviewView() {
         <Panel title={t.market.sectorPerformance} code="SECT" className="max-sm:hidden">
           {data ? <SectorBars sectors={data.sectors} /> : failed ? <ErrorState error={error} onRetry={() => mutate()} compact /> : <SkeletonRows rows={8} />}
         </Panel>
-        <MoversPanel movers={data?.movers} loading={!data && !error} />
         <Panel title={t.market.news} code="NEWS">
           {data ? (
             <NewsList news={data.news} limit={8} unavailable={data.warnings.includes("news")} />

@@ -20,3 +20,13 @@ export function rangePosition(quote: Pick<OverviewQuote, "price" | "fiftyTwoWeek
 export function sharePercent(count: number, of: number): number | null {
   return of > 0 ? Math.round((count / of) * 100) : null;
 }
+
+/**
+ * When the data under a stale banner was fetched: the oldest stale quote when the server served some ("quotes_stale"),
+ * otherwise the time the response was assembled (the last refresh failed and the previous response is shown). Null
+ * when that is unknown, so the banner leaves the time out rather than pairing "stale" with the current time.
+ */
+export function staleSinceOf(data: { asOf: string; warnings: readonly string[]; staleSince: string | null } | undefined): string | null {
+  if (!data) return null;
+  return data.warnings.includes("quotes_stale") ? data.staleSince : data.asOf;
+}

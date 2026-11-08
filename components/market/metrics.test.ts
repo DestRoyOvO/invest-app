@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { rangePosition, relativeVolume, sharePercent } from "./metrics";
+import { rangePosition, relativeVolume, sharePercent, staleSinceOf } from "./metrics";
 
 describe("relativeVolume", () => {
   it("divides today's volume by the 3-month average", () => {
@@ -34,5 +34,22 @@ describe("sharePercent", () => {
     expect(sharePercent(44, 78)).toBe(56);
     expect(sharePercent(0, 78)).toBe(0);
     expect(sharePercent(1, 0)).toBeNull();
+  });
+});
+
+describe("staleSinceOf", () => {
+  const base = { asOf: "2026-11-07T20:00:05.000Z", staleSince: null, warnings: [] as string[] };
+
+  it("uses the oldest stale quote when the server served some", () => {
+    expect(staleSinceOf({ ...base, warnings: ["quotes_stale"], staleSince: "2026-11-07T19:40:00.000Z" })).toBe("2026-11-07T19:40:00.000Z");
+  });
+
+  it("uses the response time when only the refresh failed", () => {
+    expect(staleSinceOf(base)).toBe("2026-11-07T20:00:05.000Z");
+  });
+
+  it("leaves the time out when it is unknown", () => {
+    expect(staleSinceOf({ ...base, warnings: ["quotes_stale"] })).toBeNull();
+    expect(staleSinceOf(undefined)).toBeNull();
   });
 });

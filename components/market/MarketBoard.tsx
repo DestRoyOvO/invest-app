@@ -13,13 +13,16 @@ import { MARKET_BOARD } from "@/lib/universe";
 import type { BoardItem } from "@/types/api";
 
 /**
- * Index, rate, FX, commodity and crypto cells with one-month sparklines: one horizontally scrolling row on phones, a
- * grid from sm up.
+ * Index, rate, FX, commodity and crypto cells with one-month sparklines: one horizontally scrolling row on phones and
+ * small tablets, five across from md (two full rows, no empty cells). Each cell is a size container, so the absolute
+ * change and the "1M" tag appear only where they fit beside the percentage and the line.
  */
 export function MarketBoard({ board }: { board: BoardItem[] | undefined }) {
   const { t, lang } = usePrefs();
+  // The tag beside the sparkline: "1M" needs less room than "近1月".
+  const trendTag = lang === "zh" ? "hidden @min-[9.75rem]:inline" : "hidden @min-[8.75rem]:inline";
   return (
-    <div className="no-scrollbar flex snap-x gap-px overflow-x-auto bg-line sm:grid sm:grid-cols-3 sm:overflow-visible lg:grid-cols-5">
+    <div className="no-scrollbar flex snap-x gap-px overflow-x-auto bg-line md:grid md:grid-cols-5 md:overflow-visible">
       {MARKET_BOARD.map((def) => {
         const item = board?.find((b) => b.quote.symbol === def.symbol);
         const quote = item?.quote;
@@ -28,7 +31,7 @@ export function MarketBoard({ board }: { board: BoardItem[] | undefined }) {
           <Link
             key={def.symbol}
             href={stockPath(def.symbol)}
-            className="group @container flex w-[9.75rem] min-w-0 shrink-0 snap-start flex-col gap-1 bg-panel px-3 py-2.5 transition-colors hover:bg-hover sm:w-auto"
+            className="group @container flex w-[9.75rem] min-w-0 shrink-0 snap-start flex-col gap-1 bg-panel px-3 py-2.5 transition-colors hover:bg-hover md:w-auto"
           >
             <div className="flex items-baseline justify-between gap-2">
               <span className="truncate text-xs text-fg-2">{def.label[lang]}</span>
@@ -48,7 +51,7 @@ export function MarketBoard({ board }: { board: BoardItem[] | undefined }) {
                   </span>
                   <span className="flex shrink-0 items-center gap-1.5">
                     <Sparkline data={item?.spark ?? []} width={56} height={18} tone={directionOf(quote.changePercent)} />
-                    <span className="hidden text-micro text-fg-3 sm:inline">{t.columns.trend}</span>
+                    <span className={`${trendTag} text-micro text-fg-3`}>{t.columns.trend}</span>
                   </span>
                 </div>
               </>
