@@ -6,8 +6,9 @@ import { APP_SERVER_ARGS, appEnv, BASE_URL, LLM_URL, MOCK_ENV, MOCK_SERVER_ARGS,
 // with the end-to-end suite's servers and settings (e2e/support/env.ts: fixture data, the mock model, no network access,
 // the clock pinned at E2E_NOW, E2E_PORT, E2E_LLM_PORT and E2E_REUSE) and one change: the app's clock stands still at
 // E2E_NOW (frozen-clock.mjs in place of the suite's clock.mjs), so the times the server stamps on its data are the
-// same in every run and so are the images. readme.shots.ts lists the images; docs/testing.md (Screenshots) explains
-// the command. Its files end in .shots.ts, so neither `npm run e2e` (e2e/specs) nor Vitest (*.test.ts) picks them up.
+// same in every run and so are the images. images.ts lists the images, readme.shots.ts captures them, and the global
+// setup's teardown fails the run unless all of them arrived; docs/testing.md (Screenshots) explains the command. Its
+// files end in .shots.ts, so neither `npm run e2e` (e2e/specs) nor Vitest (*.test.ts) picks them up.
 
 const CI = Boolean(process.env.CI);
 const requestedChannel = process.env.E2E_CHANNEL ?? (CI ? "chromium" : "chrome");
