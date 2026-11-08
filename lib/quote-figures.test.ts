@@ -56,12 +56,17 @@ describe("Yahoo placeholder volumes", () => {
 });
 
 describe("price decimals", () => {
-  it("gives the world board's instruments its digits, the board's yields three, other pairs four and the rest none", () => {
+  it("gives the world board's instruments its digits, yields three, other pairs four and the rest none", () => {
     expect(priceDigits("EURUSD=X", "CURRENCY")).toBe(4);
     expect(priceDigits("USDJPY=X", "CURRENCY")).toBe(3);
     expect(priceDigits("HG=F", "FUTURE")).toBe(4);
     expect(priceDigits("^GSPC", "INDEX")).toBe(2);
-    expect(priceDigits("^TNX", "INDEX")).toBe(3);
+    // The four Treasury yields read alike, whether or not the markets board lists them (it lists ^TNX), and before
+    // their quote arrives.
+    for (const symbol of ["^IRX", "^FVX", "^TNX", "^TYX"]) {
+      expect(priceDigits(symbol, "INDEX"), symbol).toBe(3);
+      expect(priceDigits(symbol, null), symbol).toBe(3);
+    }
     // A pair the world board does not list, by quote type or by Yahoo's "=X" before the quote arrives.
     expect(priceDigits("AUDUSD=X", "CURRENCY")).toBe(4);
     expect(priceDigits("AUDUSD=X", null)).toBe(4);

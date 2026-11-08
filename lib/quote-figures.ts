@@ -52,22 +52,28 @@ export function reportedVolume(value: number | null, quoteType: string | null): 
   return value === 0 && quoteType !== null && !COUNTED_VOLUME.has(quoteType) ? null : value;
 }
 
-/** Decimals of a yield on the markets board: ^TNX quotes 4.859 (percent), and the board and the ticker strip show 3. */
+/**
+ * Decimals of a yield: Yahoo quotes the Treasury yields in percent to 3 decimals (^TNX 4.859, ^FVX 4.648), and the
+ * board and the ticker strip show ^TNX with 3.
+ */
 const YIELD_DIGITS = 3;
+/** The CBOE Treasury yield indices: 13 weeks, 5, 10 and 30 years. */
+const TREASURY_YIELDS: ReadonlySet<string> = new Set(["^IRX", "^FVX", "^TNX", "^TYX"]);
 /** Decimals of a currency pair that is not on the world board. */
 const PAIR_DIGITS = 4;
 
 /**
  * Decimals for an instrument's prices and price changes, or null for formatPrice's own rule (2, or 4 below 1). The
- * world board's instruments keep its digits (EUR/USD 4, USD/JPY 3, copper 4) and the markets board's yields theirs
- * (^TNX 3), so an instrument reads the same on its quote page as on the boards; other currency pairs (quote type
- * CURRENCY, or Yahoo's "=X" symbols before the quote arrives) get 4. A change shown next to the price takes the same
- * decimals: USD/JPY at 158.425 moved +0.770, not +0.77.
+ * world board's instruments keep its digits (EUR/USD 4, USD/JPY 3, copper 4), and yields (the Treasury yields and the
+ * markets board's yields) get 3 like ^TNX on the board, so an instrument reads the same on its quote page as on the
+ * boards and the four Treasury yields read alike; other currency pairs (quote type CURRENCY, or Yahoo's "=X" symbols
+ * before the quote arrives) get 4. A change shown next to the price takes the same decimals: USD/JPY at 158.425 moved
+ * +0.770, not +0.77.
  */
 export function priceDigits(symbol: string, quoteType: string | null | undefined): number | null {
   const listed = getWorldSymbol(symbol);
   if (listed) return listed.digits;
-  if (MARKET_BOARD.some((item) => item.symbol === symbol && item.kind === "yield")) return YIELD_DIGITS;
+  if (TREASURY_YIELDS.has(symbol) || MARKET_BOARD.some((item) => item.symbol === symbol && item.kind === "yield")) return YIELD_DIGITS;
   return quoteType === "CURRENCY" || symbol.endsWith("=X") ? PAIR_DIGITS : null;
 }
 
