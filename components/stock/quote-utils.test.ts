@@ -4,6 +4,7 @@ import {
   daysUntil,
   earningsTiming,
   futureDate,
+  instrumentKind,
   isUsListing,
   liveTitle,
   parseCompare,
@@ -23,6 +24,15 @@ describe("tabs", () => {
     expect(tabsFor("INDEX")).toEqual(["overview"]);
     expect(tabsFor("CRYPTOCURRENCY")).toEqual(["overview"]);
     expect(tabsFor(undefined)).toHaveLength(6);
+  });
+
+  it("sorts quote types into stocks, funds and other instruments", () => {
+    expect(instrumentKind("EQUITY")).toBe("equity");
+    expect(instrumentKind(null)).toBe("equity");
+    expect(instrumentKind(undefined)).toBe("equity");
+    expect(instrumentKind("ETF")).toBe("fund");
+    expect(instrumentKind("MUTUALFUND")).toBe("fund");
+    for (const type of ["INDEX", "CURRENCY", "FUTURE", "CRYPTOCURRENCY"]) expect(instrumentKind(type)).toBe("other");
   });
 
   it("falls back to the overview for a tab that is missing or does not apply", () => {

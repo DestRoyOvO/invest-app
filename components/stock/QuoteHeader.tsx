@@ -14,7 +14,7 @@ import type { Position } from "@/hooks/useHoldings";
 import { formatCompact, formatNumber, formatPrice, formatRatio, formatTime, tpl } from "@/lib/format";
 import type { Lang, StockDetail } from "@/types/api";
 
-import { earningsTiming, futureDate, isUsListing, positionFigures, upcomingExDividend } from "./quote-utils";
+import { earningsTiming, futureDate, instrumentKind, isUsListing, positionFigures, upcomingExDividend } from "./quote-utils";
 import { perShareDigits } from "./research-utils";
 import { RangeBar } from "./RangeBar";
 
@@ -84,6 +84,7 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, 
   const estimated = quote.earningsDateEstimated === true;
   const timing = nextEarnings ? earningsTiming(nextEarnings, isUsListing(symbol)) : null;
   const showExDividend = upcomingExDividend(quote.exDividendDate);
+  const kind = instrumentKind(quote.quoteType);
 
   const why = () => openChat({ text: tpl(a.whyMovingPrompt, { symbol }), intent: { kind: "move", symbol } });
 
@@ -224,7 +225,16 @@ export function QuoteHeader({ detail, inWatchlist, onToggleWatchlist, position, 
         <Stat label={t.stock.stats.open}>{formatPrice(quote.open, lang)}</Stat>
         <Stat label={t.stock.stats.prevClose}>{formatPrice(quote.previousClose, lang)}</Stat>
         <Stat label={t.stock.stats.volume}>{formatCompact(quote.volume, lang)}</Stat>
-        <Stat label={quote.marketCap !== null ? t.stock.stats.marketCap : t.stock.stats.netAssets}>{formatCompact(quote.marketCap ?? quote.netAssets, lang)}</Stat>
+        {/* Market cap (stocks, crypto), net assets (funds), or the 52-week change where neither exists (indices, currencies, futures). */}
+        {quote.marketCap !== null || kind === "equity" ? (
+          <Stat label={t.stock.stats.marketCap}>{formatCompact(quote.marketCap, lang)}</Stat>
+        ) : kind === "fund" ? (
+          <Stat label={t.stock.stats.netAssets}>{formatCompact(quote.netAssets, lang)}</Stat>
+        ) : (
+          <Stat label={t.stock.stats.change52w}>
+            <Delta value={quote.fiftyTwoWeekChangePercent} digits={1} />
+          </Stat>
+        )}
         <div className="min-w-0 bg-panel px-3 py-2">
           <div className="col-head truncate">{t.stock.stats.dayRange}</div>
           <RangeBar low={quote.dayLow} high={quote.dayHigh} value={quote.price} lang={lang} />

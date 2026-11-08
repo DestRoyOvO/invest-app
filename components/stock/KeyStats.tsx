@@ -9,6 +9,8 @@ import { Panel } from "@/components/ui/Panel";
 import { formatCompact, formatDate, formatMultiple, formatNumber, formatPercent, formatPrice, formatRatio, tpl } from "@/lib/format";
 import type { KeyStats as KeyStatsData, Quote } from "@/types/api";
 
+import { instrumentKind } from "./quote-utils";
+
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-3 py-1">
@@ -37,12 +39,15 @@ function Upside({ template, value }: { template: string; value: number }) {
 
 type RecommendationKey = "strong_buy" | "buy" | "hold" | "underperform" | "sell" | "none";
 
-const FUND_TYPES = new Set(["ETF", "MUTUALFUND"]);
+/** Two columns of groups between sm and xl, one column in the narrow right stack from xl. */
+const GROUP_GRID =
+  "grid content-start sm:grid-cols-2 xl:grid-cols-1 [&>*]:border-b [&>*]:border-line [&>*:last-child]:border-b-0 sm:[&>*:nth-child(odd)]:border-r xl:[&>*:nth-child(odd)]:border-r-0";
 
 /**
  * Valuation, profitability, balance sheet and analyst figures (fund figures for ETFs). Margins that do not apply
  * (a bank's gross margin) arrive as null and show a dash; amounts reported in another currency than the price are
- * labelled with that currency.
+ * labelled with that currency. Indices, currencies, futures and crypto have no company or fund figures, earnings or
+ * dividends: they get the trading figures alone, with the market cap and volume only where Yahoo has them.
  */
 export function KeyStats({ stats, quote, className }: { stats: KeyStatsData; quote: Quote; className?: string }) {
   const { t, lang } = usePrefs();
@@ -52,8 +57,27 @@ export function KeyStats({ stats, quote, className }: { stats: KeyStatsData; quo
   const recommendation = t.stock.recommendation[recKey] ?? stats.recommendationKey ?? t.stock.recommendation.none;
   const financialCurrency = stats.financialCurrency ?? null;
   const currencyDiffers = financialCurrency !== null && quote.currency !== null && financialCurrency !== quote.currency;
-  const isFund = quote.quoteType !== null && FUND_TYPES.has(quote.quoteType);
+  const kind = instrumentKind(quote.quoteType);
+  const isFund = kind === "fund";
   const balanceTitle = currencyDiffers ? `${t.stock.groups.balance} · ${financialCurrency}` : t.stock.groups.balance;
+  const avgVolume = stats.avgVolume ?? quote.avgVolume;
+  const marketCap = stats.marketCap ?? quote.marketCap;
+
+  if (kind === "other") {
+    return (
+      <Panel title={t.stock.keyStats} code="FA" className={className}>
+        <Group title={t.stock.groups.trading}>
+          {marketCap !== null ? <Row label={s.marketCap}>{formatCompact(marketCap, lang)}</Row> : null}
+          {avgVolume !== null && avgVolume > 0 ? <Row label={s.avgVolume}>{formatCompact(avgVolume, lang)}</Row> : null}
+          <Row label={s.change52w}>
+            <Delta value={quote.fiftyTwoWeekChangePercent} digits={1} />
+          </Row>
+          <Row label={s.ma50}>{formatPrice(quote.fiftyDayAverage, lang)}</Row>
+          <Row label={s.ma200}>{formatPrice(quote.twoHundredDayAverage, lang)}</Row>
+        </Group>
+      </Panel>
+    );
+  }
 
   return (
     <Panel
@@ -67,7 +91,7 @@ export function KeyStats({ stats, quote, className }: { stats: KeyStatsData; quo
           </span>
         ) : null
       }
-      bodyClassName="grid content-start sm:grid-cols-2 xl:grid-cols-1 [&>*]:border-b [&>*]:border-line [&>*:last-child]:border-b-0 sm:[&>*:nth-child(odd)]:border-r xl:[&>*:nth-child(odd)]:border-r-0"
+      bodyClassName={GROUP_GRID}
     >
       {isFund ? (
         <Group title={t.stock.groups.fund}>
@@ -82,12 +106,12 @@ export function KeyStats({ stats, quote, className }: { stats: KeyStatsData; quo
           <Row label={s.dividendYield}>{formatRatio(stats.dividendYield ?? quote.dividendYield, { digits: 2 })}</Row>
           <Row label={s.ma50}>{formatPrice(quote.fiftyDayAverage, lang)}</Row>
           <Row label={s.ma200}>{formatPrice(quote.twoHundredDayAverage, lang)}</Row>
-          <Row label={s.avgVolume}>{formatCompact(stats.avgVolume ?? quote.avgVolume, lang)}</Row>
+          <Row label={s.avgVolume}>{formatCompact(avgVolume, lang)}</Row>
         </Group>
       ) : (
         <>
           <Group title={t.stock.groups.valuation}>
-            <Row label={s.marketCap}>{formatCompact(stats.marketCap ?? quote.marketCap, lang)}</Row>
+            <Row label={s.marketCap}>{formatCompact(marketCap, lang)}</Row>
             <Row label={s.pe}>{formatMultiple(stats.trailingPE ?? quote.trailingPE)}</Row>
             <Row label={s.forwardPe}>{formatMultiple(stats.forwardPE ?? quote.forwardPE)}</Row>
             <Row label={s.peg}>{formatNumber(stats.pegRatio, 2, lang)}</Row>
@@ -129,7 +153,7 @@ export function KeyStats({ stats, quote, className }: { stats: KeyStatsData; quo
       )}
       {isFund ? null : (
         <Group title={t.stock.groups.trading}>
-          <Row label={s.avgVolume}>{formatCompact(stats.avgVolume ?? quote.avgVolume, lang)}</Row>
+          <Row label={s.avgVolume}>{formatCompact(avgVolume, lang)}</Row>
           <Row label={s.change52w}>
             <Delta value={quote.fiftyTwoWeekChangePercent} digits={1} />
           </Row>

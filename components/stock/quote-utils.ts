@@ -12,16 +12,27 @@ export const QUOTE_TABS: readonly QuoteTab[] = ["overview", "financials", "earni
 
 const FUND_TYPES = new Set(["ETF", "MUTUALFUND"]);
 
+export type InstrumentKind = "equity" | "fund" | "other";
+
+/**
+ * The kind of instrument behind a quote type, for what the quote page shows: stocks (and a missing or unknown type)
+ * get the company figures, ETFs and mutual funds the fund figures, and indices, currencies, futures and crypto only
+ * the trading figures, since they have no statements, analysts, earnings or dividends.
+ */
+export function instrumentKind(quoteType: string | null | undefined): InstrumentKind {
+  if (quoteType === null || quoteType === undefined || quoteType === "EQUITY") return "equity";
+  return FUND_TYPES.has(quoteType) ? "fund" : "other";
+}
+
 /**
  * Tabs that apply to a quote type. Stocks get every tab; funds pay distributions but have no statements, earnings,
  * analysts or insiders; indices, currencies, futures and crypto have only the overview. An unknown type (no quote
  * yet) shows every tab so a deep link keeps its place while the quote loads.
  */
 export function tabsFor(quoteType: string | null | undefined): QuoteTab[] {
-  if (quoteType === undefined) return [...QUOTE_TABS];
-  if (quoteType === null || quoteType === "EQUITY") return [...QUOTE_TABS];
-  if (FUND_TYPES.has(quoteType)) return ["overview", "dividends"];
-  return ["overview"];
+  const kind = instrumentKind(quoteType);
+  if (kind === "equity") return [...QUOTE_TABS];
+  return kind === "fund" ? ["overview", "dividends"] : ["overview"];
 }
 
 /**
