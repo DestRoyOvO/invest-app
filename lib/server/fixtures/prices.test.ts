@@ -176,6 +176,12 @@ describe("quotes", () => {
     expect((duringSession?.regularMarketTime as Date).toISOString()).toBe("2026-11-06T21:00:00.000Z");
   });
 
+  it("close the FX week at 17:00 New York time on Friday", () => {
+    const quote = buildQuote(security("EURUSD=X"), SATURDAY);
+    expect(quote?.marketState).toBe("CLOSED");
+    expect((quote?.regularMarketTime as Date).toISOString()).toBe("2026-11-06T22:00:00.000Z");
+  });
+
   it("carry the after-hours trade of the latest session, as the intraday chart draws it", () => {
     const quote = buildQuote(security("AAPL"), SATURDAY)!;
     const chart = buildChart("AAPL", { period1: new Date("2026-11-06T09:00:00Z"), interval: "1m", includePrePost: true }, SATURDAY);

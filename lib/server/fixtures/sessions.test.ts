@@ -126,4 +126,15 @@ describe("marketStateAt", () => {
     expect(marketStateAt(PROFILES.futures, at("2026-11-09T00:30:00Z"))).toBe("REGULAR");
     expect(marketStateAt(PROFILES.futures, at("2026-11-07T15:00:00Z"))).toBe("CLOSED");
   });
+
+  it("trades FX from Sunday 17:00 to Friday 17:00 New York time", () => {
+    // 22:00 London is 17:00 New York in November 2026, both on standard time.
+    expect(new Date(sessionClose(PROFILES.fx, parseDayKey("2026-11-06"))).toISOString()).toBe("2026-11-06T22:00:00.000Z");
+    expect(new Date(sessionOpen(PROFILES.fx, parseDayKey("2026-11-09"))).toISOString()).toBe("2026-11-08T22:00:00.000Z");
+    expect(marketStateAt(PROFILES.fx, at("2026-11-06T21:59:00Z"))).toBe("REGULAR");
+    expect(marketStateAt(PROFILES.fx, at("2026-11-06T22:30:00Z"))).toBe("CLOSED");
+    expect(marketStateAt(PROFILES.fx, at("2026-11-08T22:30:00Z"))).toBe("REGULAR");
+    expect(dayKey(latestCompletedSession(PROFILES.fx, at("2026-11-06T21:59:00Z")))).toBe("2026-11-05");
+    expect(dayKey(latestCompletedSession(PROFILES.fx, at("2026-11-06T22:00:00Z")))).toBe("2026-11-06");
+  });
 });

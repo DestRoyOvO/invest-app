@@ -76,8 +76,8 @@ What the mode guarantees:
   every day. Prices stop at the latest completed session; `marketState` follows the clock (PRE, REGULAR, POST, CLOSED),
   the numbers do not.
 - **One clock.** Every answer is computed for the process clock (`fixtureNow()`). On the real clock the data changes
-  when a session closes somewhere (US stocks at 16:00 New York time, other exchanges, futures, and crypto and FX at
-  midnight UTC), and the scheduled events move with the latest session. The end-to-end suite pins the clock instead,
+  when a session closes somewhere (US stocks at 16:00 New York time, futures and FX at 17:00, other exchanges at their
+  close, crypto at midnight UTC), and the scheduled events move with the latest session. The end-to-end suite pins the clock instead,
   so a run sees the same data on any day (see [End-to-end tests](#end-to-end-tests)).
 - **Calendars.** Daily bars exist on NYSE sessions only (holidays 2000 to 2030, from the exchange rules plus the special
   closures), on weekdays for other exchanges and FX, every day for crypto. Weekly and monthly bars aggregate the dailies;

@@ -237,7 +237,10 @@ function exchange(key: string, timeZone: string, open: number, close: number): M
 
 export const PROFILES = {
   us: { key: "us", timeZone: "America/New_York", calendar: "nyse", open: 570, close: 960, pre: 240, post: 1200, dailyStamp: 570, periodsPerYear: 252, epoch: EPOCH_2000 },
-  fx: { key: "fx", timeZone: "Europe/London", calendar: "weekdays", open: 0, close: 1440, pre: null, post: null, dailyStamp: 0, periodsPerYear: 260, epoch: dayNumber(2003, 12, 1) },
+  // FX trades around the clock from Sunday 17:00 to Friday 17:00 New York time, in sessions from 22:00 London to 22:00
+  // London (17:00 New York, except in the weeks when only the US is on daylight saving time); daily bars are stamped at
+  // London midnight.
+  fx: { key: "fx", timeZone: "Europe/London", calendar: "weekdays", open: -120, close: 1320, pre: null, post: null, dailyStamp: 0, periodsPerYear: 260, epoch: dayNumber(2003, 12, 1) },
   futures: { key: "futures", timeZone: "America/New_York", calendar: "weekdays", open: -360, close: 1020, pre: null, post: null, dailyStamp: 0, periodsPerYear: 252, epoch: dayNumber(2000, 8, 30) },
   crypto: { key: "crypto", timeZone: "UTC", calendar: "daily", open: 0, close: 1440, pre: null, post: null, dailyStamp: 0, periodsPerYear: 365, epoch: dayNumber(2014, 9, 17) },
   toronto: exchange("toronto", "America/Toronto", 570, 960),
