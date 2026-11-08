@@ -25,16 +25,26 @@ function trading(state: MarketState | null | undefined): boolean {
   return state === "REGULAR" || state === "PRE" || state === "POST";
 }
 
-async function fetchQuoteChunks(key: readonly [string, string]): Promise<QuotesResponse> {
-  const symbols = key[1].split(",");
-  const chunks: string[][] = [];
-  for (let i = 0; i < symbols.length; i += CHUNK) chunks.push(symbols.slice(i, i + CHUNK));
-  const parts = await Promise.all(chunks.map((chunk) => fetchJson<QuotesResponse>(`/api/quotes?symbols=${symbolsParam(chunk)}`)));
+/** The /api/quotes requests for a symbol list: unique symbols, sorted, at most MAX_SYMBOLS, 50 per request. */
+export function quoteRequestUrls(symbols: readonly string[]): string[] {
+  const list = [...new Set(symbols)].sort().slice(0, MAX_SYMBOLS);
+  const urls: string[] = [];
+  for (let i = 0; i < list.length; i += CHUNK) urls.push(`/api/quotes?symbols=${symbolsParam(list.slice(i, i + CHUNK))}`);
+  return urls;
+}
+
+/** One response from several: all quotes and missing symbols, and the oldest asOf (the data is as old as its oldest part). */
+export function mergeQuoteResponses(parts: readonly QuotesResponse[]): QuotesResponse {
   return {
-    asOf: parts.map((part) => part.asOf).sort()[0] ?? new Date().toISOString(),
+    asOf: parts.map((part) => part.asOf).sort()[0] ?? new Date(0).toISOString(),
     quotes: parts.flatMap((part) => part.quotes),
     missing: parts.flatMap((part) => part.missing),
   };
+}
+
+async function fetchQuoteChunks(key: readonly [string, string]): Promise<QuotesResponse> {
+  const parts = await Promise.all(quoteRequestUrls(key[1].split(",")).map((url) => fetchJson<QuotesResponse>(url)));
+  return mergeQuoteResponses(parts);
 }
 
 export interface QuoteMap {

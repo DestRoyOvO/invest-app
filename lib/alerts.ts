@@ -39,7 +39,7 @@ export interface AlertRule {
   /** When the rule was created or last re-armed: a "once" rule fires at most once per arming. */
   armedAt: string;
   /** Last check: its time, the session it saw and that session's high and low so far (the catch-up baseline). */
-  checkedAt: string | null;
+  lastCheckedAt: string | null;
   checkedSession: string | null;
   checkedHigh: number | null;
   checkedLow: number | null;
@@ -148,7 +148,7 @@ function sanitizeRule(raw: unknown): AlertRule | null {
     paused: r.paused === true,
     createdAt: r.createdAt,
     armedAt: isIsoTime(r.armedAt) ? r.armedAt : r.createdAt,
-    checkedAt: isIsoTime(r.checkedAt) ? r.checkedAt : null,
+    lastCheckedAt: isIsoTime(r.lastCheckedAt) ? r.lastCheckedAt : null,
     checkedSession: isSession(r.checkedSession) ? r.checkedSession : null,
     checkedHigh: isPositive(r.checkedHigh) ? r.checkedHigh : null,
     checkedLow: isPositive(r.checkedLow) ? r.checkedLow : null,
@@ -410,7 +410,7 @@ function maxDefined(...values: Array<number | null | undefined>): number | null 
 function checkpoint(rule: AlertRule, quote: AlertQuote, session: string, now: Date): Partial<AlertRule> {
   const same = rule.checkedSession === session;
   return {
-    checkedAt: now.toISOString(),
+    lastCheckedAt: now.toISOString(),
     checkedSession: session,
     checkedHigh: maxDefined(quote.dayHigh, quote.price, same ? rule.checkedHigh : null),
     checkedLow: minDefined(quote.dayLow, quote.price, same ? rule.checkedLow : null),
@@ -461,7 +461,7 @@ export function canCatchUp(rule: Pick<AlertRule, "kind">): boolean {
 }
 
 function sinceOf(rule: AlertRule): string {
-  return rule.checkedAt ?? rule.armedAt;
+  return rule.lastCheckedAt ?? rule.armedAt;
 }
 
 /** An active price rule that went unchecked for longer than CATCH_UP_AFTER_MS. */
@@ -506,7 +506,7 @@ export function catchUp(rule: AlertRule, bars: readonly AlertBar[], now: Date, c
     hits.push({ session, extreme });
   }
 
-  const patch: Partial<AlertRule> = { checkedAt: now.toISOString() };
+  const patch: Partial<AlertRule> = { lastCheckedAt: now.toISOString() };
   const last = sorted[sorted.length - 1];
   const lastSession = last ? utcDate(last.t) : null;
   if (last && lastSession && lastSession >= (rule.checkedSession ?? "")) {
@@ -633,7 +633,7 @@ function armed(rule: AlertRule, baseline: AlertBaseline | null, now: Date): Aler
     armedAt: now.toISOString(),
     done: false,
     lastTriggeredSession: null,
-    checkedAt: baseline ? now.toISOString() : null,
+    lastCheckedAt: baseline ? now.toISOString() : null,
     checkedSession: baseline?.session ?? null,
     checkedHigh: baseline?.high ?? null,
     checkedLow: baseline?.low ?? null,
@@ -657,7 +657,7 @@ export function createRule(input: AlertRuleInput, now: Date, baseline: AlertBase
     paused: false,
     createdAt: now.toISOString(),
     armedAt: now.toISOString(),
-    checkedAt: null,
+    lastCheckedAt: null,
     checkedSession: null,
     checkedHigh: null,
     checkedLow: null,
@@ -725,7 +725,7 @@ export function setAlertPaused(id: string, paused: boolean, now = new Date()): v
     rules.map((rule) => {
       if (rule.id !== id || rule.paused === paused) return rule;
       if (paused) return { ...rule, paused: true };
-      return { ...rule, paused: false, checkedAt: now.toISOString(), checkedSession: null, checkedHigh: null, checkedLow: null, side: null };
+      return { ...rule, paused: false, lastCheckedAt: now.toISOString(), checkedSession: null, checkedHigh: null, checkedLow: null, side: null };
     }),
   );
 }

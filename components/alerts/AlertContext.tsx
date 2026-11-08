@@ -43,7 +43,8 @@ export function AlertContext({ symbol, quote, loading, kind, value, holdings, no
   if (!symbol) return null;
   if (!quote) return <p className="text-xs text-fg-3">{loading ? words.loading : tpl(words.noQuote, { symbol })}</p>;
 
-  const reading = now && (kind === "cross_ma200" || value !== null) ? readRule(createRule({ symbol, kind, value, repeat: "once" }, now), quote, holdings, now) : null;
+  const preview = now && (kind === "cross_ma200" || value !== null) ? createRule({ symbol, kind, value, repeat: "once" }, now, null, "preview") : null;
+  const reading = preview && now ? readRule(preview, quote, holdings, now) : null;
   const price = quote.price;
   const lines: ReactNode[] = [];
 

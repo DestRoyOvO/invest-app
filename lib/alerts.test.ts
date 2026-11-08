@@ -238,7 +238,7 @@ describe("evaluate", () => {
 
 describe("catchUp", () => {
   // Checked last on Tuesday Nov 3 at 15:00 New York, when that session's low so far was 175.
-  const checked = { checkedAt: "2026-11-03T20:00:00Z", checkedSession: "2026-11-03", checkedHigh: 182, checkedLow: 175 };
+  const checked = { lastCheckedAt: "2026-11-03T20:00:00Z", checkedSession: "2026-11-03", checkedHigh: 182, checkedLow: 175 };
   const bars = [bar("2026-11-02", 184, 176), bar("2026-11-03", 183, 174.5), bar("2026-11-04", 180, 172), bar("2026-11-05", 178, 168.2), bar("2026-11-06", 188.1, 171)];
 
   it("reports the first session that traded through the level", () => {
@@ -246,7 +246,7 @@ describe("catchUp", () => {
     const check = catchUp(r, bars, NOW, "USD");
     expect(check.fire).toBe(true);
     expect(check.event).toMatchObject({ id: `r1@${r.armedAt}`, missed: { session: "2026-11-05", extreme: 168.2, sessions: 1 }, observed: 168.2, currency: "USD" });
-    expect(check.patch).toMatchObject({ done: true, lastTriggeredSession: "2026-11-05", checkedSession: SESSION, checkedHigh: 188.1, checkedLow: 171, checkedAt: NOW.toISOString() });
+    expect(check.patch).toMatchObject({ done: true, lastTriggeredSession: "2026-11-05", checkedSession: SESSION, checkedHigh: 188.1, checkedLow: 171, lastCheckedAt: NOW.toISOString() });
   });
 
   it("counts the checked session only for a new extreme beyond its baseline", () => {
@@ -254,7 +254,7 @@ describe("catchUp", () => {
     expect(catchUp(r, bars, NOW).event?.missed).toMatchObject({ session: "2026-11-03", extreme: 174.5, sessions: 4 });
     // The low of 174.5 had not been seen at the last check (175), so it happened after it. Without a baseline the
     // session is skipped instead.
-    const noBaseline = rule({ kind: "below", value: 174.8 }, { checkedAt: "2026-11-03T20:00:00Z", checkedSession: null, checkedLow: null });
+    const noBaseline = rule({ kind: "below", value: 174.8 }, { lastCheckedAt: "2026-11-03T20:00:00Z", checkedSession: null, checkedLow: null });
     expect(catchUp(noBaseline, bars, NOW).event?.missed?.session).toBe("2026-11-04");
     const alreadySeen = rule({ kind: "below", value: 174.8 }, { ...checked, checkedLow: 174.5 });
     expect(catchUp(alreadySeen, bars, NOW).event?.missed?.session).toBe("2026-11-04");
@@ -275,11 +275,11 @@ describe("catchUp", () => {
     expect(catchUp(rule({ kind: "day_move", value: 5 }, checked), bars, NOW)).toMatchObject({ fire: false, patch: {} });
     expect(catchUp(rule({ kind: "below", value: 170 }, { ...checked, done: true }), bars, NOW).fire).toBe(false);
     expect(catchUp(rule({ kind: "below", value: 170 }, { ...checked, paused: true }), bars, NOW).fire).toBe(false);
-    expect(catchUp(rule({ kind: "below", value: 170 }, checked), [], NOW)).toMatchObject({ fire: false, patch: { checkedAt: NOW.toISOString() } });
+    expect(catchUp(rule({ kind: "below", value: 170 }, checked), [], NOW)).toMatchObject({ fire: false, patch: { lastCheckedAt: NOW.toISOString() } });
   });
 
   it("logs a live trigger and a catch-up of the same session once", () => {
-    const r = rule({ kind: "below", value: 172, repeat: "daily" }, { ...checked, checkedAt: "2026-11-06T14:00:00Z", checkedSession: SESSION, checkedLow: 173 });
+    const r = rule({ kind: "below", value: 172, repeat: "daily" }, { ...checked, lastCheckedAt: "2026-11-06T14:00:00Z", checkedSession: SESSION, checkedLow: 173 });
     const live = evaluate(r, quote({ price: 171.5, dayLow: 171 }), {}, NOW);
     const replay = catchUp(r, bars, NOW);
     expect(live.event?.id).toBe(replay.event?.id);
@@ -290,9 +290,9 @@ describe("catchUp", () => {
 
 describe("planChecks", () => {
   it("replays stale price rules first and checks the rest live", () => {
-    const fresh = rule({ kind: "above", value: 180 }, { id: "fresh", checkedAt: "2026-11-06T19:58:00Z", checkedSession: SESSION });
-    const stale = rule({ kind: "below", value: 170 }, { id: "stale", checkedAt: "2026-10-20T20:00:00Z" });
-    const staleMove = rule({ kind: "day_move", value: 2 }, { id: "move", checkedAt: "2026-10-20T20:00:00Z" });
+    const fresh = rule({ kind: "above", value: 180 }, { id: "fresh", lastCheckedAt: "2026-11-06T19:58:00Z", checkedSession: SESSION });
+    const stale = rule({ kind: "below", value: 170 }, { id: "stale", lastCheckedAt: "2026-10-20T20:00:00Z" });
+    const staleMove = rule({ kind: "day_move", value: 2 }, { id: "move", lastCheckedAt: "2026-10-20T20:00:00Z" });
     const paused = rule({ kind: "above", value: 100 }, { id: "paused", paused: true });
     const quotes = new Map([["NVDA", quote()]]);
     const plan = planChecks([fresh, stale, staleMove, paused], quotes, {}, NOW);
@@ -308,9 +308,9 @@ describe("planChecks", () => {
   });
 
   it("knows when a rule needs a replay and which range covers it", () => {
-    expect(needsCatchUp(rule({}, { checkedAt: "2026-11-06T19:56:00Z" }), NOW)).toBe(false);
-    expect(needsCatchUp(rule({}, { checkedAt: "2026-11-06T19:50:00Z" }), NOW)).toBe(true);
-    expect(needsCatchUp(rule({ kind: "day_move", value: 3 }, { checkedAt: "2026-10-01T00:00:00Z" }), NOW)).toBe(false);
+    expect(needsCatchUp(rule({}, { lastCheckedAt: "2026-11-06T19:56:00Z" }), NOW)).toBe(false);
+    expect(needsCatchUp(rule({}, { lastCheckedAt: "2026-11-06T19:50:00Z" }), NOW)).toBe(true);
+    expect(needsCatchUp(rule({ kind: "day_move", value: 3 }, { lastCheckedAt: "2026-10-01T00:00:00Z" }), NOW)).toBe(false);
     expect(catchUpRange("2026-10-01T00:00:00Z", NOW)).toBe("3mo");
     expect(catchUpRange("2026-06-01T00:00:00Z", NOW)).toBe("6mo");
     expect(catchUpRange("2025-01-01T00:00:00Z", NOW)).toBe("1y");
@@ -326,7 +326,7 @@ describe("stores", () => {
     expect(baseline).toEqual({ session: SESSION, high: 188.1, low: 181.2, side: "above" });
     const added = addAlertRule(input, { now: NOW, baseline, id: "a1" });
     expect(added.status).toBe("added");
-    expect(alertsStore.getSnapshot()[0]).toMatchObject({ id: "a1", symbol: "NVDA", note: "wrong below", checkedAt: NOW.toISOString(), checkedLow: 181.2, side: "above" });
+    expect(alertsStore.getSnapshot()[0]).toMatchObject({ id: "a1", symbol: "NVDA", note: "wrong below", lastCheckedAt: NOW.toISOString(), checkedLow: 181.2, side: "above" });
     expect(JSON.parse(storage.getItem("investseek:alerts:v1") ?? "[]")).toHaveLength(1);
     expect(addAlertRule({ ...input, value: -1 })).toEqual({ status: "invalid", error: "value" });
     expect(addAlertRule({ ...input, symbol: "$$" })).toEqual({ status: "invalid", error: "symbol" });
@@ -345,7 +345,7 @@ describe("stores", () => {
     addAlertRule(input, { now: new Date("2026-11-02T15:00:00Z"), id: "a1" });
     applyAlertPatches(new Map([["a1", { done: true, lastTriggeredAt: NOW.toISOString(), lastTriggeredSession: SESSION, triggerCount: 1 }]]));
     expect(updateAlertRule("a1", { ...input, value: 165 }, { now: NOW })).toBeNull();
-    expect(alertsStore.getSnapshot()[0]).toMatchObject({ value: 165, done: false, armedAt: NOW.toISOString(), lastTriggeredAt: NOW.toISOString(), triggerCount: 1, checkedAt: null });
+    expect(alertsStore.getSnapshot()[0]).toMatchObject({ value: 165, done: false, armedAt: NOW.toISOString(), lastTriggeredAt: NOW.toISOString(), triggerCount: 1, lastCheckedAt: null });
     expect(updateAlertRule("nope", input)).toBe("missing");
     // A new note alone keeps the rule's state.
     applyAlertPatches(new Map([["a1", { done: true }]]));
@@ -357,7 +357,7 @@ describe("stores", () => {
     expect(alertsStore.getSnapshot()[0].paused).toBe(true);
     const later = new Date("2026-11-09T15:00:00Z");
     setAlertPaused("a1", false, later);
-    expect(alertsStore.getSnapshot()[0]).toMatchObject({ paused: false, checkedAt: later.toISOString(), checkedSession: null, side: null });
+    expect(alertsStore.getSnapshot()[0]).toMatchObject({ paused: false, lastCheckedAt: later.toISOString(), checkedSession: null, side: null });
 
     applyAlertPatches(new Map([["a1", { done: true }]]));
     rearmAlertRule("a1", later);
