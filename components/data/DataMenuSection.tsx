@@ -6,7 +6,7 @@ import { useEffect, useId } from "react";
 
 import { useT } from "@/components/providers/PrefsProvider";
 import { useBackupReminder } from "@/components/shell/backup-reminder";
-import { openAnchorHere } from "@/components/shell/HashLanding";
+import { openAnchorOnClick } from "@/components/shell/HashLanding";
 import { useToast } from "@/components/ui/Toast";
 import { useLocalStore } from "@/hooks/useLocalStore";
 import { backupAgeDays, backupMetaStore } from "@/lib/backup";
@@ -71,7 +71,7 @@ export function DataMenuSection({ onNavigate }: { onNavigate?: () => void }) {
             onClick={(event) => {
               onNavigate?.();
               // Already on /data: land on the imports even when the address names them already.
-              if (openAnchorHere("/data#import")) event.preventDefault();
+              openAnchorOnClick(event, "/data#import");
             }}
             className={ITEM}
           >

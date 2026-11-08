@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useLayoutEffect } from "react";
+import { useEffect, useLayoutEffect, type MouseEvent as ReactMouseEvent } from "react";
 
 import { anchorOnPage, followHash, hashId, landingFor, lastFragment, type Place } from "./hash-landing";
 
@@ -99,6 +99,15 @@ export function openAnchorHere(href: string): boolean {
   if (url.href !== oldURL) window.history.pushState(null, "", `${url.pathname}${url.search}${url.hash}`);
   window.dispatchEvent(new HashChangeEvent("hashchange", { oldURL, newURL: url.href }));
   return true;
+}
+
+/**
+ * The click handler of a link to an anchor that may be on the open page (/data#import from the settings menu): a plain
+ * click opens it in place with openAnchorHere; a click with a modifier key (a new tab or window) stays the browser's.
+ */
+export function openAnchorOnClick(event: ReactMouseEvent<HTMLAnchorElement>, href: string): void {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  if (openAnchorHere(href)) event.preventDefault();
 }
 
 /** Opens an address from the command bar or a G key: an anchor on this page at once, another page through the router. */

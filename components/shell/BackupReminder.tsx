@@ -8,18 +8,17 @@ import { lastBackupLabel } from "@/components/data/labels";
 import { useT } from "@/components/providers/PrefsProvider";
 
 import { useBackupReminder } from "./backup-reminder";
-import { openAnchorHere } from "./HashLanding";
+import { openAnchorOnClick } from "./HashLanding";
 
 /** The backup panel on /data (export and restore), where the reminder leads. */
 export const BACKUP_PANEL_HREF = "/data#restore";
 
 /**
- * On /data already, a plain click opens the panel in place (openAnchorHere), because the router scrolls only when the
- * hash changes; from another page the link navigates and HashLanding lands on the panel once /data has rendered.
+ * On /data already, a plain click opens the panel in place, because the router scrolls only when the hash changes;
+ * from another page the link navigates and HashLanding lands on the panel once /data has rendered.
  */
 function openPanel(event: MouseEvent<HTMLAnchorElement>) {
-  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-  if (openAnchorHere(BACKUP_PANEL_HREF)) event.preventDefault();
+  openAnchorOnClick(event, BACKUP_PANEL_HREF);
 }
 
 /**
