@@ -13,13 +13,14 @@ import { HeatLegend } from "@/components/ui/HeatLegend";
 import { Panel, PanelMeta } from "@/components/ui/Panel";
 import { EmptyState, ErrorState, Skeleton, SkeletonRows, StaleBanner } from "@/components/ui/States";
 import { useOverview, useQuotes, useSparklines } from "@/hooks/useApi";
+import { useBoard } from "@/hooks/useShellApi";
 import { useWatchlist } from "@/hooks/useWatchlist";
 import { formatTime, tpl } from "@/lib/format";
 import type { AnalyzeRequest, Quote } from "@/types/api";
 
 import { BreadthStrip } from "./BreadthStrip";
 import { MarketBoard } from "./MarketBoard";
-import { staleSinceOf } from "./metrics";
+import { combineStaleness, stalenessOf } from "./metrics";
 import { MoversPanel } from "./MoversPanel";
 import { QuoteTable } from "./QuoteTable";
 import { SectorBars } from "./SectorBars";
@@ -72,13 +73,19 @@ function WatchlistPanel() {
  * (docs/design-system.md, column flow), so no panel stretches to its neighbour; the heatmap grows into whatever height
  * the left column has to spare, up to a size that still reads at a glance. The movers table sits in the wide column,
  * where its names have room. DOM order is the phone order.
+ *
+ * The markets board reads the shell's board payload (useBoard: the ticker strip's data, about 13 KB, refreshed every
+ * 15 s while trading), so it is on screen before the 80 KB overview arrives and ticks with the strip. Its stale banner
+ * covers both feeds, as of the older one.
  */
 export function MarketOverviewView() {
   const { t, lang } = usePrefs();
   const { data, error, mutate } = useOverview();
+  const board = useBoard();
   const marketRequest = useMemo<AnalyzeRequest>(() => ({ kind: "market", lang }), [lang]);
   const failed = Boolean(error && !data);
-  const stale = Boolean(error && data) || Boolean(data?.warnings.includes("quotes_stale"));
+  const boardFailed = Boolean(board.error && !board.data);
+  const stale = combineStaleness([stalenessOf(board.data, Boolean(board.error)), stalenessOf(data, Boolean(error))]);
 
   return (
     <div className="grid gap-px bg-line p-px xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
@@ -93,9 +100,9 @@ export function MarketOverviewView() {
           code="WEI"
           actions={
             <>
-              {data ? (
+              {board.data ? (
                 <span className="hidden sm:inline">
-                  <PanelMeta>{tpl(t.markets.asOfEt, { time: formatTime(data.asOf, lang, "America/New_York") })}</PanelMeta>
+                  <PanelMeta>{tpl(t.markets.asOfEt, { time: formatTime(board.data.asOf, lang, "America/New_York") })}</PanelMeta>
                 </span>
               ) : null}
               <Link href="/markets" className="ml-2 flex items-center gap-1 text-xs text-fg-3 transition-colors hover:text-fg max-sm:min-h-10">
@@ -105,8 +112,8 @@ export function MarketOverviewView() {
             </>
           }
         >
-          <StaleBanner show={stale} since={staleSinceOf(data)} />
-          {failed ? <ErrorState error={error} onRetry={() => mutate()} compact /> : <MarketBoard board={data?.board} />}
+          <StaleBanner show={stale.stale} since={stale.since} />
+          {boardFailed ? <ErrorState error={board.error} onRetry={() => board.mutate()} compact /> : <MarketBoard board={board.data?.board} />}
         </Panel>
 
         <BreadthStrip breadth={data?.breadth} loading={!data && !error} />

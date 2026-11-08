@@ -199,7 +199,10 @@ export interface MarketOverview {
   asOf: string;
   /** Market state of the US cash session, taken from ^GSPC. */
   marketState: MarketState | null;
-  /** Indices, rates, FX, commodities and crypto, in the order of MARKET_BOARD (lib/universe.ts). */
+  /**
+   * Indices, rates, FX, commodities and crypto, in the order of MARKET_BOARD (lib/universe.ts). The overview page's
+   * board panel reads the lighter /api/market/board (types/shell.ts) instead, which carries the same items.
+   */
   board: BoardItem[];
   /** In the order of SECTORS (lib/universe.ts). */
   sectors: SectorSnapshot[];
