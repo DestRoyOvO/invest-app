@@ -77,11 +77,30 @@ test.describe("quote page", () => {
     await expect(header.getByText("After hours", { exact: true })).toBeVisible();
   });
 
-  test("shows the not-found page for an unknown symbol", async ({ page, app, consoleErrors }) => {
-    // The sweep's allowances for this page: the 404s of the stock API and of the document itself (once the page answers
-    // 404, see e2e/support/routes.ts). A 404 for anything else (a missing script, say) still fails the test.
+  test("shows the not-found view for an unknown symbol", async ({ page, app, consoleErrors }) => {
+    // The sweep's allowances for this page: the 404s of the stock API (the document itself answers 200 on purpose, see
+    // e2e/support/routes.ts). A 404 for anything else (a missing script, say) still fails the test.
     for (const { pattern, reason } of expectedNoise(routeCase("/stock/ZZZZ")).console) consoleErrors.allow(pattern, reason);
     await app.goto("/stock/ZZZZ");
     await expect(page.getByRole("heading", { name: "No match for ZZZZ" })).toBeVisible();
   });
+
+  for (const [lang, title] of [
+    ["en", "Not found · InvestSeek"],
+    ["zh", "未找到页面 · InvestSeek"],
+  ] as const) {
+    test(`answers 404 for a symbol that cannot exist, with the not-found page titled in ${lang}`, async ({ page, app, consoleErrors }) => {
+      for (const { pattern, reason } of expectedNoise(routeCase("/stock/%24%24%24")).console) consoleErrors.allow(pattern, reason);
+      const requested: string[] = [];
+      page.on("request", (request) => {
+        if (new URL(request.url()).pathname.startsWith("/api/stock/")) requested.push(request.url());
+      });
+      await app.setPrefs({ lang });
+      const response = await app.goto("/stock/%24%24%24");
+      expect(response?.status()).toBe(404);
+      await expect(page.getByRole("heading", { level: 1, name: /^ERR 404/ })).toBeVisible();
+      await expect(page).toHaveTitle(title);
+      expect(requested, "quote data requests").toEqual([]);
+    });
+  }
 });
