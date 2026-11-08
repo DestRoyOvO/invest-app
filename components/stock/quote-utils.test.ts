@@ -82,9 +82,11 @@ describe("events", () => {
     expect(earningsTiming("2026-07-30T16:00:00.000Z")).toBe("intraday");
     // Apple's estimated next report keeps its usual 16:00 release time (Yahoo, 7 Nov 2026), in winter time too.
     expect(earningsTiming("2027-01-28T21:00:00.000Z")).toBe("post");
-    // Midnight in New York is Yahoo's placeholder for an unknown time.
+    // Midnight in New York is Yahoo's placeholder for an unknown time, and so is a date without a time (UTC midnight),
+    // which would otherwise read as the evening before, after the close.
     expect(earningsTiming("2026-11-05T05:00:00.000Z")).toBeNull();
     expect(earningsTiming("2027-01-14T05:00:00.000Z")).toBeNull();
+    expect(earningsTiming("2027-01-28T00:00:00.000Z")).toBeNull();
     // No session on a weekend: Berkshire's Saturday-morning report gets none.
     expect(earningsTiming("2027-05-01T12:00:00.000Z")).toBeNull();
     expect(earningsTiming("2026-11-07T21:00:00.000Z")).toBeNull();

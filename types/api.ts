@@ -521,7 +521,10 @@ export interface CalendarEvent {
   kind: CalendarEventKind;
   /** ISO timestamp. Dividend payment dates are dates only (UTC midnight). */
   at: string;
-  /** Earnings: reported before the open, after the close or during the session (New York time); null when unknown. */
+  /**
+   * Earnings: reported before the open, after the close or during the session (New York time), for an estimated date
+   * the company's usual session; null when unknown (see reportSession in lib/server/calendar.ts).
+   */
   timing: "pre" | "post" | "intraday" | null;
   /** The company has not confirmed the date (Yahoo's estimate), or a tentative FOMC date. */
   estimated: boolean;

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { Delta } from "@/components/ui/Delta";
 import { TickNumber } from "@/components/ui/TickNumber";
 import type { Position } from "@/hooks/useHoldings";
+import { eventDayKey } from "@/lib/events";
 import { formatCompact, formatNumber, formatRatio, formatTime, tpl } from "@/lib/format";
 import type { Lang, StockDetail } from "@/types/api";
 
@@ -41,11 +42,12 @@ interface QuoteHeaderProps {
 
 const LOCALES: Record<Lang, string> = { en: "en-US", zh: "zh-CN" };
 
-/** "Thu Nov 12" / "11月12日周四", the date in New York. */
+/** "Thu Nov 12" / "11月12日周四": the date in New York, or the date itself when Yahoo sent one without a time. */
 function eventDate(iso: string, lang: Lang): string {
-  const format = new Intl.DateTimeFormat(LOCALES[lang], { weekday: "short", month: "short", day: "numeric", timeZone: "America/New_York" });
-  if (lang === "zh") return format.format(new Date(iso));
-  const part = (type: Intl.DateTimeFormatPartTypes) => format.formatToParts(new Date(iso)).find((p) => p.type === type)?.value ?? "";
+  const date = new Date(`${eventDayKey(iso)}T12:00:00Z`);
+  const format = new Intl.DateTimeFormat(LOCALES[lang], { weekday: "short", month: "short", day: "numeric", timeZone: "UTC" });
+  if (lang === "zh") return format.format(date);
+  const part = (type: Intl.DateTimeFormatPartTypes) => format.formatToParts(date).find((p) => p.type === type)?.value ?? "";
   return `${part("weekday")} ${part("month")} ${part("day")}`;
 }
 

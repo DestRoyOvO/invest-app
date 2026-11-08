@@ -14,7 +14,7 @@ vi.mock("./yahoo", () => yahoo);
 
 import { GET as calendarRoute } from "@/app/api/calendar/route";
 
-import { earningsTiming, getCalendar, macroCalendarEvents, quoteEvents } from "./calendar";
+import { earningsTiming, getCalendar, macroCalendarEvents, quoteEvents, reportSession } from "./calendar";
 import { clientIp } from "./http";
 import { clientKey, consumeRateLimit, RATE_LIMITS, resetRateLimits } from "./rate-limit";
 
@@ -82,9 +82,11 @@ describe("earningsTiming", () => {
     expect(earningsTiming("2027-01-28T21:00:00Z", true)).toBeNull();
   });
 
-  it("gives no slot to date-only values or to listings outside the US", () => {
+  it("gives no slot to date-only values, to midnight or to listings outside the US", () => {
     // UTC midnight is how Yahoo sends a date without a time; it is not a 19:00 ET release.
     expect(earningsTiming("2026-11-18T00:00:00.000Z", false)).toBeNull();
+    // New York midnight is the other placeholder of an unknown time, not a release before the open.
+    expect(earningsTiming("2026-11-18T05:00:00.000Z", false)).toBeNull();
     expect(earningsTiming("2026-11-18T08:10:00.000Z", false, "0700.HK")).toBeNull();
     expect(earningsTiming("2026-11-18T13:30:00.000Z", false, "BRK-B")).toBe("pre");
     expect(earningsTiming("not a date", false)).toBeNull();
@@ -96,6 +98,23 @@ describe("earningsTiming", () => {
     expect(earningsTiming("2026-11-08T13:30:00.000Z", false, "XYZ")).toBeNull();
     // 01:00Z on Saturday is still Friday evening in New York.
     expect(earningsTiming("2026-11-07T01:00:00.000Z", false, "XYZ")).toBe("post");
+  });
+});
+
+describe("reportSession", () => {
+  it("gives an estimated date the session it carries, which is the company's usual one", () => {
+    // Apple's estimated next report: 16:00 in New York (Yahoo, 7 Nov 2026), after the close like its last one.
+    expect(reportSession("2027-01-28T21:00:00.000Z", "AAPL")).toBe("post");
+    expect(reportSession("2027-01-14T13:30:00.000Z", "JPM")).toBe("pre");
+    expect(earningsTiming("2027-01-28T21:00:00.000Z", false, "AAPL")).toBe("post");
+  });
+
+  it("leaves out the same placeholders, weekends and foreign listings as earningsTiming", () => {
+    expect(reportSession("2027-01-28T00:00:00.000Z", "AAPL")).toBeNull();
+    expect(reportSession("2027-01-28T05:00:00.000Z", "AAPL")).toBeNull();
+    expect(reportSession("2026-11-07T21:00:00.000Z", "BRK-B")).toBeNull();
+    expect(reportSession("2026-11-18T08:10:00.000Z", "0700.HK")).toBeNull();
+    expect(reportSession("not a date")).toBeNull();
   });
 });
 
@@ -132,6 +151,11 @@ describe("quoteEvents", () => {
       NOW + 30 * DAY,
     );
     expect(events.map((e) => [e.id, e.timing])).toEqual([["earnings:XYZ:2026-11-09", "post"]]);
+  });
+
+  it("marks an estimated report and keeps its usual session", () => {
+    const events = quoteEvents(quote("AAPL", { nextEarningsDate: "2026-11-19T21:00:00.000Z", earningsDateEstimated: true }), NOW, NOW + 30 * DAY);
+    expect(events.map((e) => [e.id, e.timing, e.estimated])).toEqual([["earnings:AAPL:2026-11-19", "post", true]]);
   });
 
   it("skips dates outside the window", () => {

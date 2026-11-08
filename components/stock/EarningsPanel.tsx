@@ -171,8 +171,8 @@ function EarningsBody({ detail, implied, now, currencies }: { detail: EarningsDe
 
 function slotText(detail: EarningsDetail, t: Messages): string {
   if (!detail.nextDate) return t.earnings.slot.tbd;
-  // An estimated date keeps the company's usual release time (marked "est." beside it), as the quote header's chip
-  // says: "Reports Thu Jan 28 · after close · est." over "Thu, Jan 28 · After close · EST.".
+  // An estimated date keeps the company's usual release session (marked "est." beside it), as the quote header's chip
+  // and the calendar say: "Reports Thu Jan 28 · after close · est." over "Thu, Jan 28 · After close · EST.".
   if (detail.nextDateEstimated) {
     const usual = earningsTiming(detail.nextDate, isUsListing(detail.symbol));
     return usual ? t.earnings.slot[usual] : t.earnings.slot.tbd;
