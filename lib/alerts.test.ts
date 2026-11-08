@@ -54,6 +54,10 @@ let storage: MemoryStorage;
 beforeEach(() => {
   storage = new MemoryStorage();
   vi.stubGlobal("window", { localStorage: storage, addEventListener: () => {}, removeEventListener: () => {} });
+  // The stores keep their last value in memory between tests.
+  alertsStore.write([]);
+  alertLogStore.write([]);
+  storage.map.clear();
 });
 
 afterEach(() => {
@@ -343,6 +347,11 @@ describe("stores", () => {
     expect(updateAlertRule("a1", { ...input, value: 165 }, { now: NOW })).toBeNull();
     expect(alertsStore.getSnapshot()[0]).toMatchObject({ value: 165, done: false, armedAt: NOW.toISOString(), lastTriggeredAt: NOW.toISOString(), triggerCount: 1, checkedAt: null });
     expect(updateAlertRule("nope", input)).toBe("missing");
+    // A new note alone keeps the rule's state.
+    applyAlertPatches(new Map([["a1", { done: true }]]));
+    expect(updateAlertRule("a1", { ...input, value: 165, note: "new note" }, { now: new Date("2026-11-09T15:00:00Z") })).toBeNull();
+    expect(alertsStore.getSnapshot()[0]).toMatchObject({ note: "new note", done: true, armedAt: NOW.toISOString() });
+    rearmAlertRule("a1", NOW);
 
     setAlertPaused("a1", true);
     expect(alertsStore.getSnapshot()[0].paused).toBe(true);

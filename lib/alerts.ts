@@ -691,7 +691,11 @@ export function addAlertRule(input: AlertRuleInput, { now = new Date(), baseline
   return result;
 }
 
-/** Changes a rule and re-arms it (a fresh watch from now). Returns the input error, "missing", or null when saved. */
+/**
+ * Changes a rule. A changed condition (symbol, kind, value or repeat) re-arms it, a fresh watch from now; a changed
+ * note alone keeps its state, so saving the editor without touching the condition never makes a rule fire again.
+ * Returns the input error, "missing", or null when saved.
+ */
 export function updateAlertRule(id: string, input: AlertRuleInput, { now = new Date(), baseline = null }: WriteOptions = {}): RuleInputError | "missing" | null {
   const error = validateRuleInput(input);
   if (error) return error;
@@ -708,7 +712,8 @@ export function updateAlertRule(id: string, input: AlertRuleInput, { now = new D
         repeat: input.repeat,
         note: cleanNote(input.note),
       };
-      return armed(changed, baseline, now);
+      const sameCondition = changed.symbol === rule.symbol && changed.kind === rule.kind && changed.value === rule.value && changed.repeat === rule.repeat;
+      return sameCondition ? changed : armed(changed, baseline, now);
     }),
   );
   return found ? null : "missing";

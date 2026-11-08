@@ -229,6 +229,7 @@ export const CONTRAST_PAIRS: readonly ContrastPair[] = [
   text("info", "panel", "Links, info badges"),
   text("warn", "panel", "Warnings"),
   text("warn", "panel-2", "Stale data banner"),
+  text("warn", "hover", "Caveats on a hovered row: overdue reviews, alerts that cannot be checked"),
   text("danger", "panel", "Errors"),
   text("heat-fg", "heat-flat", "Heatmap tile, flat"),
   ...[1, 2, 3].flatMap((step) => [text("heat-fg", `heat-up-${step}`, `Heatmap tile, up step ${step}`), text("heat-fg", `heat-down-${step}`, `Heatmap tile, down step ${step}`)]),
