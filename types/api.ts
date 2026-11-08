@@ -14,7 +14,11 @@
 //   GET  /api/search?q=apple                 -> SearchResponse
 //   GET  /api/news?sector=<SectorKey>        -> NewsResponse
 //   GET  /api/stock/[symbol]                 -> StockDetail           (404 not_found for unknown symbols)
-//   GET  /api/stock/[symbol]/chart?range=1y  -> ChartData
+//   GET  /api/stock/[symbol]/news            -> NewsResponse          (company news, industry and macro context)
+//   GET  /api/stock/[symbol]/chart?range=1y  -> ChartData             (range: 1d 5d 1mo 3mo 6mo ytd 1y 2y 5y max)
+//   GET  /api/stock/[symbol]/financials      -> FinancialStatements   (types/research.ts; 404 without statements)
+//   GET  /api/stock/[symbol]/dividends       -> DividendHistory       (types/research.ts)
+//   GET  /api/stock/[symbol]/ownership       -> OwnershipData         (types/research.ts; 404 for funds)
 //   GET  /api/stock/[symbol]/signal          -> SignalReport
 //   GET  /api/history?symbols=A,B&range=1y   -> HistoryResponse       (max 25 symbols, aligned daily adjusted closes)
 //   GET  /api/screener?universe=stocks       -> ScreenerResponse      (universe: stocks | etfs)
@@ -231,17 +235,24 @@ export interface KeyStats {
   roe: number | null;
   /** Net profit margin (decimal). */
   profitMargin: number | null;
+  /** Null for banks and insurers, where Yahoo reports 0 because gross profit does not apply. */
   grossMargin: number | null;
   operatingMargin: number | null;
+  /** EBITDA over revenue (decimal); null when it does not apply (Yahoo reports 0 for banks). */
+  ebitdaMargin?: number | null;
   /** Latest quarter, year over year (decimal). */
   revenueGrowth: number | null;
   earningsGrowth: number | null;
   /** Debt-to-equity as a ratio (Yahoo reports percent; divided by 100). */
   debtToEquity: number | null;
+  /** Cash, debt, revenue and free cash flow are in `financialCurrency`, which can differ from the quote currency. */
   totalCash: number | null;
   totalDebt: number | null;
   totalRevenue: number | null;
+  /** Yahoo's levered free cash flow (after interest), trailing twelve months. */
   freeCashflow: number | null;
+  /** Currency of the financial statements, e.g. "CNY" for 0700.HK, which trades in HKD. */
+  financialCurrency?: string | null;
   targetMeanPrice: number | null;
   targetHighPrice: number | null;
   targetLowPrice: number | null;
@@ -255,33 +266,73 @@ export interface KeyStats {
   exDividendDate: string | null;
 }
 
+/**
+ * Quote page payload. Company news is served separately by /api/stock/[symbol]/news (NewsResponse: company news
+ * first, then industry and macro context), so the price never waits for the news searches.
+ */
 export interface StockDetail {
   asOf: string;
   quote: Quote;
   profile: StockProfile;
   stats: KeyStats;
-  /** Scored and de-duplicated: company news first, then industry and macro context. */
-  news: NewsItem[];
+  /** "summary" when Yahoo had no profile or statistics; "quotes_stale" when an older cached quote is shown. */
   warnings: string[];
 }
 
-export type ChartRange = "1mo" | "3mo" | "6mo" | "1y" | "2y" | "5y";
+/** Chart ranges: 1d (5-minute bars), 5d (15-minute), 1mo to 2y and ytd (daily), 5y (weekly), max (monthly). */
+export type ChartRange = "1d" | "5d" | "1mo" | "3mo" | "6mo" | "ytd" | "1y" | "2y" | "5y" | "max";
+
+export type ChartInterval = "5m" | "15m" | "1d" | "1wk" | "1mo";
+
+/** Trading session of an intraday bar, from Yahoo's trading periods for that day. */
+export type BarSession = "pre" | "regular" | "post";
 
 export interface Bar {
-  /** Epoch milliseconds of the session (UTC midnight of the trading day for daily bars). */
+  /** Epoch milliseconds: the bar's start time for intraday bars, UTC midnight of the session date otherwise. */
   t: number;
   o: number;
   h: number;
   l: number;
   c: number;
   v: number | null;
+  /** Intraday bars only. Pre- and post-market bars come with the 1d and 5d ranges; the chart can hide them. */
+  session?: BarSession;
+}
+
+/** A cash dividend going ex on `t` (same time convention as the bars). Amounts are split-adjusted, per share. */
+export interface ChartDividend {
+  t: number;
+  amount: number;
+}
+
+export interface ChartSplit {
+  t: number;
+  numerator: number;
+  denominator: number;
+  /** As Yahoo writes it, e.g. "4:1". */
+  ratio: string;
 }
 
 export interface ChartData {
   symbol: string;
   range: ChartRange;
-  interval: "1d" | "1wk";
+  interval: ChartInterval;
+  /** True for the 5m and 15m intervals. */
+  intraday: boolean;
+  /**
+   * True for markets that trade around the clock (crypto, futures, currencies): intraday ranges then cover rolling
+   * 24-hour windows rather than session dates, and previousClose is the price at the window's start.
+   */
+  continuous?: boolean;
+  /** Oldest first. Intraday ranges keep their latest sessions (1 or 5) plus any later pre-market bars. */
   bars: Bar[];
+  /** IANA time zone of the exchange, e.g. "America/New_York"; intraday times are shown in it. */
+  timezone: string | null;
+  /** Intraday ranges: the last regular-session close before the first session shown; null otherwise. */
+  previousClose: number | null;
+  /** Dividends and splits inside the range, oldest first. */
+  dividends: ChartDividend[];
+  splits: ChartSplit[];
 }
 
 export type HistoryRange = "6mo" | "1y" | "2y" | "5y";

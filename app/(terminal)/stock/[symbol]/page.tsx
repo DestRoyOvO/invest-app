@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 
 import { StockView } from "@/components/stock/StockView";
 import { normalizeSymbol } from "@/lib/symbols";
@@ -23,5 +24,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function StockPage({ params }: Props) {
   const { symbol } = await params;
   const raw = safeDecode(symbol);
-  return <StockView key={raw} symbol={normalizeSymbol(raw)} rawInput={raw} />;
+  // StockView reads ?tab= and ?compare= with useSearchParams, which needs a Suspense boundary.
+  return (
+    <Suspense fallback={null}>
+      <StockView key={raw} symbol={normalizeSymbol(raw)} rawInput={raw} />
+    </Suspense>
+  );
 }

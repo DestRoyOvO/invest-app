@@ -19,6 +19,10 @@ function decodeParam(value: string): string {
   }
 }
 
+/**
+ * GET /api/stock/[symbol]/chart?range=1y -> ChartData. Intraday ranges (1d, 5d) refresh every minute on the server
+ * while the session trades, so the shared cache keeps them briefly; longer ranges for a minute.
+ */
 export async function GET(request: Request, ctx: { params: Promise<{ symbol: string }> }): Promise<Response> {
   const limited = limitPublicRequest(request);
   if (limited) return limited;
@@ -31,7 +35,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ symbol: str
   try {
     const chart = await getChartData(symbol, range);
     if (!chart) return jsonError(404, "not_found", `No market data for ${symbol}.`);
-    return jsonOk(chart, { cacheSeconds: 60 });
+    return jsonOk(chart, { cacheSeconds: chart.intraday ? 30 : 60 });
   } catch (error) {
     return upstreamError("api/stock/chart", error);
   }

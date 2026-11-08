@@ -36,7 +36,7 @@ const news = vi.hoisted(() => ({
 vi.mock("./yahoo", () => ({
   ...yahoo,
   // Plain values the route handlers import alongside the getters.
-  CHART_RANGES: ["1mo", "3mo", "6mo", "1y", "2y", "5y"] satisfies ChartRange[],
+  CHART_RANGES: ["1d", "5d", "1mo", "3mo", "6mo", "ytd", "1y", "2y", "5y", "max"] satisfies ChartRange[],
   isSessionActive: (state: MarketState | null) => state === "REGULAR" || state === "PRE" || state === "POST",
   hasCachedSparkline: () => false,
   // Cache probes used by lib/server/charging.ts: nothing is cached, so the stock route charges its full fan-out.
@@ -55,6 +55,7 @@ import { GET as quotesRoute } from "@/app/api/quotes/route";
 import { GET as searchRoute } from "@/app/api/search/route";
 import { GET as sparklinesRoute } from "@/app/api/sparklines/route";
 import { GET as chartRoute } from "@/app/api/stock/[symbol]/chart/route";
+import { GET as stockNewsRoute } from "@/app/api/stock/[symbol]/news/route";
 import { GET as stockRoute } from "@/app/api/stock/[symbol]/route";
 
 import { clearCache } from "./cache";
@@ -65,10 +66,28 @@ import {
   getChartData,
   getMarketOverview,
   getStockDetail,
+  getStockNews,
   selectMovers,
   summaryFromQuote,
   weightedChangePercent,
+  withApplicableMargins,
 } from "./market";
+
+/** A chart payload with the fields every range returns. */
+function chartData(overrides: Partial<ChartData> = {}): ChartData {
+  return {
+    symbol: "AAPL",
+    range: "1y",
+    interval: "1d",
+    intraday: false,
+    bars: [{ t: 1, o: 1, h: 2, l: 0.5, c: 1.5, v: 10 }],
+    timezone: "America/New_York",
+    previousClose: null,
+    dividends: [],
+    splits: [],
+    ...overrides,
+  };
+}
 
 function quote(symbol: string, overrides: Partial<Quote> = {}): Quote {
   return {
@@ -355,32 +374,37 @@ describe("getStockDetail", () => {
     expect(news.getCompanyNews).not.toHaveBeenCalled();
   });
 
-  it("combines quote, summary and company news", async () => {
+  it("combines quote and summary without waiting for news", async () => {
     yahoo.getQuote.mockResolvedValue(appleQuote);
     yahoo.getSummary.mockResolvedValue({ profile, stats });
-    news.getCompanyNews.mockResolvedValue([newsItem]);
 
     const detail = await getStockDetail("AAPL");
 
     expect(detail?.warnings).toEqual([]);
     expect(detail?.profile.industry).toBe("Consumer Electronics");
     expect(detail?.stats).toMatchObject({ trailingPE: 31, beta: 1.1, marketCap: 4_000 });
-    expect(detail?.news).toEqual([newsItem]);
-    expect(news.getCompanyNews).toHaveBeenCalledWith("AAPL", "Apple Inc.", profile);
+    expect(detail).not.toHaveProperty("news");
+    expect(news.getCompanyNews).not.toHaveBeenCalled();
   });
 
-  it("falls back to the quote when the summary is missing and tolerates a news failure", async () => {
+  it("falls back to the quote when the summary is missing", async () => {
     yahoo.getQuote.mockResolvedValue(appleQuote);
     yahoo.getSummary.mockRejectedValue(new Error("quoteSummary failed"));
-    news.getCompanyNews.mockRejectedValue(new Error("search failed"));
 
     const detail = await getStockDetail("AAPL");
 
-    expect(detail?.warnings).toEqual(["summary", "news"]);
+    expect(detail?.warnings).toEqual(["summary"]);
     expect(detail?.profile).toMatchObject({ symbol: "AAPL", name: "Apple Inc.", industry: null });
     expect(detail?.stats.marketCap).toBe(4_000);
-    expect(detail?.news).toEqual([]);
-    expect(news.getCompanyNews).toHaveBeenCalledWith("AAPL", "Apple Inc.", null);
+  });
+
+  it("reports a bank's zero gross and EBITDA margins as not available", async () => {
+    yahoo.getQuote.mockResolvedValue(quote("JPM", { name: "JPMorgan Chase & Co." }));
+    yahoo.getSummary.mockResolvedValue({ profile, stats: { ...stats, grossMargin: 0, ebitdaMargin: 0, operatingMargin: 0.42 } });
+
+    const detail = await getStockDetail("JPM");
+
+    expect(detail?.stats).toMatchObject({ grossMargin: null, ebitdaMargin: null, operatingMargin: 0.42 });
   });
 
   it("throws when the quote cannot be loaded", async () => {
@@ -390,14 +414,58 @@ describe("getStockDetail", () => {
   });
 });
 
+describe("getStockNews", () => {
+  const appleQuote = quote("AAPL", { name: "Apple Inc." });
+  const summary = summaryFromQuote(appleQuote);
+  const profile: StockProfile = { ...summary.profile, longName: "Apple Inc.", industry: "Consumer Electronics" };
+
+  it("returns null for unknown symbols without searching", async () => {
+    yahoo.getQuote.mockResolvedValue(null);
+    yahoo.getSummary.mockResolvedValue(null);
+    expect(await getStockNews("NOPE")).toBeNull();
+    expect(news.getCompanyNews).not.toHaveBeenCalled();
+  });
+
+  it("searches with the quote's name and the summary's profile, or the quote alone", async () => {
+    yahoo.getQuote.mockResolvedValue(appleQuote);
+    yahoo.getSummary.mockResolvedValue({ profile, stats: summary.stats });
+    news.getCompanyNews.mockResolvedValue([newsItem]);
+    expect(await getStockNews("AAPL")).toEqual([newsItem]);
+    expect(news.getCompanyNews).toHaveBeenCalledWith("AAPL", "Apple Inc.", profile);
+
+    yahoo.getSummary.mockRejectedValue(new Error("quoteSummary failed"));
+    await getStockNews("AAPL");
+    expect(news.getCompanyNews).toHaveBeenLastCalledWith("AAPL", "Apple Inc.", null);
+  });
+
+  it("throws when the quote or every search fails", async () => {
+    yahoo.getQuote.mockRejectedValue(new Error("Yahoo down"));
+    await expect(getStockNews("AAPL")).rejects.toThrow("Yahoo down");
+    yahoo.getQuote.mockResolvedValue(appleQuote);
+    yahoo.getSummary.mockResolvedValue(null);
+    news.getCompanyNews.mockRejectedValue(new Error("All news searches failed"));
+    await expect(getStockNews("AAPL")).rejects.toThrow("All news searches failed");
+  });
+});
+
+describe("withApplicableMargins", () => {
+  it("turns exact zero gross and EBITDA margins into null and keeps real values", () => {
+    const stats = summaryFromQuote(quote("JPM")).stats;
+    expect(withApplicableMargins({ ...stats, grossMargin: 0, ebitdaMargin: 0 })).toMatchObject({ grossMargin: null, ebitdaMargin: null });
+    expect(withApplicableMargins({ ...stats, grossMargin: 0.47, ebitdaMargin: 0.36 })).toMatchObject({ grossMargin: 0.47, ebitdaMargin: 0.36 });
+    expect(withApplicableMargins({ ...stats, ebitdaMargin: undefined }).ebitdaMargin).toBeNull();
+  });
+});
+
 describe("getChartData", () => {
-  const chart: ChartData = { symbol: "AAPL", range: "1y", interval: "1d", bars: [{ t: 1, o: 1, h: 2, l: 0.5, c: 1.5, v: 10 }] };
+  const chart = chartData();
   const empty: ChartData = { ...chart, bars: [] };
 
-  it("returns bars when Yahoo has them", async () => {
+  it("returns bars when Yahoo has them, without loading the quote", async () => {
     yahoo.getChart.mockResolvedValue(chart);
     yahoo.getQuote.mockResolvedValue(null);
     expect(await getChartData("AAPL", "1y")).toBe(chart);
+    expect(yahoo.getQuote).not.toHaveBeenCalled();
   });
 
   it("returns null for unknown symbols", async () => {
@@ -594,8 +662,30 @@ describe("route handlers", () => {
     });
   });
 
+  describe("GET /api/stock/[symbol]/news", () => {
+    it("rejects malformed symbols and returns 404 for unknown ones", async () => {
+      await expectError(await stockNewsRoute(request("/api/stock/x/news"), symbolParams("not a symbol")), 400, "bad_request");
+      yahoo.getQuote.mockResolvedValue(null);
+      yahoo.getSummary.mockResolvedValue(null);
+      await expectError(await stockNewsRoute(request("/api/stock/zzzz/news"), symbolParams("zzzz")), 404, "not_found");
+    });
+
+    it("returns the company feed with a CDN cache and maps a failure to a generic 502", async () => {
+      yahoo.getQuote.mockResolvedValue(quote("AAPL", { name: "Apple Inc." }));
+      yahoo.getSummary.mockResolvedValue(null);
+      news.getCompanyNews.mockResolvedValue([newsItem]);
+      const response = await stockNewsRoute(request("/api/stock/aapl/news"), symbolParams("aapl"));
+      expect(response.status).toBe(200);
+      expectCdnCache(response, 300);
+      expect(((await response.json()) as NewsResponse).news).toEqual([newsItem]);
+
+      news.getCompanyNews.mockRejectedValue(new Error(INTERNAL));
+      await expectError(await stockNewsRoute(request("/api/stock/AAPL/news"), symbolParams("AAPL")), 502, "upstream_error");
+    });
+  });
+
   describe("GET /api/stock/[symbol]/chart", () => {
-    const chart: ChartData = { symbol: "AAPL", range: "1y", interval: "1d", bars: [{ t: 1, o: 1, h: 2, l: 0.5, c: 1.5, v: 10 }] };
+    const chart = chartData();
 
     it("defaults to one year and rejects unknown ranges", async () => {
       yahoo.getChart.mockResolvedValue(chart);
@@ -610,6 +700,14 @@ describe("route handlers", () => {
       expect(yahoo.getChart.mock.calls.map(([, range]) => range)).toEqual(["1y", "1y"]);
 
       await expectError(await chartRoute(request("/api/stock/AAPL/chart?range=10y"), symbolParams("AAPL")), 400, "bad_request");
+    });
+
+    it("accepts the intraday ranges and keeps them in the shared cache for less time", async () => {
+      yahoo.getChart.mockResolvedValue(chartData({ range: "1d", interval: "5m", intraday: true }));
+      const response = await chartRoute(request("/api/stock/AAPL/chart?range=1d"), symbolParams("AAPL"));
+      expect(response.status).toBe(200);
+      expectCdnCache(response, 30);
+      expect(yahoo.getChart).toHaveBeenLastCalledWith("AAPL", "1d");
     });
 
     it("returns 404 for unknown symbols and a generic 502 when Yahoo fails", async () => {
