@@ -16,7 +16,8 @@ interface MeterProps {
 
 /**
  * Neutral 0-100 bar for percentiles and readings: a --fg-3 fill on a --line-2 track, a midline at 50 and an optional
- * accent marker. Never red or green: a percentile is not a gain or a loss.
+ * accent marker. Never red or green: a percentile is not a gain or a loss. The marker has a 1px --panel halo, so it
+ * stays visible where it sits on the fill (accent on --fg-3 is about 1.1:1 in the light theme).
  */
 export function Meter({ value, marker, label, valueText, className }: MeterProps) {
   const fill = toPercent(value);
@@ -33,7 +34,9 @@ export function Meter({ value, marker, label, valueText, className }: MeterProps
     >
       {fill !== null ? <span className="absolute inset-y-0 left-0 bg-fg-3" style={{ width: `${fill}%` }} /> : null}
       <span aria-hidden className="absolute -inset-y-0.5 left-1/2 w-px -translate-x-1/2 bg-fg-2" />
-      {mark !== null ? <span aria-hidden className="absolute -inset-y-1 w-0.5 -translate-x-1/2 bg-accent" style={{ left: `${mark}%` }} /> : null}
+      {mark !== null ? (
+        <span aria-hidden className="absolute -inset-y-1 w-0.5 -translate-x-1/2 bg-accent shadow-[0_0_0_1px_var(--panel)]" style={{ left: `${mark}%` }} />
+      ) : null}
     </div>
   );
 }
