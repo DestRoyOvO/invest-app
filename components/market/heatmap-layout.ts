@@ -1,7 +1,8 @@
 // Geometry for the sector heatmap, kept free of React so it can be tested: the nested treemap with sector gutters and
-// tile gaps snapped to whole pixels, which labels fit in a tile or a sector header, and arrow-key movement between the
-// rectangles.
+// tile gaps snapped to whole pixels, which labels fit in a tile or a sector header, arrow-key movement between the
+// rectangles, and the on-screen part of a tile that the details card attaches to.
 
+import type { Box } from "@/components/ui/floating";
 import { squarify, type Rect } from "@/lib/treemap";
 
 /** Gap between sectors and between tiles, in px. */
@@ -145,6 +146,24 @@ export function headerLabel(w: number, label: string, change: string): HeaderLab
   const changeWidth = textWidth(change, HEADER_FONT, "sans");
   if (w >= labelWidth + HEADER_GAP + changeWidth + HEADER_PAD) return { showLabel: true, showChange: true };
   return { showLabel: w >= 24, showChange: false };
+}
+
+/**
+ * The part of a box (viewport coordinates) inside every clip box, such as the viewport and the scrolling page area, or
+ * null when less than a pixel of it shows. The heatmap card attaches to this part and hides while it is null.
+ */
+export function clipBox(box: Box, clips: readonly Box[]): Box | null {
+  let left = box.x;
+  let top = box.y;
+  let right = box.x + box.width;
+  let bottom = box.y + box.height;
+  for (const clip of clips) {
+    left = Math.max(left, clip.x);
+    top = Math.max(top, clip.y);
+    right = Math.min(right, clip.x + clip.width);
+    bottom = Math.min(bottom, clip.y + clip.height);
+  }
+  return right - left >= 1 && bottom - top >= 1 ? { x: left, y: top, width: right - left, height: bottom - top } : null;
 }
 
 export type Direction = "left" | "right" | "up" | "down";

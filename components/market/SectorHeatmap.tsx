@@ -18,7 +18,7 @@ import { createPortal } from "react-dom";
 
 import { usePrefs } from "@/components/providers/PrefsProvider";
 import { heatStep, heatStyle, withTrueMinus } from "@/components/ui/Delta";
-import { placeFloating } from "@/components/ui/floating";
+import { placeFloating, type Box } from "@/components/ui/floating";
 import { EmptyState } from "@/components/ui/States";
 import { stockPath } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
@@ -27,7 +27,7 @@ import type { Rect } from "@/lib/treemap";
 import { getSector } from "@/lib/universe";
 import type { OverviewQuote, SectorSnapshot } from "@/types/api";
 
-import { headerLabel, layoutHeatmap, nextInDirection, tileLabel, type Direction, type TileLabel } from "./heatmap-layout";
+import { clipBox, headerLabel, layoutHeatmap, nextInDirection, tileLabel, type Direction, type TileLabel } from "./heatmap-layout";
 import { SectorCard, StockCard } from "./HeatmapCards";
 import { SectorList } from "./SectorList";
 
@@ -45,6 +45,21 @@ function median(values: number[]): number {
 
 function changeText(value: number | null): string {
   return withTrueMinus(formatPercent(value));
+}
+
+function boxOf(element: Element): Box {
+  const rect = element.getBoundingClientRect();
+  return { x: rect.left, y: rect.top, width: rect.width, height: rect.height };
+}
+
+/** The on-screen part of an element: inside the viewport and every ancestor that scrolls or clips. Null when hidden. */
+function visibleBox(element: HTMLElement): Box | null {
+  const clips: Box[] = [{ x: 0, y: 0, width: window.innerWidth, height: window.innerHeight }];
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    const style = getComputedStyle(node);
+    if (style.overflowX !== "visible" || style.overflowY !== "visible") clips.push(boxOf(node));
+  }
+  return clipBox(boxOf(element), clips);
 }
 
 interface SectorHeatmapProps {
@@ -182,6 +197,9 @@ function Treemap({ sectors, headers, className }: { sectors: SectorSnapshot[]; h
     setHoverKey(null);
     setDismissed(null);
     setKeyboard(true);
+    // aria-activedescendant moves no focus, so the browser does not scroll: bring the tile into view (the page scrolls
+    // when the treemap is taller than the screen), and the card then attaches to it.
+    document.getElementById(nodeId(next))?.scrollIntoView({ block: "nearest", inline: "nearest" });
   };
 
   const onFocus = (event: FocusEvent<HTMLDivElement>) => {
@@ -208,7 +226,9 @@ function Treemap({ sectors, headers, className }: { sectors: SectorSnapshot[]; h
     hoverTimer.current = window.setTimeout(() => setHoverKey(null), 100);
   };
 
-  // Place the card next to its node before paint, and follow scrolling and resizing while it is open.
+  // Place the card next to its node before paint, and follow scrolling and resizing while it is open. The card attaches
+  // to the part of the tile that is on screen and hides while the tile is scrolled out of view, instead of sticking to
+  // the edge of the window away from its tile.
   useLayoutEffect(() => {
     if (!cardOpen || !cardNode) return;
     const index = indexOf.get(cardNode.key);
@@ -216,14 +236,14 @@ function Treemap({ sectors, headers, className }: { sectors: SectorSnapshot[]; h
       const anchor = index === undefined ? null : document.getElementById(nodeId(index));
       const card = cardRef.current;
       if (!anchor || !card) return;
-      const box = anchor.getBoundingClientRect();
-      const position = placeFloating(
-        { x: box.left, y: box.top, width: box.width, height: box.height },
-        { width: card.offsetWidth, height: card.offsetHeight },
-        { width: window.innerWidth, height: window.innerHeight },
-        "top",
-      );
+      const box = visibleBox(anchor);
+      if (!box) {
+        card.style.visibility = "hidden";
+        return;
+      }
+      const position = placeFloating(box, { width: card.offsetWidth, height: card.offsetHeight }, { width: window.innerWidth, height: window.innerHeight }, "top");
       card.style.transform = `translate(${Math.round(position.x)}px, ${Math.round(position.y)}px)`;
+      card.style.visibility = "visible";
     };
     place();
     let frame = 0;
@@ -311,7 +331,7 @@ function Treemap({ sectors, headers, className }: { sectors: SectorSnapshot[]; h
               onClick={(event) => onNodeClick(event, node)}
               onAuxClick={(event) => event.button === 1 && open(node.href, true)}
               onPointerEnter={(event) => onNodePointerEnter(event, node)}
-              className="absolute flex cursor-pointer flex-col items-center justify-center overflow-hidden text-center leading-[1.15] select-none hover:shadow-[inset_0_0_0_1px_var(--fg)]"
+              className="absolute flex cursor-pointer flex-col items-center justify-center overflow-hidden text-center leading-[1.15] select-none hover:shadow-[inset_0_0_0_1px_var(--fg),inset_0_0_0_2px_var(--canvas)]"
               style={{ ...position, ...heatStyle(heatStep(quote.changePercent)), ...ring }}
             >
               {label.showSymbol ? (
@@ -336,12 +356,14 @@ function Treemap({ sectors, headers, className }: { sectors: SectorSnapshot[]; h
               role="tooltip"
               onPointerEnter={() => window.clearTimeout(hoverTimer.current)}
               onPointerLeave={scheduleHoverEnd}
-              style={{ position: "fixed", top: 0, left: 0 }}
+              style={{ position: "fixed", top: 0, left: 0, visibility: "hidden" }}
               className="z-[70] w-72 max-w-[calc(100vw-1rem)] rounded-xs border border-line-2 bg-panel-2 p-3 text-sm text-fg shadow-xl"
             >
               {cardNode.kind === "stock" ? <StockCard quote={cardNode.quote} sector={cardNode.sector.key} /> : <SectorCard sector={cardNode.sector} />}
             </div>,
-            document.body,
+            // Inside the main landmark, so the card's content belongs to the page region it describes; fixed positioning
+            // keeps it out of main's scrolling and clipping.
+            document.getElementById("main") ?? document.body,
           )
         : null}
     </div>

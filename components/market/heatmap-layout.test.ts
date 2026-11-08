@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Rect } from "@/lib/treemap";
 
 import {
+  clipBox,
   headerLabel,
   layoutHeatmap,
   MAX_SYMBOL_PX,
@@ -142,6 +143,21 @@ describe("nextInDirection", () => {
     expect(nextInDirection(rects, 1, "right")).toBe(1);
     expect(nextInDirection(rects, 0, "up")).toBe(0);
     expect(nextInDirection([], 0, "up")).toBe(0);
+  });
+
+  it("clips a box to the viewport and the scrolling area", () => {
+    const viewport = { x: 0, y: 0, width: 1440, height: 900 };
+    const main = { x: 192, y: 64, width: 1248, height: 812 };
+    // Fully inside.
+    expect(clipBox({ x: 300, y: 200, width: 100, height: 50 }, [viewport, main])).toEqual({ x: 300, y: 200, width: 100, height: 50 });
+    // Partly scrolled under the top bar: only the part below main's top edge counts.
+    expect(clipBox({ x: 300, y: 40, width: 100, height: 50 }, [viewport, main])).toEqual({ x: 300, y: 64, width: 100, height: 26 });
+    // Below the fold, or scrolled away above main: nothing shows.
+    expect(clipBox({ x: 300, y: 1010, width: 100, height: 120 }, [viewport, main])).toBeNull();
+    expect(clipBox({ x: 300, y: 10, width: 100, height: 54 }, [viewport, main])).toBeNull();
+    // A sliver under a pixel does not count.
+    expect(clipBox({ x: 300, y: 875.5, width: 100, height: 40 }, [viewport, main])).toBeNull();
+    expect(clipBox({ x: 5, y: 5, width: 10, height: 10 }, [])).toEqual({ x: 5, y: 5, width: 10, height: 10 });
   });
 
   it("prefers a rectangle in line over a nearer one off to the side", () => {
