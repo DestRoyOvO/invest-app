@@ -27,6 +27,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Documentation links and images
+        run: npx tsx scripts/check-links.ts
+
       - name: Lint
         run: npm run lint
 

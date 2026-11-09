@@ -4,7 +4,7 @@
 
 [中文](README.zh-CN.md) · [Docs](docs/README.md) · [Deploy with Docker](docs/deployment.md#docker) · [Changelog](CHANGELOG.md)
 
-[![CI](https://github.com/DestRoyOvO/invest-app/actions/workflows/ci.yml/badge.svg)](https://github.com/DestRoyOvO/invest-app/actions/workflows/ci.yml)
+[CI workflow](.github/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 ![Market overview in the dark theme: My day, the week ahead, the markets board, the watchlist and sector performance](docs/screenshots/overview-dark-en.png)

@@ -4,25 +4,9 @@
 //
 //   npx tsx scripts/check-links.ts                  (exits 1 when a target is missing)
 //   npx tsx scripts/check-links.ts README.md docs   (only these files or folders)
-//
-// EXPECTED_LATER lists targets that are referenced on purpose before they exist: the README screenshots, which a script
-// regenerates from the end-to-end fixture data. They are reported as expected instead of failing. Remove an entry once
-// its file is committed.
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
-
-const EXPECTED_LATER: readonly string[] = [
-  "docs/screenshots/overview-dark-en.png",
-  "docs/screenshots/quote-dark-en.png",
-  "docs/screenshots/portfolio-dark-en.png",
-  "docs/screenshots/calendar-dark-en.png",
-  "docs/screenshots/screener-dark-en.png",
-  "docs/screenshots/lab-dark-en.png",
-  "docs/screenshots/markets-dark-en.png",
-  "docs/screenshots/overview-light-zh.png",
-  "docs/screenshots/mobile-light-zh.png",
-];
 
 const ROOT = process.cwd();
 
@@ -146,9 +130,9 @@ function safeDecode(value: string): string {
   }
 }
 
-type Verdict = { status: "ok" } | { status: "expected"; path: string } | { status: "broken"; reason: string };
+type Verdict = { status: "ok" } | { status: "broken"; reason: string };
 
-/** Whether a link's target exists; targets listed in EXPECTED_LATER are "expected" while they are missing. */
+/** Whether a link's target exists, including generated screenshots committed with the docs. */
 function check(link: Link): Verdict {
   const { target } = link;
   if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("//")) return { status: "ok" };
@@ -160,7 +144,7 @@ function check(link: Link): Verdict {
   const inRepo = repoPath(absolute);
   if (inRepo.startsWith("..")) return { status: "broken", reason: `points outside the repository (${inRepo})` };
   if (!existsSync(absolute)) {
-    return EXPECTED_LATER.includes(inRepo) ? { status: "expected", path: inRepo } : { status: "broken", reason: `missing file ${inRepo}` };
+    return { status: "broken", reason: `missing file ${inRepo}` };
   }
   if (anchor && absolute.toLowerCase().endsWith(".md") && !anchorsOf(absolute).has(anchor)) {
     return { status: "broken", reason: `no heading or id "${anchor}" in ${inRepo}` };
@@ -170,29 +154,19 @@ function check(link: Link): Verdict {
 
 const files = markdownFiles(process.argv.slice(2));
 const problems: Problem[] = [];
-const expected = new Map<string, string[]>();
 let checked = 0;
 
 for (const file of files) {
   for (const link of extractLinks(file, readFileSync(file, "utf8"))) {
     checked++;
     const verdict = check(link);
-    if (verdict.status === "expected") {
-      const where = [...(expected.get(verdict.path) ?? []), `${repoPath(link.file)}:${link.line}`];
-      expected.set(verdict.path, where.sort((a, b) => a.localeCompare(b, "en", { numeric: true })));
-    } else if (verdict.status === "broken") {
+    if (verdict.status === "broken") {
       problems.push({ ...link, reason: verdict.reason });
     }
   }
 }
 
 console.log(`Checked ${checked} links in ${files.length} Markdown files.`);
-if (expected.size > 0) {
-  console.log(`\nExpected later (referenced before they exist, see EXPECTED_LATER):`);
-  for (const [path, where] of [...expected].sort(([a], [b]) => a.localeCompare(b))) {
-    console.log(`  ${path}  <- ${where.join(", ")}`);
-  }
-}
 if (problems.length > 0) {
   console.log(`\nBroken (${problems.length}):`);
   problems.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);

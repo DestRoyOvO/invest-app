@@ -4,7 +4,7 @@
 
 [English](README.md) · [文档](docs/README.md) · [用 Docker 部署](docs/deployment.md#docker) · [更新日志](CHANGELOG.md)
 
-[![CI](https://github.com/DestRoyOvO/invest-app/actions/workflows/ci.yml/badge.svg)](https://github.com/DestRoyOvO/invest-app/actions/workflows/ci.yml)
+[CI 工作流](.github/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 ![市场总览（中文 · 浅色主题 · 红涨绿跌）：市场宽度、板块热力图和头条新闻](docs/screenshots/overview-light-zh.png)
